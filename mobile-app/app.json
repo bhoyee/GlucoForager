@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "GlucoForager",
+    "slug": "glucoforager",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icons/app-icon.png",
+    "splash": {
+      "image": "./assets/images/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0C1824"
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icons/app-icon.png",
+        "backgroundColor": "#0C1824"
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "favicon": "./assets/icons/app-icon.png"
+    }
+  }
+}
