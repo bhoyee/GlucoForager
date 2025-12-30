@@ -4,12 +4,12 @@ export default function HeroSection() {
       <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_20%_20%,rgba(255,183,3,0.18),transparent_30%)]" />
       <div className="relative grid gap-8 lg:grid-cols-2 items-center">
         <div>
-          <span className="badge mb-4">Diabetes-safe meal planner</span>
+          <span className="badge mb-4">AI-powered diabetes-safe recipes</span>
           <h1 className="text-4xl md:text-5xl font-bold leading-tight">
-            Diabetes-friendly dinners from your fridge in 60 seconds
+            Snap your fridge, get 3 diabetes-friendly recipes in 60 seconds
           </h1>
           <p className="mt-4 text-slate-200">
-            GlucoForager checks every ingredient for glycemic impact and serves recipes that keep blood sugar steady.
+            GPT-5 Vision scans your fridge, applies diabetic safety rules, and serves low-GI meals instantly.
           </p>
           <div className="mt-6 flex flex-wrap gap-4">
             <a
@@ -23,7 +23,7 @@ export default function HeroSection() {
             </a>
           </div>
           <p className="mt-4 text-sm text-slate-400">
-            Free: 3 recipe searches/day • Premium: £2.99/month with camera recognition & favorites
+            Free: 3 AI scans/day • Premium: £2.99/month unlimited with priority AI & favorites
           </p>
         </div>
         <div className="relative rounded-2xl bg-surface/60 p-6 border border-surface">

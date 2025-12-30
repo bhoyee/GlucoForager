@@ -2,13 +2,19 @@ const tiers = [
   {
     name: 'Free',
     price: '£0',
-    bullets: ['3 recipe searches/day', 'Text-only ingredient input', 'Banner ads'],
+    bullets: ['3 AI scans/day', 'Text + basic vision input', 'Banner ads', 'Cached AI responses'],
   },
   {
     name: 'Premium',
     price: '£2.99/month',
     highlight: true,
-    bullets: ['Unlimited searches', 'Camera photo recognition', 'Save favorites & history', 'Ad-free experience'],
+    bullets: [
+      'Unlimited scans with GPT-5 Vision',
+      'Priority AI + dietary filters',
+      'Save favorites & history',
+      'Ad-free experience',
+      'Coming soon: meal plans & shopping lists',
+    ],
   },
 ];
 

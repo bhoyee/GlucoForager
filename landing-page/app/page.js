@@ -47,7 +47,7 @@ export default function HomePage() {
       >
         <div>
           <h3 className="text-2xl font-semibold">Download GlucoForager</h3>
-          <p className="text-slate-300">Mobile-first, optimized for diabetes-friendly meal planning.</p>
+          <p className="text-slate-300">Mobile-first, optimized for AI-driven diabetes-friendly meal planning.</p>
         </div>
         <div className="flex gap-3">
           <a className="rounded-xl bg-black px-4 py-3 text-white" href="#">

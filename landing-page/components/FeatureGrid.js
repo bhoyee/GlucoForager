@@ -1,15 +1,15 @@
 const steps = [
   {
-    title: 'Type or Scan',
-    description: 'Enter ingredients or snap a photo. OCR is tuned for pantry staples.',
+    title: 'AI Vision + Text',
+    description: 'GPT-5 Vision and text input extract your ingredients in seconds.',
   },
   {
-    title: 'Diabetes-Safe Match',
-    description: 'We filter by glycemic impact before scoring ingredient overlap.',
+    title: 'Diabetes Safety First',
+    description: 'Low-GI filters and dietitian-inspired prompts guard every recipe.',
   },
   {
-    title: 'Cook with Confidence',
-    description: 'Clear nutrition and missing items keep you on track.',
+    title: 'Tier-aware speed',
+    description: 'Free: 3 scans/day with caching. Premium: unlimited priority AI.',
   },
 ];
 
