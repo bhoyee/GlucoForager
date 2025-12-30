@@ -4,9 +4,11 @@ import TierBadge from '../components/common/TierBadge';
 import Button from '../components/common/Button';
 import { globalStyles, colors } from '../styles/global';
 import { useSubscription } from '../context/SubscriptionContext';
+import { useFavorites } from '../context/FavoritesContext';
 
 const PremiumDashboard = ({ navigation }) => {
   const { scansToday } = useSubscription();
+  const { favorites } = useFavorites();
 
   return (
     <ScrollView style={globalStyles.screen}>
@@ -28,6 +30,12 @@ const PremiumDashboard = ({ navigation }) => {
         <Text style={{ color: colors.muted, marginTop: 6 }}>
           Detailed nutrition, meal planning, dietary filters, and shopping lists are prioritized for premium users.
         </Text>
+      </View>
+
+      <View style={{ backgroundColor: colors.surface, borderRadius: 12, padding: 14, marginVertical: 8 }}>
+        <Text style={{ color: colors.text, fontWeight: '700' }}>Stats</Text>
+        <Text style={{ color: colors.muted, marginTop: 6 }}>Favorites saved: {favorites.length}</Text>
+        <Text style={{ color: colors.muted }}>Scans today: {scansToday}</Text>
       </View>
 
       <Text style={{ color: colors.muted, marginTop: 12, textAlign: 'center' }}>Premium status active.</Text>
