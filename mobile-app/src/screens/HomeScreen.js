@@ -4,6 +4,7 @@ import Header from '../components/common/Header';
 import IngredientInput from '../components/inputs/IngredientInput';
 import TagInput from '../components/inputs/TagInput';
 import Button from '../components/common/Button';
+import TierBadge from '../components/common/TierBadge';
 import { globalStyles, colors } from '../styles/global';
 import { useSubscription } from '../context/SubscriptionContext';
 
@@ -15,11 +16,17 @@ const HomeScreen = ({ navigation }) => {
   const addIngredient = (item) => setIngredients((prev) => [...prev, item]);
   const addTag = (tag) => setTags((prev) => [...prev, tag]);
 
-  const goToCamera = () => navigation.navigate('Camera');
+  const goToCamera = () => navigation.navigate(isPremium ? 'PremiumCamera' : 'FreeCamera');
   const search = () => navigation.navigate('Results', { ingredients, tags });
 
   return (
     <View style={globalStyles.screen}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <TierBadge tier={isPremium ? 'premium' : 'free'} />
+        <TouchableOpacity onPress={() => navigation.navigate('Upgrade')}>
+          <Text style={{ color: colors.accent, fontWeight: '700' }}>{isPremium ? 'Manage' : 'Upgrade'}</Text>
+        </TouchableOpacity>
+      </View>
       <Header title="What's in your fridge?" />
       <Text style={globalStyles.subheading}>Type or scan your ingredients. We will keep it diabetes-safe.</Text>
       <IngredientInput onAdd={addIngredient} />

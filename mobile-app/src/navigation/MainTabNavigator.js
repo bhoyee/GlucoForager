@@ -8,8 +8,9 @@ import FavoritesScreen from '../screens/FavoritesScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import ResultsScreen from '../screens/ResultsScreen';
 import RecipeDetailScreen from '../screens/RecipeDetailScreen';
-import CameraScreen from '../screens/CameraScreen';
 import UpgradeScreen from '../screens/UpgradeScreen';
+import FreeCameraScreen from '../screens/FreeCameraScreen';
+import PremiumCameraScreen from '../screens/PremiumCameraScreen';
 import { colors } from '../styles/global';
 
 const Tab = createBottomTabNavigator();
@@ -21,7 +22,8 @@ const HomeStackScreen = () => (
     <HomeStack.Screen name="HomeScreen" component={HomeScreen} />
     <HomeStack.Screen name="Results" component={ResultsScreen} />
     <HomeStack.Screen name="RecipeDetail" component={RecipeDetailScreen} />
-    <HomeStack.Screen name="Camera" component={CameraScreen} />
+    <HomeStack.Screen name="FreeCamera" component={FreeCameraScreen} />
+    <HomeStack.Screen name="PremiumCamera" component={PremiumCameraScreen} />
   </HomeStack.Navigator>
 );
 
