@@ -10,7 +10,7 @@ services:
       POSTGRES_PASSWORD: glucoforager
       POSTGRES_DB: glucoforager
     ports:
-      - "56432:5432"
+      - "${HOST_DB_PORT:-65432}:5432"
     volumes:
       - db-data:/var/lib/postgresql/data
     healthcheck:
