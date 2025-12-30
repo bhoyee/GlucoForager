@@ -13,3 +13,7 @@ Diabetes-friendly recipe suggestions from the ingredients you already have. Mobi
 3. Premium features: Camera flow, subscriptions, favorites, profile/history.
 4. Landing page: Marketing site with pricing, feature comparison, gallery, and SEO focus.
 
+## Running Postgres locally
+- Spin up DB: `docker-compose up -d db` (binds host port 56432 → container 5432).
+- Use `backend/.env.example` to set `DATABASE_URL` (already set to localhost:56432).
+

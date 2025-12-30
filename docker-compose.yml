@@ -1,0 +1,27 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: glucoforager-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: glucoforager
+      POSTGRES_PASSWORD: glucoforager
+      POSTGRES_DB: glucoforager
+    ports:
+      - "56432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U glucoforager"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  db-data:
