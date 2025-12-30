@@ -7,7 +7,7 @@ import { useSubscription } from '../context/SubscriptionContext';
 import { useFavorites } from '../context/FavoritesContext';
 
 const PremiumDashboard = ({ navigation }) => {
-  const { scansToday } = useSubscription();
+  const { scansToday, restore } = useSubscription();
   const { favorites } = useFavorites();
 
   return (
@@ -36,6 +36,7 @@ const PremiumDashboard = ({ navigation }) => {
         <Text style={{ color: colors.text, fontWeight: '700' }}>Stats</Text>
         <Text style={{ color: colors.muted, marginTop: 6 }}>Favorites saved: {favorites.length}</Text>
         <Text style={{ color: colors.muted }}>Scans today: {scansToday}</Text>
+        <Button label="Restore purchases" onPress={restore} />
       </View>
 
       <Text style={{ color: colors.muted, marginTop: 12, textAlign: 'center' }}>Premium status active.</Text>

@@ -7,17 +7,15 @@ import Button from '../components/common/Button';
 import { SUBSCRIPTION_PLANS } from '../utils/constants';
 import { globalStyles, colors } from '../styles/global';
 import { useSubscription } from '../context/SubscriptionContext';
-import { startCheckout } from '../services/revenuecat';
 
 const UpgradeScreen = () => {
   const [selected, setSelected] = useState('premium');
-  const { upgrade } = useSubscription();
+  const { purchase, restore } = useSubscription();
 
   const handleUpgrade = async () => {
-    const res = await startCheckout();
-    if (res.status === 'mock') {
-      upgrade();
-      Alert.alert('Upgraded (mock)', 'RevenueCat integration not yet implemented.');
+    const res = await purchase();
+    if (res?.isPremium) {
+      Alert.alert('Upgraded', 'Premium activated via RevenueCat.');
     }
   };
 
@@ -38,6 +36,7 @@ const UpgradeScreen = () => {
       />
       <Button label="Start 7-day free trial" onPress={handleUpgrade} />
       <Text style={{ color: colors.muted, marginTop: 8 }}>£2.99/month after trial. Cancel anytime.</Text>
+      <Button label="Restore purchases" onPress={restore} />
     </View>
   );
 };

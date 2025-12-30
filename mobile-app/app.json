@@ -23,6 +23,14 @@
         "backgroundColor": "#0C1824"
       }
     },
+    "plugins": [
+      [
+        "react-native-purchases",
+        {
+          "androidItemPrefetchingEnabled": true
+        }
+      ]
+    ],
     "web": {
       "bundler": "metro",
       "favicon": "./assets/icons/app-icon.png"
