@@ -22,13 +22,15 @@ class AIRecipeGenerator:
         self.fallback_model = settings.deepseek_model
         self.enabled = bool(self.primary_client or self.fallback_client)
 
-    def _call(self, client: OpenAI, model: str, ingredients: List[str]) -> str:
+    def _call(self, client: OpenAI, model: str, ingredients: List[str], filters: List[str]) -> str:
         prompt = (
             "Generate 3 diabetes-friendly recipes using these ingredients. "
             "Return JSON with fields: title, description, ingredients[{name,quantity,unit}], "
             "instructions[], prep_time, cook_time, total_time, difficulty, nutritional_info, "
             "tags, image_url, servings, glycemic_index."
         )
+        if filters:
+            prompt += f" Apply dietary filters: {', '.join(filters)}."
         resp = client.chat.completions.create(
             model=model,
             messages=[
@@ -39,10 +41,11 @@ class AIRecipeGenerator:
         )
         return resp.choices[0].message.content or ""
 
-    def generate(self, ingredients: List[str], tier: str) -> List[Dict[str, Any]]:
+    def generate(self, ingredients: List[str], tier: str, filters: List[str] | None = None) -> List[Dict[str, Any]]:
         if not self.enabled:
             raise RuntimeError("AI recipe generation not configured: provide OPENAI_API_KEY or DEEPSEEK_API_KEY")
 
+        filters = filters or []
         from ..core.constants import TIER_CONFIG  # local import to avoid cycle
         tier_cfg = TIER_CONFIG.get(tier, {})
         primary_model = tier_cfg.get("recipe_model", self.primary_model)
@@ -50,14 +53,14 @@ class AIRecipeGenerator:
 
         if self.primary_client:
             try:
-                content = self._call(self.primary_client, primary_model, ingredients)
+                content = self._call(self.primary_client, primary_model, ingredients, filters)
                 return [{"raw": content}]
             except OpenAIError as exc:
                 logger.warning("Primary recipe generation failed, attempting fallback: %s", exc)
 
         if self.fallback_client:
             try:
-                content = self._call(self.fallback_client, fallback_model, ingredients)
+                content = self._call(self.fallback_client, fallback_model, ingredients, filters)
                 return [{"raw": content}]
             except OpenAIError as exc:
                 logger.exception("Fallback recipe generation failed")

@@ -13,6 +13,7 @@ pipeline = AIPipeline()
 
 class VisionRecipeRequest(BaseModel):
     image_base64: str
+    filters: list[str] | None = None
 
 
 @router.post("/vision")
@@ -28,5 +29,5 @@ def generate_from_vision(
             detail=f"Daily limit reached. Scans left: {access['searches_left']}",
         )
     tier = current_user.subscription_tier or "free"
-    recipes = pipeline.fridge_to_recipes(db, current_user.id, tier, payload.image_base64)
+    recipes = pipeline.fridge_to_recipes(db, current_user.id, tier, payload.image_base64, filters=payload.filters or [])
     return {"results": recipes, "access": access}

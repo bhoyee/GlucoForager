@@ -13,6 +13,7 @@ pipeline = AIPipeline()
 
 class TextRecipeRequest(BaseModel):
     ingredients: list[str]
+    filters: list[str] | None = None
 
 
 @router.post("/recipes")
@@ -28,5 +29,5 @@ def generate_from_text(
             detail=f"Daily limit reached. Scans left: {access['searches_left']}",
         )
     tier = current_user.subscription_tier or "free"
-    recipes = pipeline.text_to_recipes(db, current_user.id, tier, payload.ingredients)
+    recipes = pipeline.text_to_recipes(db, current_user.id, tier, payload.ingredients, filters=payload.filters or [])
     return {"results": recipes, "access": access}
