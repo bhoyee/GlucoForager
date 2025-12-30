@@ -3,6 +3,8 @@ import time
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 
 from .api.endpoints import auth, ingredients, recipes, subscriptions, ai_recipes, text_recipes
@@ -51,6 +53,23 @@ async def abuse_guard(request: Request, call_next):
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+# Offline Swagger UI (serves local assets)
+try:
+    from swagger_ui_bundle import swagger_ui_3_path
+
+    app.mount("/docs_static", StaticFiles(directory=swagger_ui_3_path), name="docs_static")
+
+    @app.get("/docs", include_in_schema=False)
+    async def custom_swagger_ui_html():
+        return get_swagger_ui_html(
+            openapi_url=app.openapi_url,
+            title=f"{settings.project_name} - Docs",
+            swagger_js_url="/docs_static/swagger-ui-bundle.js",
+            swagger_css_url="/docs_static/swagger-ui.css",
+        )
+except Exception as exc:  # noqa: BLE001
+    logger.warning("Swagger UI local mount failed: %s", exc)
 
 
 app.include_router(auth.router, prefix="/api")
