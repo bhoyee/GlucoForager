@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from ...core.security import create_access_token, get_password_hash, verify_password
 from ...database import get_db
 from ...models.user import User
+from ...services.email_service import send_welcome_email
 from ...services.login_throttler import LoginThrottler
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -37,6 +38,10 @@ def signup(payload: UserCreate, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(user)
         token = create_access_token({"sub": str(user.id)})
+        try:
+            send_welcome_email(payload.email)
+        except Exception:
+            logger.exception("Welcome email failed for email=%s", payload.email)
         return Token(access_token=token, message="Signup successful")
     except HTTPException:
         # Bubble up expected API errors unchanged.
