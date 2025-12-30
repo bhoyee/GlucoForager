@@ -20,8 +20,12 @@ Diabetes-friendly recipe suggestions from the ingredients you already have. Mobi
 ## Environment
 - `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_VISION_MODEL` for primary AI.
 - `DEEPSEEK_API_KEY`, `DEEPSEEK_BASE_URL`, `DEEPSEEK_MODEL`, `DEEPSEEK_VISION_MODEL` for fallback.
-- `REDIS_URL` for cache (optional; falls back to in-memory if unavailable).
+- `REDIS_URL` for cache (recommended; falls back to in-memory if unavailable). Default ports set via `HOST_DB_PORT` and `HOST_REDIS_PORT`.
 - SMTP/Resend keys for welcome emails in `backend/.env.example`.
+
+## Running Postgres + Redis locally
+- Start services: `HOST_DB_PORT=65432 HOST_REDIS_PORT=6379 docker-compose up -d db redis`
+- Stop services: `docker-compose down`
 
 ## Running Postgres locally
 - Choose a free host port. Default is `65432`. Override when starting compose if needed.
