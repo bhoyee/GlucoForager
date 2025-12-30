@@ -36,3 +36,14 @@ def create_checkout(
     db.add(Subscription(user_id=current_user.id, plan="premium", status="pending"))
     db.commit()
     return session_info
+
+
+@router.post("/upgrade")
+def upgrade_to_premium(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    current_user.subscription_tier = "premium"
+    db.add(Subscription(user_id=current_user.id, plan="premium", status="active"))
+    db.commit()
+    return {"detail": "Upgraded to premium"}

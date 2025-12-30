@@ -31,3 +31,12 @@ def generate_from_vision(
     tier = current_user.subscription_tier or "free"
     recipes = pipeline.fridge_to_recipes(db, current_user.id, tier, payload.image_base64, filters=payload.filters or [])
     return {"results": recipes, "access": access}
+
+
+@router.post("/fridge-to-recipes")
+def fridge_to_recipes_alias(
+    payload: VisionRecipeRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return generate_from_vision(payload, db, current_user)

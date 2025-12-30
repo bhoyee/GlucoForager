@@ -74,3 +74,12 @@ def login(
     login_throttler.record_success(identifier)
     token = create_access_token({"sub": str(user.id)})
     return Token(access_token=token, message="Login successful")
+
+
+@router.post("/login", response_model=Token)
+def login_alias(
+    request: Request,
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db),
+):
+    return login(request=request, form_data=form_data, db=db)
