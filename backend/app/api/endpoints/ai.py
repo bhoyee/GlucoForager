@@ -24,8 +24,11 @@ class RecipeGenRequest(BaseModel):
 @router.post("/vision")
 def analyze_vision(payload: VisionRequest, current_user: User = Depends(get_current_user)):
     if not vision_service.enabled:
-        return {"detail": "Vision service not configured; returning mock.", "result": vision_service.analyze_fridge("")}
-    return {"result": vision_service.analyze_fridge(payload.image_base64)}
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Vision service not configured")
+    try:
+        return {"result": vision_service.analyze_fridge(payload.image_base64)}
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
 
 
 @router.post("/recipes/generate")
@@ -41,7 +44,12 @@ def generate_recipes(
             detail=f"Daily limit reached. Searches left: {access['searches_left']}",
         )
 
-    recipes = recipe_service.generate(payload.ingredients)
+    if not recipe_service.enabled:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Recipe AI not configured")
+    try:
+        recipes = recipe_service.generate(payload.ingredients)
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
     db.add(SearchLog(user_id=current_user.id, query=",".join(payload.ingredients)))
     db.commit()
     return {"results": recipes, "access": access}
