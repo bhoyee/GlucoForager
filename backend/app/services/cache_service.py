@@ -14,9 +14,10 @@ class CacheService:
 
     def __init__(self) -> None:
         self.client: Optional[redis.Redis] = None
-        if settings.redis_url := getattr(settings, "redis_url", None):
+        redis_url = getattr(settings, "redis_url", None)
+        if redis_url:
             try:
-                self.client = redis.from_url(settings.redis_url)
+                self.client = redis.from_url(redis_url)
                 self.client.ping()
                 logger.info("Redis cache connected")
             except Exception as exc:  # noqa: BLE001
