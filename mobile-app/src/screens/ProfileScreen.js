@@ -7,7 +7,7 @@ import { useSubscription } from '../context/SubscriptionContext';
 
 const ProfileScreen = ({ navigation }) => {
   const { user, logout } = useAuth();
-  const { tier } = useSubscription();
+  const { tier, isPremium } = useSubscription();
 
   return (
     <View style={globalStyles.screen}>
@@ -16,8 +16,10 @@ const ProfileScreen = ({ navigation }) => {
         <Text style={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>{user?.email ?? 'Guest user'}</Text>
         <Text style={{ color: colors.muted }}>Subscription: {tier}</Text>
       </View>
-      <TouchableOpacity onPress={() => navigation.navigate('Upgrade')} style={{ marginBottom: 12 }}>
-        <Text style={{ color: colors.accent, fontWeight: '700' }}>Upgrade to Premium</Text>
+      <TouchableOpacity onPress={() => navigation.navigate(isPremium ? 'PremiumDashboard' : 'Upgrade')} style={{ marginBottom: 12 }}>
+        <Text style={{ color: colors.accent, fontWeight: '700' }}>
+          {isPremium ? 'Open Premium Dashboard' : 'Upgrade to Premium'}
+        </Text>
       </TouchableOpacity>
       <TouchableOpacity onPress={logout}>
         <Text style={{ color: colors.muted }}>Log out</Text>

@@ -11,6 +11,7 @@ import RecipeDetailScreen from '../screens/RecipeDetailScreen';
 import UpgradeScreen from '../screens/UpgradeScreen';
 import FreeCameraScreen from '../screens/FreeCameraScreen';
 import PremiumCameraScreen from '../screens/PremiumCameraScreen';
+import PremiumDashboard from '../screens/PremiumDashboard';
 import { colors } from '../styles/global';
 
 const Tab = createBottomTabNavigator();
@@ -31,6 +32,7 @@ const ProfileStackScreen = () => (
   <ProfileStack.Navigator screenOptions={{ headerShown: false }}>
     <ProfileStack.Screen name="ProfileHome" component={ProfileScreen} />
     <ProfileStack.Screen name="Upgrade" component={UpgradeScreen} />
+    <ProfileStack.Screen name="PremiumDashboard" component={PremiumDashboard} />
   </ProfileStack.Navigator>
 );
 
