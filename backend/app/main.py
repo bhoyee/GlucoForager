@@ -7,7 +7,19 @@ from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 
-from .api.endpoints import auth, ingredients, recipes, subscriptions, ai_recipes, text_recipes, favorites, user
+from .api.endpoints import (
+    auth,
+    ingredients,
+    recipes,
+    subscriptions,
+    ai_recipes,
+    text_recipes,
+    favorites,
+    user,
+    history,
+    meal_plan,
+    shopping_list,
+)
 from .core.config import settings
 from .database import Base, engine
 from .models import subscription, user, ai_request  # ensure models are registered with SQLAlchemy
@@ -80,3 +92,6 @@ app.include_router(ai_recipes.router, prefix="/api")
 app.include_router(text_recipes.router, prefix="/api")
 app.include_router(favorites.router, prefix="/api")
 app.include_router(user.router, prefix="/api")
+app.include_router(history.router, prefix="/api")
+app.include_router(meal_plan.router, prefix="/api")
+app.include_router(shopping_list.router, prefix="/api")

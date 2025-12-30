@@ -19,6 +19,8 @@ class User(Base):
     subscriptions = relationship("Subscription", back_populates="user")
     ai_requests = relationship("AIRequest", back_populates="user", cascade="all, delete-orphan")
     favorites = relationship("Favorite", back_populates="user", cascade="all, delete-orphan")
+    meal_plans = relationship("MealPlan", back_populates="user", cascade="all, delete-orphan")
+    shopping_items = relationship("ShoppingItem", back_populates="user", cascade="all, delete-orphan")
 
 
 class SearchLog(Base):
