@@ -14,11 +14,12 @@ Diabetes-friendly recipe suggestions from the ingredients you already have. Mobi
 4. Landing page: Marketing site with pricing, feature comparison, gallery, and SEO focus.
 
 ## AI endpoints (Phase 1 refresh)
-- `POST /api/ai/vision`: GPT-5 Vision-style fridge analysis (base64 image). Returns detected ingredients (mocked if no API key).
-- `POST /api/ai/recipes/generate`: GPT-5 recipe generation with diabetes-friendly prompt, enforces daily search limits.
+- `POST /api/ai/vision`: GPT-5 Vision-style fridge analysis (base64 image). Uses OpenAI primary; DeepSeek fallback if provided.
+- `POST /api/ai/recipes/generate`: GPT-5 recipe generation with diabetes-friendly prompt, OpenAI primary, DeepSeek fallback; enforces daily search limits.
 
 ## Environment
-- Add `OPENAI_API_KEY`, `OPENAI_MODEL` (default gpt-5), `OPENAI_VISION_MODEL` (default gpt-5-vision) for AI.
+- Add `OPENAI_API_KEY`, `OPENAI_MODEL` (default gpt-5), `OPENAI_VISION_MODEL` (default gpt-5-vision) for AI primary.
+- Add `DEEPSEEK_API_KEY` (and optional `DEEPSEEK_BASE_URL`, models) for fallback.
 - SMTP/Resend keys for welcome emails are in `backend/.env.example`.
 
 ## Running Postgres locally
