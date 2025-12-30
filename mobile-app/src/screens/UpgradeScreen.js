@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, Alert } from 'react-native';
 import Header from '../components/common/Header';
 import PlanCard from '../components/subscription/PlanCard';
 import FeatureList from '../components/subscription/FeatureList';
@@ -7,10 +7,19 @@ import Button from '../components/common/Button';
 import { SUBSCRIPTION_PLANS } from '../utils/constants';
 import { globalStyles, colors } from '../styles/global';
 import { useSubscription } from '../context/SubscriptionContext';
+import { startCheckout } from '../services/revenuecat';
 
 const UpgradeScreen = () => {
   const [selected, setSelected] = useState('premium');
   const { upgrade } = useSubscription();
+
+  const handleUpgrade = async () => {
+    const res = await startCheckout();
+    if (res.status === 'mock') {
+      upgrade();
+      Alert.alert('Upgraded (mock)', 'RevenueCat integration not yet implemented.');
+    }
+  };
 
   return (
     <View style={globalStyles.screen}>
@@ -27,7 +36,7 @@ const UpgradeScreen = () => {
           'Ad-free experience',
         ]}
       />
-      <Button label="Start 7-day free trial" onPress={upgrade} />
+      <Button label="Start 7-day free trial" onPress={handleUpgrade} />
       <Text style={{ color: colors.muted, marginTop: 8 }}>£2.99/month after trial. Cancel anytime.</Text>
     </View>
   );
