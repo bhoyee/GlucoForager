@@ -39,20 +39,25 @@ class AIRecipeGenerator:
         )
         return resp.choices[0].message.content or ""
 
-    def generate(self, ingredients: List[str]) -> List[Dict[str, Any]]:
+    def generate(self, ingredients: List[str], tier: str) -> List[Dict[str, Any]]:
         if not self.enabled:
             raise RuntimeError("AI recipe generation not configured: provide OPENAI_API_KEY or DEEPSEEK_API_KEY")
 
+        from ..core.constants import TIER_CONFIG  # local import to avoid cycle
+        tier_cfg = TIER_CONFIG.get(tier, {})
+        primary_model = tier_cfg.get("recipe_model", self.primary_model)
+        fallback_model = tier_cfg.get("recipe_model", self.fallback_model)
+
         if self.primary_client:
             try:
-                content = self._call(self.primary_client, self.primary_model, ingredients)
+                content = self._call(self.primary_client, primary_model, ingredients)
                 return [{"raw": content}]
             except OpenAIError as exc:
                 logger.warning("Primary recipe generation failed, attempting fallback: %s", exc)
 
         if self.fallback_client:
             try:
-                content = self._call(self.fallback_client, self.fallback_model, ingredients)
+                content = self._call(self.fallback_client, fallback_model, ingredients)
                 return [{"raw": content}]
             except OpenAIError as exc:
                 logger.exception("Fallback recipe generation failed")
