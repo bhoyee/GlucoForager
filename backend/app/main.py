@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from .api.endpoints import auth, ingredients, recipes, subscriptions, ai_recipes, text_recipes
 from .core.config import settings
 from .database import Base, engine
-from .models import recipe, subscription, user  # ensure models are registered with SQLAlchemy
+from .models import subscription, user, ai_request  # ensure models are registered with SQLAlchemy
 from .services.abuse_detector import AbuseDetector
 
 logging.basicConfig(
