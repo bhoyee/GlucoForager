@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
@@ -8,9 +8,11 @@ from sqlalchemy.orm import Session
 from ...core.security import create_access_token, get_password_hash, verify_password
 from ...database import get_db
 from ...models.user import User
+from ...services.login_throttler import LoginThrottler
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
+login_throttler = LoginThrottler()
 
 
 class Token(BaseModel):
@@ -45,9 +47,25 @@ def signup(payload: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/token", response_model=Token)
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+def login(
+    request: Request,
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db),
+):
+    identifier = f"{form_data.username.lower()}@{request.client.host}"
+    allowed, remaining = login_throttler.check_allowed(identifier)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many failed attempts. Try again in {remaining} seconds.",
+        )
+
     user = db.query(User).filter(User.email == form_data.username).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
+        remaining_attempts = login_throttler.record_failure(identifier)
+        logger.warning("Login failed for email=%s, remaining_attempts=%s", form_data.username, remaining_attempts)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    login_throttler.record_success(identifier)
     token = create_access_token({"sub": str(user.id)})
     return Token(access_token=token, message="Login successful")
