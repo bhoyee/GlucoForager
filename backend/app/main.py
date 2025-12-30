@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 
 from .api.endpoints import auth, ingredients, recipes, subscriptions
 from .core.config import settings
+from .database import Base, engine
 from .services.abuse_detector import AbuseDetector
 
 app = FastAPI(title=settings.project_name)
@@ -17,6 +18,11 @@ app.add_middleware(
 )
 
 abuse_detector = AbuseDetector()
+
+
+@app.on_event("startup")
+def on_startup():
+    Base.metadata.create_all(bind=engine)
 
 
 @app.middleware("http")
