@@ -22,3 +22,27 @@ export const generateVisionRecipes = async (imageBase64, token, filters = []) =>
   });
   return response.json();
 };
+
+export const fetchProfile = async (token) => {
+  const res = await fetch(`${API_BASE_URL}/user/profile`, { headers: jsonHeaders(token) });
+  return res.json();
+};
+
+export const fetchScansToday = async (token) => {
+  const res = await fetch(`${API_BASE_URL}/user/scans-today`, { headers: jsonHeaders(token) });
+  return res.json();
+};
+
+export const listFavorites = async (token) => {
+  const res = await fetch(`${API_BASE_URL}/favorites`, { headers: jsonHeaders(token) });
+  return res.json();
+};
+
+export const saveFavorite = async (title, recipe, token) => {
+  const res = await fetch(`${API_BASE_URL}/favorites`, {
+    method: 'POST',
+    headers: jsonHeaders(token),
+    body: JSON.stringify({ title, recipe }),
+  });
+  return res.json();
+};
