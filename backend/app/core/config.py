@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     deepseek_base_url: str = Field("https://api.deepseek.com/v1", env="DEEPSEEK_BASE_URL")
     deepseek_model: str = Field("gpt-5", env="DEEPSEEK_MODEL")
     deepseek_vision_model: str = Field("gpt-5-vision", env="DEEPSEEK_VISION_MODEL")
+    redis_url: str | None = Field(None, env="REDIS_URL")
 
     class Config:
         env_file = ".env"

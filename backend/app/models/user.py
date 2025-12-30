@@ -17,6 +17,7 @@ class User(Base):
 
     searches = relationship("SearchLog", back_populates="user", cascade="all, delete-orphan")
     subscriptions = relationship("Subscription", back_populates="user")
+    ai_requests = relationship("AIRequest", back_populates="user", cascade="all, delete-orphan")
 
 
 class SearchLog(Base):
