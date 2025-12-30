@@ -7,8 +7,8 @@ from passlib.context import CryptContext
 from .config import settings
 
 
-# Use bcrypt_sha256 to avoid bcrypt 72-byte limits and Windows backend quirks.
-pwd_context = CryptContext(schemes=["bcrypt_sha256"], deprecated="auto")
+# Use pbkdf2_sha256 to avoid platform-specific bcrypt issues on Windows.
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
