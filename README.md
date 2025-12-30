@@ -8,19 +8,20 @@ Diabetes-friendly recipe suggestions from the ingredients you already have. Mobi
 - landing-page: Next.js App Router marketing site with required sections stubbed.
 
 ## Development phases
-1. Backend core: DB models, FastAPI app, recipe matching, auth, AI vision/recipe stubs, abuse detection.
+1. Backend core: DB models (users, subscriptions, AI requests), FastAPI app, AI vision/recipe pipeline (OpenAI primary, DeepSeek fallback), auth, abuse detection, caching hooks.
 2. Mobile core: Expo setup, key screens, results display, detail view, API layer.
 3. Premium features: Camera flow, subscriptions, favorites, profile/history.
 4. Landing page: Marketing site with pricing, feature comparison, gallery, and SEO focus.
 
-## AI endpoints (Phase 1 refresh)
-- `POST /api/ai/vision`: GPT-5 Vision-style fridge analysis (base64 image). Uses OpenAI primary; DeepSeek fallback if provided.
-- `POST /api/ai/recipes/generate`: GPT-5 recipe generation with diabetes-friendly prompt, OpenAI primary, DeepSeek fallback; enforces daily search limits.
+## AI endpoints (AI-first)
+- `POST /api/ai/recipes/vision`: Fridge photo (base64) → ingredients via vision → 3 AI recipes. Tier-aware models and caching.
+- `POST /api/ai/text/recipes`: Text ingredient list → 3 AI recipes. Tier-aware models and caching.
 
 ## Environment
-- Add `OPENAI_API_KEY`, `OPENAI_MODEL` (default gpt-5), `OPENAI_VISION_MODEL` (default gpt-5-vision) for AI primary.
-- Add `DEEPSEEK_API_KEY` (and optional `DEEPSEEK_BASE_URL`, models) for fallback.
-- SMTP/Resend keys for welcome emails are in `backend/.env.example`.
+- `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_VISION_MODEL` for primary AI.
+- `DEEPSEEK_API_KEY`, `DEEPSEEK_BASE_URL`, `DEEPSEEK_MODEL`, `DEEPSEEK_VISION_MODEL` for fallback.
+- `REDIS_URL` for cache (optional; falls back to in-memory if unavailable).
+- SMTP/Resend keys for welcome emails in `backend/.env.example`.
 
 ## Running Postgres locally
 - Choose a free host port. Default is `65432`. Override when starting compose if needed.

@@ -4,9 +4,10 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
-from ..core.constants import FREE_SEARCH_LIMIT
+from ..core.constants import FREE_SEARCH_LIMIT, TIER_CONFIG
 from ..core.security import decode_access_token
 from ..database import get_db
+from ..models.ai_request import AIRequest
 from ..models.user import SearchLog, User
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
@@ -31,6 +32,9 @@ def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_
 
 
 def check_user_access(user: User, db: Session) -> dict:
+    tier_cfg = TIER_CONFIG.get(user.subscription_tier, TIER_CONFIG["free"])
+
+    # Premium: unlimited scans
     if user.subscription_tier == "premium":
         return {
             "allowed": True,
@@ -40,12 +44,32 @@ def check_user_access(user: User, db: Session) -> dict:
         }
 
     today = date.today()
-    today_searches = (
+    daily_limit = tier_cfg.get("max_daily_scans", FREE_SEARCH_LIMIT)
+    if daily_limit:
+        tomorrow = date.fromordinal(today.toordinal() + 1)
+        ai_count = (
+            db.query(AIRequest)
+            .filter(AIRequest.user_id == user.id, AIRequest.created_at >= today, AIRequest.created_at < tomorrow)
+            .count()
+        )
+        search_count = (
+            db.query(SearchLog)
+            .filter(SearchLog.user_id == user.id, SearchLog.executed_at == today)
+            .count()
+        )
+    else:
+        ai_count = 0
+        search_count = 0
+    # Keep legacy text search count as part of daily budget
+    search_count = (
         db.query(SearchLog).filter(SearchLog.user_id == user.id, SearchLog.executed_at == today).count()
+        if daily_limit
+        else 0
     )
+    total_used = ai_count + search_count
     return {
-        "allowed": today_searches < FREE_SEARCH_LIMIT,
-        "searches_left": max(0, FREE_SEARCH_LIMIT - today_searches),
+        "allowed": (total_used < daily_limit) if daily_limit is not None else True,
+        "searches_left": "unlimited" if daily_limit is None else max(0, daily_limit - total_used),
         "camera_access": False,
         "ads": True,
     }
