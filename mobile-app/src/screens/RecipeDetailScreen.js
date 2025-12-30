@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, Image, ScrollView } from 'react-native';
+import { View, Text, Image, ScrollView, Alert } from 'react-native';
 import Button from '../components/common/Button';
 import { globalStyles, colors } from '../styles/global';
 import { useSubscription } from '../context/SubscriptionContext';
+import { useFavorites } from '../context/FavoritesContext';
 
 const demoRecipe = {
   title: 'Lemon Garlic Salmon',
@@ -25,6 +26,7 @@ const demoRecipe = {
 
 const RecipeDetailScreen = () => {
   const { isPremium } = useSubscription();
+  const { addFavorite } = useFavorites();
 
   return (
     <ScrollView style={globalStyles.screen}>
@@ -56,7 +58,18 @@ const RecipeDetailScreen = () => {
         </Text>
       ))}
 
-      <Button label="Save to favorites" onPress={() => {}} disabled={!isPremium} />
+      <Button
+        label="Save to favorites"
+        onPress={() => {
+          if (!isPremium) {
+            Alert.alert('Premium only', 'Upgrade to save favorites.');
+            return;
+          }
+          addFavorite(demoRecipe);
+          Alert.alert('Saved', 'Recipe added to favorites.');
+        }}
+        disabled={!isPremium}
+      />
       {!isPremium && (
         <Text style={{ color: colors.accent, marginTop: 8 }}>
           Premium unlocks favorites and camera recognition.

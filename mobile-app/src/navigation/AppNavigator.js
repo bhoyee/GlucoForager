@@ -3,14 +3,17 @@ import { NavigationContainer } from '@react-navigation/native';
 
 import { AuthProvider } from '../context/AuthContext';
 import { SubscriptionProvider } from '../context/SubscriptionContext';
+import { FavoritesProvider } from '../context/FavoritesContext';
 import AuthStack from './AuthStack';
 
 const AppNavigator = () => (
   <AuthProvider>
     <SubscriptionProvider>
-      <NavigationContainer>
-        <AuthStack />
-      </NavigationContainer>
+      <FavoritesProvider>
+        <NavigationContainer>
+          <AuthStack />
+        </NavigationContainer>
+      </FavoritesProvider>
     </SubscriptionProvider>
   </AuthProvider>
 );
