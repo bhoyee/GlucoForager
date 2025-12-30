@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    message: str | None = None
 
 
 class UserCreate(BaseModel):
@@ -34,7 +35,7 @@ def signup(payload: UserCreate, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(user)
         token = create_access_token({"sub": str(user.id)})
-        return Token(access_token=token)
+        return Token(access_token=token, message="Signup successful")
     except HTTPException:
         # Bubble up expected API errors unchanged.
         raise
@@ -49,4 +50,4 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     token = create_access_token({"sub": str(user.id)})
-    return Token(access_token=token)
+    return Token(access_token=token, message="Login successful")

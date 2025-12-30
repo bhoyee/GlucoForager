@@ -1,3 +1,6 @@
+import logging
+import time
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -7,6 +10,12 @@ from .core.config import settings
 from .database import Base, engine
 from .models import recipe, subscription, user  # ensure models are registered with SQLAlchemy
 from .services.abuse_detector import AbuseDetector
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s - %(message)s",
+)
+logger = logging.getLogger("glucoforager")
 
 app = FastAPI(title=settings.project_name)
 
@@ -24,6 +33,7 @@ abuse_detector = AbuseDetector()
 @app.on_event("startup")
 def on_startup():
     Base.metadata.create_all(bind=engine)
+    logger.info("Startup complete, database tables ensured.")
 
 
 @app.middleware("http")
@@ -31,7 +41,11 @@ async def abuse_guard(request: Request, call_next):
     identifier = request.client.host
     if not abuse_detector.record_and_check(identifier):
         return JSONResponse(status_code=429, content={"detail": "Slow down"})
-    return await call_next(request)
+    start = time.time()
+    response = await call_next(request)
+    duration_ms = (time.time() - start) * 1000
+    logger.info("%s %s -> %s (%.1f ms)", request.method, request.url.path, response.status_code, duration_ms)
+    return response
 
 
 @app.get("/health")
