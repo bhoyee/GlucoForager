@@ -46,3 +46,36 @@ export const saveFavorite = async (title, recipe, token) => {
   });
   return res.json();
 };
+
+export const fetchHistory = async (token) => {
+  const res = await fetch(`${API_BASE_URL}/history/ai-requests`, { headers: jsonHeaders(token) });
+  return res.json();
+};
+
+export const fetchMealPlans = async (token) => {
+  const res = await fetch(`${API_BASE_URL}/meal-plans`, { headers: jsonHeaders(token) });
+  return res.json();
+};
+
+export const createMealPlan = async (plan_date, recipes, token) => {
+  const res = await fetch(`${API_BASE_URL}/meal-plans`, {
+    method: 'POST',
+    headers: jsonHeaders(token),
+    body: JSON.stringify({ plan_date, recipes }),
+  });
+  return res.json();
+};
+
+export const fetchShoppingList = async (token) => {
+  const res = await fetch(`${API_BASE_URL}/shopping-list`, { headers: jsonHeaders(token) });
+  return res.json();
+};
+
+export const createShoppingList = async (title, items, token) => {
+  const res = await fetch(`${API_BASE_URL}/shopping-list`, {
+    method: 'POST',
+    headers: jsonHeaders(token),
+    body: JSON.stringify({ title, items }),
+  });
+  return res.json();
+};
