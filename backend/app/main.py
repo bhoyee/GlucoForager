@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .api.endpoints import auth, ingredients, recipes, subscriptions
+from .api.endpoints import ai, auth, ingredients, recipes, subscriptions
 from .core.config import settings
 from .database import Base, engine
 from .models import recipe, subscription, user  # ensure models are registered with SQLAlchemy
@@ -57,3 +57,4 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(ingredients.router, prefix="/api")
 app.include_router(recipes.router, prefix="/api")
 app.include_router(subscriptions.router, prefix="/api")
+app.include_router(ai.router, prefix="/api")
