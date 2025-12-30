@@ -14,7 +14,7 @@ Diabetes-friendly recipe suggestions from the ingredients you already have. Mobi
 4. Landing page: Marketing site with pricing, feature comparison, gallery, and SEO focus.
 
 ## Running Postgres locally
-- Choose a free host port. Default is `65432`. Set `HOST_DB_PORT` if you need another.
+- Choose a free host port. Default is `65432`. Override when starting compose if needed.
 - Spin up DB: `HOST_DB_PORT=65432 docker-compose up -d db` (binds host port → container 5432).
-- Use `backend/.env.example` to set `DATABASE_URL` (it interpolates `HOST_DB_PORT`).
+- In `backend/.env`, set `DATABASE_URL=postgresql://glucoforager:glucoforager@localhost:<your_port>/glucoforager` (example uses 65432).
 
