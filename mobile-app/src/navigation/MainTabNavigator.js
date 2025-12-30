@@ -14,6 +14,9 @@ import PremiumCameraScreen from '../screens/PremiumCameraScreen';
 import PremiumDashboard from '../screens/PremiumDashboard';
 import TextInputScreen from '../screens/TextInputScreen';
 import AIProcessingScreen from '../screens/AIProcessingScreen';
+import HistoryScreen from '../screens/HistoryScreen';
+import MealPlanScreen from '../screens/MealPlanScreen';
+import ShoppingListScreen from '../screens/ShoppingListScreen';
 import { colors } from '../styles/global';
 
 const Tab = createBottomTabNavigator();
@@ -29,6 +32,9 @@ const HomeStackScreen = () => (
     <HomeStack.Screen name="PremiumCamera" component={PremiumCameraScreen} />
     <HomeStack.Screen name="TextInput" component={TextInputScreen} />
     <HomeStack.Screen name="AIProcessing" component={AIProcessingScreen} />
+    <HomeStack.Screen name="History" component={HistoryScreen} />
+    <HomeStack.Screen name="MealPlan" component={MealPlanScreen} />
+    <HomeStack.Screen name="ShoppingList" component={ShoppingListScreen} />
   </HomeStack.Navigator>
 );
 

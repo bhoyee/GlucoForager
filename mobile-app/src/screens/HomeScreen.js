@@ -12,7 +12,7 @@ import { useSubscription } from '../context/SubscriptionContext';
 const HomeScreen = ({ navigation }) => {
   const [ingredients, setIngredients] = useState(['chicken breast', 'spinach']);
   const [tags, setTags] = useState(['diabetes-friendly']);
-  const { isPremium } = useSubscription();
+  const { isPremium, scansToday } = useSubscription();
 
   const addIngredient = (item) => setIngredients((prev) => [...prev, item]);
   const addTag = (tag) => setTags((prev) => [...prev, tag]);
@@ -71,6 +71,33 @@ const HomeScreen = ({ navigation }) => {
           {isPremium ? 'Use camera recognition' : 'Upgrade for camera access'}
         </Text>
       </TouchableOpacity>
+
+      <View style={{ marginTop: 12 }}>
+        <Text style={{ color: colors.muted, marginBottom: 6 }}>Tools</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('History')}
+            style={{ backgroundColor: colors.surface, padding: 12, borderRadius: 10, flex: 1, marginRight: 6 }}
+          >
+            <Text style={{ color: colors.text, fontWeight: '700' }}>History</Text>
+            <Text style={{ color: colors.muted, fontSize: 12 }}>Recent AI scans</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('MealPlan')}
+            style={{ backgroundColor: colors.surface, padding: 12, borderRadius: 10, flex: 1, marginHorizontal: 6 }}
+          >
+            <Text style={{ color: colors.text, fontWeight: '700' }}>Meal plans</Text>
+            <Text style={{ color: colors.muted, fontSize: 12 }}>Premium</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('ShoppingList')}
+            style={{ backgroundColor: colors.surface, padding: 12, borderRadius: 10, flex: 1, marginLeft: 6 }}
+          >
+            <Text style={{ color: colors.text, fontWeight: '700' }}>Shopping</Text>
+            <Text style={{ color: colors.muted, fontSize: 12 }}>Premium</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
     </View>
   );
 };
