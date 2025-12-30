@@ -12,6 +12,8 @@ import UpgradeScreen from '../screens/UpgradeScreen';
 import FreeCameraScreen from '../screens/FreeCameraScreen';
 import PremiumCameraScreen from '../screens/PremiumCameraScreen';
 import PremiumDashboard from '../screens/PremiumDashboard';
+import TextInputScreen from '../screens/TextInputScreen';
+import AIProcessingScreen from '../screens/AIProcessingScreen';
 import { colors } from '../styles/global';
 
 const Tab = createBottomTabNavigator();
@@ -25,6 +27,8 @@ const HomeStackScreen = () => (
     <HomeStack.Screen name="RecipeDetail" component={RecipeDetailScreen} />
     <HomeStack.Screen name="FreeCamera" component={FreeCameraScreen} />
     <HomeStack.Screen name="PremiumCamera" component={PremiumCameraScreen} />
+    <HomeStack.Screen name="TextInput" component={TextInputScreen} />
+    <HomeStack.Screen name="AIProcessing" component={AIProcessingScreen} />
   </HomeStack.Navigator>
 );
 

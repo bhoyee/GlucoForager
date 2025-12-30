@@ -5,6 +5,7 @@ import IngredientInput from '../components/inputs/IngredientInput';
 import TagInput from '../components/inputs/TagInput';
 import Button from '../components/common/Button';
 import TierBadge from '../components/common/TierBadge';
+import AIScanCounter from '../components/common/AIScanCounter';
 import { globalStyles, colors } from '../styles/global';
 import { useSubscription } from '../context/SubscriptionContext';
 
@@ -29,6 +30,7 @@ const HomeScreen = ({ navigation }) => {
       </View>
       <Header title="What's in your fridge?" />
       <Text style={globalStyles.subheading}>Type or scan your ingredients. We will keep it diabetes-safe.</Text>
+      <AIScanCounter isPremium={isPremium} scansToday={scansToday} />
       <IngredientInput onAdd={addIngredient} />
       <TagInput onAdd={addTag} />
 
