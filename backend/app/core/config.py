@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     smtp_from_name: str | None = Field(None, env="SMTP_FROM_NAME")
     smtp_encryption: str | None = Field("ssl", env="SMTP_ENCRYPTION")
     resend_api_key: str | None = Field(None, env="RESEND_API_KEY")
+    openai_api_key: str | None = Field(None, env="OPENAI_API_KEY")
+    openai_model: str = Field("gpt-5", env="OPENAI_MODEL")
+    openai_vision_model: str = Field("gpt-5-vision", env="OPENAI_VISION_MODEL")
 
     class Config:
         env_file = ".env"
