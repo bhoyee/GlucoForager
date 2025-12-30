@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 from .api.endpoints import auth, ingredients, recipes, subscriptions
 from .core.config import settings
 from .database import Base, engine
+from .models import recipe, subscription, user  # ensure models are registered with SQLAlchemy
 from .services.abuse_detector import AbuseDetector
 
 app = FastAPI(title=settings.project_name)
