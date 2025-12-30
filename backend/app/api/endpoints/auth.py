@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
@@ -8,6 +10,7 @@ from ...database import get_db
 from ...models.user import User
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+logger = logging.getLogger(__name__)
 
 
 class Token(BaseModel):
@@ -22,15 +25,22 @@ class UserCreate(BaseModel):
 
 @router.post("/signup", response_model=Token)
 def signup(payload: UserCreate, db: Session = Depends(get_db)):
-    existing = db.query(User).filter(User.email == payload.email).first()
-    if existing:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User already exists")
-    user = User(email=payload.email, hashed_password=get_password_hash(payload.password))
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    token = create_access_token({"sub": str(user.id)})
-    return Token(access_token=token)
+    try:
+        existing = db.query(User).filter(User.email == payload.email).first()
+        if existing:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User already exists")
+        user = User(email=payload.email, hashed_password=get_password_hash(payload.password))
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        token = create_access_token({"sub": str(user.id)})
+        return Token(access_token=token)
+    except HTTPException:
+        # Bubble up expected API errors unchanged.
+        raise
+    except Exception as exc:
+        logger.exception("Signup failed for email=%s", payload.email)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Signup failed") from exc
 
 
 @router.post("/token", response_model=Token)
