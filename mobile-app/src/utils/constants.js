@@ -14,3 +14,8 @@ export const SUBSCRIPTION_PLANS = [
     features: ['Unlimited searches', 'Camera ingredient recognition', 'Favorites', 'Ad-free'],
   },
 ];
+
+export const TIER_LIMITS = {
+  free: 3,
+  premium: Infinity,
+};
