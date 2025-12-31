@@ -28,7 +28,8 @@ class UserCreate(BaseModel):
 
 
 class LoginPayload(BaseModel):
-    email: EmailStr
+    email: EmailStr | None = None
+    username: str | None = None
     password: str
 
 
@@ -93,7 +94,11 @@ def login_alias(
     """
     JSON-based login for mobile/web clients.
     """
-    identifier = f"{payload.email.lower()}@{request.client.host}"
+    email = payload.email or payload.username
+    if not email:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Email is required")
+
+    identifier = f"{email.lower()}@{request.client.host}"
     allowed, remaining = login_throttler.check_allowed(identifier)
     if not allowed:
         raise HTTPException(
@@ -101,10 +106,10 @@ def login_alias(
             detail=f"Too many failed attempts. Try again in {remaining} seconds.",
         )
 
-    user = db.query(User).filter(User.email == payload.email).first()
+    user = db.query(User).filter(User.email == email).first()
     if not user or not verify_password(payload.password, user.hashed_password):
         remaining_attempts = login_throttler.record_failure(identifier)
-        logger.warning("Login failed for email=%s, remaining_attempts=%s", payload.email, remaining_attempts)
+        logger.warning("Login failed for email=%s, remaining_attempts=%s", email, remaining_attempts)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
     login_throttler.record_success(identifier)
