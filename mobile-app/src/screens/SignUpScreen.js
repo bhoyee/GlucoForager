@@ -13,8 +13,16 @@ const SignUpScreen = ({ navigation }) => {
 
   const toMessage = (val) => {
     if (typeof val === 'string') return val;
-    if (Array.isArray(val)) return val.join(', ');
-    if (val && typeof val === 'object') return JSON.stringify(val);
+    if (Array.isArray(val)) {
+      return val
+        .map((item) => {
+          if (typeof item === 'string') return item;
+          if (item && typeof item === 'object') return item.msg || item.detail || JSON.stringify(item);
+          return String(item);
+        })
+        .join(', ');
+    }
+    if (val && typeof val === 'object') return val.msg || val.detail || JSON.stringify(val);
     return 'Please try again';
   };
 
