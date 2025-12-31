@@ -27,6 +27,11 @@ class UserCreate(BaseModel):
     password: str
 
 
+class LoginPayload(BaseModel):
+    email: EmailStr
+    password: str
+
+
 @router.post("/signup", response_model=Token)
 def signup(payload: UserCreate, db: Session = Depends(get_db)):
     try:
@@ -57,6 +62,9 @@ def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):
+    """
+    Form-based login (x-www-form-urlencoded), used by Swagger/CLI.
+    """
     identifier = f"{form_data.username.lower()}@{request.client.host}"
     allowed, remaining = login_throttler.check_allowed(identifier)
     if not allowed:
@@ -78,8 +86,27 @@ def login(
 
 @router.post("/login", response_model=Token)
 def login_alias(
+    payload: LoginPayload,
     request: Request,
-    form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):
-    return login(request=request, form_data=form_data, db=db)
+    """
+    JSON-based login for mobile/web clients.
+    """
+    identifier = f"{payload.email.lower()}@{request.client.host}"
+    allowed, remaining = login_throttler.check_allowed(identifier)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many failed attempts. Try again in {remaining} seconds.",
+        )
+
+    user = db.query(User).filter(User.email == payload.email).first()
+    if not user or not verify_password(payload.password, user.hashed_password):
+        remaining_attempts = login_throttler.record_failure(identifier)
+        logger.warning("Login failed for email=%s, remaining_attempts=%s", payload.email, remaining_attempts)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    login_throttler.record_success(identifier)
+    token = create_access_token({"sub": str(user.id)})
+    return Token(access_token=token, message="Login successful")
