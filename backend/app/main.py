@@ -15,14 +15,14 @@ from .api.endpoints import (
     ai_recipes,
     text_recipes,
     favorites,
-    user,
+    user as user_router,
     history,
     meal_plan,
     shopping_list,
 )
 from .core.config import settings
 from .database import Base, engine
-from .models import subscription, user, ai_request  # ensure models are registered with SQLAlchemy
+from .models import subscription, user as user_model, ai_request  # ensure models are registered with SQLAlchemy
 from .services.abuse_detector import AbuseDetector
 
 logging.basicConfig(
@@ -91,7 +91,7 @@ app.include_router(subscriptions.router, prefix="/api")
 app.include_router(ai_recipes.router, prefix="/api")
 app.include_router(text_recipes.router, prefix="/api")
 app.include_router(favorites.router, prefix="/api")
-app.include_router(user.router, prefix="/api")
+app.include_router(user_router.router, prefix="/api")
 app.include_router(history.router, prefix="/api")
 app.include_router(meal_plan.router, prefix="/api")
 app.include_router(shopping_list.router, prefix="/api")
