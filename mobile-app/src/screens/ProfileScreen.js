@@ -9,6 +9,11 @@ const ProfileScreen = ({ navigation }) => {
   const { user, logout } = useAuth();
   const { tier, isPremium } = useSubscription();
 
+  const handleLogout = () => {
+    logout();
+    navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+  };
+
   return (
     <View style={globalStyles.screen}>
       <Header title="Profile" />
@@ -21,7 +26,7 @@ const ProfileScreen = ({ navigation }) => {
           {isPremium ? 'Open Premium Dashboard' : 'Upgrade to Premium'}
         </Text>
       </TouchableOpacity>
-      <TouchableOpacity onPress={logout}>
+      <TouchableOpacity onPress={handleLogout}>
         <Text style={{ color: colors.muted }}>Log out</Text>
       </TouchableOpacity>
     </View>

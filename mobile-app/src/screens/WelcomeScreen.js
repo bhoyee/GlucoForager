@@ -26,13 +26,27 @@ const WelcomeScreen = ({ navigation }) => {
   const slide = slides[index];
 
   return (
-    <View style={[globalStyles.screen, { justifyContent: 'center', alignItems: 'center' }]}>
-      <Image
-        source={{ uri: 'https://via.placeholder.com/220x220.png?text=GlucoForager' }}
-        style={{ width: 200, height: 200, marginBottom: 24 }}
-      />
-      <Text style={globalStyles.heading}>{slide.title}</Text>
-      <Text style={[globalStyles.subheading, { textAlign: 'center' }]}>{slide.subtitle}</Text>
+    <View
+      style={[
+        globalStyles.screen,
+        { justifyContent: 'center', alignItems: 'center', paddingTop: 40, backgroundColor: '#0C1824' },
+      ]}
+    >
+      <View
+        style={{
+          width: 200,
+          height: 200,
+          borderRadius: 24,
+          backgroundColor: '#10243a',
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginBottom: 24,
+        }}
+      >
+        <Image source={require('../../assets/icons/app-icon.png')} style={{ width: 120, height: 120 }} />
+      </View>
+      <Text style={[globalStyles.heading, { color: '#fff', textAlign: 'center' }]}>{slide.title}</Text>
+      <Text style={[globalStyles.subheading, { textAlign: 'center', color: '#cfd8e3' }]}>{slide.subtitle}</Text>
       <View style={{ flexDirection: 'row', marginVertical: 12 }}>
         {slides.map((_, i) => (
           <View
@@ -41,7 +55,7 @@ const WelcomeScreen = ({ navigation }) => {
               width: 10,
               height: 10,
               borderRadius: 5,
-              backgroundColor: i === index ? colors.primary : colors.surface,
+              backgroundColor: i === index ? colors.primary : '#243b53',
               marginHorizontal: 4,
             }}
           />
@@ -50,10 +64,10 @@ const WelcomeScreen = ({ navigation }) => {
       <Button label="Get Started" onPress={() => navigation.replace('Login')} />
       <View style={{ flexDirection: 'row', marginTop: 8 }}>
         <TouchableOpacity onPress={prev} style={{ marginHorizontal: 8 }}>
-          <Text style={{ color: colors.muted }}>Prev</Text>
+          <Text style={{ color: '#cfd8e3' }}>Prev</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={next} style={{ marginHorizontal: 8 }}>
-          <Text style={{ color: colors.muted }}>Next</Text>
+          <Text style={{ color: '#cfd8e3' }}>Next</Text>
         </TouchableOpacity>
       </View>
     </View>

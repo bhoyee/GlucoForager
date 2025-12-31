@@ -11,7 +11,7 @@ const ResultsScreen = ({ route }) => {
     <ScrollView style={globalStyles.screen}>
       <Header title="AI-Generated Recipes" />
       <Text style={[globalStyles.subheading, { marginBottom: 12 }]}>
-        Based on your fridge scan. {filters.length ? `Filters: ${filters.join(', ')}` : 'No filters applied.'}
+        Based on your ingredients. {filters.length ? `Filters: ${filters.join(', ')}` : 'No filters applied.'}
       </Text>
 
       {detected.length ? (

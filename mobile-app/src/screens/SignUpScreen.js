@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Alert, ActivityIndicator, Image } from 'react-native';
 import Header from '../components/common/Header';
 import Button from '../components/common/Button';
 import { globalStyles, colors } from '../styles/global';
@@ -10,6 +10,7 @@ const SignUpScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const { login } = useAuth();
+  const [loading, setLoading] = useState(false);
 
   const toMessage = (val) => {
     if (typeof val === 'string') return val;
@@ -27,18 +28,32 @@ const SignUpScreen = ({ navigation }) => {
   };
 
   const handleSignup = async () => {
-    const res = await signupApi(email, password);
-    if (res.access_token) {
-      login(email, res.access_token);
-      navigation.replace('Main');
-    } else {
-      Alert.alert('Signup failed', toMessage(res.detail));
+    if (!email || !password) {
+      Alert.alert('Signup failed', 'Email and password are required');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await signupApi(email, password);
+      if (res.access_token) {
+        login(email, res.access_token);
+        navigation.replace('Main');
+      } else {
+        Alert.alert('Signup failed', toMessage(res.detail));
+      }
+    } catch (e) {
+      Alert.alert('Signup failed', 'Please check your connection and try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <View style={globalStyles.screen}>
-      <Header title="Create account" />
+    <View style={[globalStyles.screen, { justifyContent: 'center' }]}>
+      <View style={{ alignItems: 'center', marginBottom: 16 }}>
+        <Image source={require('../../assets/icons/app-icon.png')} style={{ width: 96, height: 96, marginBottom: 8 }} />
+        <Header title="Create account" />
+      </View>
       <TextInput
         value={email}
         onChangeText={setEmail}
@@ -54,7 +69,8 @@ const SignUpScreen = ({ navigation }) => {
         secureTextEntry
         style={{ backgroundColor: colors.surface, color: colors.text, padding: 12, borderRadius: 10, marginBottom: 10 }}
       />
-      <Button label="Create Free Account" onPress={handleSignup} />
+      <Button label={loading ? 'Creating account...' : 'Create Free Account'} onPress={handleSignup} disabled={loading} />
+      {loading ? <ActivityIndicator color={colors.primary} style={{ marginTop: 8 }} /> : null}
       <Text style={{ color: colors.muted, marginTop: 6 }}>Start with 3 free AI scans daily.</Text>
       <TouchableOpacity onPress={() => navigation.navigate('Login')} style={{ marginTop: 12 }}>
         <Text style={{ color: colors.accent }}>Have an account? Login</Text>

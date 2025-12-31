@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import Header from '../components/common/Header';
 import IngredientInput from '../components/inputs/IngredientInput';
 import TagInput from '../components/inputs/TagInput';
@@ -8,17 +8,40 @@ import TierBadge from '../components/common/TierBadge';
 import AIScanCounter from '../components/common/AIScanCounter';
 import { globalStyles, colors } from '../styles/global';
 import { useSubscription } from '../context/SubscriptionContext';
+import { useAuth } from '../context/AuthContext';
+import { searchRecipes } from '../services/api';
+import { checkDailyLimit } from '../utils/daily_limit';
 
 const HomeScreen = ({ navigation }) => {
   const [ingredients, setIngredients] = useState(['chicken breast', 'spinach']);
   const [tags, setTags] = useState(['diabetes-friendly']);
-  const { isPremium, scansToday } = useSubscription();
+  const { isPremium, scansToday, tier, incrementScan } = useSubscription();
+  const { token } = useAuth();
+  const [loading, setLoading] = useState(false);
 
   const addIngredient = (item) => setIngredients((prev) => [...prev, item]);
+  const removeIngredient = (item) => setIngredients((prev) => prev.filter((i) => i !== item));
   const addTag = (tag) => setTags((prev) => [...prev, tag]);
 
-  const goToCamera = () => navigation.navigate(isPremium ? 'PremiumCamera' : 'FreeCamera');
-  const search = () => navigation.navigate('Results', { ingredients, tags });
+  const goToCamera = () => navigation.navigate('FreeCamera'); // free and premium share camera, limits enforced in flow
+
+  const search = async () => {
+    const limit = checkDailyLimit(tier, scansToday);
+    if (!limit.canScan) {
+      Alert.alert('Limit reached', 'Daily limit reached (3 scans). Upgrade for unlimited.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await searchRecipes(ingredients, token);
+      incrementScan();
+      navigation.navigate('Results', { results: res.results ?? [], detected: ingredients, filters: tags });
+    } catch (e) {
+      Alert.alert('Error', 'Could not generate recipes.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <View style={globalStyles.screen}>
@@ -47,20 +70,25 @@ const HomeScreen = ({ navigation }) => {
               paddingVertical: 8,
               borderRadius: 12,
               marginRight: 8,
+              flexDirection: 'row',
+              alignItems: 'center',
             }}
           >
-            <Text style={{ color: colors.text }}>{item}</Text>
+            <Text style={{ color: colors.text, marginRight: 6 }}>{item}</Text>
+            <TouchableOpacity onPress={() => removeIngredient(item)}>
+              <Text style={{ color: colors.muted, fontWeight: '700' }}>×</Text>
+            </TouchableOpacity>
           </View>
         )}
       />
 
-      <Button label="Find diabetes-friendly recipes" onPress={search} />
+      <Button label={loading ? 'Finding recipes...' : 'Find diabetes-friendly recipes'} onPress={search} disabled={loading} />
+      {loading ? <ActivityIndicator color={colors.primary} style={{ marginTop: 8 }} /> : null}
 
       <TouchableOpacity
         onPress={goToCamera}
-        disabled={!isPremium}
         style={{
-          backgroundColor: isPremium ? colors.accent : colors.muted,
+          backgroundColor: colors.accent,
           padding: 14,
           borderRadius: 12,
           alignItems: 'center',
@@ -68,7 +96,7 @@ const HomeScreen = ({ navigation }) => {
         }}
       >
         <Text style={{ color: '#0C1824', fontWeight: '700' }}>
-          {isPremium ? 'Use camera recognition' : 'Upgrade for camera access'}
+          Use camera recognition (free: 3 scans/day)
         </Text>
       </TouchableOpacity>
 
