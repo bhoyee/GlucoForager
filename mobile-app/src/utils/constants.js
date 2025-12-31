@@ -1,4 +1,5 @@
-export const API_BASE_URL = 'http://127.0.0.1:8010/api';
+// Use LAN IP so physical devices can reach the backend
+export const API_BASE_URL = 'http://192.168.1.125:8010/api';
 
 export const SUBSCRIPTION_PLANS = [
   {

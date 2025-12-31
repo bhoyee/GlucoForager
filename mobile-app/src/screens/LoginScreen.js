@@ -11,13 +11,20 @@ const LoginScreen = ({ navigation }) => {
   const [password, setPassword] = useState('');
   const { login } = useAuth();
 
+  const toMessage = (val) => {
+    if (typeof val === 'string') return val;
+    if (Array.isArray(val)) return val.join(', ');
+    if (val && typeof val === 'object') return JSON.stringify(val);
+    return 'Check credentials';
+  };
+
   const handleLogin = async () => {
     const res = await loginApi(email, password);
     if (res.access_token) {
       login(email, res.access_token);
       navigation.replace('Main');
     } else {
-      Alert.alert('Login failed', res.detail || 'Check credentials');
+      Alert.alert('Login failed', toMessage(res.detail));
     }
   };
 

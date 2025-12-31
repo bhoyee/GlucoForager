@@ -11,13 +11,20 @@ const SignUpScreen = ({ navigation }) => {
   const [password, setPassword] = useState('');
   const { login } = useAuth();
 
+  const toMessage = (val) => {
+    if (typeof val === 'string') return val;
+    if (Array.isArray(val)) return val.join(', ');
+    if (val && typeof val === 'object') return JSON.stringify(val);
+    return 'Please try again';
+  };
+
   const handleSignup = async () => {
     const res = await signupApi(email, password);
     if (res.access_token) {
       login(email, res.access_token);
       navigation.replace('Main');
     } else {
-      Alert.alert('Signup failed', res.detail || 'Please try again');
+      Alert.alert('Signup failed', toMessage(res.detail));
     }
   };
 
