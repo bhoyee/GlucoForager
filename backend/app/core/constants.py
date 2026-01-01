@@ -15,8 +15,8 @@ TIER_CONFIG = {
     },
     "premium": {
         "max_daily_scans": None,  # unlimited
-        "vision_model": "gpt-5-vision",
-        "recipe_model": "gpt-5",
+        "vision_model": "gpt-4o-mini-vision",  # align with available OpenAI vision model
+        "recipe_model": "gpt-4o-mini",
         "cache_priority": "low",
     },
 }

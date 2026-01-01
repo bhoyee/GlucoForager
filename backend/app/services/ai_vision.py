@@ -14,13 +14,10 @@ class AIVisionService:
     def __init__(self) -> None:
         self.primary_client = OpenAI(api_key=settings.openai_api_key) if settings.openai_api_key else None
         self.primary_model = settings.openai_vision_model
-        self.fallback_client = (
-            OpenAI(api_key=settings.deepseek_api_key, base_url=settings.deepseek_base_url)
-            if settings.deepseek_api_key
-            else None
-        )
-        self.fallback_model = settings.deepseek_vision_model
-        self.enabled = bool(self.primary_client or self.fallback_client)
+        # DeepSeek currently does not support image_url content; disable fallback for vision to avoid 400s.
+        self.fallback_client = None
+        self.fallback_model = None
+        self.enabled = bool(self.primary_client)
 
     def _call(self, client: OpenAI, model: str, image_b64: str) -> str:
         resp = client.chat.completions.create(
@@ -48,7 +45,7 @@ class AIVisionService:
 
         # Tier-specific model preference
         tier_model = settings.openai_vision_model
-        fallback_model = settings.deepseek_vision_model
+        fallback_model = self.fallback_model
         from ..core.constants import TIER_CONFIG  # local import to avoid cycle
 
         tier_cfg = TIER_CONFIG.get(tier, {})
@@ -63,9 +60,9 @@ class AIVisionService:
                 content = self._call(self.primary_client, tier_model, image_b64)
                 return {"ingredients": [i.strip() for i in content.split(",") if i.strip()], "raw": content}
             except OpenAIError as exc:
-                logger.warning("Primary vision failed, attempting fallback: %s", exc)
+                logger.warning("Primary vision failed: %s", exc)
 
-        if self.fallback_client:
+        if self.fallback_client and fallback_model:
             try:
                 content = self._call(self.fallback_client, fallback_model, image_b64)
                 return {"ingredients": [i.strip() for i in content.split(",") if i.strip()], "raw": content}
@@ -73,4 +70,4 @@ class AIVisionService:
                 logger.exception("Fallback vision failed")
                 raise
 
-        raise RuntimeError("No vision provider available")
+        raise RuntimeError("No vision provider available or request failed")
