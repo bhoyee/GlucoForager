@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Header from '../components/common/Header';
 import IngredientInput from '../components/inputs/IngredientInput';
 import TagInput from '../components/inputs/TagInput';
@@ -44,7 +45,7 @@ const HomeScreen = ({ navigation }) => {
   };
 
   return (
-    <View style={globalStyles.screen}>
+    <SafeAreaView style={globalStyles.screen} edges={['top', 'left', 'right']}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <TierBadge tier={isPremium ? 'premium' : 'free'} />
         <TouchableOpacity onPress={() => navigation.navigate('Upgrade')}>
@@ -61,13 +62,13 @@ const HomeScreen = ({ navigation }) => {
         data={ingredients}
         keyExtractor={(item, idx) => `${item}-${idx}`}
         horizontal
-        style={{ marginVertical: 10 }}
+        style={{ marginVertical: 6 }}
         renderItem={({ item }) => (
           <View
             style={{
               backgroundColor: colors.surface,
-              paddingHorizontal: 12,
-              paddingVertical: 8,
+              paddingHorizontal: 10,
+              paddingVertical: 6,
               borderRadius: 12,
               marginRight: 8,
               flexDirection: 'row',
