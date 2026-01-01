@@ -97,7 +97,7 @@ const HomeScreen = ({ navigation }) => {
         }}
       >
         <Text style={{ color: '#0C1824', fontWeight: '700' }}>
-          Use camera recognition (free: 3 scans/day)
+          {isPremium ? 'Use camera recognition (unlimited)' : 'Use camera recognition (free: 3 scans/day)'}
         </Text>
       </TouchableOpacity>
 
