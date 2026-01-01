@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Alert } from 'react-native';
 import { useAuth } from './AuthContext';
 import { initRevenueCat, refreshEntitlements, purchasePremium, restorePurchases } from '../services/revenuecat';
+import { fetchProfile, fetchScansToday } from '../services/api';
 
 const SubscriptionContext = createContext(null);
 
@@ -10,6 +11,7 @@ export const SubscriptionProvider = ({ children }) => {
   const [scansToday, setScansToday] = useState(0);
    const [rcConfigured, setRcConfigured] = useState(false);
    const { user } = useAuth();
+  const { token } = useAuth();
 
   const upgrade = () => setTier('premium');
   const downgrade = () => setTier('free');
@@ -25,6 +27,20 @@ export const SubscriptionProvider = ({ children }) => {
       }
     })();
   }, [user?.email]);
+
+  useEffect(() => {
+    (async () => {
+      if (!token) return;
+      try {
+        const profile = await fetchProfile(token);
+        if (profile?.subscription_tier) setTier(profile.subscription_tier);
+        const scans = await fetchScansToday(token);
+        if (typeof scans.total === 'number') setScansToday(scans.total);
+      } catch {
+        // ignore profile load errors for now
+      }
+    })();
+  }, [token]);
 
   const syncEntitlements = async () => {
     const res = await refreshEntitlements();
@@ -63,6 +79,8 @@ export const SubscriptionProvider = ({ children }) => {
         tier,
         isPremium: tier === 'premium',
         scansToday,
+        setScansToday,
+        setTier,
         incrementScan,
         resetScans,
         upgrade,
