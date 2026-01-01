@@ -10,7 +10,7 @@ services:
       POSTGRES_PASSWORD: glucoforager
       POSTGRES_DB: glucoforager
     ports:
-      - "${HOST_DB_PORT:-65432}:5432"
+      - "127.0.0.1:${HOST_DB_PORT:-65432}:5432"
     volumes:
       - db-data:/var/lib/postgresql/data
     healthcheck:
@@ -28,7 +28,7 @@ services:
     container_name: glucoforager-redis
     restart: unless-stopped
     ports:
-      - "${HOST_REDIS_PORT:-6379}:6379"
+      - "127.0.0.1:${HOST_REDIS_PORT:-6379}:6379"
     command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
