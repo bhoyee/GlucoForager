@@ -18,12 +18,13 @@ class Settings(BaseSettings):
     smtp_encryption: str | None = Field("ssl", env="SMTP_ENCRYPTION")
     resend_api_key: str | None = Field(None, env="RESEND_API_KEY")
     openai_api_key: str | None = Field(None, env="OPENAI_API_KEY")
-    openai_model: str = Field("gpt-5", env="OPENAI_MODEL")
-    openai_vision_model: str = Field("gpt-5-vision", env="OPENAI_VISION_MODEL")
+    # Use available models by default; can be overridden via env.
+    openai_model: str = Field("gpt-4o-mini", env="OPENAI_MODEL")
+    openai_vision_model: str = Field("gpt-4o-mini-vision", env="OPENAI_VISION_MODEL")
     deepseek_api_key: str | None = Field(None, env="DEEPSEEK_API_KEY")
     deepseek_base_url: str = Field("https://api.deepseek.com/v1", env="DEEPSEEK_BASE_URL")
-    deepseek_model: str = Field("gpt-5", env="DEEPSEEK_MODEL")
-    deepseek_vision_model: str = Field("gpt-5-vision", env="DEEPSEEK_VISION_MODEL")
+    deepseek_model: str = Field("deepseek-chat", env="DEEPSEEK_MODEL")
+    deepseek_vision_model: str = Field("deepseek-chat", env="DEEPSEEK_VISION_MODEL")
     redis_url: str | None = Field(None, env="REDIS_URL")
 
     class Config:

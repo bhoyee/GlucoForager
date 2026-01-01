@@ -14,13 +14,10 @@ class AIRecipeGenerator:
     def __init__(self) -> None:
         self.primary_client = OpenAI(api_key=settings.openai_api_key) if settings.openai_api_key else None
         self.primary_model = settings.openai_model
-        self.fallback_client = (
-            OpenAI(api_key=settings.deepseek_api_key, base_url=settings.deepseek_base_url)
-            if settings.deepseek_api_key
-            else None
-        )
-        self.fallback_model = settings.deepseek_model
-        self.enabled = bool(self.primary_client or self.fallback_client)
+        # DeepSeek fallback is disabled until a compatible model is confirmed.
+        self.fallback_client = None
+        self.fallback_model = None
+        self.enabled = bool(self.primary_client)
 
     def _call(self, client: OpenAI, model: str, ingredients: List[str], filters: List[str]) -> str:
         prompt = (
@@ -58,7 +55,7 @@ class AIRecipeGenerator:
             except OpenAIError as exc:
                 logger.warning("Primary recipe generation failed, attempting fallback: %s", exc)
 
-        if self.fallback_client:
+        if self.fallback_client and self.fallback_model:
             try:
                 content = self._call(self.fallback_client, fallback_model, ingredients, filters)
                 return [{"raw": content}]
