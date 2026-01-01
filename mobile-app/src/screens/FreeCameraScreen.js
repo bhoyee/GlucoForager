@@ -8,9 +8,11 @@ import { captureImage } from '../services/camera';
 import { generateVisionRecipes } from '../services/api';
 import { useSubscription } from '../context/SubscriptionContext';
 import { checkDailyLimit } from '../utils/daily_limit';
+import { useAuth } from '../context/AuthContext';
 
 const FreeCameraScreen = ({ navigation }) => {
   const { tier, scansToday, incrementScan } = useSubscription();
+  const { token } = useAuth();
   const [loading, setLoading] = useState(false);
 
   const handleCapture = async () => {
@@ -29,11 +31,15 @@ const FreeCameraScreen = ({ navigation }) => {
         setLoading(false);
         return;
       }
-      const res = await generateVisionRecipes(img.base64, null);
+      const res = await generateVisionRecipes(img.base64, token, []);
       incrementScan();
-      navigation.navigate('Results', { results: res.results ?? [] });
+      navigation.navigate('Results', {
+        results: res.results ?? [],
+        detected: res.detected ?? [],
+        filters: res.filters ?? [],
+      });
     } catch (e) {
-      Alert.alert('Error', 'Could not process image.');
+      Alert.alert('Error', e.message || 'Could not process image.');
     } finally {
       setLoading(false);
     }

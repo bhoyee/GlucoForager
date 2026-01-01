@@ -7,7 +7,7 @@ export const pickImage = async () => {
 };
 
 export const captureImage = async () => {
-  const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.7 });
+  const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.7, base64: true });
   if (result.canceled) return null;
   return result.assets?.[0];
 };
