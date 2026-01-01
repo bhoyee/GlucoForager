@@ -24,7 +24,13 @@ export const generateVisionRecipes = async (imageBase64, token, filters = []) =>
     headers: jsonHeaders(token),
     body: JSON.stringify({ image_base64: imageBase64, filters }),
   });
-  const data = await response.json();
+  let data;
+  try {
+    data = await response.json();
+  } catch (e) {
+    const text = await response.text();
+    throw new Error(text || 'Vision analysis failed');
+  }
   if (!response.ok) {
     throw new Error(data.detail || 'Vision analysis failed');
   }

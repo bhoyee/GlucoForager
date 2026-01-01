@@ -35,7 +35,7 @@ const FreeCameraScreen = ({ navigation }) => {
       incrementScan();
       navigation.navigate('Results', {
         results: res.results ?? [],
-        detected: res.detected ?? [],
+        detected: res.detected ?? res.ingredients ?? [],
         filters: res.filters ?? [],
       });
     } catch (e) {
