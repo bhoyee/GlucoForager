@@ -39,7 +39,7 @@ class TieredAIService:
                     return json.loads(cached)
                 except Exception:
                     pass
-        result = self.vision.analyze_fridge(image_b64)
+        result = self.vision.analyze_fridge(image_b64, tier)
         if self._should_cache(tier):
             self.cache.set(key, json.dumps(result), ttl_seconds=300)
         return result
