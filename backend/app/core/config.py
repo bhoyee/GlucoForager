@@ -20,7 +20,8 @@ class Settings(BaseSettings):
     openai_api_key: str | None = Field(None, env="OPENAI_API_KEY")
     # Use available models by default; can be overridden via env.
     openai_model: str = Field("gpt-4o-mini", env="OPENAI_MODEL")
-    openai_vision_model: str = Field("gpt-4o-mini-vision", env="OPENAI_VISION_MODEL")
+    # Default vision-capable model; can be overridden in .env
+    openai_vision_model: str = Field("gpt-4o-2024-11-20", env="OPENAI_VISION_MODEL")
     deepseek_api_key: str | None = Field(None, env="DEEPSEEK_API_KEY")
     # DeepSeek text fallback (no vision support)
     deepseek_base_url: str = Field("https://api.deepseek.com", env="DEEPSEEK_BASE_URL")

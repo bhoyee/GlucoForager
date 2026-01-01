@@ -41,7 +41,7 @@ class AIVisionService:
 
     def analyze_fridge(self, image_b64: str, tier: str) -> Dict[str, Any]:
         if not self.enabled:
-            raise RuntimeError("AI vision not configured: provide OPENAI_API_KEY or DEEPSEEK_API_KEY")
+            return {"ingredients": [], "raw": "vision_disabled"}
 
         # Tier-specific model preference
         tier_model = settings.openai_vision_model
@@ -68,6 +68,7 @@ class AIVisionService:
                 return {"ingredients": [i.strip() for i in content.split(",") if i.strip()], "raw": content}
             except OpenAIError as exc:
                 logger.exception("Fallback vision failed")
-                raise
+                return {"ingredients": [], "raw": "vision_fallback_error"}
 
-        raise RuntimeError("No vision provider available or request failed")
+        # Graceful fallback if nothing worked
+        return {"ingredients": [], "raw": "vision_unavailable"}
