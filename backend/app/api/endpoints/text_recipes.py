@@ -29,5 +29,11 @@ def generate_from_text(
             detail=f"Daily limit reached. Scans left: {access['searches_left']}",
         )
     tier = current_user.subscription_tier or "free"
-    recipes = pipeline.text_to_recipes(db, current_user.id, tier, payload.ingredients, filters=payload.filters or [])
+    try:
+        recipes = pipeline.text_to_recipes(
+            db, current_user.id, tier, payload.ingredients, filters=payload.filters or []
+        )
+    except RuntimeError as exc:
+        # AI not configured (missing keys) or other pipeline errors
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
     return {"results": recipes, "access": access}

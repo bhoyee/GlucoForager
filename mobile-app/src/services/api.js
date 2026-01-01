@@ -11,7 +11,11 @@ export const searchRecipes = async (ingredients, token) => {
     headers: jsonHeaders(token),
     body: JSON.stringify({ ingredients }),
   });
-  return response.json();
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.detail || 'Search failed');
+  }
+  return data;
 };
 
 export const generateVisionRecipes = async (imageBase64, token, filters = []) => {

@@ -15,5 +15,9 @@ export const login = async (email, password) => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
   });
-  return response.json();
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.detail || 'Invalid credentials');
+  }
+  return data;
 };

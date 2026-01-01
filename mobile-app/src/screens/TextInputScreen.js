@@ -13,6 +13,7 @@ const TextInputScreen = ({ navigation }) => {
   const [ingredients, setIngredients] = useState([]);
   const { tier, scansToday, incrementScan } = useSubscription();
   const { token } = useAuth();
+  const [loading, setLoading] = useState(false);
 
   const addIngredient = (item) => setIngredients((prev) => [...prev, item]);
 
@@ -23,11 +24,14 @@ const TextInputScreen = ({ navigation }) => {
       return;
     }
     try {
+      setLoading(true);
       const res = await searchRecipes(ingredients, token);
       incrementScan();
-      navigation.navigate('Results', { results: res.results ?? [] });
+      navigation.navigate('Results', { results: res.results ?? [], detected: ingredients });
     } catch (e) {
-      Alert.alert('Error', 'Could not generate recipes.');
+      Alert.alert('Error', e.message || 'Could not generate recipes.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -51,7 +55,7 @@ const TextInputScreen = ({ navigation }) => {
           </View>
         ))}
       </View>
-      <Button label="Generate recipes" onPress={handleSearch} />
+      <Button label={loading ? 'Generating...' : 'Generate recipes'} onPress={handleSearch} disabled={loading} />
     </View>
   );
 };

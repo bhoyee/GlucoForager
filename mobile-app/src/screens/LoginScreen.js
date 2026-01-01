@@ -35,14 +35,10 @@ const LoginScreen = ({ navigation }) => {
     setLoading(true);
     try {
       const res = await loginApi(email, password);
-      if (res.access_token) {
-        login(email, res.access_token);
-        navigation.replace('Main');
-      } else {
-        Alert.alert('Login failed', toMessage(res.detail));
-      }
+      login(email, res.access_token);
+      navigation.replace('Main');
     } catch (e) {
-      Alert.alert('Login failed', 'Please check your connection and try again.');
+      Alert.alert('Login failed', e.message || 'Please check your connection and try again.');
     } finally {
       setLoading(false);
     }
