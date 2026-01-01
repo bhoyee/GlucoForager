@@ -8,6 +8,7 @@ passlib[bcrypt]==1.7.4
 pydantic==1.10.14
 email-validator==1.3.1
 python-multipart==0.0.6
-openai==1.3.7
+openai==1.58.1
+httpx==0.27.2
 redis==5.0.1
 swagger-ui-bundle==0.0.9
