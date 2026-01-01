@@ -1,7 +1,9 @@
 export const formatNutrition = (nutrition) => {
   if (!nutrition) return 'Nutrition unavailable';
   const { calories, carbs } = nutrition;
-  return `Calories: ${calories ?? 0} | Carbs: ${carbs ?? 0}g`;
+  const caloriesText = calories != null ? calories : 'n/a';
+  const carbsText = carbs != null ? `${carbs}g` : 'n/a';
+  return `Calories: ${caloriesText} | Carbs: ${carbsText}`;
 };
 
 export const formatMissingItems = (missing) => {

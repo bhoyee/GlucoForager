@@ -1,27 +1,27 @@
 import React from 'react';
-import { View, Text, Image, StyleSheet } from 'react-native';
+import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { colors } from '../../styles/global';
 import { formatNutrition, formatMissingItems } from '../../utils/helpers';
 
-const RecipeCard = ({ recipe }) => (
-  <View style={styles.card}>
+const RecipeCard = ({ recipe, onPress }) => (
+  <TouchableOpacity activeOpacity={0.8} onPress={onPress} style={styles.card}>
     <Image
       source={{ uri: recipe.image_url || 'https://via.placeholder.com/400x220.png?text=Diabetes+Friendly' }}
       style={styles.image}
     />
     <View style={{ paddingHorizontal: 12, paddingBottom: 10 }}>
       <View style={styles.titleRow}>
-        <Text style={styles.title}>{recipe.title}</Text>
+        <Text style={styles.title}>{recipe.title || 'AI Recipe'}</Text>
         <Text style={styles.badge}>Diabetes-Friendly</Text>
       </View>
-      <Text style={styles.meta}>Ready in {recipe.total_time} mins</Text>
+      <Text style={styles.meta}>Ready in {recipe.total_time ?? 'n/a'} mins</Text>
       <Text style={styles.meta}>{formatNutrition(recipe.nutritional_info)}</Text>
       <Text style={styles.match}>
         Uses {recipe.used_count ?? 0} of your {recipe.total_supplied ?? recipe.total_ingredients ?? 0} items
       </Text>
       <Text style={styles.missing}>{formatMissingItems(recipe.missing_ingredients)}</Text>
     </View>
-  </View>
+  </TouchableOpacity>
 );
 
 const styles = StyleSheet.create({
@@ -29,7 +29,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: 16,
     overflow: 'hidden',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   image: {
     width: '100%',

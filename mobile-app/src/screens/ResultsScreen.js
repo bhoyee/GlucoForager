@@ -4,7 +4,7 @@ import RecipeCard from '../components/common/RecipeCard';
 import Header from '../components/common/Header';
 import { globalStyles, colors } from '../styles/global';
 
-const ResultsScreen = ({ route }) => {
+const ResultsScreen = ({ route, navigation }) => {
   const { results = [], filters = [], detected = [] } = route.params || {};
 
   return (
@@ -46,7 +46,15 @@ const ResultsScreen = ({ route }) => {
 
       {results.length === 0 ? <Text style={{ color: colors.muted }}>No results yet.</Text> : null}
       {results.map((recipe, idx) => (
-        <RecipeCard key={recipe.id ?? idx} recipe={recipe} />
+        <RecipeCard
+          key={recipe.id ?? idx}
+          recipe={recipe}
+          onPress={() =>
+            navigation.navigate('RecipeDetail', {
+              recipe: { ...recipe, detected_ingredients: detected },
+            })
+          }
+        />
       ))}
       <Text style={{ color: colors.muted, textAlign: 'center', marginVertical: 8 }}>
         ✨ AI-generated • Diabetes-friendly

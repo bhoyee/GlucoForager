@@ -51,9 +51,9 @@ const RecipeDetailScreen = ({ route }) => {
       ) : null}
 
       <Text style={globalStyles.heading}>Ingredients</Text>
-      {ingredients.map((item) => (
+      {ingredients.map((item, idx) => (
         <View
-          key={item.name}
+          key={item.name || idx}
           style={{
             padding: 10,
             borderRadius: 10,
