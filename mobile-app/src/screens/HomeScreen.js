@@ -7,53 +7,46 @@ import {
   Alert,
   ScrollView,
   StyleSheet,
-  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { globalStyles } from '../styles/global';
+import { Ionicons } from '@expo/vector-icons';
+import Header from '../components/common/Header';
+import IngredientInput from '../components/inputs/IngredientInput';
+import TagInput from '../components/inputs/TagInput';
+import Button from '../components/common/Button';
+import TierBadge from '../components/common/TierBadge';
+import AIScanCounter from '../components/common/AIScanCounter';
+import { globalStyles, colors } from '../styles/global';
 import { useSubscription } from '../context/SubscriptionContext';
 import { useAuth } from '../context/AuthContext';
 import { searchRecipes } from '../services/api';
 import { checkDailyLimit } from '../utils/daily_limit';
 
-const palette = {
-  primary: '#FF6B35',
-  primaryDim: '#F0A17F',
-  secondary: '#2E3192',
-  text: '#1A1A1A',
-  muted: '#666666',
-  border: '#E5E5E5',
-  bg: '#FFFFFF',
-};
-
 const HomeScreen = ({ navigation }) => {
   const [ingredients, setIngredients] = useState(['chicken breast', 'spinach']);
-  const [newIngredient, setNewIngredient] = useState('');
+  const [tags, setTags] = useState(['diabetes-friendly']);
   const { isPremium, scansToday, tier, incrementScan } = useSubscription();
   const { token } = useAuth();
   const [loading, setLoading] = useState(false);
 
-  const addIngredient = (item) => {
-    const value = item?.trim();
-    if (!value) return;
-    setIngredients((prev) => [...prev, value]);
-    setNewIngredient('');
-  };
+  const addIngredient = (item) => setIngredients((prev) => [...prev, item]);
   const removeIngredient = (item) => setIngredients((prev) => prev.filter((i) => i !== item));
+  const addTag = (tag) => setTags((prev) => [...prev, tag]);
 
   const goToCamera = () => navigation.navigate('FreeCamera');
+  const goToUpgrade = () => navigation.navigate('Profile', { screen: 'Upgrade' });
 
   const search = async () => {
     const limit = checkDailyLimit(tier, scansToday);
     if (!limit.canScan && !isPremium) {
-      Alert.alert('Limit reached', 'Daily limit reached (3 scans). Upgrade for unlimited.');
+      Alert.alert('Limit reached', 'You have used your 3 free scans. Upgrade for unlimited access.');
       return;
     }
     setLoading(true);
     try {
       const res = await searchRecipes(ingredients, token);
       incrementScan();
-      navigation.navigate('Results', { results: res.results ?? [], detected: ingredients, filters: [] });
+      navigation.navigate('Results', { results: res.results ?? [], detected: ingredients, filters: tags });
     } catch (e) {
       Alert.alert('Error', 'Could not generate recipes.');
     } finally {
@@ -61,260 +54,139 @@ const HomeScreen = ({ navigation }) => {
     }
   };
 
-  const toolbarItemsPremium = ['Tools', 'History', 'Recent AI scans', 'Meal plans', 'Premium', 'Shopping', 'Premium'];
-  const toolbarItemsFree = [
-    'Tools (Free)',
-    'History (Limited)',
-    '🔒 Recent AI scans',
-    '🔒 Meal plans',
-    '🔒 Advanced analytics',
-    'Shopping (Basic)',
-  ];
+  const handleCamera = () => {
+    const limit = checkDailyLimit(tier, scansToday);
+    if (!limit.canScan && !isPremium) {
+      Alert.alert('Limit reached', 'You have used your 3 free scans. Upgrade for unlimited access.', [
+        { text: 'Upgrade', onPress: goToUpgrade },
+        { text: 'OK' },
+      ]);
+      return;
+    }
+    goToCamera();
+  };
 
-  const canScan = isPremium || scansToday < 3;
   const scansLeft = Math.max(0, 3 - scansToday);
-
-  const Chips = () => (
-    <View style={styles.chipsWrap}>
-      {ingredients.slice(0, 5).map((item) => (
-        <View key={item} style={styles.chip}>
-          <Text style={styles.chipText}>{item}</Text>
-          <TouchableOpacity onPress={() => removeIngredient(item)}>
-            <Text style={styles.chipRemove}>×</Text>
-          </TouchableOpacity>
-        </View>
-      ))}
-    </View>
-  );
-
-  const PremiumLayout = () => (
-    <>
-      <Text style={styles.premiumBadge}>PREMIUM</Text>
-      <Text style={styles.title}>What's in your fridge?</Text>
-      <Text style={styles.subtitle}>Type or scan your ingredients. We will keep it diabetes-safe.</Text>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Unlimited scans</Text>
-        <TextInput
-          value={newIngredient}
-          onChangeText={setNewIngredient}
-          placeholder="Add an ingredient"
-          placeholderTextColor="#999"
-          style={styles.input}
-          onSubmitEditing={() => addIngredient(newIngredient)}
-          returnKeyType="done"
-        />
-        <TouchableOpacity onPress={() => addIngredient(newIngredient)} style={styles.bullet}>
-          <Text style={styles.bulletText}>• Add an ingredient</Text>
-        </TouchableOpacity>
-        <Chips />
-      </View>
-
-      <View style={styles.divider} />
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Find diabetes-friendly recipes</Text>
-        <TouchableOpacity style={styles.cameraButton} onPress={goToCamera}>
-          <Text style={styles.cameraButtonText}>📷 Use camera recognition (unlimited)</Text>
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.toolbar}
-      >
-        {toolbarItemsPremium.map((item) => (
-          <TouchableOpacity key={item} style={styles.toolbarItem}>
-            <Text style={styles.toolbarText}>{item}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-    </>
-  );
-
-  const FreeLayout = () => (
-    <>
-      <Text style={styles.title}>What's in your fridge?</Text>
-      <Text style={styles.subtitle}>Type or scan your ingredients. We will keep it diabetes-safe.</Text>
-
-      <View style={styles.freeBadge}>
-        <Text style={{ fontWeight: '700', color: palette.text }}>🔓 Free Plan</Text>
-        <Text style={{ color: palette.secondary, marginTop: 2 }}>⭐ {scansLeft} scans left this week</Text>
-      </View>
-
-      <View style={styles.section}>
-        <TextInput
-          value={newIngredient}
-          onChangeText={setNewIngredient}
-          placeholder="Add an ingredient"
-          placeholderTextColor="#999"
-          style={styles.input}
-          onSubmitEditing={() => addIngredient(newIngredient)}
-          returnKeyType="done"
-        />
-        <TouchableOpacity onPress={() => addIngredient(newIngredient)} style={styles.bullet}>
-          <Text style={styles.bulletText}>• Add an ingredient</Text>
-        </TouchableOpacity>
-        <Chips />
-      </View>
-
-      <View style={styles.divider} />
-
-      <Text style={styles.sectionTitle}>Find diabetes-friendly recipes</Text>
-      <TouchableOpacity
-        onPress={canScan ? goToCamera : () => Alert.alert('Limit reached', 'Upgrade for unlimited scans')}
-        disabled={!canScan}
-        style={[styles.cameraButton, { backgroundColor: canScan ? palette.primary : palette.primaryDim }]}
-      >
-        <Text style={styles.cameraButtonText}>📷 Use camera recognition</Text>
-        <Text style={{ color: '#fff', fontSize: 12 }}>({scansLeft} scans left)</Text>
-      </TouchableOpacity>
-
-      <View style={styles.upgradeBox}>
-        <Text style={{ fontSize: 15, fontWeight: '700', color: palette.text }}>🔒 Upgrade for unlimited scans</Text>
-        <Text style={{ fontSize: 13, color: palette.muted, marginVertical: 6 }}>
-          Get AI meal plans, shopping lists, and advanced health insights.
-        </Text>
-        <TouchableOpacity
-          onPress={() => navigation.navigate('Upgrade')}
-          style={{ backgroundColor: palette.primary, paddingVertical: 12, borderRadius: 10, alignItems: 'center' }}
-        >
-          <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>⭐ Upgrade to Premium</Text>
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.toolbar}
-      >
-        {toolbarItemsFree.map((item) => (
-          <TouchableOpacity
-            key={item}
-            onPress={() =>
-              item.startsWith('🔒')
-                ? Alert.alert('Upgrade required', 'This feature is premium.')
-                : navigation.navigate('Tools')
-            }
-            style={[
-              styles.toolbarItem,
-              item.startsWith('🔒') && { backgroundColor: '#F8F8F8', borderColor: '#ECECEC' },
-            ]}
-          >
-            <Text style={[styles.toolbarText, item.startsWith('🔒') && { color: '#999' }]}>{item}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-    </>
-  );
+  const cameraDisabled = !isPremium && scansLeft === 0;
 
   return (
-    <SafeAreaView style={[globalStyles.screen, { backgroundColor: palette.bg }]} edges={['top', 'left', 'right']}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
-        {isPremium ? <PremiumLayout /> : <FreeLayout />}
-      </ScrollView>
-
-      <View style={styles.bottomNav}>
-        {['Home', 'Favorites', 'Profile'].map((item) => (
-          <TouchableOpacity key={item} onPress={() => navigation.navigate(item === 'Home' ? 'Main' : item)}>
-            <Text style={{ color: item === 'Home' ? palette.primary : palette.muted, fontWeight: item === 'Home' ? '700' : '500' }}>
-              {item}
-            </Text>
+    <SafeAreaView style={[globalStyles.screen, styles.safeArea]} edges={['top', 'left', 'right']}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.topRow}>
+          <TierBadge tier={isPremium ? 'premium' : 'free'} />
+          <TouchableOpacity onPress={goToUpgrade}>
+            <Text style={styles.linkText}>{isPremium ? 'Manage plan' : 'Upgrade'}</Text>
           </TouchableOpacity>
-        ))}
-      </View>
-
-      {loading && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator color={palette.primary} size="large" />
-          <Text style={{ marginTop: 8 }}>Finding recipes...</Text>
         </View>
-      )}
+
+        <Header title="What's in your fridge?" />
+        <Text style={globalStyles.subheading}>Type or scan your ingredients. We keep it diabetes-safe.</Text>
+
+        <AIScanCounter isPremium={isPremium} scansToday={scansToday} />
+
+        <IngredientInput onAdd={addIngredient} />
+        <TagInput onAdd={addTag} />
+
+        <View style={styles.chipWrap}>
+          {ingredients.map((item) => (
+            <View key={item} style={styles.chip}>
+              <Text style={styles.chipText}>{item}</Text>
+              <TouchableOpacity onPress={() => removeIngredient(item)} accessibilityLabel={`Remove ${item}`}>
+                <Ionicons name="close" size={16} color={colors.muted} />
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+
+        <Button label={loading ? 'Finding recipes...' : 'Find diabetes-friendly recipes'} onPress={search} disabled={loading} />
+        {loading ? <ActivityIndicator color={colors.primary} style={{ marginTop: 8 }} /> : null}
+
+        <TouchableOpacity
+          onPress={handleCamera}
+          disabled={cameraDisabled}
+          style={[
+            styles.cameraButton,
+            {
+              backgroundColor: cameraDisabled ? colors.surface : colors.accent,
+              opacity: cameraDisabled ? 0.6 : 1,
+            },
+          ]}
+        >
+          <Ionicons name="camera" size={18} color="#0C1824" style={{ marginRight: 8 }} />
+          <View>
+            <Text style={styles.cameraText}>Use camera recognition</Text>
+            <Text style={styles.cameraSubtext}>
+              {isPremium ? 'Unlimited scans' : `${scansLeft} free scans left today`}
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        <View style={styles.toolsHeader}>
+          <Text style={styles.toolsLabel}>Tools</Text>
+          <Text style={styles.toolsHint}>{isPremium ? 'Included in Premium' : 'Upgrade to unlock more'}</Text>
+        </View>
+
+        <View style={styles.toolRow}>
+          <TouchableOpacity style={styles.toolCard} onPress={() => navigation.navigate('History')}>
+            <Ionicons name="time" size={18} color={colors.primary} />
+            <Text style={styles.toolTitle}>History</Text>
+            <Text style={styles.toolSubtitle}>Recent AI scans</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.toolCard} onPress={() => navigation.navigate('MealPlan')}>
+            <Ionicons name="restaurant" size={18} color={colors.primary} />
+            <Text style={styles.toolTitle}>Meal plans</Text>
+            <Text style={styles.toolSubtitle}>{isPremium ? 'Custom weekly' : 'Premium'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.toolCard} onPress={() => navigation.navigate('ShoppingList')}>
+            <Ionicons name="cart" size={18} color={colors.primary} />
+            <Text style={styles.toolTitle}>Shopping</Text>
+            <Text style={styles.toolSubtitle}>{isPremium ? 'Lists saved' : 'Premium'}</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  premiumBadge: { textAlign: 'center', letterSpacing: 1, fontSize: 12, color: '#666', marginBottom: 6 },
-  title: { fontSize: 22, fontWeight: '700', color: palette.text },
-  subtitle: { fontSize: 14, color: palette.muted, marginTop: 4 },
-  section: { marginTop: 16 },
-  sectionTitle: { fontSize: 16, fontWeight: '600', color: palette.text, marginBottom: 10 },
-  bullet: { marginVertical: 6 },
-  bulletText: { color: palette.secondary, fontSize: 15 },
-  chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  safeArea: { paddingBottom: 0 },
+  scrollContent: { paddingBottom: 32 },
+  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  linkText: { color: colors.accent, fontWeight: '700' },
+  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 12 },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F7F7F9',
-    borderRadius: 10,
+    backgroundColor: colors.surface,
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: palette.border,
+    paddingVertical: 8,
+    borderRadius: 12,
+    marginRight: 6,
+    marginBottom: 6,
   },
-  chipText: { color: palette.text, marginRight: 6 },
-  chipRemove: { color: '#999', fontWeight: '700' },
-  divider: { height: 1, backgroundColor: palette.border, marginVertical: 16 },
+  chipText: { color: colors.text, marginRight: 8 },
   cameraButton: {
-    backgroundColor: palette.primary,
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  cameraButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  toolbar: { paddingVertical: 6, gap: 14, paddingRight: 8 },
-  toolbarItem: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: palette.border },
-  toolbarText: { color: palette.secondary, fontWeight: '600' },
-  freeBadge: {
-    marginTop: 12,
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: '#FFF9F5',
-  },
-  upgradeBox: {
-    marginTop: 14,
+    marginTop: 8,
     padding: 14,
     borderRadius: 12,
-    backgroundColor: '#FFF3EB',
-    borderWidth: 1,
-    borderColor: '#FFDACC',
-  },
-  input: {
-    height: 48,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: palette.border,
-    paddingHorizontal: 12,
-    fontSize: 15,
-    color: palette.text,
-    backgroundColor: '#fff',
-  },
-  bottomNav: {
-    height: 64,
-    borderTopWidth: 1,
-    borderColor: palette.border,
     flexDirection: 'row',
-    justifyContent: 'space-around',
     alignItems: 'center',
-    backgroundColor: '#fff',
   },
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    bottom: 64,
-    left: 0,
-    right: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.7)',
+  cameraText: { color: '#0C1824', fontWeight: '700' },
+  cameraSubtext: { color: '#0C1824', fontSize: 12 },
+  toolsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 },
+  toolsLabel: { color: colors.text, fontWeight: '700' },
+  toolsHint: { color: colors.muted, fontSize: 12 },
+  toolRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
+  toolCard: {
+    backgroundColor: colors.surface,
+    padding: 12,
+    borderRadius: 12,
+    flex: 1,
+    marginHorizontal: 4,
   },
+  toolTitle: { color: colors.text, fontWeight: '700', marginTop: 6 },
+  toolSubtitle: { color: colors.muted, fontSize: 12 },
 });
 
 export default HomeScreen;

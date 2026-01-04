@@ -15,7 +15,7 @@ const AIScanCounter = ({ scansToday, isPremium }) => (
     }}
   >
     <Text style={{ color: colors.text, fontWeight: '700' }}>{isPremium ? 'Unlimited scans' : 'Free tier scans'}</Text>
-    <Text style={{ color: colors.muted }}>{isPremium ? '∞' : `${scansToday}/3`}</Text>
+    <Text style={{ color: colors.muted }}>{isPremium ? 'Unlimited' : `${scansToday}/3 today`}</Text>
   </View>
 );
 
