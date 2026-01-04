@@ -1,16 +1,54 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
-  background: radial-gradient(circle at 10% 10%, rgba(15, 183, 165, 0.12), transparent 20%),
-    radial-gradient(circle at 90% 20%, rgba(255, 183, 3, 0.1), transparent 18%),
-    #0C1824;
+:root {
+  --primary: #0D9488;
+  --secondary: #6D28D9;
+  --accent: #10B981;
 }
 
-.badge {
-  @apply inline-flex items-center rounded-full bg-primary/20 px-3 py-1 text-sm text-primary;
+/* FIX: Ensure smooth scrolling works for anchor links */
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 80px; /* Adjust for sticky header height */
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: #FFFFFF;
+  color: #1F2937;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom button styles */
+.btn-primary {
+  @apply bg-[#0D9488] hover:bg-teal-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200;
+}
+
+.btn-secondary {
+  @apply bg-[#6D28D9] hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200;
+}
+
+/* Fix for sticky header covering anchor links */
+:target {
+  scroll-margin-top: 80px; /* Same as header height */
+}
+
+/* Card hover effects */
+.card-hover {
+  @apply transition-all duration-300 hover:shadow-lg hover:-translate-y-1;
+}
+
+/* Gradient backgrounds */
+.gradient-teal-purple {
+  background: linear-gradient(135deg, #0D9488 0%, #6D28D9 100%);
+}
+
+/* App store badge styling */
+.app-store-badge {
+  @apply transition-transform duration-200 hover:scale-105;
 }
