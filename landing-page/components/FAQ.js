@@ -1,27 +1,49 @@
-const faqs = [
-  {
-    q: 'How do you keep recipes diabetes-friendly?',
-    a: 'We filter by glycemic impact first, then score ingredient matches to keep options low-carb and low-glycemic.',
-  },
-  {
-    q: 'Do you store my ingredient photos?',
-    a: 'Photos stay on-device during the mock phase. Production OCR will be opt-in with encrypted transit.',
-  },
-  {
-    q: 'What happens after the trial?',
-    a: 'Premium is £2.99/month. Cancel anytime from your profile before renewal.',
-  },
-];
+'use client';
+
+import { useState } from 'react';
 
 export default function FAQ() {
+  const [openIndex, setOpenIndex] = useState(null);
+  
+  const faqs = [
+    {
+      question: "How does the AI ensure diabetic safety?",
+      answer: "Our AI is specially prompted with ADA (American Diabetes Association) guidelines and focuses on low-glycemic ingredients, carb control, and balanced nutrition."
+    },
+    {
+      question: "Does the AI save my food photos?",
+      answer: "No. Photos are processed immediately by OpenAI's API and not stored on our servers. We only store the detected ingredients."
+    },
+    {
+      question: "Can I trust AI-generated recipes?",
+      answer: "All recipes are generated with strict diabetic constraints and follow medical nutrition guidelines. We recommend consulting your doctor for personalized advice."
+    },
+    {
+      question: "What if I have other dietary restrictions?",
+      answer: "Premium users can apply additional filters like gluten-free, low-sodium, or dairy-free alongside diabetes-friendly requirements."
+    }
+  ];
+  
   return (
-    <section id="faq" className="space-y-4">
-      {faqs.map((item) => (
-        <div key={item.q} className="rounded-2xl border border-slate-700 bg-surface/60 p-4">
-          <p className="font-semibold text-slate-100">{item.q}</p>
-          <p className="text-slate-300 mt-1">{item.a}</p>
+    <div className="space-y-4">
+      {faqs.map((faq, index) => (
+        <div key={index} className="border border-gray-200 rounded-lg overflow-hidden">
+          <button
+            className="w-full px-6 py-4 text-left flex justify-between items-center bg-gray-50 hover:bg-gray-100"
+            onClick={() => setOpenIndex(openIndex === index ? null : index)}
+          >
+            <span className="font-semibold text-gray-900">{faq.question}</span>
+            <span className="text-gray-500">
+              {openIndex === index ? '−' : '+'}
+            </span>
+          </button>
+          {openIndex === index && (
+            <div className="px-6 py-4 bg-white">
+              <p className="text-gray-700">{faq.answer}</p>
+            </div>
+          )}
         </div>
       ))}
-    </section>
+    </div>
   );
 }

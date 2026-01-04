@@ -1,63 +1,84 @@
+import Header from "../components/Header";
 import HeroSection from "../components/HeroSection";
-import FeatureGrid from "../components/FeatureGrid";
-import PricingTable from "../components/PricingTable";
-import ScreenshotGallery from "../components/ScreenshotGallery";
+import HowItWorks from "../components/HowItWorks";
+import Features from "../components/Features";
+import Screenshots from "../components/Screenshots";
+import Pricing from "../components/Pricing";
 import Testimonials from "../components/Testimonials";
 import FAQ from "../components/FAQ";
+import Footer from "../components/Footer";
 
 export default function HomePage() {
   return (
-    <main className="container mx-auto max-w-6xl space-y-16 px-4 py-10">
+    <div className="min-h-screen bg-white text-gray-900">
+      <Header />
+      
       <HeroSection />
-
-      <section className="space-y-4">
-        <h2 className="text-3xl font-bold">How it works</h2>
-        <FeatureGrid />
-      </section>
-
-      <section className="space-y-4">
-        <h2 className="text-3xl font-bold">Feature comparison</h2>
-        <PricingTable />
-      </section>
-
-      <section className="space-y-4" id="gallery">
-        <h2 className="text-3xl font-bold">Screenshot gallery</h2>
-        <ScreenshotGallery />
-      </section>
-
-      <section className="space-y-4">
-        <h2 className="text-3xl font-bold">What people say</h2>
-        <Testimonials />
-      </section>
-
-      <section className="space-y-4" id="pricing">
-        <h2 className="text-3xl font-bold">Pricing</h2>
-        <PricingTable />
-        <p className="text-slate-300">Premium is £2.99/month with a 7-day free trial.</p>
-      </section>
-
-      <section className="space-y-4" id="faq">
-        <h2 className="text-3xl font-bold">FAQ</h2>
-        <FAQ />
-      </section>
-
-      <footer
-        id="download"
-        className="flex flex-col gap-4 rounded-3xl border border-slate-700 bg-surface/60 p-6 md:flex-row md:items-center md:justify-between"
-      >
-        <div>
-          <h3 className="text-2xl font-semibold">Download GlucoForager</h3>
-          <p className="text-slate-300">Mobile-first, optimized for AI-driven diabetes-friendly meal planning.</p>
+      
+      {/* HOW IT WORKS - Add ID */}
+      <section className="py-16 bg-gray-50" id="how-it-works">
+        <div className="container mx-auto px-4">
+          <h2 className="text-3xl font-bold text-center mb-12">
+            How It Works in 60 Seconds
+          </h2>
+          <HowItWorks />
         </div>
-        <div className="flex gap-3">
-          <a className="rounded-xl bg-black px-4 py-3 text-white" href="#">
-            App Store
-          </a>
-          <a className="rounded-xl bg-black px-4 py-3 text-white" href="#">
-            Google Play
-          </a>
+      </section>
+      
+      {/* FEATURES - Add ID (matches href="#features") */}
+      <section className="py-16" id="features">
+        <div className="container mx-auto px-4">
+          <h2 className="text-3xl font-bold text-center mb-12">
+            AI-Powered Diabetes Management
+          </h2>
+          <Features />
         </div>
-      </footer>
-    </main>
+      </section>
+      
+      {/* SCREENSHOTS - Add ID (matches href="#screenshots") */}
+      <section className="py-16 bg-gray-50" id="screenshots">
+        <div className="container mx-auto px-4">
+          <h2 className="text-3xl font-bold text-center mb-12">
+            See It In Action
+          </h2>
+          <Screenshots />
+        </div>
+      </section>
+      
+      {/* PRICING - Already has ID, keep it */}
+      <section className="py-16" id="pricing">
+        <div className="container mx-auto px-4">
+          <h2 className="text-3xl font-bold text-center mb-4">
+            Simple, Transparent Pricing
+          </h2>
+          <p className="text-gray-600 text-center mb-12 max-w-2xl mx-auto">
+            Start free, upgrade anytime. Cancel whenever you want.
+          </p>
+          <Pricing />
+        </div>
+      </section>
+      
+      {/* TESTIMONIALS - Add ID if you want to link to it */}
+      <section className="py-16 bg-gray-50" id="testimonials">
+        <div className="container mx-auto px-4">
+          <h2 className="text-3xl font-bold text-center mb-12">
+            Loved by People with Diabetes
+          </h2>
+          <Testimonials />
+        </div>
+      </section>
+      
+      {/* FAQ - Add ID (matches href="#faq") */}
+      <section className="py-16" id="faq">
+        <div className="container mx-auto px-4 max-w-3xl">
+          <h2 className="text-3xl font-bold text-center mb-12">
+            Frequently Asked Questions
+          </h2>
+          <FAQ />
+        </div>
+      </section>
+      
+      <Footer />
+    </div>
   );
 }
