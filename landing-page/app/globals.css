@@ -20,6 +20,7 @@ body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   background-color: #FFFFFF;
   color: #1F2937;
+  padding-top: 80px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -51,4 +52,198 @@ body {
 /* App store badge styling */
 .app-store-badge {
   @apply transition-transform duration-200 hover:scale-105;
+}
+
+/* Hero Section Background with fade food items */
+.hero-background {
+  background: 
+    linear-gradient(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.85)),
+    url('/images/food-pattern.png') center/cover;
+  position: relative;
+}
+
+/* Create a subtle food pattern background */
+.hero-background::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    radial-gradient(circle at 20% 80%, rgba(13, 148, 136, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(109, 40, 217, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 40% 40%, rgba(16, 185, 129, 0.05) 0%, transparent 50%);
+  z-index: -1;
+}
+
+/* Add to your existing globals.css */
+
+/* Blob animation for hero background */
+@keyframes blob {
+  0% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate(30px, -50px) scale(1.1);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
+  100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+}
+
+.animate-blob {
+  animation: blob 7s infinite;
+}
+
+.animation-delay-2000 {
+  animation-delay: 2s;
+}
+
+.animation-delay-4000 {
+  animation-delay: 4s;
+}
+
+/* Mix blend mode utility */
+.mix-blend-multiply {
+  mix-blend-mode: multiply;
+}
+
+/* Hero section specific styles */
+.hero-pattern {
+  background-image: 
+    radial-gradient(circle at 10% 20%, rgba(13, 148, 136, 0.07) 0%, transparent 40%),
+    radial-gradient(circle at 90% 10%, rgba(109, 40, 217, 0.07) 0%, transparent 40%),
+    radial-gradient(circle at 50% 80%, rgba(16, 185, 129, 0.07) 0%, transparent 40%);
+}
+
+/* Add to your existing globals.css */
+
+/* Floating animations for food items - MORE VISIBLE */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+  33% {
+    transform: translateY(-25px) rotate(8deg) scale(1.05);
+  }
+  66% {
+    transform: translateY(15px) rotate(-8deg) scale(0.95);
+  }
+}
+
+@keyframes float-slow {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+  33% {
+    transform: translateY(-35px) rotate(12deg) scale(1.1);
+  }
+  66% {
+    transform: translateY(20px) rotate(-12deg) scale(0.9);
+  }
+}
+
+@keyframes float-delayed {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+  33% {
+    transform: translateY(-30px) rotate(-10deg) scale(1.08);
+  }
+  66% {
+    transform: translateY(18px) rotate(10deg) scale(0.92);
+  }
+}
+
+@keyframes float-random {
+  0%, 100% {
+    transform: translate(0, 0) rotate(0deg) scale(1);
+  }
+  25% {
+    transform: translate(15px, -20px) rotate(15deg) scale(1.2);
+  }
+  50% {
+    transform: translate(-10px, 15px) rotate(-15deg) scale(0.8);
+  }
+  75% {
+    transform: translate(-15px, -10px) rotate(10deg) scale(1.1);
+  }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-float-slow {
+  animation: float-slow 8s ease-in-out infinite;
+}
+
+.animate-float-delayed {
+  animation: float-delayed 7s ease-in-out infinite;
+}
+
+.animate-float-random {
+  animation: float-random 12s ease-in-out infinite;
+}
+
+/* Make the background gradient more subtle */
+.bg-gradient-to-br {
+  background-attachment: fixed;
+}
+
+/* Add these responsive utilities to your globals.css */
+
+/* Responsive touch targets for mobile */
+@media (max-width: 640px) {
+  .tap-highlight-none {
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  button, a {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Prevent horizontal scroll on mobile */
+html, body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Better responsive font sizes */
+.text-responsive-title {
+  font-size: clamp(1.5rem, 5vw, 3rem);
+}
+
+.text-responsive-body {
+  font-size: clamp(1rem, 3vw, 1.25rem);
+}
+
+/* Responsive container padding */
+.responsive-container {
+  @apply px-4 sm:px-6 lg:px-8;
+}
+
+/* Mobile-first spacing utilities */
+@media (max-width: 640px) {
+  .mobile-py-8 {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+  }
+  
+  .mobile-mb-6 {
+    margin-bottom: 1.5rem;
+  }
+}
+
+/* Prevent text overflow on mobile */
+.break-words {
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  hyphens: auto;
 }
