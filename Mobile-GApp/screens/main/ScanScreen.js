@@ -16,7 +16,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
-import { Camera } from 'expo-camera';
 import { 
   getTodayScans, 
   getRemainingScans, 
@@ -36,7 +35,7 @@ export default function ScanScreen() {
   const [showPreview, setShowPreview] = useState(false);
   const [cameraRef, setCameraRef] = useState(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
-  const [flashMode, setFlashMode] = useState(Camera.Constants.FlashMode.off);
+  const [flashMode, setFlashMode] = useState(Camera?.Constants?.FlashMode?.off ?? null);
   const [hasCameraPermission, setHasCameraPermission] = useState(null);
   const [isCapturing, setIsCapturing] = useState(false);
 
@@ -115,6 +114,7 @@ export default function ScanScreen() {
   };
 
   const toggleFlashMode = () => {
+    if (!Camera?.Constants?.FlashMode) return;
     setFlashMode((prev) =>
       prev === Camera.Constants.FlashMode.torch
         ? Camera.Constants.FlashMode.off
@@ -364,7 +364,11 @@ export default function ScanScreen() {
             </TouchableOpacity>
             <TouchableOpacity style={styles.overlayButton} onPress={toggleFlashMode}>
               <Ionicons
-                name={flashMode === Camera.Constants.FlashMode.torch ? 'flash' : 'flash-off'}
+                name={
+                  flashMode === Camera?.Constants?.FlashMode?.torch
+                    ? 'flash'
+                    : 'flash-off'
+                }
                 size={24}
                 color="white"
               />
