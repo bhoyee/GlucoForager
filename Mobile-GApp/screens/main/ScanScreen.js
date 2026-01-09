@@ -25,14 +25,17 @@ import {
 } from '../../utils/scanTracker';
 
 let Camera;
+let CameraView;
 let CameraConstants;
 try {
   const CameraModule = require('expo-camera');
-  Camera = CameraModule?.Camera ?? null;
-  CameraConstants = Camera?.Constants ?? CameraModule?.Constants ?? null;
+  Camera = CameraModule?.Camera ?? CameraModule ?? null;
+  CameraView = CameraModule?.CameraView ?? CameraModule?.Camera ?? null;
+  CameraConstants = CameraModule?.Camera?.Constants ?? CameraModule?.Constants ?? null;
 } catch (error) {
   console.warn('expo-camera module missing', error);
   Camera = null;
+  CameraView = null;
   CameraConstants = null;
 }
 
@@ -47,8 +50,7 @@ export default function ScanScreen() {
   const [showPreview, setShowPreview] = useState(false);
   const [cameraRef, setCameraRef] = useState(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
-  const defaultFlash = CameraConstants?.FlashMode?.off ?? null;
-  const [flashMode, setFlashMode] = useState(defaultFlash);
+  const [torchEnabled, setTorchEnabled] = useState(false);
   const [hasCameraPermission, setHasCameraPermission] = useState(null);
   const [isCapturing, setIsCapturing] = useState(false);
 
@@ -109,11 +111,12 @@ export default function ScanScreen() {
     if (hasCameraPermission === true) {
       return true;
     }
-    if (!Camera?.requestCameraPermissionsAsync) {
+    if (!Camera?.requestCameraPermissionsAsync && !Camera?.Camera?.requestCameraPermissionsAsync) {
       Alert.alert('Camera unavailable', 'Camera module is not supported on this device.');
       return false;
     }
-    const { status } = await Camera.requestCameraPermissionsAsync();
+    const requestPermission = Camera?.requestCameraPermissionsAsync ?? Camera?.Camera?.requestCameraPermissionsAsync;
+    const { status } = await requestPermission();
     const granted = status === 'granted';
     setHasCameraPermission(granted);
     if (!granted) {
@@ -127,24 +130,19 @@ export default function ScanScreen() {
     if (!allowed) return;
     const permissionGranted = await requestCameraPermission();
     if (!permissionGranted) return;
-    if (!Camera) {
+    if (!CameraView) {
       Alert.alert('Camera unavailable', 'Camera module is not available on this device.');
       return;
     }
     setIsCameraActive(true);
   };
 
-  const toggleFlashMode = () => {
-    if (!CameraConstants?.FlashMode) return;
-    setFlashMode((prev) =>
-      prev === CameraConstants.FlashMode.torch
-        ? CameraConstants.FlashMode.off
-        : CameraConstants.FlashMode.torch
-    );
+  const toggleTorch = () => {
+    setTorchEnabled((prev) => !prev);
   };
 
   const capturePhoto = async () => {
-    if (!cameraRef || !Camera) return;
+    if (!cameraRef || !CameraView) return;
     setIsCapturing(true);
     try {
       const photo = await cameraRef.takePictureAsync({ quality: 0.7, skipProcessing: true });
@@ -370,25 +368,24 @@ export default function ScanScreen() {
           </TouchableOpacity>
         )}
       </View>
-      {isCameraActive && Camera && (
+      {isCameraActive && CameraView && (
         <View style={styles.cameraOverlay}>
-          <Camera
+          <CameraView
             ref={(ref) => setCameraRef(ref)}
             style={styles.cameraView}
-            type={CameraConstants?.Type?.back ?? Camera?.Constants?.Type?.back}
-            flashMode={flashMode}
+            facing={CameraConstants?.Type?.back ?? Camera?.Constants?.Type?.back ?? 'back'}
+            enableTorch={torchEnabled}
+            flash="off"
             ratio="16:9"
           />
           <View style={styles.cameraToolbar}>
             <TouchableOpacity style={styles.overlayButton} onPress={() => setIsCameraActive(false)}>
               <Ionicons name="close" size={24} color="white" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.overlayButton} onPress={toggleFlashMode}>
+            <TouchableOpacity style={styles.overlayButton} onPress={toggleTorch}>
               <Ionicons
                 name={
-                  flashMode === CameraConstants?.FlashMode?.torch
-                    ? 'flash'
-                    : 'flash-off'
+                  torchEnabled ? 'flash' : 'flash-off'
                 }
                 size={24}
                 color="white"
