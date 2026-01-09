@@ -53,6 +53,7 @@ export default function ScanScreen() {
   const [torchEnabled, setTorchEnabled] = useState(false);
   const [hasCameraPermission, setHasCameraPermission] = useState(null);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [autoLaunched, setAutoLaunched] = useState(false);
 
   useEffect(() => {
     const loadUserData = async () => {
@@ -71,6 +72,17 @@ export default function ScanScreen() {
       loadUserData();
     }
   }, [isFocused]);
+
+  useEffect(() => {
+    if (!isFocused) {
+      setAutoLaunched(false);
+      return;
+    }
+    if (!autoLaunched) {
+      handleLaunchCamera();
+      setAutoLaunched(true);
+    }
+  }, [isFocused, autoLaunched]);
 
   const showUpgradeAlert = () => {
     Alert.alert(
@@ -382,16 +394,36 @@ export default function ScanScreen() {
             <TouchableOpacity style={styles.overlayButton} onPress={() => setIsCameraActive(false)}>
               <Ionicons name="close" size={24} color="white" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.overlayButton} onPress={toggleTorch}>
-              <Ionicons
-                name={
-                  torchEnabled ? 'flash' : 'flash-off'
-                }
-                size={24}
-                color="white"
-              />
-            </TouchableOpacity>
+            <View style={styles.toolbarRight}>
+              <TouchableOpacity style={styles.overlayButton} onPress={handlePickImage}>
+                <Ionicons name="images-outline" size={24} color="white" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.overlayButton} onPress={toggleTorch}>
+                <Ionicons
+                  name={torchEnabled ? 'flash' : 'flash-off'}
+                  size={24}
+                  color="white"
+                />
+              </TouchableOpacity>
+            </View>
           </View>
+          {capturedImages.length > 0 && (
+            <View style={styles.cameraPreviewStrip}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {capturedImages.map((image) => (
+                  <View key={image.id} style={styles.cameraPreviewItem}>
+                    <Image source={{ uri: image.uri }} style={styles.cameraPreviewImage} />
+                    <TouchableOpacity
+                      style={styles.cameraDeleteButton}
+                      onPress={() => handleDeleteImage(image.id)}
+                    >
+                      <Ionicons name="close-circle" size={18} color="white" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          )}
           <View style={styles.cameraActionRow}>
             <TouchableOpacity
               style={styles.captureButton}
@@ -645,6 +677,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
+  toolbarRight: {
+    flexDirection: 'row',
+    gap: 12,
+  },
   overlayButton: {
     width: 44,
     height: 44,
@@ -652,6 +688,29 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  cameraPreviewStrip: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 120 : 100,
+    left: 16,
+    right: 16,
+  },
+  cameraPreviewItem: {
+    marginRight: 10,
+  },
+  cameraPreviewImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: Colors.primary,
+  },
+  cameraDeleteButton: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 10,
   },
   cameraActionRow: {
     position: 'absolute',
