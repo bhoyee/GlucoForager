@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
+import { Camera } from 'expo-camera';
 import { 
   getTodayScans, 
   getRemainingScans, 
@@ -33,6 +34,11 @@ export default function ScanScreen() {
   const [isScanning, setIsScanning] = useState(false);
   const [capturedImages, setCapturedImages] = useState([]);
   const [showPreview, setShowPreview] = useState(false);
+  const [cameraRef, setCameraRef] = useState(null);
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [flashMode, setFlashMode] = useState(Camera.Constants.FlashMode.off);
+  const [hasCameraPermission, setHasCameraPermission] = useState(null);
+  const [isCapturing, setIsCapturing] = useState(false);
 
   useEffect(() => {
     const loadUserData = async () => {
@@ -52,23 +58,95 @@ export default function ScanScreen() {
     }
   }, [isFocused]);
 
-  const handlePickImage = async () => {
+  const showUpgradeAlert = () => {
+    Alert.alert(
+      'Daily Limit Reached',
+      'You have used all 3 free scans today. Upgrade to Premium for unlimited scans.',
+      [
+        { text: 'OK', style: 'cancel' },
+        { 
+          text: 'Upgrade', 
+          onPress: () => navigation.navigate('ProfileTab') 
+        }
+      ]
+    );
+  };
+
+  const checkScanLimit = async () => {
     const canScan = await canUserScan(userIsPremium);
-    
     if (!userIsPremium && !canScan && capturedImages.length === 0) {
-      Alert.alert(
-        'Daily Limit Reached',
-        'You have used all 3 free scans today. Upgrade to Premium for unlimited scans.',
-        [
-          { text: 'OK', style: 'cancel' },
-          { 
-            text: 'Upgrade', 
-            onPress: () => navigation.navigate('ProfileTab') 
-          }
-        ]
-      );
-      return;
+      showUpgradeAlert();
+      return false;
     }
+    return true;
+  };
+
+  const recordScanIfNeeded = async () => {
+    if (!userIsPremium && capturedImages.length === 0) {
+      await incrementScan();
+      const remaining = await getRemainingScans(false);
+      setRemainingScans(remaining);
+    }
+  };
+
+  const requestCameraPermission = async () => {
+    if (hasCameraPermission === false) {
+      Alert.alert('Permission required', 'Camera permission is required to scan ingredients.');
+      return false;
+    }
+    if (hasCameraPermission === true) {
+      return true;
+    }
+    const { status } = await Camera.requestCameraPermissionsAsync();
+    const granted = status === 'granted';
+    setHasCameraPermission(granted);
+    if (!granted) {
+      Alert.alert('Permission required', 'Please allow access to your camera.');
+    }
+    return granted;
+  };
+
+  const handleLaunchCamera = async () => {
+    const allowed = await checkScanLimit();
+    if (!allowed) return;
+    const permissionGranted = await requestCameraPermission();
+    if (!permissionGranted) return;
+    setIsCameraActive(true);
+  };
+
+  const toggleFlashMode = () => {
+    setFlashMode((prev) =>
+      prev === Camera.Constants.FlashMode.torch
+        ? Camera.Constants.FlashMode.off
+        : Camera.Constants.FlashMode.torch
+    );
+  };
+
+  const capturePhoto = async () => {
+    if (!cameraRef) return;
+    setIsCapturing(true);
+    try {
+      const photo = await cameraRef.takePictureAsync({ quality: 0.7, skipProcessing: true });
+      await recordScanIfNeeded();
+      const newImage = {
+        id: Date.now().toString(),
+        uri: photo.uri,
+        name: `Photo ${capturedImages.length + 1}`,
+      };
+      setCapturedImages((prev) => [...prev, newImage]);
+      setShowPreview(true);
+    } catch (error) {
+      console.error('Capture failed', error);
+      Alert.alert('Capture failed', 'Unable to take a photo. Please try again.');
+    } finally {
+      setIsCapturing(false);
+      setIsCameraActive(false);
+    }
+  };
+
+  const handlePickImage = async () => {
+    const allowed = await checkScanLimit();
+    if (!allowed) return;
 
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -86,11 +164,7 @@ export default function ScanScreen() {
       });
 
       if (!result.canceled) {
-        if (!userIsPremium && capturedImages.length === 0) {
-          await incrementScan();
-          const remaining = await getRemainingScans(false);
-          setRemainingScans(remaining);
-        }
+        await recordScanIfNeeded();
         
         const newImages = result.assets.map((asset, index) => ({
           id: Date.now().toString() + index,
@@ -158,6 +232,21 @@ export default function ScanScreen() {
         <Text style={styles.subtitle}>
           Select images from your gallery to scan ingredients
         </Text>
+        
+        <TouchableOpacity 
+          style={[styles.galleryButton, styles.launchButton]}
+          onPress={handleLaunchCamera}
+          disabled={isScanning || isCapturing}
+        >
+          {isCapturing ? (
+            <ActivityIndicator size="small" color="white" />
+          ) : (
+            <>
+              <Ionicons name="camera" size={24} color="white" />
+              <Text style={[styles.galleryButtonText, styles.launchButtonText]}>Launch Camera</Text>
+            </>
+          )}
+        </TouchableOpacity>
         
         <TouchableOpacity 
           style={styles.galleryButton}
@@ -260,6 +349,41 @@ export default function ScanScreen() {
           </TouchableOpacity>
         )}
       </View>
+      {isCameraActive && (
+        <View style={styles.cameraOverlay}>
+          <Camera
+            ref={(ref) => setCameraRef(ref)}
+            style={styles.cameraView}
+            type={Camera.Constants.Type.back}
+            flashMode={flashMode}
+            ratio="16:9"
+          />
+          <View style={styles.cameraToolbar}>
+            <TouchableOpacity style={styles.overlayButton} onPress={() => setIsCameraActive(false)}>
+              <Ionicons name="close" size={24} color="white" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.overlayButton} onPress={toggleFlashMode}>
+              <Ionicons
+                name={flashMode === Camera.Constants.FlashMode.torch ? 'flash' : 'flash-off'}
+                size={24}
+                color="white"
+              />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.cameraActionRow}>
+            <TouchableOpacity
+              style={styles.captureButton}
+              onPress={capturePhoto}
+              disabled={isCapturing}
+            >
+              <View style={styles.captureCircle}>
+                <View style={styles.captureDot} />
+              </View>
+            </TouchableOpacity>
+            <Text style={styles.captureLabel}>{isCapturing ? 'Capturing…' : 'Capture'}</Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -335,6 +459,15 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     marginLeft: 10,
+  },
+  launchButton: {
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    marginBottom: 10,
+  },
+  launchButtonText: {
+    color: 'white',
   },
   previewContainer: {
     backgroundColor: 'rgba(0,0,0,0.8)',
@@ -468,5 +601,71 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.text,
     fontWeight: '500',
+  },
+  cameraOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'black',
+    zIndex: 50,
+    justifyContent: 'center',
+  },
+  cameraView: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  cameraToolbar: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 60 : 40,
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  overlayButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cameraActionRow: {
+    position: 'absolute',
+    bottom: Platform.OS === 'ios' ? 60 : 40,
+    left: 0,
+    right: 0,
+    flexDirection: 'column',
+    alignItems: 'center',
+  },
+  captureButton: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    borderWidth: 4,
+    borderColor: 'rgba(255,255,255,0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  captureCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'white',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  captureDot: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'red',
+  },
+  captureLabel: {
+    marginTop: 8,
+    color: 'white',
+    fontSize: 16,
   },
 });
