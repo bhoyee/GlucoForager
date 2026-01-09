@@ -440,7 +440,7 @@ export default function ScanScreen() {
                 disabled={isScanning}
               >
                 <Ionicons name="analytics-outline" size={18} color="white" />
-                <Text style={{ marginLeft: 8, color: 'white', fontSize: 14, fontWeight: '600' }}>
+                <Text style={styles.analyzeOverlayText}>
                   {isScanning ? 'Processing...' : `Analyze ${capturedImages.length}`}
                 </Text>
               </TouchableOpacity>
@@ -785,5 +785,11 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 18,
     backgroundColor: Colors.primary,
+  },
+  analyzeOverlayText: {
+    marginLeft: 8,
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
