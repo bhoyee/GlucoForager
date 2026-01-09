@@ -435,15 +435,7 @@ export default function ScanScreen() {
             <Text style={styles.captureLabel}>{isCapturing ? 'Capturing…' : 'Capture'}</Text>
             {capturedImages.length > 0 && (
               <TouchableOpacity
-                style={{
-                  marginTop: 12,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  paddingHorizontal: 18,
-                  paddingVertical: 10,
-                  borderRadius: 18,
-                  backgroundColor: Colors.primary,
-                }}
+                style={styles.analyzeOverlayButton}
                 onPress={handleAnalyzeImages}
                 disabled={isScanning}
               >
@@ -784,5 +776,14 @@ const styles = StyleSheet.create({
     marginTop: 8,
     color: 'white',
     fontSize: 16,
+  },
+  analyzeOverlayButton: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 18,
+    backgroundColor: Colors.primary,
   },
 });
