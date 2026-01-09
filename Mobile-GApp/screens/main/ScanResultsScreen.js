@@ -425,14 +425,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
     marginBottom: 16,
   },
   sectionActions: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginTop: 8,
   },
   sectionTitle: {
     fontSize: 22,
