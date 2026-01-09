@@ -39,6 +39,9 @@ const mockRecipe = {
 
 export default function RecipeDetailScreen({ navigation, route }) {
   const recipe = route.params?.recipe || mockRecipe;
+  const ingredients = recipe.ingredients ?? [];
+  const steps = recipe.steps ?? [];
+  const tips = recipe.tips ?? [];
 
   return (
     <View style={styles.container}>
@@ -79,7 +82,7 @@ export default function RecipeDetailScreen({ navigation, route }) {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Ingredients</Text>
-          {recipe.ingredients.map((item, index) => (
+          {ingredients.map((item, index) => (
             <View key={`${item}-${index}`} style={styles.listItem}>
               <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
               <Text style={styles.listText}>{item}</Text>
@@ -89,7 +92,7 @@ export default function RecipeDetailScreen({ navigation, route }) {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Steps</Text>
-          {recipe.steps.map((item, index) => (
+          {steps.map((item, index) => (
             <View key={`${item}-${index}`} style={styles.stepItem}>
               <View style={styles.stepBadge}>
                 <Text style={styles.stepNumber}>{index + 1}</Text>
@@ -101,7 +104,7 @@ export default function RecipeDetailScreen({ navigation, route }) {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Tips</Text>
-          {recipe.tips.map((item, index) => (
+          {tips.map((item, index) => (
             <View key={`${item}-${index}`} style={styles.tipItem}>
               <Ionicons name="sparkles-outline" size={16} color={Colors.primary} />
               <Text style={styles.tipText}>{item}</Text>
