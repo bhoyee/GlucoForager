@@ -24,6 +24,18 @@ import {
   canUserScan 
 } from '../../utils/scanTracker';
 
+let Camera;
+let CameraConstants;
+try {
+  const CameraModule = require('expo-camera');
+  Camera = CameraModule?.Camera ?? null;
+  CameraConstants = Camera?.Constants ?? CameraModule?.Constants ?? null;
+} catch (error) {
+  console.warn('expo-camera module missing', error);
+  Camera = null;
+  CameraConstants = null;
+}
+
 export default function ScanScreen() {
   const navigation = useNavigation();
   const isFocused = useIsFocused();
@@ -35,7 +47,8 @@ export default function ScanScreen() {
   const [showPreview, setShowPreview] = useState(false);
   const [cameraRef, setCameraRef] = useState(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
-  const [flashMode, setFlashMode] = useState(Camera?.Constants?.FlashMode?.off ?? null);
+  const defaultFlash = CameraConstants?.FlashMode?.off ?? null;
+  const [flashMode, setFlashMode] = useState(defaultFlash);
   const [hasCameraPermission, setHasCameraPermission] = useState(null);
   const [isCapturing, setIsCapturing] = useState(false);
 
@@ -96,6 +109,10 @@ export default function ScanScreen() {
     if (hasCameraPermission === true) {
       return true;
     }
+    if (!Camera?.requestCameraPermissionsAsync) {
+      Alert.alert('Camera unavailable', 'Camera module is not supported on this device.');
+      return false;
+    }
     const { status } = await Camera.requestCameraPermissionsAsync();
     const granted = status === 'granted';
     setHasCameraPermission(granted);
@@ -110,20 +127,24 @@ export default function ScanScreen() {
     if (!allowed) return;
     const permissionGranted = await requestCameraPermission();
     if (!permissionGranted) return;
+    if (!Camera) {
+      Alert.alert('Camera unavailable', 'Camera module is not available on this device.');
+      return;
+    }
     setIsCameraActive(true);
   };
 
   const toggleFlashMode = () => {
-    if (!Camera?.Constants?.FlashMode) return;
+    if (!CameraConstants?.FlashMode) return;
     setFlashMode((prev) =>
-      prev === Camera.Constants.FlashMode.torch
-        ? Camera.Constants.FlashMode.off
-        : Camera.Constants.FlashMode.torch
+      prev === CameraConstants.FlashMode.torch
+        ? CameraConstants.FlashMode.off
+        : CameraConstants.FlashMode.torch
     );
   };
 
   const capturePhoto = async () => {
-    if (!cameraRef) return;
+    if (!cameraRef || !Camera) return;
     setIsCapturing(true);
     try {
       const photo = await cameraRef.takePictureAsync({ quality: 0.7, skipProcessing: true });
@@ -349,12 +370,12 @@ export default function ScanScreen() {
           </TouchableOpacity>
         )}
       </View>
-      {isCameraActive && (
+      {isCameraActive && Camera && (
         <View style={styles.cameraOverlay}>
           <Camera
             ref={(ref) => setCameraRef(ref)}
             style={styles.cameraView}
-            type={Camera.Constants.Type.back}
+            type={CameraConstants?.Type?.back ?? Camera?.Constants?.Type?.back}
             flashMode={flashMode}
             ratio="16:9"
           />
@@ -365,7 +386,7 @@ export default function ScanScreen() {
             <TouchableOpacity style={styles.overlayButton} onPress={toggleFlashMode}>
               <Ionicons
                 name={
-                  flashMode === Camera?.Constants?.FlashMode?.torch
+                  flashMode === CameraConstants?.FlashMode?.torch
                     ? 'flash'
                     : 'flash-off'
                 }
