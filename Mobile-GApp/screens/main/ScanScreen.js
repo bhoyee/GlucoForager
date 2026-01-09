@@ -433,6 +433,26 @@ export default function ScanScreen() {
               </View>
             </TouchableOpacity>
             <Text style={styles.captureLabel}>{isCapturing ? 'Capturing…' : 'Capture'}</Text>
+            {capturedImages.length > 0 && (
+              <TouchableOpacity
+                style={{
+                  marginTop: 12,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingHorizontal: 18,
+                  paddingVertical: 10,
+                  borderRadius: 18,
+                  backgroundColor: Colors.primary,
+                }}
+                onPress={handleAnalyzeImages}
+                disabled={isScanning}
+              >
+                <Ionicons name="analytics-outline" size={18} color="white" />
+                <Text style={{ marginLeft: 8, color: 'white', fontSize: 14, fontWeight: '600' }}>
+                  {isScanning ? 'Processing...' : `Analyze ${capturedImages.length}`}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       )}
