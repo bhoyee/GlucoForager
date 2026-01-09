@@ -15,6 +15,7 @@ const mockRecipe = {
   description:
     'A quick, diabetes-friendly stir fry with lean protein, colorful veggies, and heart-healthy olive oil.',
   image: 'https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?w=1200&q=80',
+  nutrition: '🥗 350 cal | 🍞 28g carbs',
   safety: {
     summary: 'Low glycemic impact with balanced carbs, high fiber, and lean protein.',
     carb: 'Carbs are evenly distributed across veggies and lean protein.',
@@ -83,6 +84,7 @@ export default function RecipeDetailScreen({ navigation, route }) {
         <View style={styles.titleBlock}>
           <Text style={styles.title}>{recipe.name}</Text>
           <Text style={styles.description}>{recipe.description}</Text>
+          {recipe.nutrition ? <Text style={styles.nutritionText}>{recipe.nutrition}</Text> : null}
         </View>
 
         <TouchableOpacity style={styles.safetyHeader} onPress={() => setShowSafety((prev) => !prev)}>
@@ -231,6 +233,12 @@ const styles = StyleSheet.create({
     marginTop: 10,
     color: Colors.textLight,
     lineHeight: 20,
+  },
+  nutritionText: {
+    marginTop: 8,
+    color: Colors.text,
+    fontSize: 14,
+    fontWeight: '600',
   },
   section: {
     marginTop: 24,
