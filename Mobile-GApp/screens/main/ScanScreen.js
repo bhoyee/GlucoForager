@@ -171,7 +171,6 @@ export default function ScanScreen() {
       Alert.alert('Capture failed', 'Unable to take a photo. Please try again.');
     } finally {
       setIsCapturing(false);
-      setIsCameraActive(false);
     }
   };
 
@@ -394,21 +393,16 @@ export default function ScanScreen() {
             <TouchableOpacity style={styles.overlayButton} onPress={() => setIsCameraActive(false)}>
               <Ionicons name="close" size={24} color="white" />
             </TouchableOpacity>
-            <View style={styles.toolbarRight}>
-              <TouchableOpacity style={styles.overlayButton} onPress={handlePickImage}>
-                <Ionicons name="images-outline" size={24} color="white" />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.overlayButton} onPress={toggleTorch}>
-                <Ionicons
-                  name={torchEnabled ? 'flash' : 'flash-off'}
-                  size={24}
-                  color="white"
-                />
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity style={styles.overlayButton} onPress={toggleTorch}>
+              <Ionicons
+                name={torchEnabled ? 'flash' : 'flash-off'}
+                size={24}
+                color="white"
+              />
+            </TouchableOpacity>
           </View>
-          {capturedImages.length > 0 && (
-            <View style={styles.cameraPreviewStrip}>
+          <View style={styles.cameraPreviewStrip}>
+            {capturedImages.length > 0 && (
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 {capturedImages.map((image) => (
                   <View key={image.id} style={styles.cameraPreviewItem}>
@@ -422,8 +416,12 @@ export default function ScanScreen() {
                   </View>
                 ))}
               </ScrollView>
-            </View>
-          )}
+            )}
+            <TouchableOpacity style={styles.galleryOverlayButton} onPress={handlePickImage}>
+              <Ionicons name="images-outline" size={18} color="white" />
+              <Text style={styles.galleryOverlayText}>Gallery</Text>
+            </TouchableOpacity>
+          </View>
           <View style={styles.cameraActionRow}>
             <TouchableOpacity
               style={styles.captureButton}
@@ -694,6 +692,24 @@ const styles = StyleSheet.create({
     top: Platform.OS === 'ios' ? 120 : 100,
     left: 16,
     right: 16,
+  },
+  galleryOverlayButton: {
+    marginTop: 10,
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  galleryOverlayText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
   },
   cameraPreviewItem: {
     marginRight: 10,
