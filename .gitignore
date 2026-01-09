@@ -1,0 +1,33 @@
+node_modules/
+.expo/
+.expo-shared/
+.DS_Store
+*.log
+*.tmp
+__pycache__/
+*.pyc
+*.pyo
+*.env
+
+# backend artifacts
+/backend/.env
+/backend/app/**/__pycache__/
+
+# landing page
+/landing-page/.next/
+/landing-page/node_modules/
+
+# mobile app build caches
+/mobile-app/.expo/
+/mobile-app/node_modules/
+
+# Mobile-GApp artifacts
+/Mobile-GApp/node_modules/
+/Mobile-GApp/.expo/
+/Mobile-GApp/.expo-shared/
+/Mobile-GApp/android/.gradle/
+/Mobile-GApp/android/app/build/
+
+# IDEs
+.vscode/
+.idea/
