@@ -14,6 +14,7 @@ import ManualInputScreen from '../screens/main/ManualInputScreen';
 import RecipeDetailScreen from '../screens/main/RecipeDetailScreen';
 import RecipeResultsScreen from '../screens/main/RecipeResultsScreen';
 import ScanResultsScreen from '../screens/main/ScanResultsScreen';
+import StartCookingScreen from '../screens/main/StartCookingScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -32,6 +33,7 @@ function HomeStackNavigator() {
       <HomeStack.Screen name="ScanResults" component={ScanResultsScreen} />
       <HomeStack.Screen name="RecipeResults" component={RecipeResultsScreen} />
       <HomeStack.Screen name="RecipeDetail" component={RecipeDetailScreen} />
+      <HomeStack.Screen name="StartCooking" component={StartCookingScreen} />
     </HomeStack.Navigator>
   );
 }
@@ -51,6 +53,7 @@ function ScanStackNavigator() {
       <ScanStack.Screen name="ScanResults" component={ScanResultsScreen} />
       <ScanStack.Screen name="RecipeResults" component={RecipeResultsScreen} />
       <ScanStack.Screen name="RecipeDetail" component={RecipeDetailScreen} />
+      <ScanStack.Screen name="StartCooking" component={StartCookingScreen} />
     </ScanStack.Navigator>
   );
 }
@@ -67,6 +70,7 @@ function FavoritesStackNavigator() {
     >
       <FavoritesStack.Screen name="Favorites" component={FavoritesScreen} />
       <FavoritesStack.Screen name="RecipeDetail" component={RecipeDetailScreen} />
+      <FavoritesStack.Screen name="StartCooking" component={StartCookingScreen} />
     </FavoritesStack.Navigator>
   );
 }
