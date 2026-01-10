@@ -3,6 +3,7 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/Colors';
 
 // Import all screens
@@ -91,6 +92,7 @@ function ProfileStackNavigator() {
 }
 
 export default function MainTabNavigator() {
+  const insets = useSafeAreaInsets();
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -100,8 +102,8 @@ export default function MainTabNavigator() {
           backgroundColor: Colors.surface,
           borderTopColor: Colors.border,
           paddingTop: 8,
-          paddingBottom: 8,
-          height: 60,
+          paddingBottom: Math.max(8, insets.bottom),
+          height: 60 + Math.max(0, insets.bottom - 4),
         },
         tabBarLabelStyle: {
           fontSize: 12,
