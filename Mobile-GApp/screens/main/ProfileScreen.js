@@ -56,10 +56,10 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.menuItem}>
+        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('PrivacyPolicy')}>
           <View style={styles.menuItemLeft}>
             <Ionicons name="shield-checkmark-outline" size={22} color={Colors.text} />
-            <Text style={styles.menuText}>Privacy & Security</Text>
+            <Text style={styles.menuText}>Privacy Policy</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
         </TouchableOpacity>
