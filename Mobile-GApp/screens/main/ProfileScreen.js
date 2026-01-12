@@ -79,14 +79,6 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('PrivacyPolicy')}>
-          <View style={styles.menuItemLeft}>
-            <Ionicons name="shield-checkmark-outline" size={22} color={Colors.text} />
-            <Text style={styles.menuText}>Privacy Policy</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
-        </TouchableOpacity>
-
       </View>
 
       <View style={styles.menuSection}>
@@ -126,7 +118,7 @@ export default function ProfileScreen() {
         <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Terms')}>
           <View style={styles.menuItemLeft}>
             <Ionicons name="document-text-outline" size={22} color={Colors.text} />
-            <Text style={styles.menuText}>Terms & Conditions</Text>
+            <Text style={styles.menuText}>Terms & Condition</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
         </TouchableOpacity>
@@ -289,6 +281,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.text,
     marginLeft: 12,
+    flexShrink: 1,
   },
   versionContainer: {
     alignItems: 'center',

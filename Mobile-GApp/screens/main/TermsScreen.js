@@ -10,7 +10,7 @@ export default function TermsScreen({ navigation }) {
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={22} color={Colors.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Terms & Conditions</Text>
+        <Text style={styles.title}>Terms & Condition</Text>
         <View style={{ width: 36 }} />
       </View>
 
