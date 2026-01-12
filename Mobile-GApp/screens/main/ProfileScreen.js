@@ -276,12 +276,15 @@ const styles = StyleSheet.create({
   menuItemLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
+    marginRight: 12,
   },
   menuText: {
     fontSize: 16,
     color: Colors.text,
     marginLeft: 12,
-    flexShrink: 1,
+    flex: 1,
+    flexWrap: 'wrap',
   },
   versionContainer: {
     alignItems: 'center',
