@@ -1,5 +1,5 @@
 // screens/main/HomeScreen.js - UPDATED PRODUCTION VERSION
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   StatusBar,
   Alert,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +21,7 @@ import {
   initializeScans,
   canUserScan 
 } from '../../utils/scanTracker';
+import { API_ENDPOINTS, API_URL } from '../../config/api';
 
 export default function HomeScreen() {
   const navigation = useNavigation();
@@ -30,12 +32,10 @@ export default function HomeScreen() {
   const [remainingScans, setRemainingScans] = useState(3);
   const [userName, setUserName] = useState("User");
   const [isLoading, setIsLoading] = useState(true);
-
-  const recentRecipes = [
-    { id: 1, name: 'Mediterranean Chicken Salad', time: '25 min', match: '5/7' },
-    { id: 2, name: 'Zucchini Noodles', time: '15 min', match: '4/6' },
-    { id: 3, name: 'Grilled Salmon', time: '20 min', match: '6/8' },
-  ];
+  const [recentRecipes, setRecentRecipes] = useState([]);
+  const [suggestedRecipes, setSuggestedRecipes] = useState([]);
+  const [isFetchingRecipes, setIsFetchingRecipes] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   // Load user data
   useEffect(() => {
@@ -56,6 +56,7 @@ export default function HomeScreen() {
         setUserName(name);
         setTodayScans(scansUsed);
         setRemainingScans(remaining);
+        await loadRecipes();
         
       } catch (error) {
         console.error('Error loading user data:', error);
@@ -73,6 +74,88 @@ export default function HomeScreen() {
       loadUserData();
     }
   }, [isFocused]);
+
+  const getMealType = () => {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour <= 10) return 'breakfast';
+    if (hour >= 11 && hour <= 15) return 'lunch';
+    if (hour >= 16 && hour <= 21) return 'dinner';
+    return 'snack';
+  };
+
+  const loadRecipes = async () => {
+    try {
+      setIsFetchingRecipes(true);
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        setRecentRecipes([]);
+        setSuggestedRecipes([]);
+        setShowSuggestions(true);
+        return;
+      }
+
+      const recentResponse = await fetch(`${API_URL}${API_ENDPOINTS.RECENT_RECIPES}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const recentData = await recentResponse.json();
+      const recentItems = Array.isArray(recentData.items) ? recentData.items : [];
+      setRecentRecipes(recentItems);
+
+      if (recentItems.length === 0) {
+        await fetchSuggestions(token);
+        setShowSuggestions(true);
+      } else {
+        setShowSuggestions(false);
+      }
+    } catch (error) {
+      console.error('Error loading recipes:', error);
+      setRecentRecipes([]);
+      setSuggestedRecipes([]);
+      setShowSuggestions(true);
+    } finally {
+      setIsFetchingRecipes(false);
+    }
+  };
+
+  const fetchSuggestions = async (token) => {
+    const mealType = getMealType();
+    const response = await fetch(
+      `${API_URL}${API_ENDPOINTS.RECIPE_SUGGESTIONS}?limit=3&meal_type=${mealType}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const data = await response.json();
+    const items = Array.isArray(data.items) ? data.items : [];
+    setSuggestedRecipes(items);
+  };
+
+  const handleShuffleSuggestions = async () => {
+    try {
+      setIsFetchingRecipes(true);
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) return;
+      await fetchSuggestions(token);
+    } catch (error) {
+      Alert.alert('Error', 'Unable to refresh suggestions right now.');
+    } finally {
+      setIsFetchingRecipes(false);
+    }
+  };
+
+  const getRecipeTimeLabel = (recipe) => {
+    const prep = recipe.prep_time_minutes ?? recipe.prepTime ?? recipe.prep_time;
+    const cook = recipe.cook_time_minutes ?? recipe.cookTime ?? recipe.cook_time;
+    if (typeof prep === 'number' || typeof cook === 'number') {
+      const total = (prep || 0) + (cook || 0);
+      return `${total || prep || cook} min`;
+    }
+    return recipe.time || '--';
+  };
+
+  const getRecipeCalories = (recipe) => {
+    if (recipe.nutrition?.calories) return `${recipe.nutrition.calories} cal`;
+    if (recipe.nutrition_per_serving?.calories) return `${recipe.nutrition_per_serving.calories} cal`;
+    return 'Calories --';
+  };
 
   const checkScanLimit = async () => {
     try {
@@ -109,8 +192,8 @@ export default function HomeScreen() {
     navigation.navigate('ManualInput');
   };
 
-  const handleViewRecipeDetail = (recipeId) => {
-    navigation.navigate('RecipeDetail', { id: recipeId });
+  const handleViewRecipeDetail = (recipe) => {
+    navigation.navigate('RecipeDetail', { recipe });
   };
 
   const handleViewAllRecipes = () => {
@@ -176,7 +259,7 @@ export default function HomeScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.greeting}>Welcome back, {userName} 👋</Text>
+            <Text style={styles.greeting}>Welcome back</Text>
             <Text style={styles.subGreeting}>What's cooking today?</Text>
           </View>
           <TouchableOpacity 
@@ -265,10 +348,14 @@ export default function HomeScreen() {
         {/* Recent Recipes */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recent Recipes</Text>
-            <TouchableOpacity onPress={handleViewAllRecipes}>
-              <Text style={styles.seeAllText}>See all</Text>
-            </TouchableOpacity>
+            <Text style={styles.sectionTitle}>
+              {showSuggestions ? 'Suggest me 3 recipes' : 'Recent Recipes'}
+            </Text>
+            {!showSuggestions && (
+              <TouchableOpacity onPress={handleViewAllRecipes}>
+                <Text style={styles.seeAllText}>See all</Text>
+              </TouchableOpacity>
+            )}
           </View>
           
           <ScrollView 
@@ -276,32 +363,47 @@ export default function HomeScreen() {
             showsHorizontalScrollIndicator={false}
             style={styles.recipesScroll}
           >
-            {recentRecipes.map((recipe) => (
+            {(showSuggestions ? suggestedRecipes : recentRecipes).map((recipe, index) => (
               <TouchableOpacity 
-                key={recipe.id}
+                key={recipe.id || `${recipe.name || 'recipe'}-${index}`}
                 style={styles.recipeCard}
-                onPress={() => handleViewRecipeDetail(recipe.id)}
+                onPress={() => handleViewRecipeDetail(recipe)}
               >
-                <View style={styles.recipeImage}>
-                  <Ionicons name="restaurant-outline" size={40} color={Colors.textLight} />
-                </View>
+                {recipe.image_url ? (
+                  <Image source={{ uri: recipe.image_url }} style={styles.recipeImage} />
+                ) : (
+                  <View style={styles.recipeImagePlaceholder}>
+                    <Ionicons name="restaurant-outline" size={40} color={Colors.textLight} />
+                  </View>
+                )}
                 <View style={styles.recipeInfo}>
                   <View style={styles.recipeHeader}>
                     <View style={styles.badge}>
                       <Text style={styles.badgeText}>Diabetes-Safe</Text>
                     </View>
-                    <Text style={styles.recipeTime}>{recipe.time}</Text>
+                    <Text style={styles.recipeTime}>{getRecipeTimeLabel(recipe)}</Text>
                   </View>
                   <Text style={styles.recipeName} numberOfLines={2}>
-                    {recipe.name}
+                    {recipe.name || recipe.title}
                   </Text>
-                  <Text style={styles.recipeMatch}>
-                    Uses {recipe.match} ingredients
-                  </Text>
+                  <Text style={styles.recipeMatch}>{getRecipeCalories(recipe)}</Text>
                 </View>
               </TouchableOpacity>
             ))}
           </ScrollView>
+
+          {showSuggestions && (
+            <TouchableOpacity
+              style={styles.shuffleButton}
+              onPress={handleShuffleSuggestions}
+              disabled={isFetchingRecipes}
+            >
+              <Ionicons name="shuffle" size={18} color={Colors.primary} />
+              <Text style={styles.shuffleText}>
+                {isFetchingRecipes ? 'Refreshing...' : 'Shuffle recipes'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Upgrade Banner */}
@@ -552,6 +654,10 @@ const styles = StyleSheet.create({
   },
   recipeImage: {
     height: 140,
+    width: '100%',
+  },
+  recipeImagePlaceholder: {
+    height: 140,
     backgroundColor: Colors.background,
     justifyContent: 'center',
     alignItems: 'center',
@@ -590,6 +696,22 @@ const styles = StyleSheet.create({
   recipeMatch: {
     fontSize: 14,
     color: Colors.textLight,
+  },
+  shuffleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: `${Colors.primary}15`,
+  },
+  shuffleText: {
+    marginLeft: 8,
+    color: Colors.primary,
+    fontWeight: '600',
+    fontSize: 14,
   },
   upgradeBanner: {
     backgroundColor: Colors.primary,

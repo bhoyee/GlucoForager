@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -11,12 +11,13 @@ import {
   Modal,
   Animated,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons, MaterialIcons, FontAwesome, Feather } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_ENDPOINTS, API_URL } from '../../config/api';
 
 const { width } = Dimensions.get('window');
 
-// Mock recipe data
 const mockRecipe = {
   id: '1',
   title: 'Mediterranean Quinoa Bowl',
@@ -77,11 +78,112 @@ const mockRecipe = {
 
 const RecipeDetailsScreen = () => {
   const navigation = useNavigation();
+  const route = useRoute();
   const [recipe, setRecipe] = useState(mockRecipe);
   const [showIngredientsModal, setShowIngredientsModal] = useState(false);
   const [showSafetyModal, setShowSafetyModal] = useState(false);
   const [servings, setServings] = useState(recipe.servings);
   const [expandedTip, setExpandedTip] = useState(null);
+
+  useEffect(() => {
+    const init = async () => {
+      const incoming = route.params?.recipe;
+      if (incoming) {
+        const normalized = normalizeRecipe(incoming);
+        setRecipe(normalized);
+        setServings(normalized.servings);
+        if ((!normalized.ingredients || normalized.ingredients.length === 0) && incoming.id) {
+          await fetchRecipeDetail(incoming.id);
+        }
+      }
+    };
+    init();
+  }, [route.params]);
+
+  const fetchRecipeDetail = async (recipeId) => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) return;
+      const response = await fetch(`${API_URL}${API_ENDPOINTS.RECIPE_DETAIL}/${recipeId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (response.ok && data?.id) {
+        const normalized = normalizeRecipe(data);
+        setRecipe(normalized);
+        setServings(normalized.servings);
+      }
+    } catch (error) {
+      // Keep fallback mock on error
+    }
+  };
+
+  const normalizeRecipe = (item) => {
+    const ingredients = Array.isArray(item.ingredients)
+      ? item.ingredients.map((ingredient, index) => ({
+          id: ingredient.id || `${item.id || 'ing'}-${index}`,
+          name: ingredient.name || ingredient.title || 'Ingredient',
+          amount: formatIngredientAmount(ingredient),
+          owned: Boolean(ingredient.owned),
+        }))
+      : [];
+
+    const instructions = Array.isArray(item.instructions)
+      ? item.instructions
+      : Array.isArray(item.steps)
+      ? item.steps
+      : [];
+
+    const nutrition = item.nutrition || item.nutrition_per_serving || {};
+
+    const prepTime = item.prep_time_minutes ?? item.prepTime ?? item.prep_time ?? 0;
+    const cookTime = item.cook_time_minutes ?? item.cookTime ?? item.cook_time ?? 0;
+
+    return {
+      id: item.id || '0',
+      title: item.name || item.title || 'Recipe',
+      category: item.category || 'Diabetes-Friendly',
+      prepTime,
+      cookTime,
+      totalTime: (prepTime || 0) + (cookTime || 0),
+      servings: item.servings || 1,
+      difficulty: item.difficulty || 'Easy',
+      rating: item.rating || 4.6,
+      reviewCount: item.reviewCount || 40,
+      author: item.author || 'GlucoForager',
+      authorRole: item.authorRole || 'Recipe Team',
+      image: item.image_url || item.image || '',
+      isBookmarked: Boolean(item.isBookmarked),
+      description: item.description || 'A diabetes-friendly recipe curated for balanced nutrition.',
+      nutrition: {
+        calories: nutrition.calories || 0,
+        carbs: formatNutritionValue(nutrition.carbs),
+        protein: formatNutritionValue(nutrition.protein),
+        fat: formatNutritionValue(nutrition.fat),
+        fiber: formatNutritionValue(nutrition.fiber),
+        sugar: formatNutritionValue(nutrition.sugar),
+      },
+      ingredients,
+      instructions,
+      tips: item.tips || mockRecipe.tips,
+    };
+  };
+
+  const formatIngredientAmount = (ingredient) => {
+    if (!ingredient) return '';
+    const quantity = ingredient.quantity ? `${ingredient.quantity}` : '';
+    const unit = ingredient.unit ? `${ingredient.unit}` : '';
+    const base = `${quantity} ${unit}`.trim();
+    const note = ingredient.note ? ` (${ingredient.note})` : '';
+    return `${base}${note}`.trim();
+  };
+
+  const formatNutritionValue = (value) => {
+    if (value === null || value === undefined || value === '') return '0g';
+    const numeric = typeof value === 'number' ? value : parseFloat(value);
+    if (Number.isNaN(numeric)) return `${value}`.includes('g') ? `${value}` : '0g';
+    return `${numeric}g`;
+  };
 
   const toggleBookmark = () => {
     setRecipe({ ...recipe, isBookmarked: !recipe.isBookmarked });
@@ -89,6 +191,7 @@ const RecipeDetailsScreen = () => {
 
   const ownedCount = recipe.ingredients.filter(item => item.owned).length;
   const totalIngredients = recipe.ingredients.length;
+  const ingredientProgress = totalIngredients ? (ownedCount / totalIngredients) * 100 : 0;
 
   const renderHeader = () => (
     <View style={styles.header}>
@@ -107,7 +210,13 @@ const RecipeDetailsScreen = () => {
 
   const renderHeroSection = () => (
     <View style={styles.heroContainer}>
-      <Image source={{ uri: recipe.image }} style={styles.recipeImage} />
+      {recipe.image ? (
+        <Image source={{ uri: recipe.image }} style={styles.recipeImage} />
+      ) : (
+        <View style={styles.recipeImagePlaceholder}>
+          <Ionicons name="image-outline" size={48} color="#A0A0A0" />
+        </View>
+      )}
       <View style={styles.imageOverlay}>
         <View style={styles.heroContent}>
           <View style={styles.recipeBadge}>
@@ -227,7 +336,7 @@ const RecipeDetailsScreen = () => {
             <View 
               style={[
                 styles.progressFill, 
-                { width: `${(ownedCount / totalIngredients) * 100}%` }
+                { width: `${ingredientProgress}%` }
               ]} 
             />
           </View>
@@ -235,7 +344,10 @@ const RecipeDetailsScreen = () => {
       </View>
       
       <View style={styles.ingredientsGrid}>
-        {recipe.ingredients.slice(0, 6).map((item) => (
+        {recipe.ingredients.length === 0 ? (
+          <Text style={styles.emptyText}>No ingredients listed yet.</Text>
+        ) : (
+          recipe.ingredients.slice(0, 6).map((item) => (
           <View key={item.id} style={styles.ingredientCard}>
             <View style={styles.ingredientHeader}>
               {item.owned ? (
@@ -253,7 +365,8 @@ const RecipeDetailsScreen = () => {
             </View>
             <Text style={styles.ingredientAmount}>{item.amount}</Text>
           </View>
-        ))}
+          ))
+        )}
       </View>
     </View>
   );
@@ -262,14 +375,18 @@ const RecipeDetailsScreen = () => {
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>Instructions</Text>
       
-      {recipe.instructions.map((step, index) => (
-        <View key={index} style={styles.instructionStep}>
-          <View style={styles.stepNumber}>
-            <Text style={styles.stepNumberText}>{index + 1}</Text>
+      {recipe.instructions.length === 0 ? (
+        <Text style={styles.emptyText}>Instructions will appear here once available.</Text>
+      ) : (
+        recipe.instructions.map((step, index) => (
+          <View key={index} style={styles.instructionStep}>
+            <View style={styles.stepNumber}>
+              <Text style={styles.stepNumberText}>{index + 1}</Text>
+            </View>
+            <Text style={styles.stepText}>{step}</Text>
           </View>
-          <Text style={styles.stepText}>{step}</Text>
-        </View>
-      ))}
+        ))
+      )}
     </View>
   );
 
@@ -544,6 +661,13 @@ const styles = StyleSheet.create({
   recipeImage: {
     width: '100%',
     height: '100%',
+  },
+  recipeImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#F5F5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   imageOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -833,6 +957,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#4CAF50',
     fontWeight: '600',
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#666',
+    paddingVertical: 8,
   },
   instructionStep: {
     flexDirection: 'row',
