@@ -48,10 +48,10 @@ export default function ProfileScreen() {
       <View style={styles.menuSection}>
         <Text style={styles.sectionTitle}>Account</Text>
         
-        <TouchableOpacity style={styles.menuItem}>
+        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('PersonalInfo')}>
           <View style={styles.menuItemLeft}>
             <Ionicons name="person-outline" size={22} color={Colors.text} />
-            <Text style={styles.menuText}>Personal Info</Text>
+            <Text style={styles.menuText}>Edit Personal Info</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
         </TouchableOpacity>

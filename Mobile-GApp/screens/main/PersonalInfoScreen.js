@@ -1,0 +1,257 @@
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  Modal,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Colors } from '../../constants/Colors';
+
+const countries = [
+  'United States',
+  'Canada',
+  'United Kingdom',
+  'Australia',
+  'Germany',
+  'France',
+  'Netherlands',
+  'Nigeria',
+  'Ghana',
+  'South Africa',
+  'Kenya',
+  'India',
+  'Pakistan',
+  'Bangladesh',
+  'Philippines',
+  'China',
+  'Japan',
+  'South Korea',
+  'Brazil',
+  'Mexico',
+];
+
+export default function PersonalInfoScreen({ navigation }) {
+  const [name, setName] = useState('John Doe');
+  const [gender, setGender] = useState('Male');
+  const [country, setCountry] = useState('United States');
+  const [email, setEmail] = useState('john@example.com');
+  const [password, setPassword] = useState('password123');
+  const [showCountries, setShowCountries] = useState(false);
+
+  return (
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={22} color={Colors.text} />
+        </TouchableOpacity>
+        <Text style={styles.title}>Personal Info</Text>
+        <View style={{ width: 32 }} />
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.label}>Full name</Text>
+        <TextInput value={name} onChangeText={setName} style={styles.input} />
+
+        <Text style={styles.label}>Gender</Text>
+        <TextInput value={gender} onChangeText={setGender} style={styles.input} />
+
+        <Text style={styles.label}>Country</Text>
+        <TouchableOpacity style={styles.select} onPress={() => setShowCountries(true)}>
+          <Text style={styles.selectText}>{country}</Text>
+          <Ionicons name="chevron-down" size={18} color={Colors.textLight} />
+        </TouchableOpacity>
+
+        <Text style={styles.label}>Email</Text>
+        <TextInput
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          style={styles.input}
+        />
+
+        <Text style={styles.label}>Password</Text>
+        <TextInput
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          style={styles.input}
+        />
+      </View>
+
+      <TouchableOpacity style={styles.logoutButton}>
+        <Ionicons name="log-out-outline" size={18} color={Colors.primary} />
+        <Text style={styles.logoutText}>Log out</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.deleteButton}>
+        <Ionicons name="trash-outline" size={18} color={Colors.error} />
+        <Text style={styles.deleteText}>Delete account</Text>
+      </TouchableOpacity>
+
+      <Modal visible={showCountries} transparent animationType="slide" onRequestClose={() => setShowCountries(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Country</Text>
+              <TouchableOpacity onPress={() => setShowCountries(false)}>
+                <Ionicons name="close" size={22} color={Colors.text} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {countries.map((item) => (
+                <TouchableOpacity
+                  key={item}
+                  style={styles.countryRow}
+                  onPress={() => {
+                    setCountry(item);
+                    setShowCountries(false);
+                  }}
+                >
+                  <Text style={styles.countryText}>{item}</Text>
+                  {item === country && <Ionicons name="checkmark" size={18} color={Colors.primary} />}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 60,
+    paddingBottom: 20,
+  },
+  backButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  card: {
+    backgroundColor: Colors.surface,
+    marginHorizontal: 20,
+    borderRadius: 16,
+    padding: 20,
+  },
+  label: {
+    fontSize: 14,
+    color: Colors.textLight,
+    marginBottom: 6,
+  },
+  input: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: Colors.text,
+    marginBottom: 14,
+  },
+  select: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginBottom: 14,
+  },
+  selectText: {
+    fontSize: 16,
+    color: Colors.text,
+  },
+  logoutButton: {
+    marginTop: 20,
+    marginHorizontal: 20,
+    backgroundColor: '#F1F8E9',
+    borderRadius: 12,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+  },
+  logoutText: {
+    color: Colors.primary,
+    fontWeight: '600',
+  },
+  deleteButton: {
+    marginTop: 12,
+    marginHorizontal: 20,
+    backgroundColor: '#FFF5F5',
+    borderRadius: 12,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 30,
+  },
+  deleteText: {
+    color: Colors.error,
+    fontWeight: '600',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    backgroundColor: Colors.background,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    maxHeight: '70%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  countryRow: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  countryText: {
+    fontSize: 16,
+    color: Colors.text,
+  },
+});
