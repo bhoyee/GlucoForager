@@ -1,10 +1,18 @@
 // config/api.js
-// For now, we'll use mock data. In production, replace with your actual API URL
-export const API_URL = __DEV__ 
-  ? 'https://your-dev-api.com' // Development API
-  : 'https://your-production-api.com'; // Production API
+import { Platform } from 'react-native';
+
+const DEV_DEFAULT_URL =
+  Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://localhost:8000';
+const PROD_DEFAULT_URL = 'https://your-production-api.com';
+
+export const API_URL =
+  process.env.EXPO_PUBLIC_API_URL || (__DEV__ ? DEV_DEFAULT_URL : PROD_DEFAULT_URL);
 
 export const API_ENDPOINTS = {
+  SIGNUP: '/api/auth/signup',
+  LOGIN: '/api/auth/login',
+  FORGOT_PASSWORD: '/api/auth/forgot-password',
+  RESET_PASSWORD: '/api/auth/reset-password',
   USER_STATS: '/api/user/stats',
   CAN_SCAN: '/api/user/can-scan',
   RECORD_SCAN: '/api/user/record-scan',

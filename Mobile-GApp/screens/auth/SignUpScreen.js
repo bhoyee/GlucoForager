@@ -1,5 +1,5 @@
 // screens/auth/SignUpScreen.js - COMPLETE WITH AUTH CONTEXT
-import React, { useState, useContext } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -15,11 +15,12 @@ import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../../constants/Colors";
 import { LinearGradient } from "expo-linear-gradient";
-import { AuthContext } from "../../context/authContext";
+import { useAuth } from "../../context/authContext";
+import { API_ENDPOINTS, API_URL } from "../../config/api";
 
 export default function SignUpScreen() {
   const navigation = useNavigation();
-  const { signUp } = useContext(AuthContext);
+  const { signIn } = useAuth();
   
   const [formData, setFormData] = useState({
     fullName: "",
@@ -61,20 +62,25 @@ export default function SignUpScreen() {
     }
 
     setIsLoading(true);
-    
-    // Simulate API call
-    setTimeout(() => {
+
+    try {
+      const response = await fetch(`${API_URL}${API_ENDPOINTS.SIGNUP}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, full_name: fullName }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.detail || data?.message || 'Signup failed. Please try again.');
+      }
+
+      await signIn(data.access_token);
+      Alert.alert("Success!", data.message || "Account created successfully!");
+    } catch (error) {
+      Alert.alert("Error", error.message || "Signup failed. Please try again.");
+    } finally {
       setIsLoading(false);
-      
-      // Call signUp with a fake token - this will trigger navigation to Home
-      signUp('fake-jwt-token-signup-12345');
-      
-      // Optional: Show success message
-      Alert.alert(
-        "Success!",
-        "Account created successfully!"
-      );
-    }, 1500);
+    }
   };
 
   return (

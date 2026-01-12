@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../../constants/Colors";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "../../context/authContext"; // Use the hook instead of useContext directly
+import { API_ENDPOINTS, API_URL } from "../../config/api";
 
 export default function LoginScreen() {
   const navigation = useNavigation();
@@ -41,22 +42,24 @@ export default function LoginScreen() {
     setIsLoading(true);
     
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Call signIn with a fake token - this will trigger navigation to Home
-      await signIn('fake-jwt-token-12345');
-      
-      // Optional: Show success message
-      Alert.alert('Success', 'Login successful!', [
-        { text: 'OK', onPress: () => console.log('OK Pressed') }
+      const response = await fetch(`${API_URL}${API_ENDPOINTS.LOGIN}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.detail || data?.message || 'Login failed. Please try again.');
+      }
+
+      await signIn(data.access_token);
+
+      Alert.alert('Success', data.message || 'Login successful!', [
+        { text: 'OK' },
       ]);
-      
-      // Navigation will happen automatically via the auth state change
-      
     } catch (error) {
-      Alert.alert('Error', 'Login failed. Please try again.');
-      console.error('Login error:', error);
+      Alert.alert('Error', error.message || 'Login failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
