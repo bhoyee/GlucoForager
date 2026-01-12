@@ -1,6 +1,6 @@
 // screens/main/ProfileScreen.js
 import React, { useContext } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Linking, Share, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
@@ -9,6 +9,29 @@ import { AuthContext } from '../../context/authContext';
 export default function ProfileScreen() {
   const navigation = useNavigation();
   const { signOut } = useContext(AuthContext);
+  const appStoreUrl = 'itms-apps://itunes.apple.com/app/id0000000000';
+  const playStoreUrl = 'market://details?id=com.glucoforager.app';
+  const shareUrl = 'https://glucoforager.com/app';
+
+  const handleRateUs = async () => {
+    const url = Platform.OS === 'ios' ? appStoreUrl : playStoreUrl;
+    const canOpen = await Linking.canOpenURL(url);
+    if (canOpen) {
+      Linking.openURL(url);
+      return;
+    }
+    Alert.alert('Unavailable', 'Store link not available yet.');
+  };
+
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        message: `Check out GlucoForager: ${shareUrl}`,
+      });
+    } catch (error) {
+      Alert.alert('Share failed', 'Could not open share options.');
+    }
+  };
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -64,30 +87,34 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.menuItem}>
-          <View style={styles.menuItemLeft}>
-            <Ionicons name="notifications-outline" size={22} color={Colors.text} />
-            <Text style={styles.menuText}>Notifications</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
-        </TouchableOpacity>
       </View>
 
       <View style={styles.menuSection}>
-        <Text style={styles.sectionTitle}>Preferences</Text>
-        
-        <TouchableOpacity style={styles.menuItem}>
+        <Text style={styles.sectionTitle}>Social</Text>
+
+        <TouchableOpacity style={styles.menuItem} onPress={handleRateUs}>
           <View style={styles.menuItemLeft}>
-            <Ionicons name="medkit-outline" size={22} color={Colors.text} />
-            <Text style={styles.menuText}>Diabetes Settings</Text>
+            <Ionicons name="star-outline" size={22} color={Colors.text} />
+            <Text style={styles.menuText}>Rate Us</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.menuItem}>
+        <TouchableOpacity style={styles.menuItem} onPress={handleShare}>
           <View style={styles.menuItemLeft}>
-            <Ionicons name="nutrition-outline" size={22} color={Colors.text} />
-            <Text style={styles.menuText}>Dietary Preferences</Text>
+            <Ionicons name="share-social-outline" size={22} color={Colors.text} />
+            <Text style={styles.menuText}>Share with Friends</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => Alert.alert('Contact Us', 'hello@glucoforager.com')}
+        >
+          <View style={styles.menuItemLeft}>
+            <Ionicons name="mail-outline" size={22} color={Colors.text} />
+            <Text style={styles.menuText}>Contact Us</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
         </TouchableOpacity>
