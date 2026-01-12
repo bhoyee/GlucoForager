@@ -7,40 +7,27 @@ import {
   TouchableOpacity,
   ScrollView,
   Modal,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
+import { countries } from '../../utils/countries';
 
-const countries = [
-  'United States',
-  'Canada',
-  'United Kingdom',
-  'Australia',
-  'Germany',
-  'France',
-  'Netherlands',
-  'Nigeria',
-  'Ghana',
-  'South Africa',
-  'Kenya',
-  'India',
-  'Pakistan',
-  'Bangladesh',
-  'Philippines',
-  'China',
-  'Japan',
-  'South Korea',
-  'Brazil',
-  'Mexico',
-];
+const genders = ['Male', 'Female', 'Other', 'Prefer not to say'];
+
+const flagFromCode = (code) =>
+  code
+    .toUpperCase()
+    .replace(/./g, (char) => String.fromCodePoint(127397 + char.charCodeAt(0)));
 
 export default function PersonalInfoScreen({ navigation }) {
   const [name, setName] = useState('John Doe');
   const [gender, setGender] = useState('Male');
-  const [country, setCountry] = useState('United States');
+  const [country, setCountry] = useState({ code: 'US', name: 'United States' });
   const [email, setEmail] = useState('john@example.com');
   const [password, setPassword] = useState('password123');
   const [showCountries, setShowCountries] = useState(false);
+  const [showGender, setShowGender] = useState(false);
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -57,11 +44,16 @@ export default function PersonalInfoScreen({ navigation }) {
         <TextInput value={name} onChangeText={setName} style={styles.input} />
 
         <Text style={styles.label}>Gender</Text>
-        <TextInput value={gender} onChangeText={setGender} style={styles.input} />
+        <TouchableOpacity style={styles.select} onPress={() => setShowGender(true)}>
+          <Text style={styles.selectText}>{gender}</Text>
+          <Ionicons name="chevron-down" size={18} color={Colors.textLight} />
+        </TouchableOpacity>
 
         <Text style={styles.label}>Country</Text>
         <TouchableOpacity style={styles.select} onPress={() => setShowCountries(true)}>
-          <Text style={styles.selectText}>{country}</Text>
+          <Text style={styles.selectText}>
+            {flagFromCode(country.code)} {country.name}
+          </Text>
           <Ionicons name="chevron-down" size={18} color={Colors.textLight} />
         </TouchableOpacity>
 
@@ -82,6 +74,14 @@ export default function PersonalInfoScreen({ navigation }) {
           style={styles.input}
         />
       </View>
+
+      <TouchableOpacity
+        style={styles.updateButton}
+        onPress={() => Alert.alert('Updated', 'Personal info updated (mock).')}
+      >
+        <Ionicons name="save-outline" size={18} color="white" />
+        <Text style={styles.updateText}>Update</Text>
+      </TouchableOpacity>
 
       <TouchableOpacity style={styles.logoutButton}>
         <Ionicons name="log-out-outline" size={18} color={Colors.primary} />
@@ -105,18 +105,46 @@ export default function PersonalInfoScreen({ navigation }) {
             <ScrollView showsVerticalScrollIndicator={false}>
               {countries.map((item) => (
                 <TouchableOpacity
-                  key={item}
+                  key={item.code}
                   style={styles.countryRow}
                   onPress={() => {
                     setCountry(item);
                     setShowCountries(false);
                   }}
                 >
-                  <Text style={styles.countryText}>{item}</Text>
-                  {item === country && <Ionicons name="checkmark" size={18} color={Colors.primary} />}
+                  <Text style={styles.countryText}>
+                    {flagFromCode(item.code)} {item.name}
+                  </Text>
+                  {item.code === country.code && <Ionicons name="checkmark" size={18} color={Colors.primary} />}
                 </TouchableOpacity>
               ))}
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showGender} transparent animationType="slide" onRequestClose={() => setShowGender(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Gender</Text>
+              <TouchableOpacity onPress={() => setShowGender(false)}>
+                <Ionicons name="close" size={22} color={Colors.text} />
+              </TouchableOpacity>
+            </View>
+            {genders.map((item) => (
+              <TouchableOpacity
+                key={item}
+                style={styles.countryRow}
+                onPress={() => {
+                  setGender(item);
+                  setShowGender(false);
+                }}
+              >
+                <Text style={styles.countryText}>{item}</Text>
+                {item === gender && <Ionicons name="checkmark" size={18} color={Colors.primary} />}
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
       </Modal>
@@ -187,6 +215,21 @@ const styles = StyleSheet.create({
   selectText: {
     fontSize: 16,
     color: Colors.text,
+  },
+  updateButton: {
+    marginTop: 20,
+    marginHorizontal: 20,
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+  },
+  updateText: {
+    color: 'white',
+    fontWeight: '600',
   },
   logoutButton: {
     marginTop: 20,
