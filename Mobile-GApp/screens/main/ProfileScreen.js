@@ -121,25 +121,25 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.menuSection}>
-        <Text style={styles.sectionTitle}>Support</Text>
+        <Text style={styles.sectionTitle}>Legal</Text>
         
-        <TouchableOpacity style={styles.menuItem}>
-          <View style={styles.menuItemLeft}>
-            <Ionicons name="help-circle-outline" size={22} color={Colors.text} />
-            <Text style={styles.menuText}>Help & Support</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.menuItem}>
+        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Terms')}>
           <View style={styles.menuItemLeft}>
             <Ionicons name="document-text-outline" size={22} color={Colors.text} />
-            <Text style={styles.menuText}>Terms & Privacy</Text>
+            <Text style={styles.menuText}>Terms & Conditions</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.menuItem}>
+        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('PrivacyPolicy')}>
+          <View style={styles.menuItemLeft}>
+            <Ionicons name="shield-checkmark-outline" size={22} color={Colors.text} />
+            <Text style={styles.menuText}>Privacy Policy</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.menuItem} onPress={() => Alert.alert('About', 'GlucoForager helps you find diabetes-friendly recipes from your ingredients.')}>
           <View style={styles.menuItemLeft}>
             <Ionicons name="information-circle-outline" size={22} color={Colors.text} />
             <Text style={styles.menuText}>About</Text>
