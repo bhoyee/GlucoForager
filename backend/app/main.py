@@ -1,6 +1,8 @@
 import logging
 import time
 
+import os
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
@@ -9,6 +11,7 @@ from fastapi.responses import JSONResponse
 
 from .api.endpoints import (
     auth,
+    admin,
     ingredients,
     recipes,
     subscriptions,
@@ -22,7 +25,15 @@ from .api.endpoints import (
 )
 from .core.config import settings
 from .database import Base, engine
-from .models import subscription, user as user_model, ai_request, password_reset  # ensure models are registered with SQLAlchemy
+from .models import (  # ensure models are registered with SQLAlchemy
+    subscription,
+    user as user_model,
+    ai_request,
+    password_reset,
+    admin_user,
+    recipe,
+    recipe_history,
+)
 from .services.abuse_detector import AbuseDetector
 
 logging.basicConfig(
@@ -32,6 +43,9 @@ logging.basicConfig(
 logger = logging.getLogger("glucoforager")
 
 app = FastAPI(title=settings.project_name)
+
+os.makedirs(settings.uploads_dir, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=settings.uploads_dir), name="uploads")
 
 app.add_middleware(
     CORSMiddleware,
@@ -84,6 +98,7 @@ except Exception as exc:  # noqa: BLE001
 
 
 app.include_router(auth.router, prefix="/api")
+app.include_router(admin.router, prefix="/api")
 app.include_router(ingredients.router, prefix="/api")
 app.include_router(recipes.router, prefix="/api")
 app.include_router(subscriptions.router, prefix="/api")
