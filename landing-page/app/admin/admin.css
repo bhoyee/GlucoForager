@@ -1,0 +1,273 @@
+.admin-shell {
+  min-height: 100vh;
+  background: #f6f9f7;
+  color: #1b3b2f;
+  padding: 40px 20px;
+}
+
+.admin-container {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.admin-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .admin-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.admin-sidebar {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 20px;
+  border: 1px solid #e5eee9;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.admin-brand {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.admin-brand-mark {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: #2e7d32;
+  color: #ffffff;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-brand-title {
+  font-weight: 700;
+}
+
+.admin-brand-subtitle {
+  color: #5c7368;
+  font-size: 12px;
+}
+
+.admin-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.admin-nav a {
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: #2f4f3f;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.admin-nav a.active {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.admin-main {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.admin-header {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 20px 24px;
+  border: 1px solid #e5eee9;
+}
+
+.admin-header h1 {
+  font-size: 22px;
+  margin-bottom: 6px;
+}
+
+.admin-header p {
+  color: #5c7368;
+}
+
+.admin-card {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 10px 30px rgba(18, 47, 34, 0.08);
+  border: 1px solid #e5eee9;
+}
+
+.admin-title {
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.admin-subtitle {
+  color: #4f6b5c;
+  margin-bottom: 24px;
+}
+
+.admin-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+
+@media (min-width: 960px) {
+  .admin-grid {
+    grid-template-columns: 1.2fr 1fr;
+  }
+}
+
+.admin-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.admin-field label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.admin-field input,
+.admin-field select,
+.admin-field textarea {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #cfe0d8;
+  font-size: 14px;
+}
+
+.admin-field textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.admin-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.admin-button {
+  background: #2e7d32;
+  color: #ffffff;
+  border: none;
+  padding: 12px 18px;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.admin-button.secondary {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.admin-button.danger {
+  background: #e53935;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.admin-table th,
+.admin-table td {
+  text-align: left;
+  padding: 12px;
+  border-bottom: 1px solid #e5eee9;
+}
+
+.admin-table th {
+  font-weight: 600;
+  color: #3c5447;
+}
+
+.admin-badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #e8f5e9;
+  color: #2e7d32;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.admin-inline {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.admin-inline .admin-field {
+  flex: 1;
+  min-width: 160px;
+}
+
+.admin-ingredients {
+  margin-bottom: 16px;
+}
+
+.admin-ingredient-row {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr 0.6fr 1fr auto;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.admin-ingredient-row input {
+  width: 100%;
+}
+
+.admin-link {
+  color: #2e7d32;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.admin-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.admin-toolbar input,
+.admin-toolbar select {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #cfe0d8;
+  font-size: 14px;
+}
+
+.admin-pagination {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 16px;
+}
+
+.admin-pagination button {
+  border: 1px solid #cfe0d8;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
