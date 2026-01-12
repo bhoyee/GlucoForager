@@ -20,6 +20,8 @@ const flagFromCode = (code) =>
     .toUpperCase()
     .replace(/./g, (char) => String.fromCodePoint(127397 + char.charCodeAt(0)));
 
+const countryLabel = (item) => `${flagFromCode(item.code)} ${item.name} (${item.code})`;
+
 export default function PersonalInfoScreen({ navigation }) {
   const [name, setName] = useState('John Doe');
   const [gender, setGender] = useState('Male');
@@ -51,9 +53,7 @@ export default function PersonalInfoScreen({ navigation }) {
 
         <Text style={styles.label}>Country</Text>
         <TouchableOpacity style={styles.select} onPress={() => setShowCountries(true)}>
-          <Text style={styles.selectText}>
-            {flagFromCode(country.code)} {country.name}
-          </Text>
+          <Text style={styles.selectText}>{countryLabel(country)}</Text>
           <Ionicons name="chevron-down" size={18} color={Colors.textLight} />
         </TouchableOpacity>
 
@@ -88,7 +88,19 @@ export default function PersonalInfoScreen({ navigation }) {
         <Text style={styles.logoutText}>Log out</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.deleteButton}>
+      <TouchableOpacity
+        style={styles.deleteButton}
+        onPress={() =>
+          Alert.alert(
+            'Delete account?',
+            "This action is permanent. You won't be able to get your account back.",
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Delete', style: 'destructive' },
+            ]
+          )
+        }
+      >
         <Ionicons name="trash-outline" size={18} color={Colors.error} />
         <Text style={styles.deleteText}>Delete account</Text>
       </TouchableOpacity>
@@ -112,8 +124,8 @@ export default function PersonalInfoScreen({ navigation }) {
                     setShowCountries(false);
                   }}
                 >
-                  <Text style={styles.countryText}>
-                    {flagFromCode(item.code)} {item.name}
+                  <Text style={styles.countryText} numberOfLines={2}>
+                    {countryLabel(item)}
                   </Text>
                   {item.code === country.code && <Ionicons name="checkmark" size={18} color={Colors.primary} />}
                 </TouchableOpacity>
@@ -296,5 +308,7 @@ const styles = StyleSheet.create({
   countryText: {
     fontSize: 16,
     color: Colors.text,
+    flex: 1,
+    marginRight: 8,
   },
 });
