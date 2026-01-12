@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
+import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { 
   getTodayScans, 
   getRemainingScans, 
@@ -157,11 +158,12 @@ export default function ScanScreen() {
     if (!cameraRef || !CameraView) return;
     setIsCapturing(true);
     try {
-      const photo = await cameraRef.takePictureAsync({ quality: 0.7, skipProcessing: true });
+      const photo = await cameraRef.takePictureAsync({ quality: 0.7, skipProcessing: true, base64: true });
       await recordScanIfNeeded();
       const newImage = {
         id: Date.now().toString(),
         uri: photo.uri,
+        base64: photo.base64,
         name: `Photo ${capturedImages.length + 1}`,
       };
       setCapturedImages((prev) => [...prev, newImage]);
@@ -191,6 +193,7 @@ export default function ScanScreen() {
         allowsEditing: false,
         allowsMultipleSelection: true,
         quality: 0.8,
+        base64: true,
       });
 
       if (!result.canceled) {
@@ -199,6 +202,7 @@ export default function ScanScreen() {
         const newImages = result.assets.map((asset, index) => ({
           id: Date.now().toString() + index,
           uri: asset.uri,
+          base64: asset.base64,
           name: `Image ${capturedImages.length + index + 1}`
         }));
         
@@ -211,6 +215,14 @@ export default function ScanScreen() {
     }
   };
 
+  const getDeviceId = async () => {
+    const existing = await AsyncStorage.getItem('deviceId');
+    if (existing) return existing;
+    const generated = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    await AsyncStorage.setItem('deviceId', generated);
+    return generated;
+  };
+
   const handleAnalyzeImages = async () => {
     if (capturedImages.length === 0) {
       Alert.alert('No Images', 'Please select at least one image before analyzing.');
@@ -219,13 +231,57 @@ export default function ScanScreen() {
     
     setIsScanning(true);
     
-    setTimeout(() => {
-      setIsScanning(false);
-      navigation.navigate('ScanResults', { 
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        Alert.alert('Sign in required', 'Please sign in to analyze ingredients.');
+        return;
+      }
+      const deviceId = await getDeviceId();
+      const imagesBase64 = capturedImages
+        .map((item) => item.base64)
+        .filter((value) => Boolean(value));
+
+      if (imagesBase64.length === 0) {
+        Alert.alert('Image error', 'Unable to read image data. Please try again.');
+        return;
+      }
+
+      const response = await fetch(`${API_URL}${API_ENDPOINTS.AI_VISION_RECIPES_BATCH}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'X-Device-Id': deviceId,
+        },
+        body: JSON.stringify({ images_base64: imagesBase64 }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        const detail = data?.detail;
+        const message = detail?.message || detail || 'Unable to analyze image.';
+        Alert.alert('Scan failed', message);
+        return;
+      }
+
+      if (!data?.detected?.length) {
+        Alert.alert('Scan failed', 'No food ingredients detected.');
+        return;
+      }
+
+      navigation.navigate('ScanResults', {
         images: capturedImages,
         userIsPremium,
+        detectedIngredients: data.detected || [],
+        recipes: data.results || [],
+        warning: data.warning || null,
       });
-    }, 1500);
+    } catch (error) {
+      Alert.alert('Scan failed', 'Unable to analyze image. Please try again.');
+    } finally {
+      setIsScanning(false);
+    }
   };
 
   const handleDeleteImage = (imageId) => {
@@ -607,16 +663,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.primary,
-    borderRadius: 12,
-    paddingVertical: 14,
-    flex: 0.7,
+    borderRadius: 14,
+    paddingVertical: 18,
+    flex: 0.75,
     marginRight: 10,
   },
   analyzeButtonText: {
-    marginLeft: 8,
-    fontSize: 16,
+    marginLeft: 10,
+    fontSize: 18,
     color: 'white',
-    fontWeight: '600',
+    fontWeight: '700',
   },
   addMoreButton: {
     flexDirection: 'row',
@@ -778,18 +834,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   analyzeOverlayButton: {
-    marginTop: 12,
+    marginTop: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 18,
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    borderRadius: 20,
     backgroundColor: Colors.primary,
   },
   analyzeOverlayText: {
-    marginLeft: 8,
+    marginLeft: 10,
     color: 'white',
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });

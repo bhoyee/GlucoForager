@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from ...database import get_db
 from ...models.ai_request import AIRequest
 from ...models.user import SearchLog, User
-from ..dependencies import get_current_user
+from ..dependencies import check_user_access, get_current_user
 
 router = APIRouter(prefix="/user", tags=["user"])
 
@@ -43,7 +43,17 @@ def scans_today(
         .filter(SearchLog.user_id == current_user.id, SearchLog.executed_at == today)
         .count()
     )
-    response = {"ai_scans": ai_count, "text_searches": text_count, "total": ai_count + text_count}
+    access = check_user_access(current_user, db, device_id)
+    response = {
+        "ai_scans": ai_count,
+        "text_searches": text_count,
+        "total": ai_count + text_count,
+        "searches_left": access["searches_left"],
+        "device_searches_left": access.get("device_searches_left"),
+        "daily_limit": access.get("daily_limit"),
+        "subscription_tier": current_user.subscription_tier or "free",
+        "is_premium": current_user.subscription_tier == "premium",
+    }
     if device_id:
         device_ai = (
             db.query(AIRequest)

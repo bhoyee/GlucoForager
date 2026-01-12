@@ -15,12 +15,6 @@ import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { 
-  getTodayScans, 
-  getRemainingScans, 
-  initializeScans,
-  canUserScan 
-} from '../../utils/scanTracker';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 
 export default function HomeScreen() {
@@ -30,7 +24,7 @@ export default function HomeScreen() {
   const [userIsPremium, setUserIsPremium] = useState(false);
   const [todayScans, setTodayScans] = useState(0);
   const [remainingScans, setRemainingScans] = useState(3);
-  const [userName, setUserName] = useState("User");
+  const [dailyLimit, setDailyLimit] = useState(3);
   const [isLoading, setIsLoading] = useState(true);
   const [recentRecipes, setRecentRecipes] = useState([]);
   const [suggestedRecipes, setSuggestedRecipes] = useState([]);
@@ -43,28 +37,17 @@ export default function HomeScreen() {
       try {
         setIsLoading(true);
         
-        // Initialize scan tracking
-        await initializeScans();
-        
         // Load user data from AsyncStorage
-        const premiumStatus = await AsyncStorage.getItem('userIsPremium') || 'false';
-        const name = await AsyncStorage.getItem('userName') || "User";
-        const scansUsed = await getTodayScans();
-        const remaining = await getRemainingScans(premiumStatus === 'true');
-        
-        setUserIsPremium(premiumStatus === 'true');
-        setUserName(name);
-        setTodayScans(scansUsed);
-        setRemainingScans(remaining);
+        await loadScanStatus();
         await loadRecipes();
         
       } catch (error) {
         console.error('Error loading user data:', error);
         // Set defaults on error
         setUserIsPremium(false);
-        setUserName("User");
         setTodayScans(0);
         setRemainingScans(3);
+        setDailyLimit(3);
       } finally {
         setIsLoading(false);
       }
@@ -74,6 +57,40 @@ export default function HomeScreen() {
       loadUserData();
     }
   }, [isFocused]);
+
+  const loadScanStatus = async () => {
+    const token = await AsyncStorage.getItem('userToken');
+    if (!token) {
+      setUserIsPremium(false);
+      setTodayScans(0);
+      setRemainingScans(3);
+      setDailyLimit(3);
+      return;
+    }
+
+    const response = await fetch(`${API_URL}${API_ENDPOINTS.SCANS_TODAY}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (response.status === 401) {
+      await AsyncStorage.removeItem('userToken');
+      setUserIsPremium(false);
+      setTodayScans(0);
+      setRemainingScans(3);
+      setDailyLimit(3);
+      navigation.navigate('Login');
+      return;
+    }
+    if (!response.ok) {
+      throw new Error('Unable to fetch scan status.');
+    }
+    const data = await response.json();
+    setUserIsPremium(Boolean(data.is_premium));
+    setTodayScans(data.total || 0);
+    setRemainingScans(
+      typeof data.searches_left === 'number' ? data.searches_left : 0
+    );
+    setDailyLimit(typeof data.daily_limit === 'number' ? data.daily_limit : 3);
+  };
 
   const getMealType = () => {
     const hour = new Date().getHours();
@@ -159,10 +176,18 @@ export default function HomeScreen() {
 
   const checkScanLimit = async () => {
     try {
-      // Check if user can scan
-      const canScan = await canUserScan(userIsPremium);
-      
-      if (canScan) {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        Alert.alert('Sign in required', 'Please sign in to scan ingredients.');
+        return;
+      }
+      const response = await fetch(`${API_URL}${API_ENDPOINTS.SCANS_TODAY}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      const allowed = data.is_premium || (data.searches_left || 0) > 0;
+
+      if (allowed) {
         // Navigate to Scan tab
         navigation.navigate('Scan');
       } else {
@@ -220,16 +245,8 @@ export default function HomeScreen() {
           text: 'Reset',
           onPress: async () => {
             try {
-              const { resetScansForTesting } = await import('../../utils/scanTracker');
-              await resetScansForTesting();
-              
-              // Update state
-              const scansUsed = await getTodayScans();
-              const remaining = await getRemainingScans(userIsPremium);
-              
-              setTodayScans(scansUsed);
-              setRemainingScans(remaining);
-              Alert.alert('Success', 'Scans reset to 0');
+              await loadScanStatus();
+              Alert.alert('Success', 'Scan status refreshed');
             } catch (error) {
               Alert.alert('Error', 'Failed to reset scans');
             }
@@ -286,7 +303,12 @@ export default function HomeScreen() {
           
           {!userIsPremium && (
             <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: `${(todayScans / 3) * 100}%` }]} />
+              <View
+                style={[
+                  styles.progressFill,
+                  { width: `${dailyLimit ? (todayScans / dailyLimit) * 100 : 0}%` },
+                ]}
+              />
             </View>
           )}
           
@@ -456,12 +478,8 @@ export default function HomeScreen() {
           style={styles.devResetButton}
           onPress={handleResetScans}
           onLongPress={async () => {
-            // Long press to set as premium
-            await AsyncStorage.setItem('userIsPremium', 'true');
-            setUserIsPremium(true);
-            const remaining = await getRemainingScans(true);
-            setRemainingScans(remaining);
-            Alert.alert('Dev Mode', 'Set as premium user');
+            await loadScanStatus();
+            Alert.alert('Dev Mode', 'Refreshed server scan status');
           }}
         >
           <Ionicons name="bug-outline" size={20} color="white" />

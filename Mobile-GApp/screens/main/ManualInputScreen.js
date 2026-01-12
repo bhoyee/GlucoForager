@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,14 +10,23 @@ import {
   Platform,
   Alert,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_ENDPOINTS, API_URL } from '../../config/api';
 
 export default function ManualInputScreen() {
   const navigation = useNavigation();
+  const isFocused = useIsFocused();
   const [ingredients, setIngredients] = useState(['']);
   const [isLoading, setIsLoading] = useState(false);
+  const [scanStatus, setScanStatus] = useState({
+    remaining: null,
+    isPremium: false,
+  });
+  const limitReached = !scanStatus.isPremium && scanStatus.remaining === 0;
+  const allowedIngredientPattern = /^[A-Za-z0-9][A-Za-z0-9\s\-'/%%]*$/;
 
   const handleAddIngredient = () => {
     setIngredients([...ingredients, '']);
@@ -37,25 +46,116 @@ export default function ManualInputScreen() {
     setIngredients(newIngredients);
   };
 
-  const handleFindRecipes = () => {
-    const validIngredients = ingredients.filter(ing => ing.trim() !== '');
+  const getDeviceId = async () => {
+    const existing = await AsyncStorage.getItem('deviceId');
+    if (existing) return existing;
+    const generated = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    await AsyncStorage.setItem('deviceId', generated);
+    return generated;
+  };
+
+  useEffect(() => {
+    const fetchScanStatus = async () => {
+      try {
+        const token = await AsyncStorage.getItem('userToken');
+        if (!token) {
+          setScanStatus({ remaining: null, isPremium: false });
+          return;
+        }
+        const response = await fetch(`${API_URL}${API_ENDPOINTS.SCANS_TODAY}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!response.ok) {
+          setScanStatus({ remaining: null, isPremium: false });
+          return;
+        }
+        const data = await response.json();
+        setScanStatus({
+          remaining: data?.searches_left ?? null,
+          isPremium: Boolean(data?.is_premium),
+        });
+      } catch (error) {
+        setScanStatus({ remaining: null, isPremium: false });
+      }
+    };
+
+    if (isFocused) {
+      fetchScanStatus();
+    }
+  }, [isFocused]);
+
+  const handleFindRecipes = async () => {
+    const normalized = ingredients
+      .map((ing) => ing.trim().replace(/\s+/g, ' '))
+      .filter((ing) => ing !== '');
+
+    if (normalized.length > 20) {
+      Alert.alert('Too many ingredients', 'Please enter 20 ingredients or fewer.');
+      return;
+    }
+
+    const invalid = normalized.find(
+      (item) => item.length < 2 || item.length > 30 || !allowedIngredientPattern.test(item)
+    );
     
-    if (validIngredients.length === 0) {
+    if (normalized.length === 0) {
       Alert.alert('Error', 'Please enter at least one ingredient');
+      return;
+    }
+
+    if (invalid) {
+      Alert.alert(
+        'Invalid ingredient',
+        "Use letters, numbers, spaces, hyphens, apostrophes, slashes, or % only."
+      );
       return;
     }
 
     setIsLoading(true);
     
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        Alert.alert('Sign in required', 'Please sign in to find recipes.');
+        return;
+      }
+      const deviceId = await getDeviceId();
+      const response = await fetch(`${API_URL}${API_ENDPOINTS.AI_TEXT_RECIPES}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'X-Device-Id': deviceId,
+        },
+        body: JSON.stringify({ ingredients: normalized }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 429) {
+          setScanStatus((prev) => ({ ...prev, remaining: 0 }));
+        }
+        const detail = data?.detail;
+        const message = detail?.message || detail || 'Unable to generate recipes.';
+        Alert.alert('Request failed', message);
+        return;
+      }
+
+      if (!data?.results?.length) {
+        Alert.alert('No recipes found', 'Try different ingredients and try again.');
+        return;
+      }
+
+      navigation.navigate('RecipeResults', {
+        recipes: data.results,
+        selectedIngredients: normalized,
+        source: 'text',
+      });
+    } catch (error) {
+      Alert.alert('Request failed', 'Unable to reach the server. Please try again.');
+    } finally {
       setIsLoading(false);
-      Alert.alert(
-        'Recipes Found',
-        `Found recipes for: ${validIngredients.join(', ')}`
-      );
-      // In real app: navigation.navigate('RecipeResults', { ingredients: validIngredients })
-    }, 1500);
+    }
   };
 
   return (
@@ -86,6 +186,20 @@ export default function ManualInputScreen() {
             Enter the ingredients you have available. We'll find diabetes-safe recipes you can make.
           </Text>
         </View>
+        {!scanStatus.isPremium && scanStatus.remaining !== null && (
+          <View style={styles.scanBadge}>
+            <Ionicons name="camera-outline" size={16} color={Colors.primary} />
+            <Text style={styles.scanBadgeText}>
+              {scanStatus.remaining} scans left today
+            </Text>
+          </View>
+        )}
+        {scanStatus.isPremium && (
+          <View style={styles.scanBadge}>
+            <Ionicons name="sparkles" size={16} color={Colors.primary} />
+            <Text style={styles.scanBadgeText}>Unlimited scans</Text>
+          </View>
+        )}
 
         {/* Ingredients List */}
         <View style={styles.ingredientsContainer}>
@@ -149,15 +263,26 @@ export default function ManualInputScreen() {
 
         {/* Find Recipes Button */}
         <TouchableOpacity
-          style={[styles.findButton, isLoading && styles.findButtonDisabled]}
+          style={[
+            styles.findButton,
+            (isLoading || limitReached) && styles.findButtonDisabled,
+            limitReached && styles.findButtonLimit,
+          ]}
           onPress={handleFindRecipes}
-          disabled={isLoading}
+          disabled={isLoading || limitReached}
         >
           <View style={styles.findButtonContent}>
             {isLoading ? (
               <>
                 <Ionicons name="refresh" size={20} color="white" style={styles.loadingIcon} />
                 <Text style={styles.findButtonText}>Searching Recipes...</Text>
+              </>
+            ) : limitReached ? (
+              <>
+                <Ionicons name="lock-closed-outline" size={20} color={Colors.textLight} />
+                <Text style={[styles.findButtonText, styles.findButtonTextLimit]}>
+                  Limit reached for today
+                </Text>
               </>
             ) : (
               <>
@@ -222,6 +347,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.text,
     lineHeight: 20,
+  },
+  scanBadge: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginHorizontal: 20,
+    marginTop: -8,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  scanBadgeText: {
+    marginLeft: 6,
+    fontSize: 12,
+    color: Colors.text,
+    fontWeight: '600',
   },
   ingredientsContainer: {
     paddingHorizontal: 20,
@@ -292,10 +437,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderWidth: 1,
     borderColor: Colors.border,
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
   },
   exampleText: {
     fontSize: 14,
     color: Colors.primary,
+    flexShrink: 1,
   },
   findButton: {
     backgroundColor: Colors.primary,
@@ -311,6 +459,9 @@ const styles = StyleSheet.create({
   findButtonDisabled: {
     opacity: 0.7,
   },
+  findButtonLimit: {
+    backgroundColor: Colors.border,
+  },
   findButtonContent: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -321,6 +472,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  findButtonTextLimit: {
+    color: Colors.textLight,
   },
   loadingIcon: {
     marginRight: 8,

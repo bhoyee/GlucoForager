@@ -20,7 +20,7 @@ import { Colors } from '../../constants/Colors';
 export default function ScanResultsScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-  const { images, userIsPremium, scansUsed } = route.params || {};
+  const { images, userIsPremium, scansUsed, detectedIngredients: detectedFromApi, warning, recipes: recipesFromApi } = route.params || {};
   
   const [isLoading, setIsLoading] = useState(true);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
@@ -31,25 +31,23 @@ export default function ScanResultsScreen() {
   const [showRecipeButton, setShowRecipeButton] = useState(false);
 
   useEffect(() => {
-    // Simulate AI processing
-    setTimeout(() => {
-      // Mock detected ingredients from images
-      const mockIngredients = [
-        { id: '1', name: 'Chicken Breast', confidence: '95%', selected: true },
-        { id: '2', name: 'Broccoli', confidence: '88%', selected: true },
-        { id: '3', name: 'Bell Peppers', confidence: '82%', selected: true },
-        { id: '4', name: 'Garlic', confidence: '75%', selected: true },
-        { id: '5', name: 'Olive Oil', confidence: '90%', selected: true },
-        { id: '6', name: 'Onion', confidence: '70%', selected: false },
-        { id: '7', name: 'Tomatoes', confidence: '85%', selected: false },
-        { id: '8', name: 'Basil', confidence: '60%', selected: false },
-      ];
-      
-      setDetectedIngredients(mockIngredients);
-      setSelectedIngredients(mockIngredients.filter(item => item.selected).map(item => item.id));
+    if (Array.isArray(detectedFromApi) && detectedFromApi.length > 0) {
+      const normalized = detectedFromApi.map((item, index) => ({
+        id: `${index}-${item}`,
+        name: item,
+        confidence: 'AI',
+        selected: true,
+      }));
+      setDetectedIngredients(normalized);
+      setSelectedIngredients(normalized.map(item => item.id));
       setIsLoading(false);
-    }, 2000);
-  }, []);
+      return;
+    }
+
+    setDetectedIngredients([]);
+    setSelectedIngredients([]);
+    setIsLoading(false);
+  }, [detectedFromApi]);
 
   useEffect(() => {
     // Show generate recipe button when at least one ingredient is selected
@@ -105,7 +103,8 @@ export default function ScanResultsScreen() {
     // Navigate to recipe generation screen
     navigation.navigate('RecipeResults', { 
       selectedIngredients: selectedItems,
-      images: images
+      images: images,
+      recipes: recipesFromApi,
     });
   };
 
@@ -158,6 +157,12 @@ export default function ScanResultsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
+        {warning && (
+          <View style={styles.warningBanner}>
+            <Ionicons name="alert-circle-outline" size={18} color={Colors.warning} />
+            <Text style={styles.warningText}>{warning.message}</Text>
+          </View>
+        )}
         {/* Images Slideshow */}
         {images && images.length > 0 && (
           <View style={styles.slideshowContainer}>
@@ -364,6 +369,22 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 40,
+  },
+  warningBanner: {
+    marginHorizontal: 20,
+    marginBottom: 16,
+    backgroundColor: `${Colors.warning}15`,
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  warningText: {
+    flex: 1,
+    color: Colors.warning,
+    fontSize: 14,
+    fontWeight: '600',
   },
   slideshowContainer: {
     marginBottom: 24,

@@ -1,4 +1,4 @@
-// screens/main/RecipeResultsScreen.js - ENHANCED VERSION
+// screens/main/RecipeResultsScreen.js
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -8,91 +8,47 @@ import {
   Image,
   TouchableOpacity,
   ActivityIndicator,
-  Dimensions,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { LinearGradient } from 'expo-linear-gradient';
 
-const { width: screenWidth } = Dimensions.get('window');
-
 export default function RecipeResultsScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-  const { photoUri } = route.params || {};
-  
+  const {
+    photoUri,
+    images,
+    recipes: recipesFromParams,
+    selectedIngredients,
+    detectedIngredients: detectedFromParams,
+    source,
+  } = route.params || {};
+
   const [isLoading, setIsLoading] = useState(true);
   const [detectedIngredients, setDetectedIngredients] = useState([]);
   const [recipes, setRecipes] = useState([]);
 
-  // Mock AI detection data
-  const mockIngredients = [
-    { id: 1, name: 'Chicken Breast', category: 'Protein', confidence: '95%', icon: '🍗' },
-    { id: 2, name: 'Broccoli', category: 'Vegetable', confidence: '88%', icon: '🥦' },
-    { id: 3, name: 'Bell Peppers', category: 'Vegetable', confidence: '82%', icon: '🫑' },
-    { id: 4, name: 'Carrots', category: 'Vegetable', confidence: '78%', icon: '🥕' },
-    { id: 5, name: 'Eggs', category: 'Protein', confidence: '91%', icon: '🥚' },
-    { id: 6, name: 'Spinach', category: 'Vegetable', confidence: '75%', icon: '🥬' },
-    { id: 7, name: 'Tomatoes', category: 'Vegetable', confidence: '85%', icon: '🍅' },
-    { id: 8, name: 'Onions', category: 'Vegetable', confidence: '80%', icon: '🧅' },
-  ];
-
-  const mockRecipes = [
-    { 
-      id: 1, 
-      name: 'Mediterranean Chicken Stir Fry', 
-      carbs: '18g', 
-      time: '25 min', 
-      match: '7/8 ingredients',
-      difficulty: 'Easy',
-      calories: '320',
-      rating: 4.8,
-      icon: '🥘'
-    },
-    { 
-      id: 2, 
-      name: 'Vegetable Omelette', 
-      carbs: '12g', 
-      time: '15 min', 
-      match: '5/8 ingredients',
-      difficulty: 'Easy',
-      calories: '280',
-      rating: 4.5,
-      icon: '🍳'
-    },
-    { 
-      id: 3, 
-      name: 'Roasted Veggie Bowl', 
-      carbs: '22g', 
-      time: '35 min', 
-      match: '6/8 ingredients',
-      difficulty: 'Medium',
-      calories: '310',
-      rating: 4.7,
-      icon: '🥗'
-    },
-    { 
-      id: 4, 
-      name: 'Chicken & Veggie Skewers', 
-      carbs: '15g', 
-      time: '30 min', 
-      match: '6/8 ingredients',
-      difficulty: 'Medium',
-      calories: '290',
-      rating: 4.6,
-      icon: '🍢'
-    },
-  ];
-
   useEffect(() => {
-    // Simulate AI processing
-    setTimeout(() => {
-      setDetectedIngredients(mockIngredients);
-      setRecipes(mockRecipes);
-      setIsLoading(false);
-    }, 1500);
-  }, []);
+    const ingredientSource = source === 'text' ? 'Input' : 'Detected';
+    const rawIngredients = detectedFromParams?.length
+      ? detectedFromParams
+      : selectedIngredients || [];
+
+    const normalizedIngredients = rawIngredients.map((item, index) => {
+      const name = typeof item === 'string' ? item : item?.name || `Ingredient ${index + 1}`;
+      return {
+        id: `${index}-${name}`,
+        name,
+        confidence: ingredientSource,
+      };
+    });
+
+    setDetectedIngredients(normalizedIngredients);
+    setRecipes(recipesFromParams || []);
+    setIsLoading(false);
+  }, [detectedFromParams, recipesFromParams, selectedIngredients, source]);
 
   if (isLoading) {
     return (
@@ -102,26 +58,57 @@ export default function RecipeResultsScreen() {
           style={styles.loadingGradient}
         >
           <Ionicons name="sparkles" size={60} color="white" />
-          <Text style={styles.loadingTitle}>Analyzing Your Fridge</Text>
-          <Text style={styles.loadingSubtitle}>Identifying ingredients and finding diabetes-safe recipes...</Text>
+          <Text style={styles.loadingTitle}>Preparing Recipes</Text>
+          <Text style={styles.loadingSubtitle}>
+            Finding diabetes-safe recipes for your ingredients...
+          </Text>
           <ActivityIndicator size="large" color="white" style={{ marginTop: 30 }} />
         </LinearGradient>
       </View>
     );
   }
 
+  const heroImage = photoUri || images?.[0]?.uri;
+  const hasRecipes = recipes.length > 0;
+
+  const formatTime = (recipe) => {
+    const total = recipe?.total_time ?? recipe?.time ?? 0;
+    if (typeof total === 'number' && total > 0) {
+      return `${total} min`;
+    }
+    const prep = recipe?.prep_time ?? 0;
+    const cook = recipe?.cook_time ?? 0;
+    const sum = prep + cook;
+    return sum > 0 ? `${sum} min` : 'N/A';
+  };
+
+  const getMatchText = (recipe) => {
+    if (!selectedIngredients?.length) {
+      const count = Array.isArray(recipe?.ingredients) ? recipe.ingredients.length : 0;
+      return count ? `${count} ingredients` : 'Ingredients listed';
+    }
+    const selectedLower = selectedIngredients.map((item) => item.toLowerCase());
+    const recipeNames = Array.isArray(recipe?.ingredients)
+      ? recipe.ingredients
+          .map((item) => (typeof item === 'string' ? item : item?.name))
+          .filter(Boolean)
+          .map((item) => item.toLowerCase())
+      : [];
+    const matches = recipeNames.filter((item) => selectedLower.includes(item));
+    return `${matches.length}/${selectedIngredients.length} ingredients`;
+  };
+
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Scan Results</Text>
-        <TouchableOpacity 
+        <Text style={styles.headerTitle}>Recipe Results</Text>
+        <TouchableOpacity
           style={styles.scanAgainButton}
           onPress={() => navigation.navigate('Scan')}
         >
@@ -130,122 +117,136 @@ export default function RecipeResultsScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView 
+      <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Your Fridge Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>📸 Your Fridge Scan</Text>
-          {photoUri && (
+        {heroImage && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Your Scan</Text>
             <View style={styles.imageContainer}>
-              <Image source={{ uri: photoUri }} style={styles.image} resizeMode="cover" />
+              <Image source={{ uri: heroImage }} style={styles.image} resizeMode="cover" />
               <View style={styles.imageOverlay}>
-                <Text style={styles.imageOverlayText}>8 ingredients detected</Text>
+                <Text style={styles.imageOverlayText}>
+                  {detectedIngredients.length} ingredients detected
+                </Text>
               </View>
             </View>
-          )}
-        </View>
+          </View>
+        )}
 
-        {/* Detected Ingredients */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>🛒 Detected Ingredients</Text>
+            <Text style={styles.sectionTitle}>Detected Ingredients</Text>
             <Text style={styles.ingredientCount}>{detectedIngredients.length} items</Text>
           </View>
-          
-          <ScrollView 
-            horizontal 
+
+          <ScrollView
+            horizontal
             showsHorizontalScrollIndicator={false}
             style={styles.ingredientsScroll}
           >
             {detectedIngredients.map((item) => (
               <View key={item.id} style={styles.ingredientCard}>
                 <View style={styles.ingredientIconContainer}>
-                  <Text style={styles.ingredientEmoji}>{item.icon}</Text>
+                  <Ionicons name="nutrition-outline" size={26} color={Colors.primary} />
                 </View>
                 <Text style={styles.ingredientName} numberOfLines={1}>{item.name}</Text>
                 <View style={styles.confidenceBadge}>
                   <Text style={styles.confidenceText}>{item.confidence}</Text>
                 </View>
-                <Text style={styles.ingredientCategory}>{item.category}</Text>
+                <Text style={styles.ingredientCategory}>Ingredient</Text>
               </View>
             ))}
           </ScrollView>
         </View>
 
-        {/* Recipe Recommendations */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>🍽️ Diabetes-Safe Recipes</Text>
+            <Text style={styles.sectionTitle}>Diabetes-Safe Recipes</Text>
             <Text style={styles.recipeCount}>{recipes.length} recipes</Text>
           </View>
-          <Text style={styles.sectionSubtitle}>Low glycemic recipes based on your ingredients</Text>
-          
-          {recipes.map((recipe) => (
-            <TouchableOpacity 
-              key={recipe.id}
-              style={styles.recipeCard}
-              onPress={() => navigation.navigate('RecipeDetail', { recipe })}
-            >
-              <LinearGradient
-                colors={[Colors.primary + '20', Colors.primary + '10']}
-                style={styles.recipeIcon}
+          <Text style={styles.sectionSubtitle}>
+            Low glycemic recipes based on your ingredients
+          </Text>
+
+          {hasRecipes ? recipes.map((recipe, index) => {
+            const nutrition = recipe?.nutritional_info || {};
+            const calories = nutrition.calories ?? recipe?.calories ?? 'N/A';
+            const carbs = nutrition.carbs ?? recipe?.carbs ?? 'N/A';
+            const title = recipe?.title || recipe?.name || `Recipe ${index + 1}`;
+            const imageUrl = recipe?.image_url;
+            const matchText = getMatchText(recipe);
+            return (
+              <TouchableOpacity
+                key={recipe.id || `${title}-${index}`}
+                style={styles.recipeCard}
+                onPress={() => navigation.navigate('RecipeDetail', { recipe })}
               >
-                <Text style={styles.recipeEmoji}>{recipe.icon}</Text>
-              </LinearGradient>
-              
-              <View style={styles.recipeInfo}>
-                <View style={styles.recipeHeader}>
-                  <Text style={styles.recipeName} numberOfLines={2}>{recipe.name}</Text>
-                  <View style={styles.rating}>
-                    <Ionicons name="star" size={16} color="#FFD700" />
-                    <Text style={styles.ratingText}>{recipe.rating}</Text>
-                  </View>
-                </View>
-                
-                <View style={styles.recipeMeta}>
-                  <View style={styles.metaItem}>
-                    <Ionicons name="time-outline" size={14} color={Colors.textLight} />
-                    <Text style={styles.metaText}>{recipe.time}</Text>
-                  </View>
-                  <View style={styles.metaItem}>
-                    <Ionicons name="flame-outline" size={14} color={Colors.textLight} />
-                    <Text style={styles.metaText}>{recipe.calories} cal</Text>
-                  </View>
-                  <View style={styles.metaItem}>
-                    <Ionicons name="nutrition-outline" size={14} color={Colors.textLight} />
-                    <Text style={styles.metaText}>{recipe.carbs} carbs</Text>
-                  </View>
-                </View>
-                
-                <View style={styles.matchContainer}>
+                {imageUrl ? (
+                  <Image source={{ uri: imageUrl }} style={styles.recipeImage} />
+                ) : (
                   <LinearGradient
-                    colors={[Colors.success, '#4CAF50']}
-                    style={styles.matchBadge}
+                    colors={[Colors.primary + '20', Colors.primary + '10']}
+                    style={styles.recipeIcon}
                   >
-                    <Text style={styles.matchText}>{recipe.match}</Text>
+                    <Ionicons name="restaurant-outline" size={28} color={Colors.primary} />
                   </LinearGradient>
-                  <Text style={styles.matchLabel}>ingredients match</Text>
+                )}
+
+                <View style={styles.recipeInfo}>
+                  <View style={styles.recipeHeader}>
+                    <Text style={styles.recipeName} numberOfLines={2}>{title}</Text>
+                  </View>
+
+                  <View style={styles.recipeMeta}>
+                    <View style={styles.metaItem}>
+                      <Ionicons name="time-outline" size={14} color={Colors.textLight} />
+                      <Text style={styles.metaText}>{formatTime(recipe)}</Text>
+                    </View>
+                    <View style={styles.metaItem}>
+                      <Ionicons name="flame-outline" size={14} color={Colors.textLight} />
+                      <Text style={styles.metaText}>{calories} cal</Text>
+                    </View>
+                    <View style={styles.metaItem}>
+                      <Ionicons name="nutrition-outline" size={14} color={Colors.textLight} />
+                      <Text style={styles.metaText}>{carbs} carbs</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.matchContainer}>
+                    <LinearGradient
+                      colors={[Colors.success, '#4CAF50']}
+                      style={styles.matchBadge}
+                    >
+                      <Text style={styles.matchText}>{matchText}</Text>
+                    </LinearGradient>
+                    <Text style={styles.matchLabel}>ingredients match</Text>
+                  </View>
                 </View>
-              </View>
-              
-              <Ionicons name="chevron-forward" size={24} color={Colors.textLight} />
-            </TouchableOpacity>
-          ))}
+
+                <Ionicons name="chevron-forward" size={24} color={Colors.textLight} />
+              </TouchableOpacity>
+            );
+          }) : (
+            <View style={styles.emptyState}>
+              <Ionicons name="alert-circle-outline" size={32} color={Colors.textLight} />
+              <Text style={styles.emptyTitle}>No recipes available</Text>
+              <Text style={styles.emptyText}>Try different ingredients to generate recipes.</Text>
+            </View>
+          )}
         </View>
 
-        {/* Action Buttons */}
         <View style={styles.actionButtons}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.primaryButton}
             onPress={() => navigation.navigate('ManualInput')}
           >
             <Ionicons name="add-circle-outline" size={22} color="white" />
             <Text style={styles.primaryButtonText}>Add Missing Ingredients</Text>
           </TouchableOpacity>
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             style={styles.secondaryButton}
             onPress={() => navigation.navigate('Scan')}
           >
@@ -401,9 +402,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  ingredientEmoji: {
-    fontSize: 30,
-  },
   ingredientName: {
     fontSize: 14,
     fontWeight: '600',
@@ -444,8 +442,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 16,
   },
-  recipeEmoji: {
-    fontSize: 30,
+  recipeImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 16,
+    marginRight: 16,
   },
   recipeInfo: {
     flex: 1,
@@ -463,16 +464,6 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 8,
     lineHeight: 22,
-  },
-  rating: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  ratingText: {
-    marginLeft: 4,
-    fontSize: 14,
-    color: Colors.text,
-    fontWeight: '600',
   },
   recipeMeta: {
     flexDirection: 'row',
@@ -506,6 +497,25 @@ const styles = StyleSheet.create({
   matchLabel: {
     fontSize: 12,
     color: Colors.textLight,
+  },
+  emptyState: {
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    marginHorizontal: 20,
+    padding: 20,
+    borderRadius: 16,
+  },
+  emptyTitle: {
+    marginTop: 10,
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  emptyText: {
+    marginTop: 6,
+    fontSize: 14,
+    color: Colors.textLight,
+    textAlign: 'center',
   },
   actionButtons: {
     paddingHorizontal: 20,
