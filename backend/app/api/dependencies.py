@@ -31,7 +31,7 @@ def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_
     return user
 
 
-def check_user_access(user: User, db: Session) -> dict:
+def check_user_access(user: User, db: Session, device_id: str | None = None) -> dict:
     tier_cfg = TIER_CONFIG.get(user.subscription_tier, TIER_CONFIG["free"])
 
     # Premium: unlimited scans
@@ -45,11 +45,21 @@ def check_user_access(user: User, db: Session) -> dict:
 
     today = date.today()
     daily_limit = tier_cfg.get("max_daily_scans", FREE_SEARCH_LIMIT)
+    ai_count = 0
+    search_count = 0
+    device_ai_count = 0
+    device_search_count = 0
+    tomorrow = date.fromordinal(today.toordinal() + 1)
+
     if daily_limit:
-        tomorrow = date.fromordinal(today.toordinal() + 1)
         ai_count = (
             db.query(AIRequest)
-            .filter(AIRequest.user_id == user.id, AIRequest.created_at >= today, AIRequest.created_at < tomorrow)
+            .filter(
+                AIRequest.user_id == user.id,
+                AIRequest.request_type.in_(["vision", "text"]),
+                AIRequest.created_at >= today,
+                AIRequest.created_at < tomorrow,
+            )
             .count()
         )
         search_count = (
@@ -57,19 +67,34 @@ def check_user_access(user: User, db: Session) -> dict:
             .filter(SearchLog.user_id == user.id, SearchLog.executed_at == today)
             .count()
         )
-    else:
-        ai_count = 0
-        search_count = 0
-    # Keep legacy text search count as part of daily budget
-    search_count = (
-        db.query(SearchLog).filter(SearchLog.user_id == user.id, SearchLog.executed_at == today).count()
-        if daily_limit
-        else 0
-    )
+
+        if device_id:
+            device_ai_count = (
+                db.query(AIRequest)
+                .filter(
+                    AIRequest.device_id == device_id,
+                    AIRequest.request_type.in_(["vision", "text"]),
+                    AIRequest.created_at >= today,
+                    AIRequest.created_at < tomorrow,
+                )
+                .count()
+            )
+            device_search_count = (
+                db.query(SearchLog)
+                .filter(SearchLog.device_id == device_id, SearchLog.executed_at == today)
+                .count()
+            )
+
     total_used = ai_count + search_count
+    device_used = device_ai_count + device_search_count if device_id else 0
+    device_allowed = True if not device_id else (device_used < daily_limit)
     return {
-        "allowed": (total_used < daily_limit) if daily_limit is not None else True,
+        "allowed": (total_used < daily_limit and device_allowed) if daily_limit is not None else True,
         "searches_left": "unlimited" if daily_limit is None else max(0, daily_limit - total_used),
+        "device_searches_left": None
+        if daily_limit is None or not device_id
+        else max(0, daily_limit - device_used),
+        "daily_limit": daily_limit,
         "camera_access": False,
         "ads": True,
     }

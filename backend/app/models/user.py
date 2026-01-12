@@ -12,6 +12,9 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
+    full_name = Column(String, nullable=True)
+    gender = Column(String, nullable=True)
+    country = Column(String, nullable=True)
     subscription_tier = Column(String, default="free")
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -28,6 +31,7 @@ class SearchLog(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    device_id = Column(String, nullable=True, index=True)
     query = Column(String, nullable=False)
     executed_at = Column(Date, default=date.today)
 

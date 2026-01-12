@@ -22,7 +22,7 @@ from .api.endpoints import (
 )
 from .core.config import settings
 from .database import Base, engine
-from .models import subscription, user as user_model, ai_request  # ensure models are registered with SQLAlchemy
+from .models import subscription, user as user_model, ai_request, password_reset  # ensure models are registered with SQLAlchemy
 from .services.abuse_detector import AbuseDetector
 
 logging.basicConfig(
@@ -46,8 +46,7 @@ abuse_detector = AbuseDetector()
 
 @app.on_event("startup")
 def on_startup():
-    Base.metadata.create_all(bind=engine)
-    logger.info("Startup complete, database tables ensured.")
+    logger.info("Startup complete.")
 
 
 @app.middleware("http")

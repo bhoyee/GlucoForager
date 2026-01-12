@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -21,15 +21,23 @@ def generate_from_vision(
     payload: VisionRecipeRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    device_id: str = Header(..., alias="X-Device-Id"),
 ):
-    access = check_user_access(current_user, db)
+    access = check_user_access(current_user, db, device_id)
     if not access["allowed"]:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Daily limit reached. Scans left: {access['searches_left']}",
         )
     tier = current_user.subscription_tier or "free"
-    result = pipeline.fridge_to_recipes(db, current_user.id, tier, payload.image_base64, filters=payload.filters or [])
+    result = pipeline.fridge_to_recipes(
+        db,
+        current_user.id,
+        tier,
+        payload.image_base64,
+        filters=payload.filters or [],
+        device_id=device_id,
+    )
     return {
         "results": result.get("recipes", []),
         "detected": result.get("detected", []),

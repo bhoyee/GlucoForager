@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     smtp_from_address: str | None = Field(None, env="SMTP_FROM_ADDRESS")
     smtp_from_name: str | None = Field(None, env="SMTP_FROM_NAME")
     smtp_encryption: str | None = Field("ssl", env="SMTP_ENCRYPTION")
+    password_reset_code_ttl_minutes: int = Field(15, env="PASSWORD_RESET_CODE_TTL_MINUTES")
+    password_reset_code_max_attempts: int = Field(5, env="PASSWORD_RESET_CODE_MAX_ATTEMPTS")
     resend_api_key: str | None = Field(None, env="RESEND_API_KEY")
     openai_api_key: str | None = Field(None, env="OPENAI_API_KEY")
     # Use available models by default; can be overridden via env.

@@ -1,6 +1,6 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header
 from sqlalchemy.orm import Session
 
 from ...database import get_db
@@ -24,12 +24,18 @@ def profile(current_user: User = Depends(get_current_user)):
 def scans_today(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    device_id: str | None = Header(None, alias="X-Device-Id"),
 ):
     today = date.today()
     tomorrow = date.fromordinal(today.toordinal() + 1)
     ai_count = (
         db.query(AIRequest)
-        .filter(AIRequest.user_id == current_user.id, AIRequest.created_at >= today, AIRequest.created_at < tomorrow)
+        .filter(
+            AIRequest.user_id == current_user.id,
+            AIRequest.request_type.in_(["vision", "text"]),
+            AIRequest.created_at >= today,
+            AIRequest.created_at < tomorrow,
+        )
         .count()
     )
     text_count = (
@@ -37,4 +43,22 @@ def scans_today(
         .filter(SearchLog.user_id == current_user.id, SearchLog.executed_at == today)
         .count()
     )
-    return {"ai_scans": ai_count, "text_searches": text_count, "total": ai_count + text_count}
+    response = {"ai_scans": ai_count, "text_searches": text_count, "total": ai_count + text_count}
+    if device_id:
+        device_ai = (
+            db.query(AIRequest)
+            .filter(
+                AIRequest.device_id == device_id,
+                AIRequest.request_type.in_(["vision", "text"]),
+                AIRequest.created_at >= today,
+                AIRequest.created_at < tomorrow,
+            )
+            .count()
+        )
+        device_text = (
+            db.query(SearchLog)
+            .filter(SearchLog.device_id == device_id, SearchLog.executed_at == today)
+            .count()
+        )
+        response["device_total"] = device_ai + device_text
+    return response

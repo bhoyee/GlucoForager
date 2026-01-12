@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -7,6 +7,7 @@ from ...database import get_db
 from ...models.user import SearchLog, User
 from ...services.ai_recipe_generator import AIRecipeGenerator
 from ...services.ai_vision import AIVisionService
+from ...services.cost_tracker import record_ai_request
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 vision_service = AIVisionService()
@@ -22,11 +23,25 @@ class RecipeGenRequest(BaseModel):
 
 
 @router.post("/vision")
-def analyze_vision(payload: VisionRequest, current_user: User = Depends(get_current_user)):
+def analyze_vision(
+    payload: VisionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    device_id: str = Header(..., alias="X-Device-Id"),
+):
+    access = check_user_access(current_user, db, device_id)
+    if not access["allowed"]:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Daily limit reached. Scans left: {access['searches_left']}",
+        )
     if not vision_service.enabled:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Vision service not configured")
     try:
-        return {"result": vision_service.analyze_fridge(payload.image_base64)}
+        result = vision_service.analyze_fridge(payload.image_base64)
+        tier = current_user.subscription_tier or "free"
+        record_ai_request(db, current_user.id, tier, "vision", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
+        return {"result": result, "access": access}
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
 
@@ -36,8 +51,9 @@ def generate_recipes(
     payload: RecipeGenRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    device_id: str = Header(..., alias="X-Device-Id"),
 ):
-    access = check_user_access(current_user, db)
+    access = check_user_access(current_user, db, device_id)
     if not access["allowed"]:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -50,6 +66,6 @@ def generate_recipes(
         recipes = recipe_service.generate(payload.ingredients)
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
-    db.add(SearchLog(user_id=current_user.id, query=",".join(payload.ingredients)))
+    db.add(SearchLog(user_id=current_user.id, device_id=device_id, query=",".join(payload.ingredients)))
     db.commit()
     return {"results": recipes, "access": access}

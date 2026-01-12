@@ -13,9 +13,11 @@ def record_ai_request(
     model_used: str,
     tokens_used: int = 0,
     cost_estimate: float = 0.0,
+    device_id: str | None = None,
 ) -> None:
     entry = AIRequest(
         user_id=user_id,
+        device_id=device_id,
         tier=tier,
         request_type=request_type,
         model_used=model_used,

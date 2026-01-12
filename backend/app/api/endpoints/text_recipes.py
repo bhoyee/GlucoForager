@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -21,8 +21,9 @@ def generate_from_text(
     payload: TextRecipeRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    device_id: str = Header(..., alias="X-Device-Id"),
 ):
-    access = check_user_access(current_user, db)
+    access = check_user_access(current_user, db, device_id)
     if not access["allowed"]:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -31,7 +32,12 @@ def generate_from_text(
     tier = current_user.subscription_tier or "free"
     try:
         recipes = pipeline.text_to_recipes(
-            db, current_user.id, tier, payload.ingredients, filters=payload.filters or []
+            db,
+            current_user.id,
+            tier,
+            payload.ingredients,
+            filters=payload.filters or [],
+            device_id=device_id,
         )
     except RuntimeError as exc:
         # AI not configured (missing keys) or other pipeline errors

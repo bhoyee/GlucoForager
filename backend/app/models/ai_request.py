@@ -11,6 +11,7 @@ class AIRequest(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    device_id = Column(String, nullable=True, index=True)
     tier = Column(String, default="free")
     request_type = Column(String, nullable=False)  # e.g., "vision", "text"
     model_used = Column(String, nullable=False)
