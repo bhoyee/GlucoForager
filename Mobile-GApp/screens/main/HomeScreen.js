@@ -32,6 +32,11 @@ export default function HomeScreen() {
   const [suggestedRecipes, setSuggestedRecipes] = useState([]);
   const [isFetchingRecipes, setIsFetchingRecipes] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(true);
+  const [userStats, setUserStats] = useState({
+    recipesGenerated: 0,
+    scansToday: 0,
+    favoritesSaved: 0,
+  });
 
   // Load user data
   useEffect(() => {
@@ -41,6 +46,7 @@ export default function HomeScreen() {
         
         // Load user data from AsyncStorage
         await loadScanStatus();
+        await loadUserStats();
         await loadRecipes();
         
       } catch (error) {
@@ -50,6 +56,7 @@ export default function HomeScreen() {
         setTodayScans(0);
         setRemainingScans(3);
         setDailyLimit(3);
+        setUserStats({ recipesGenerated: 0, scansToday: 0, favoritesSaved: 0 });
       } finally {
         setIsLoading(false);
       }
@@ -100,6 +107,33 @@ export default function HomeScreen() {
     if (hour >= 11 && hour <= 15) return 'lunch';
     if (hour >= 16 && hour <= 21) return 'dinner';
     return 'snack';
+  };
+
+  const loadUserStats = async () => {
+    const token = await AsyncStorage.getItem('userToken');
+    if (!token) {
+      setUserStats({ recipesGenerated: 0, scansToday: 0, favoritesSaved: 0 });
+      return;
+    }
+    const response = await apiFetch(
+      `${API_URL}${API_ENDPOINTS.USER_STATS}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+      { onUnauthorized: signOut }
+    );
+    if (response.status === 401) {
+      setUserStats({ recipesGenerated: 0, scansToday: 0, favoritesSaved: 0 });
+      return;
+    }
+    if (!response.ok) {
+      setUserStats({ recipesGenerated: 0, scansToday: 0, favoritesSaved: 0 });
+      return;
+    }
+    const data = await response.json();
+    setUserStats({
+      recipesGenerated: data.recipes_generated || 0,
+      scansToday: data.scans_today || 0,
+      favoritesSaved: data.favorites_saved || 0,
+    });
   };
 
   const loadRecipes = async () => {
@@ -484,16 +518,16 @@ export default function HomeScreen() {
           <Text style={styles.sectionTitle}>Your Stats</Text>
           <View style={styles.statsGrid}>
             <View style={styles.statCard}>
-              <Text style={styles.statValue}>12</Text>
-              <Text style={styles.statLabel}>Recipes found</Text>
+              <Text style={styles.statValue}>{userStats.recipesGenerated}</Text>
+              <Text style={styles.statLabel}>Recipes generated</Text>
             </View>
             <View style={styles.statCard}>
-              <Text style={styles.statValue}>{todayScans}</Text>
+              <Text style={styles.statValue}>{userStats.scansToday}</Text>
               <Text style={styles.statLabel}>Scans today</Text>
             </View>
             <View style={styles.statCard}>
-              <Text style={styles.statValue}>45m</Text>
-              <Text style={styles.statLabel}>Time saved</Text>
+              <Text style={styles.statValue}>{userStats.favoritesSaved}</Text>
+              <Text style={styles.statLabel}>Favorites saved</Text>
             </View>
           </View>
         </View>

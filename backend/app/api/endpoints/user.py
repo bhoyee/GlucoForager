@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 
 from ...database import get_db
 from ...models.ai_request import AIRequest
+from ...models.favorite import Favorite
+from ...models.recipe_history import RecipeHistory
 from ...models.user import SearchLog, User
 from ..dependencies import check_user_access, get_current_user
 
@@ -72,3 +74,39 @@ def scans_today(
         )
         response["device_total"] = device_ai + device_text
     return response
+
+
+@router.get("/stats")
+def user_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    recipe_histories = (
+        db.query(RecipeHistory)
+        .filter(RecipeHistory.user_id == current_user.id)
+        .all()
+    )
+    recipes_generated = sum(len(row.recipes or []) for row in recipe_histories)
+    favorites_saved = (
+        db.query(Favorite)
+        .filter(Favorite.user_id == current_user.id)
+        .count()
+    )
+
+    today = date.today()
+    tomorrow = date.fromordinal(today.toordinal() + 1)
+    scans_today_count = (
+        db.query(AIRequest)
+        .filter(
+            AIRequest.user_id == current_user.id,
+            AIRequest.request_type.in_(["vision", "text"]),
+            AIRequest.created_at >= today,
+            AIRequest.created_at < tomorrow,
+        )
+        .count()
+    )
+    return {
+        "recipes_generated": recipes_generated,
+        "favorites_saved": favorites_saved,
+        "scans_today": scans_today_count,
+    }
