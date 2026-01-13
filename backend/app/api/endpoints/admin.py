@@ -34,12 +34,12 @@ class IngredientInput(BaseModel):
 
 
 class NutritionInput(BaseModel):
-    calories: int | None = Field(None, ge=0)
-    carbs: int | None = Field(None, ge=0)
-    protein: int | None = Field(None, ge=0)
-    fat: int | None = Field(None, ge=0)
-    fiber: int | None = Field(None, ge=0)
-    sugar: int | None = Field(None, ge=0)
+    calories: float | None = Field(None, ge=0)
+    carbs: float | None = Field(None, ge=0)
+    protein: float | None = Field(None, ge=0)
+    fat: float | None = Field(None, ge=0)
+    fiber: float | None = Field(None, ge=0)
+    sugar: float | None = Field(None, ge=0)
 
 
 class RecipePayload(BaseModel):

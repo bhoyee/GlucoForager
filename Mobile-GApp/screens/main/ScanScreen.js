@@ -17,6 +17,8 @@ import { Colors } from '../../constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
+import { useAuth } from '../../context/authContext';
+import { apiFetch } from '../../utils/api';
 import { 
   getTodayScans, 
   getRemainingScans, 
@@ -43,6 +45,7 @@ try {
 export default function ScanScreen() {
   const navigation = useNavigation();
   const isFocused = useIsFocused();
+  const { signOut } = useAuth();
   
   const [userIsPremium, setUserIsPremium] = useState(false);
   const [remainingScans, setRemainingScans] = useState(3);
@@ -247,15 +250,22 @@ export default function ScanScreen() {
         return;
       }
 
-      const response = await fetch(`${API_URL}${API_ENDPOINTS.AI_VISION_RECIPES_BATCH}`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'X-Device-Id': deviceId,
+      const response = await apiFetch(
+        `${API_URL}${API_ENDPOINTS.AI_VISION_RECIPES_BATCH}`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'X-Device-Id': deviceId,
+          },
+          body: JSON.stringify({ images_base64: imagesBase64 }),
         },
-        body: JSON.stringify({ images_base64: imagesBase64 }),
-      });
+        { onUnauthorized: signOut }
+      );
+      if (response.status === 401) {
+        return;
+      }
       const data = await response.json();
 
       if (!response.ok) {

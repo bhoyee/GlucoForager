@@ -200,6 +200,7 @@ export default function RecipeForm({ initialData, onSubmit, onUpload, isSubmitti
           <label>Calories</label>
           <input
             type="number"
+            step="0.1"
             value={formState.nutrition.calories}
             onChange={(event) =>
               setFormState({
@@ -213,6 +214,7 @@ export default function RecipeForm({ initialData, onSubmit, onUpload, isSubmitti
           <label>Carbs (g)</label>
           <input
             type="number"
+            step="0.1"
             value={formState.nutrition.carbs}
             onChange={(event) =>
               setFormState({
@@ -226,6 +228,7 @@ export default function RecipeForm({ initialData, onSubmit, onUpload, isSubmitti
           <label>Protein (g)</label>
           <input
             type="number"
+            step="0.1"
             value={formState.nutrition.protein}
             onChange={(event) =>
               setFormState({
@@ -242,6 +245,7 @@ export default function RecipeForm({ initialData, onSubmit, onUpload, isSubmitti
           <label>Fat (g)</label>
           <input
             type="number"
+            step="0.1"
             value={formState.nutrition.fat}
             onChange={(event) =>
               setFormState({
@@ -255,6 +259,7 @@ export default function RecipeForm({ initialData, onSubmit, onUpload, isSubmitti
           <label>Fiber (g)</label>
           <input
             type="number"
+            step="0.1"
             value={formState.nutrition.fiber}
             onChange={(event) =>
               setFormState({
@@ -268,6 +273,7 @@ export default function RecipeForm({ initialData, onSubmit, onUpload, isSubmitti
           <label>Sugar (g)</label>
           <input
             type="number"
+            step="0.1"
             value={formState.nutrition.sugar}
             onChange={(event) =>
               setFormState({

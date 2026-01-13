@@ -105,12 +105,12 @@ export default function EditRecipePage() {
         .map((step) => step.trim())
         .filter(Boolean),
       nutrition: {
-        calories: Number(formState.nutrition.calories) || 0,
-        carbs: Number(formState.nutrition.carbs) || 0,
-        protein: Number(formState.nutrition.protein) || 0,
-        fat: Number(formState.nutrition.fat) || 0,
-        fiber: Number(formState.nutrition.fiber) || 0,
-        sugar: Number(formState.nutrition.sugar) || 0,
+        calories: parseFloat(formState.nutrition.calories) || 0,
+        carbs: parseFloat(formState.nutrition.carbs) || 0,
+        protein: parseFloat(formState.nutrition.protein) || 0,
+        fat: parseFloat(formState.nutrition.fat) || 0,
+        fiber: parseFloat(formState.nutrition.fiber) || 0,
+        sugar: parseFloat(formState.nutrition.sugar) || 0,
       },
     };
 

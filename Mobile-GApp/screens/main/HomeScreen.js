@@ -16,20 +16,22 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
+import { useAuth } from '../../context/authContext';
+import { apiFetch } from '../../utils/api';
 
 export default function HomeScreen() {
   const navigation = useNavigation();
   const isFocused = useIsFocused();
+  const { signOut } = useAuth();
   
   const [userIsPremium, setUserIsPremium] = useState(false);
   const [todayScans, setTodayScans] = useState(0);
   const [remainingScans, setRemainingScans] = useState(3);
   const [dailyLimit, setDailyLimit] = useState(3);
   const [isLoading, setIsLoading] = useState(true);
-  const [recentRecipes, setRecentRecipes] = useState([]);
   const [suggestedRecipes, setSuggestedRecipes] = useState([]);
   const [isFetchingRecipes, setIsFetchingRecipes] = useState(false);
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(true);
 
   // Load user data
   useEffect(() => {
@@ -68,16 +70,16 @@ export default function HomeScreen() {
       return;
     }
 
-    const response = await fetch(`${API_URL}${API_ENDPOINTS.SCANS_TODAY}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const response = await apiFetch(
+      `${API_URL}${API_ENDPOINTS.SCANS_TODAY}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+      { onUnauthorized: signOut }
+    );
     if (response.status === 401) {
-      await AsyncStorage.removeItem('userToken');
       setUserIsPremium(false);
       setTodayScans(0);
       setRemainingScans(3);
       setDailyLimit(3);
-      navigation.navigate('Login');
       return;
     }
     if (!response.ok) {
@@ -105,30 +107,14 @@ export default function HomeScreen() {
       setIsFetchingRecipes(true);
       const token = await AsyncStorage.getItem('userToken');
       if (!token) {
-        setRecentRecipes([]);
         setSuggestedRecipes([]);
-        setShowSuggestions(true);
         return;
       }
 
-      const recentResponse = await fetch(`${API_URL}${API_ENDPOINTS.RECENT_RECIPES}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const recentData = await recentResponse.json();
-      const recentItems = Array.isArray(recentData.items) ? recentData.items : [];
-      setRecentRecipes(recentItems);
-
-      if (recentItems.length === 0) {
-        await fetchSuggestions(token);
-        setShowSuggestions(true);
-      } else {
-        setShowSuggestions(false);
-      }
+      await fetchSuggestions(token);
     } catch (error) {
       console.error('Error loading recipes:', error);
-      setRecentRecipes([]);
       setSuggestedRecipes([]);
-      setShowSuggestions(true);
     } finally {
       setIsFetchingRecipes(false);
     }
@@ -136,10 +122,14 @@ export default function HomeScreen() {
 
   const fetchSuggestions = async (token) => {
     const mealType = getMealType();
-    const response = await fetch(
+    const response = await apiFetch(
       `${API_URL}${API_ENDPOINTS.RECIPE_SUGGESTIONS}?limit=3&meal_type=${mealType}`,
-      { headers: { Authorization: `Bearer ${token}` } }
+      { headers: { Authorization: `Bearer ${token}` } },
+      { onUnauthorized: signOut }
     );
+    if (response.status === 401) {
+      return;
+    }
     const data = await response.json();
     const items = Array.isArray(data.items) ? data.items : [];
     setSuggestedRecipes(items);
@@ -159,19 +149,50 @@ export default function HomeScreen() {
   };
 
   const getRecipeTimeLabel = (recipe) => {
-    const prep = recipe.prep_time_minutes ?? recipe.prepTime ?? recipe.prep_time;
-    const cook = recipe.cook_time_minutes ?? recipe.cookTime ?? recipe.cook_time;
-    if (typeof prep === 'number' || typeof cook === 'number') {
-      const total = (prep || 0) + (cook || 0);
-      return `${total || prep || cook} min`;
+    const prepRaw = recipe.prep_time_minutes ?? recipe.prepTime ?? recipe.prep_time;
+    const cookRaw = recipe.cook_time_minutes ?? recipe.cookTime ?? recipe.cook_time;
+    const prep = typeof prepRaw === 'number' ? prepRaw : parseFloat(prepRaw);
+    const cook = typeof cookRaw === 'number' ? cookRaw : parseFloat(cookRaw);
+    const hasPrep = Number.isFinite(prep);
+    const hasCook = Number.isFinite(cook);
+    if (hasPrep || hasCook) {
+      const total = (hasPrep ? prep : 0) + (hasCook ? cook : 0);
+      const value = total || (hasPrep ? prep : 0) || (hasCook ? cook : 0);
+      return `${value}`;
     }
-    return recipe.time || '--';
+    const timeLabel = recipe.time ?? '--';
+    if (timeLabel === '--') return timeLabel;
+    if (typeof timeLabel === 'number') {
+      return `${timeLabel}`;
+    }
+    const normalized = `${timeLabel}`.trim();
+    if (!normalized) return '--';
+    const match = normalized.match(/[-+]?\d*\.?\d+/);
+    if (match) return `${match[0]}`;
+    return normalized;
   };
 
   const getRecipeCalories = (recipe) => {
-    if (recipe.nutrition?.calories) return `${recipe.nutrition.calories} cal`;
-    if (recipe.nutrition_per_serving?.calories) return `${recipe.nutrition_per_serving.calories} cal`;
-    return 'Calories --';
+    const value = recipe.nutrition?.calories ?? recipe.nutrition_per_serving?.calories;
+    return formatNutrient(value, 'cal', 'Calories --');
+  };
+
+  const getRecipeProtein = (recipe) => {
+    const value = recipe.nutrition?.protein ?? recipe.nutrition_per_serving?.protein;
+    return formatNutrient(value, 'g pro', 'Pro --');
+  };
+
+  const getRecipeFiber = (recipe) => {
+    const value = recipe.nutrition?.fiber ?? recipe.nutrition_per_serving?.fiber;
+    return formatNutrient(value, 'g fib', 'Fib --');
+  };
+
+  const formatNutrient = (value, suffix, emptyLabel) => {
+    if (value === undefined || value === null || value === '') return emptyLabel;
+    if (typeof value === 'number') return `${value}${suffix ? ` ${suffix}` : ''}`.trim();
+    const match = `${value}`.match(/[-+]?\d*\.?\d+/);
+    if (match) return `${match[0]}${suffix ? ` ${suffix}` : ''}`.trim();
+    return `${value}`.includes(suffix.trim()) ? `${value}` : `${value} ${suffix}`.trim();
   };
 
   const checkScanLimit = async () => {
@@ -181,9 +202,14 @@ export default function HomeScreen() {
         Alert.alert('Sign in required', 'Please sign in to scan ingredients.');
         return;
       }
-      const response = await fetch(`${API_URL}${API_ENDPOINTS.SCANS_TODAY}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await apiFetch(
+        `${API_URL}${API_ENDPOINTS.SCANS_TODAY}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+        { onUnauthorized: signOut }
+      );
+      if (response.status === 401) {
+        return;
+      }
       const data = await response.json();
       const allowed = data.is_premium || (data.searches_left || 0) > 0;
 
@@ -367,17 +393,12 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Recent Recipes */}
+        {/* Suggest Me 3 Recipes */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>
-              {showSuggestions ? 'Suggest me 3 recipes' : 'Recent Recipes'}
+              Suggest me 3 recipes
             </Text>
-            {!showSuggestions && (
-              <TouchableOpacity onPress={handleViewAllRecipes}>
-                <Text style={styles.seeAllText}>See all</Text>
-              </TouchableOpacity>
-            )}
           </View>
           
           <ScrollView 
@@ -385,7 +406,7 @@ export default function HomeScreen() {
             showsHorizontalScrollIndicator={false}
             style={styles.recipesScroll}
           >
-            {(showSuggestions ? suggestedRecipes : recentRecipes).map((recipe, index) => (
+            {suggestedRecipes.map((recipe, index) => (
               <TouchableOpacity 
                 key={recipe.id || `${recipe.name || 'recipe'}-${index}`}
                 style={styles.recipeCard}
@@ -401,31 +422,37 @@ export default function HomeScreen() {
                 <View style={styles.recipeInfo}>
                   <View style={styles.recipeHeader}>
                     <View style={styles.badge}>
-                      <Text style={styles.badgeText}>Diabetes-Safe</Text>
+                      <Text style={styles.badgeText} numberOfLines={1}>
+                        Diabetes-Safe
+                      </Text>
                     </View>
-                    <Text style={styles.recipeTime}>{getRecipeTimeLabel(recipe)}</Text>
+                    <Text style={styles.recipeTime}>
+                      {getRecipeTimeLabel(recipe) === '--'
+                        ? '--'
+                        : `${getRecipeTimeLabel(recipe)} min`}
+                    </Text>
                   </View>
                   <Text style={styles.recipeName} numberOfLines={2}>
                     {recipe.name || recipe.title}
                   </Text>
-                  <Text style={styles.recipeMatch}>{getRecipeCalories(recipe)}</Text>
+                  <Text style={styles.recipeMatch}>
+                    {getRecipeCalories(recipe)} | {getRecipeProtein(recipe)} | {getRecipeFiber(recipe)}
+                  </Text>
                 </View>
               </TouchableOpacity>
             ))}
           </ScrollView>
 
-          {showSuggestions && (
-            <TouchableOpacity
-              style={styles.shuffleButton}
-              onPress={handleShuffleSuggestions}
-              disabled={isFetchingRecipes}
-            >
-              <Ionicons name="shuffle" size={18} color={Colors.primary} />
-              <Text style={styles.shuffleText}>
-                {isFetchingRecipes ? 'Refreshing...' : 'Shuffle recipes'}
-              </Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={styles.shuffleButton}
+            onPress={handleShuffleSuggestions}
+            disabled={isFetchingRecipes}
+          >
+            <Ionicons name="shuffle" size={18} color={Colors.primary} />
+            <Text style={styles.shuffleText}>
+              {isFetchingRecipes ? 'Refreshing...' : 'Shuffle recipes'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Upgrade Banner */}
@@ -442,7 +469,7 @@ export default function HomeScreen() {
                     Unlimited scans, advanced filters, and no ads
                   </Text>
                   <View style={styles.priceContainer}>
-                    <Text style={styles.price}>£2.99</Text>
+                    <Text style={styles.price}>$2.99</Text>
                     <Text style={styles.pricePeriod}>/month</Text>
                   </View>
                 </View>
@@ -685,24 +712,31 @@ const styles = StyleSheet.create({
   },
   recipeHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     alignItems: 'center',
     marginBottom: 8,
+    gap: 32,
+    flexWrap: 'nowrap',
   },
   badge: {
     backgroundColor: `${Colors.success}15`,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
     borderRadius: 6,
+    flexShrink: 1,
   },
   badgeText: {
     color: Colors.success,
     fontSize: 12,
     fontWeight: '600',
+    flexShrink: 1,
   },
   recipeTime: {
     fontSize: 14,
     color: Colors.textLight,
+    marginLeft: 32,
+    flexShrink: 0,
+    minWidth: 48,
   },
   recipeName: {
     fontSize: 16,

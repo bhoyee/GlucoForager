@@ -6,7 +6,6 @@ import {
   Image,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   Dimensions,
   Modal,
   Animated,
@@ -15,6 +14,9 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons, MaterialIcons, FontAwesome, Feather } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
+import { useAuth } from '../../context/authContext';
+import { apiFetch } from '../../utils/api';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 
@@ -79,6 +81,7 @@ const mockRecipe = {
 const RecipeDetailsScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
+  const { signOut } = useAuth();
   const [recipe, setRecipe] = useState(mockRecipe);
   const [showIngredientsModal, setShowIngredientsModal] = useState(false);
   const [showSafetyModal, setShowSafetyModal] = useState(false);
@@ -104,9 +107,14 @@ const RecipeDetailsScreen = () => {
     try {
       const token = await AsyncStorage.getItem('userToken');
       if (!token) return;
-      const response = await fetch(`${API_URL}${API_ENDPOINTS.RECIPE_DETAIL}/${recipeId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await apiFetch(
+        `${API_URL}${API_ENDPOINTS.RECIPE_DETAIL}/${recipeId}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+        { onUnauthorized: signOut }
+      );
+      if (response.status === 401) {
+        return;
+      }
       const data = await response.json();
       if (response.ok && data?.id) {
         const normalized = normalizeRecipe(data);

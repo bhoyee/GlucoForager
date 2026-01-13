@@ -15,10 +15,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
+import { useAuth } from '../../context/authContext';
+import { apiFetch } from '../../utils/api';
 
 export default function ManualInputScreen() {
   const navigation = useNavigation();
   const isFocused = useIsFocused();
+  const { signOut } = useAuth();
   const [ingredients, setIngredients] = useState(['']);
   const [isLoading, setIsLoading] = useState(false);
   const [scanStatus, setScanStatus] = useState({
@@ -62,13 +65,19 @@ export default function ManualInputScreen() {
           setScanStatus({ remaining: null, isPremium: false });
           return;
         }
-        const response = await fetch(`${API_URL}${API_ENDPOINTS.SCANS_TODAY}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!response.ok) {
+        const response = await apiFetch(
+          `${API_URL}${API_ENDPOINTS.SCANS_TODAY}`,
+          { headers: { Authorization: `Bearer ${token}` } },
+          { onUnauthorized: signOut }
+        );
+        if (response.status === 401) {
           setScanStatus({ remaining: null, isPremium: false });
           return;
         }
+      if (!response.ok) {
+        setScanStatus({ remaining: null, isPremium: false });
+        return;
+      }
         const data = await response.json();
         setScanStatus({
           remaining: data?.searches_left ?? null,
@@ -120,7 +129,9 @@ export default function ManualInputScreen() {
         return;
       }
       const deviceId = await getDeviceId();
-      const response = await fetch(`${API_URL}${API_ENDPOINTS.AI_TEXT_RECIPES}`, {
+      const response = await apiFetch(
+        `${API_URL}${API_ENDPOINTS.AI_TEXT_RECIPES}`,
+        {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -128,7 +139,12 @@ export default function ManualInputScreen() {
           'X-Device-Id': deviceId,
         },
         body: JSON.stringify({ ingredients: normalized }),
-      });
+        },
+        { onUnauthorized: signOut }
+      );
+      if (response.status === 401) {
+        return;
+      }
       const data = await response.json();
 
       if (!response.ok) {
