@@ -42,6 +42,46 @@ class IngredientClassifier:
     def _save_cached(self, item: str, label: str) -> None:
         self.cache.set(self._cache_key(item), label, ttl_seconds=86400)
 
+    def _rule_label(self, item: str) -> str | None:
+        lowered = item.strip().lower()
+        non_food_keywords = [
+            "laptop",
+            "keyboard",
+            "mouse",
+            "trackpad",
+            "monitor",
+            "screen",
+            "desk",
+            "table",
+            "chair",
+            "phone",
+            "tablet",
+            "charger",
+            "cable",
+            "cord",
+            "remote",
+            "controller",
+            "headphone",
+            "headset",
+            "speaker",
+            "printer",
+            "book",
+            "notebook",
+            "paper",
+            "pen",
+            "pencil",
+            "lamp",
+            "mug",
+            "cup",
+            "plate",
+            "bowl",
+            "scissors",
+            "knife set",
+        ]
+        if any(keyword in lowered for keyword in non_food_keywords):
+            return "non_food"
+        return None
+
     def classify(self, ingredients: List[str]) -> Dict[str, Any]:
         if not ingredients:
             return {"food": [], "non_food": [], "source": "rules"}
@@ -94,6 +134,11 @@ class IngredientClassifier:
         non_food = []
         for item in ingredients:
             label = labels.get(item)
+            if not label:
+                label = self._rule_label(item)
+                if label:
+                    labels[item] = label
+                    self._save_cached(item, label)
             if label == "non_food":
                 non_food.append(item)
             else:

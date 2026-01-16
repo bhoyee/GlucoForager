@@ -25,7 +25,12 @@ class AIVisionService:
             messages=[
                 {
                     "role": "system",
-                    "content": "Extract ingredient names from the fridge photo. Return a comma-separated list.",
+                    "content": (
+                        "Extract ONLY edible food ingredients from the photo. "
+                        "Ignore non-food items (electronics, furniture, tools, etc.). "
+                        "If no food ingredients are visible, return an empty string. "
+                        "Return a comma-separated list."
+                    ),
                 },
                 {
                     "role": "user",

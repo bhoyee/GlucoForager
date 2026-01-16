@@ -52,6 +52,7 @@ def generate_from_vision(
     return {
         "results": result.get("recipes", []),
         "detected": result.get("detected", []),
+        "non_food": result.get("non_food", []),
         "filters": result.get("filters", []),
         "warning": result.get("warning"),
         "access": access,
@@ -89,6 +90,7 @@ def generate_from_vision_batch(
     return {
         "results": result.get("recipes", []),
         "detected": result.get("detected", []),
+        "non_food": result.get("non_food", []),
         "filters": result.get("filters", []),
         "warning": result.get("warning"),
         "access": access,
