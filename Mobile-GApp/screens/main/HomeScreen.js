@@ -223,6 +223,17 @@ export default function HomeScreen() {
     return normalized;
   };
 
+  const getRecipeTimeValue = (recipe) => {
+    const timeLabel = getRecipeTimeLabel(recipe);
+    if (!timeLabel || timeLabel === '--' || timeLabel === '') {
+      return '--';
+    }
+    const timeStr = String(timeLabel).trim();
+    if (!timeStr) return '--';
+    const normalized = timeStr.replace(/\s*mins?\s*$/i, '').trim();
+    return normalized || '--';
+  };
+
   const getRecipeCalories = (recipe) => {
     const value = recipe.nutrition?.calories ?? recipe.nutrition_per_serving?.calories;
     return formatNutrient(value, 'cal', 'Calories --');
@@ -491,11 +502,19 @@ export default function HomeScreen() {
                         Diabetes-Safe
                       </Text>
                     </View>
-                    <Text style={styles.recipeTime}>
-                      {getRecipeTimeLabel(recipe) === '--'
-                        ? '--'
-                        : `${getRecipeTimeLabel(recipe)} min`}
-                    </Text>
+                    <View style={styles.recipeSpacer} />
+                    {(() => {
+                      const timeValue = getRecipeTimeValue(recipe);
+                      if (timeValue === '--') {
+                        return <Text style={styles.recipeTime}>{timeValue}</Text>;
+                      }
+                      return (
+                        <Text style={styles.recipeTime}>
+                          {timeValue}
+                          <Text style={styles.recipeTimeUnit}>min</Text>
+                        </Text>
+                      );
+                    })()}
                   </View>
                   <Text style={styles.recipeName} numberOfLines={2}>
                     {recipe.name || recipe.title}
@@ -782,6 +801,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     flexWrap: 'nowrap',
   },
+  recipeSpacer: {
+    flex: 1,
+  },
   badge: {
     backgroundColor: `${Colors.success}15`,
     paddingHorizontal: 6,
@@ -798,9 +820,12 @@ const styles = StyleSheet.create({
   recipeTime: {
     fontSize: 14,
     color: Colors.textLight,
-    marginLeft: 40,
     flexShrink: 0,
     minWidth: 48,
+  },
+  recipeTimeUnit: {
+    fontSize: 12,
+    color: Colors.textLight,
   },
   recipeName: {
     fontSize: 16,
