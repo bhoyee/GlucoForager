@@ -88,9 +88,17 @@ def check_user_access(user: User, db: Session, device_id: str | None = None) -> 
     total_used = ai_count + search_count
     device_used = device_ai_count + device_search_count if device_id else 0
     device_allowed = True if not device_id else (device_used < daily_limit)
+    user_left = max(0, daily_limit - total_used) if daily_limit is not None else None
+    device_left = max(0, daily_limit - device_used) if (daily_limit is not None and device_id) else None
+    effective_left = (
+        min(user_left, device_left)
+        if user_left is not None and device_left is not None
+        else user_left if user_left is not None
+        else "unlimited"
+    )
     return {
         "allowed": (total_used < daily_limit and device_allowed) if daily_limit is not None else True,
-        "searches_left": "unlimited" if daily_limit is None else max(0, daily_limit - total_used),
+        "searches_left": effective_left,
         "device_searches_left": None
         if daily_limit is None or not device_id
         else max(0, daily_limit - device_used),
