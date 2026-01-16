@@ -1,5 +1,5 @@
 // screens/main/HomeScreen.js - UPDATED PRODUCTION VERSION
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
   Image,
 } from 'react-native';
-import { useNavigation, useIsFocused } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -21,7 +21,6 @@ import { apiFetch } from '../../utils/api';
 
 export default function HomeScreen() {
   const navigation = useNavigation();
-  const isFocused = useIsFocused();
   const { signOut } = useAuth();
   
   const [userIsPremium, setUserIsPremium] = useState(false);
@@ -38,34 +37,47 @@ export default function HomeScreen() {
     favoritesSaved: 0,
   });
 
+  const getDeviceId = async () => {
+    const existing = await AsyncStorage.getItem('deviceId');
+    if (existing) return existing;
+    const generated = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    await AsyncStorage.setItem('deviceId', generated);
+    return generated;
+  };
+
   // Load user data
-  useEffect(() => {
-    const loadUserData = async () => {
-      try {
-        setIsLoading(true);
-        
-        // Load user data from AsyncStorage
-        await loadScanStatus();
-        await loadUserStats();
-        await loadRecipes();
-        
-      } catch (error) {
-        console.error('Error loading user data:', error);
-        // Set defaults on error
-        setUserIsPremium(false);
-        setTodayScans(0);
-        setRemainingScans(3);
-        setDailyLimit(3);
-        setUserStats({ recipesGenerated: 0, scansToday: 0, favoritesSaved: 0 });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    if (isFocused) {
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+      const loadUserData = async () => {
+        try {
+          setIsLoading(true);
+
+          // Load user data from AsyncStorage
+          await loadScanStatus();
+          await loadUserStats();
+          await loadRecipes();
+        } catch (error) {
+          console.error('Error loading user data:', error);
+          // Set defaults on error
+          setUserIsPremium(false);
+          setTodayScans(0);
+          setRemainingScans(3);
+          setDailyLimit(3);
+          setUserStats({ recipesGenerated: 0, scansToday: 0, favoritesSaved: 0 });
+        } finally {
+          if (isActive) {
+            setIsLoading(false);
+          }
+        }
+      };
+
       loadUserData();
-    }
-  }, [isFocused]);
+      return () => {
+        isActive = false;
+      };
+    }, [])
+  );
 
   const loadScanStatus = async () => {
     const token = await AsyncStorage.getItem('userToken');
@@ -77,9 +89,10 @@ export default function HomeScreen() {
       return;
     }
 
+    const deviceId = await getDeviceId();
     const response = await apiFetch(
       `${API_URL}${API_ENDPOINTS.SCANS_TODAY}`,
-      { headers: { Authorization: `Bearer ${token}` } },
+      { headers: { Authorization: `Bearer ${token}`, 'X-Device-Id': deviceId } },
       { onUnauthorized: signOut }
     );
     if (response.status === 401) {
@@ -93,7 +106,11 @@ export default function HomeScreen() {
       throw new Error('Unable to fetch scan status.');
     }
     const data = await response.json();
-    setUserIsPremium(Boolean(data.is_premium));
+    const isPremium =
+      data.is_premium === true ||
+      data.subscription_tier === 'premium' ||
+      data.searches_left === 'unlimited';
+    setUserIsPremium(isPremium);
     setTodayScans(data.total || 0);
     setRemainingScans(
       typeof data.searches_left === 'number' ? data.searches_left : 0
@@ -229,27 +246,37 @@ export default function HomeScreen() {
     return `${value}`.includes(suffix.trim()) ? `${value}` : `${value} ${suffix}`.trim();
   };
 
-  const checkScanLimit = async () => {
+  const checkScanLimit = async (source = 'scan') => {
     try {
       const token = await AsyncStorage.getItem('userToken');
       if (!token) {
-        Alert.alert('Sign in required', 'Please sign in to scan ingredients.');
+        Alert.alert('Sign in required', 'Please sign in to find recipes.');
         return;
       }
+      const deviceId = await getDeviceId();
       const response = await apiFetch(
         `${API_URL}${API_ENDPOINTS.SCANS_TODAY}`,
-        { headers: { Authorization: `Bearer ${token}` } },
+        { headers: { Authorization: `Bearer ${token}`, 'X-Device-Id': deviceId } },
         { onUnauthorized: signOut }
       );
       if (response.status === 401) {
         return;
       }
       const data = await response.json();
-      const allowed = data.is_premium || (data.searches_left || 0) > 0;
+      const isPremium =
+        data.is_premium === true ||
+        data.subscription_tier === 'premium' ||
+        data.searches_left === 'unlimited';
+      const numericLeft = Number(data.searches_left);
+      const allowed = isPremium || (Number.isFinite(numericLeft) && numericLeft > 0);
 
       if (allowed) {
-        // Navigate to Scan tab
-        navigation.navigate('Scan');
+        if (source === 'manual') {
+          navigation.navigate('ManualInput');
+        } else {
+          // Navigate to Scan tab
+          navigation.navigate('Scan', { screen: 'ScanMain' });
+        }
       } else {
         Alert.alert(
           'Daily Limit Reached',
@@ -270,11 +297,11 @@ export default function HomeScreen() {
   };
 
   const handleScanPress = () => {
-    checkScanLimit();
+    checkScanLimit('scan');
   };
 
   const handleManualInputPress = () => {
-    navigation.navigate('ManualInput');
+    checkScanLimit('manual');
   };
 
   const handleViewRecipeDetail = (recipe) => {
@@ -420,7 +447,11 @@ export default function HomeScreen() {
               </View>
               <View style={styles.actionText}>
                 <Text style={styles.actionTitle}>Type Ingredients</Text>
-                <Text style={styles.actionDescription}>Enter what you have manually - Always free</Text>
+                <Text style={styles.actionDescription}>
+                  {userIsPremium
+                    ? 'Enter what you have manually'
+                    : `${remainingScans} searches left today`}
+                </Text>
               </View>
               <Ionicons name="chevron-forward" size={24} color={Colors.textLight} />
             </View>
@@ -749,7 +780,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     alignItems: 'center',
     marginBottom: 8,
-    gap: 32,
     flexWrap: 'nowrap',
   },
   badge: {
@@ -768,7 +798,7 @@ const styles = StyleSheet.create({
   recipeTime: {
     fontSize: 14,
     color: Colors.textLight,
-    marginLeft: 32,
+    marginLeft: 40,
     flexShrink: 0,
     minWidth: 48,
   },

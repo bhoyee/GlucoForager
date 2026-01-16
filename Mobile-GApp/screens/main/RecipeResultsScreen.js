@@ -110,7 +110,7 @@ export default function RecipeResultsScreen() {
         <Text style={styles.headerTitle}>Recipe Results</Text>
         <TouchableOpacity
           style={styles.scanAgainButton}
-          onPress={() => navigation.navigate('Scan')}
+          onPress={() => navigation.navigate('Scan', { screen: 'ScanMain' })}
         >
           <Ionicons name="camera-outline" size={20} color={Colors.primary} />
           <Text style={styles.scanAgainText}>Scan Again</Text>
@@ -248,7 +248,7 @@ export default function RecipeResultsScreen() {
 
           <TouchableOpacity
             style={styles.secondaryButton}
-            onPress={() => navigation.navigate('Scan')}
+            onPress={() => navigation.navigate('Scan', { screen: 'ScanMain' })}
           >
             <Ionicons name="camera-outline" size={22} color={Colors.primary} />
             <Text style={styles.secondaryButtonText}>Scan Another Fridge</Text>

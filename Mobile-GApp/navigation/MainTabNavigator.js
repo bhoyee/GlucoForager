@@ -18,6 +18,7 @@ import ManualInputScreen from '../screens/main/ManualInputScreen';
 import RecipeDetailScreen from '../screens/main/RecipeDetailScreen';
 import RecipeResultsScreen from '../screens/main/RecipeResultsScreen';
 import ScanResultsScreen from '../screens/main/ScanResultsScreen';
+import ScanProcessingScreen from '../screens/main/ScanProcessingScreen';
 import StartCookingScreen from '../screens/main/StartCookingScreen';
 
 const Tab = createBottomTabNavigator();
@@ -34,6 +35,7 @@ function HomeStackNavigator() {
     >
       <HomeStack.Screen name="HomeMain" component={HomeScreen} />
       <HomeStack.Screen name="ManualInput" component={ManualInputScreen} />
+      <HomeStack.Screen name="ScanProcessing" component={ScanProcessingScreen} />
       <HomeStack.Screen name="ScanResults" component={ScanResultsScreen} />
       <HomeStack.Screen name="RecipeResults" component={RecipeResultsScreen} />
       <HomeStack.Screen name="RecipeDetail" component={RecipeDetailScreen} />
@@ -52,8 +54,8 @@ function ScanStackNavigator() {
         animation: 'slide_from_right'
       }}
     >
-      {/* IMPORTANT: Name this "Scan" for easy navigation */}
-      <ScanStack.Screen name="Scan" component={ScanScreen} />
+      <ScanStack.Screen name="ScanMain" component={ScanScreen} />
+      <ScanStack.Screen name="ScanProcessing" component={ScanProcessingScreen} />
       <ScanStack.Screen name="ScanResults" component={ScanResultsScreen} />
       <ScanStack.Screen name="RecipeResults" component={RecipeResultsScreen} />
       <ScanStack.Screen name="RecipeDetail" component={RecipeDetailScreen} />

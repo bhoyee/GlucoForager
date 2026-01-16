@@ -1,5 +1,5 @@
 // screens/main/ScanScreen.js - WORKING GALLERY-ONLY VERSION
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -19,13 +19,6 @@ import * as ImagePicker from 'expo-image-picker';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
-import { 
-  getTodayScans, 
-  getRemainingScans, 
-  incrementScan, 
-  initializeScans,
-  canUserScan 
-} from '../../utils/scanTracker';
 
 let Camera;
 let CameraView;
@@ -59,23 +52,51 @@ export default function ScanScreen() {
   const [isCapturing, setIsCapturing] = useState(false);
   const [autoLaunched, setAutoLaunched] = useState(false);
 
-  useEffect(() => {
-    const loadUserData = async () => {
-      try {
-        await initializeScans();
-        const premiumStatus = await AsyncStorage.getItem('userIsPremium') || 'false';
-        setUserIsPremium(premiumStatus === 'true');
-        const remaining = await getRemainingScans(premiumStatus === 'true');
-        setRemainingScans(remaining);
-      } catch (error) {
-        console.error('Error loading user data:', error);
-      }
-    };
-    
-    if (isFocused) {
-      loadUserData();
+  const getDeviceId = async () => {
+    const existing = await AsyncStorage.getItem('deviceId');
+    if (existing) return existing;
+    const generated = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    await AsyncStorage.setItem('deviceId', generated);
+    return generated;
+  };
+
+  const loadScanStatus = useCallback(async () => {
+    const token = await AsyncStorage.getItem('userToken');
+    if (!token) {
+      setUserIsPremium(false);
+      setRemainingScans(3);
+      return;
     }
-  }, [isFocused]);
+    const deviceId = await getDeviceId();
+    const response = await apiFetch(
+      `${API_URL}${API_ENDPOINTS.SCANS_TODAY}`,
+      { headers: { Authorization: `Bearer ${token}`, 'X-Device-Id': deviceId } },
+      { onUnauthorized: signOut }
+    );
+    if (response.status === 401) {
+      setUserIsPremium(false);
+      setRemainingScans(3);
+      return;
+    }
+    if (!response.ok) {
+      throw new Error('Unable to fetch scan status.');
+    }
+    const data = await response.json();
+    const isPremium =
+      data.is_premium === true ||
+      data.subscription_tier === 'premium' ||
+      data.searches_left === 'unlimited';
+    setUserIsPremium(isPremium);
+    setRemainingScans(typeof data.searches_left === 'number' ? data.searches_left : 0);
+  }, [signOut]);
+
+  useEffect(() => {
+    if (isFocused) {
+      loadScanStatus().catch((error) => {
+        console.error('Error loading user data:', error);
+      });
+    }
+  }, [isFocused, loadScanStatus]);
 
   useEffect(() => {
     if (!isFocused) {
@@ -103,19 +124,41 @@ export default function ScanScreen() {
   };
 
   const checkScanLimit = async () => {
-    const canScan = await canUserScan(userIsPremium);
-    if (!userIsPremium && !canScan && capturedImages.length === 0) {
-      showUpgradeAlert();
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        Alert.alert('Sign in required', 'Please sign in to scan ingredients.');
+        return false;
+      }
+      const deviceId = await getDeviceId();
+      const response = await apiFetch(
+        `${API_URL}${API_ENDPOINTS.SCANS_TODAY}`,
+        { headers: { Authorization: `Bearer ${token}`, 'X-Device-Id': deviceId } },
+        { onUnauthorized: signOut }
+      );
+      if (response.status === 401) {
+        return false;
+      }
+      const data = await response.json();
+      const isPremium =
+        data.is_premium === true ||
+        data.subscription_tier === 'premium' ||
+        data.searches_left === 'unlimited';
+      setUserIsPremium(isPremium);
+      if (typeof data.searches_left === 'number') {
+        setRemainingScans(data.searches_left);
+      }
+      const numericLeft = Number(data.searches_left);
+      const allowed = isPremium || (Number.isFinite(numericLeft) && numericLeft > 0);
+      if (!allowed && capturedImages.length === 0) {
+        showUpgradeAlert();
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error('Error checking scan limit:', error);
+      Alert.alert('Error', 'Unable to check scan limit. Please try again.');
       return false;
-    }
-    return true;
-  };
-
-  const recordScanIfNeeded = async () => {
-    if (!userIsPremium && capturedImages.length === 0) {
-      await incrementScan();
-      const remaining = await getRemainingScans(false);
-      setRemainingScans(remaining);
     }
   };
 
@@ -162,7 +205,6 @@ export default function ScanScreen() {
     setIsCapturing(true);
     try {
       const photo = await cameraRef.takePictureAsync({ quality: 0.7, skipProcessing: true, base64: true });
-      await recordScanIfNeeded();
       const newImage = {
         id: Date.now().toString(),
         uri: photo.uri,
@@ -200,8 +242,6 @@ export default function ScanScreen() {
       });
 
       if (!result.canceled) {
-        await recordScanIfNeeded();
-        
         const newImages = result.assets.map((asset, index) => ({
           id: Date.now().toString() + index,
           uri: asset.uri,
@@ -218,80 +258,18 @@ export default function ScanScreen() {
     }
   };
 
-  const getDeviceId = async () => {
-    const existing = await AsyncStorage.getItem('deviceId');
-    if (existing) return existing;
-    const generated = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-    await AsyncStorage.setItem('deviceId', generated);
-    return generated;
-  };
-
   const handleAnalyzeImages = async () => {
     if (capturedImages.length === 0) {
       Alert.alert('No Images', 'Please select at least one image before analyzing.');
       return;
     }
-    
     setIsScanning(true);
-    
-    try {
-      const token = await AsyncStorage.getItem('userToken');
-      if (!token) {
-        Alert.alert('Sign in required', 'Please sign in to analyze ingredients.');
-        return;
-      }
-      const deviceId = await getDeviceId();
-      const imagesBase64 = capturedImages
-        .map((item) => item.base64)
-        .filter((value) => Boolean(value));
-
-      if (imagesBase64.length === 0) {
-        Alert.alert('Image error', 'Unable to read image data. Please try again.');
-        return;
-      }
-
-      const response = await apiFetch(
-        `${API_URL}${API_ENDPOINTS.AI_VISION_RECIPES_BATCH}`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-            'X-Device-Id': deviceId,
-          },
-          body: JSON.stringify({ images_base64: imagesBase64 }),
-        },
-        { onUnauthorized: signOut }
-      );
-      if (response.status === 401) {
-        return;
-      }
-      const data = await response.json();
-
-      if (!response.ok) {
-        const detail = data?.detail;
-        const message = detail?.message || detail || 'Unable to analyze image.';
-        Alert.alert('Scan failed', message);
-        return;
-      }
-
-      if (!data?.detected?.length) {
-        Alert.alert('Scan failed', 'No food ingredients detected.');
-        return;
-      }
-
-      navigation.navigate('ScanResults', {
-        images: capturedImages,
-        userIsPremium,
-        detectedIngredients: data.detected || [],
-        recipes: data.results || [],
-        warning: data.warning || null,
-      });
-    } catch (error) {
-      Alert.alert('Scan failed', 'Unable to analyze image. Please try again.');
-    } finally {
-      setIsScanning(false);
-    }
+    setIsCameraActive(false);
+    navigation.navigate('ScanProcessing', {
+      images: capturedImages,
+      userIsPremium,
+    });
+    setIsScanning(false);
   };
 
   const handleDeleteImage = (imageId) => {
@@ -406,7 +384,9 @@ export default function ScanScreen() {
             >
               <Ionicons name="analytics-outline" size={20} color="white" />
               <Text style={styles.analyzeButtonText}>
-                {isScanning ? 'Processing...' : `Analyze ${capturedImages.length} Image${capturedImages.length !== 1 ? 's' : ''}`}
+                {isScanning
+                  ? 'Processing...'
+                  : `Analyze ${capturedImages.length} image${capturedImages.length !== 1 ? 's' : ''}`}
               </Text>
             </TouchableOpacity>
             
@@ -507,7 +487,9 @@ export default function ScanScreen() {
               >
                 <Ionicons name="analytics-outline" size={18} color="white" />
                 <Text style={styles.analyzeOverlayText}>
-                  {isScanning ? 'Processing...' : `Analyze ${capturedImages.length}`}
+                  {isScanning
+                    ? 'Processing...'
+                    : `Analyze ${capturedImages.length} image${capturedImages.length !== 1 ? 's' : ''}`}
                 </Text>
               </TouchableOpacity>
             )}

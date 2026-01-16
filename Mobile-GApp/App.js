@@ -1,5 +1,5 @@
 // App.js - COMPLETE FIXED VERSION
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -52,10 +52,18 @@ function AppNavigator() {
   }
 
   const { userToken, isLoading } = authContext || {};
+  const [minimumSplashDone, setMinimumSplashDone] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setMinimumSplashDone(true);
+    }, 800);
+    return () => clearTimeout(timer);
+  }, []);
   
   console.log('AppNavigator state:', { userToken, isLoading, hasAuthContext: !!authContext });
 
-  if (isLoading) {
+  if (isLoading || !minimumSplashDone) {
     console.log('Showing SplashScreen');
     return <SplashScreen />;
   }

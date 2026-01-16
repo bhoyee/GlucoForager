@@ -32,12 +32,15 @@ export default function ScanResultsScreen() {
 
   useEffect(() => {
     if (Array.isArray(detectedFromApi) && detectedFromApi.length > 0) {
-      const normalized = detectedFromApi.map((item, index) => ({
+      const normalized = detectedFromApi
+        .map((item) => (typeof item === 'string' ? item.trim() : ''))
+        .filter((item) => item.length > 0)
+        .map((item, index) => ({
         id: `${index}-${item}`,
         name: item,
         confidence: 'AI',
         selected: true,
-      }));
+        }));
       setDetectedIngredients(normalized);
       setSelectedIngredients(normalized.map(item => item.id));
       setIsLoading(false);
@@ -51,8 +54,8 @@ export default function ScanResultsScreen() {
 
   useEffect(() => {
     // Show generate recipe button when at least one ingredient is selected
-    setShowRecipeButton(selectedIngredients.length > 0);
-  }, [selectedIngredients]);
+    setShowRecipeButton(selectedIngredients.length > 0 && detectedIngredients.length > 0);
+  }, [selectedIngredients, detectedIngredients]);
 
   const toggleIngredientSelection = (id) => {
     setSelectedIngredients(prev => {
@@ -109,7 +112,7 @@ export default function ScanResultsScreen() {
   };
 
   const handleScanMore = () => {
-    navigation.navigate('Scan');
+    navigation.navigate('Scan', { screen: 'ScanMain' });
   };
 
   if (isLoading) {
@@ -157,10 +160,12 @@ export default function ScanResultsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {warning && (
+        {(warning || detectedIngredients.length === 0) && (
           <View style={styles.warningBanner}>
             <Ionicons name="alert-circle-outline" size={18} color={Colors.warning} />
-            <Text style={styles.warningText}>{warning.message}</Text>
+            <Text style={styles.warningText}>
+              {warning?.message || 'No food ingredients detected. Please try another image.'}
+            </Text>
           </View>
         )}
         {/* Images Slideshow */}
@@ -237,7 +242,6 @@ export default function ScanResultsScreen() {
                   </View>
                   <View style={styles.ingredientInfo}>
                     <Text style={styles.ingredientName}>{item.name}</Text>
-                    <Text style={styles.ingredientConfidence}>{item.confidence} confidence</Text>
                   </View>
                   {item.confidence === 'Manual' ? (
                     <TouchableOpacity 
@@ -521,10 +525,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.text,
     marginBottom: 2,
-  },
-  ingredientConfidence: {
-    fontSize: 12,
-    color: Colors.textLight,
   },
   ingredientIcon: {
     marginLeft: 8,
