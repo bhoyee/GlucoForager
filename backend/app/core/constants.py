@@ -35,10 +35,11 @@ REQUIREMENTS FOR EACH RECIPE:
 1. Name the recipe specifically
 2. Include prep_time, cook_time (minutes)
 3. List ingredients with quantities and units
-4. Step-by-step cooking instructions
+4. Step-by-step cooking instructions (at least 5 steps). Start with prep (e.g., washing, chopping), end with plating/serving.
 5. Nutritional info PER SERVING: calories, carbs, protein, fat, fiber, sugar, sodium
-6. Diabetes analysis: glycemic impact, carb type, safety rating
-7. Tags: diabetes-friendly, low-carb, etc.
+6. Short description (1-2 sentences) describing why it is diabetes-friendly
+7. Diabetes analysis: glycemic impact, carb type, safety rating
+8. Tags: diabetes-friendly, low-carb, etc.
 
 NUTRITIONAL CONSTRAINTS:
 - Calories: 250-400 per serving
@@ -58,7 +59,8 @@ FORMAT: Return VALID JSON with this EXACT structure:
         {"name": "ingredient1", "quantity": 1, "unit": "cup"},
         {"name": "ingredient2", "quantity": 2, "unit": "tbsp"}
       ],
-      "instructions": ["Step 1", "Step 2"],
+      "instructions": ["Step 1", "Step 2", "Step 3", "Step 4", "Step 5"],
+      "description": "Short diabetes-friendly description here.",
       "nutrition_per_serving": {
         "calories": 320,
         "carbs": 15,

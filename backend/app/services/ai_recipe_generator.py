@@ -92,10 +92,34 @@ class AIRecipeGenerator:
                 recipe["image_url"] = cached
                 continue
 
+            title = recipe.get("title", "diabetes-friendly meal")
+            description = recipe.get("description") or ""
+            ingredient_names = []
+            for item in recipe.get("ingredients") or []:
+                if isinstance(item, dict):
+                    name = item.get("name")
+                else:
+                    name = str(item)
+                if name:
+                    ingredient_names.append(name)
             prompt = (
-                f"High-quality food photography of {recipe.get('title', 'diabetes-friendly meal')}, "
-                f"using ingredients: {', '.join(ingredients)}. "
-                "Studio lighting, appetizing, 1:1 aspect."
+                f"Photorealistic food photography of {title}. "
+                f"{description} " if description else f"Photorealistic food photography of {title}. "
+            )
+            if ingredient_names:
+                prompt += (
+                    "Must visually include these ingredients: "
+                    f"{', '.join(ingredient_names)}. "
+                    "Do not include ingredients not listed. "
+                )
+            elif ingredients:
+                prompt += (
+                    "Must visually reflect these ingredients: "
+                    f"{', '.join(ingredients)}. "
+                    "Do not include ingredients not listed. "
+                )
+            prompt += (
+                "Clean, modern plating. Natural soft light. 1:1 aspect. No text, no watermarks."
             )
             try:
                 resp = self.primary_client.images.generate(
@@ -148,10 +172,22 @@ class AIRecipeGenerator:
                             "sugar": ni_src.get("sugar"),
                             "glycemic_index": ni_src.get("glycemic_index"),
                         }
+                        description = item.get("description") or ""
                         analysis = item.get("diabetes_analysis")
-                        if isinstance(analysis, dict):
-                            analysis = "; ".join(f"{k}: {v}" for k, v in analysis.items())
-                        item.setdefault("description", analysis or "Diabetes-friendly recipe")
+                        if not description and isinstance(analysis, dict):
+                            glycemic = analysis.get("glycemic_impact") or analysis.get("glycemic impact")
+                            carb_type = analysis.get("carb_type") or analysis.get("carb type")
+                            safety = analysis.get("safety_rating") or analysis.get("safety rating")
+                            parts = []
+                            if glycemic:
+                                parts.append(f"{glycemic.lower()} glycemic impact")
+                            if carb_type:
+                                parts.append(f"{carb_type.lower()} carbs")
+                            if safety:
+                                parts.append(f"{safety} safety rating")
+                            if parts:
+                                description = "Diabetes-friendly option with " + ", ".join(parts) + "."
+                        item.setdefault("description", description or "Diabetes-friendly recipe.")
                         item.setdefault("instructions", item.get("instructions") or [])
                         item.setdefault("ingredients", item.get("ingredients") or [])
                         item.setdefault("prep_time", item.get("prep_time", 0))
@@ -170,7 +206,7 @@ class AIRecipeGenerator:
                     "title": "AI-Generated Recipe",
                     "description": cleaned[:200],
                     "ingredients": [{"name": i, "quantity": 1, "unit": ""} for i in ingredients],
-                    "instructions": ["AI could not format steps; see description above."],
+                    "instructions": [],
                     "prep_time": 0,
                     "cook_time": 0,
                     "total_time": 0,
