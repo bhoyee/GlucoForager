@@ -29,10 +29,6 @@ const mockRecipe = {
   totalTime: 35,
   servings: 2,
   difficulty: 'Easy',
-  rating: 4.8,
-  reviewCount: 124,
-  author: 'Dr. Sarah Miller',
-  authorRole: 'Diabetes Nutritionist',
   image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800',
   isBookmarked: true,
   
@@ -81,6 +77,15 @@ const mockRecipe = {
 const RecipeDetailsScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
+  const selectedFromRouteRaw = route.params?.selectedIngredients || [];
+  const selectedFromRoute = Array.isArray(selectedFromRouteRaw)
+    ? selectedFromRouteRaw
+        .map((item) => (typeof item === 'string' ? item : item?.name))
+        .filter((item) => Boolean(item))
+    : [];
+  const selectedIngredientKeys = selectedFromRoute.map((item) =>
+    item.toLowerCase().trim()
+  );
   const { signOut } = useAuth();
   const [recipe, setRecipe] = useState(mockRecipe);
   const [showIngredientsModal, setShowIngredientsModal] = useState(false);
@@ -126,13 +131,27 @@ const RecipeDetailsScreen = () => {
     }
   };
 
+  const normalizeIngredientKey = (value) => `${value || ''}`.toLowerCase().trim();
+
+  const hasSelectedIngredient = (name) => {
+    if (!selectedIngredientKeys.length) return null;
+    const ingredientKey = normalizeIngredientKey(name);
+    if (!ingredientKey) return null;
+    return selectedIngredientKeys.some(
+      (selected) =>
+        ingredientKey.includes(selected) || selected.includes(ingredientKey)
+    );
+  };
+
   const normalizeRecipe = (item) => {
     const ingredients = Array.isArray(item.ingredients)
       ? item.ingredients.map((ingredient, index) => ({
           id: ingredient.id || `${item.id || 'ing'}-${index}`,
           name: ingredient.name || ingredient.title || 'Ingredient',
           amount: formatIngredientAmount(ingredient),
-          owned: Boolean(ingredient.owned),
+          owned:
+            hasSelectedIngredient(ingredient.name || ingredient.title) ??
+            Boolean(ingredient.owned),
         }))
       : [];
 
@@ -156,11 +175,8 @@ const RecipeDetailsScreen = () => {
       totalTime: (prepTime || 0) + (cookTime || 0),
       servings: item.servings || 1,
       difficulty: item.difficulty || 'Easy',
-      rating: item.rating || 4.6,
-      reviewCount: item.reviewCount || 40,
-      author: item.author || 'GlucoForager',
-      authorRole: item.authorRole || 'Recipe Team',
       image: item.image_url || item.image || '',
+      diabetesAnalysis: item.diabetes_analysis || item.diabetesAnalysis || null,
       isBookmarked: Boolean(item.isBookmarked),
       description: item.description || 'A diabetes-friendly recipe curated for balanced nutrition.',
       nutrition: {
@@ -191,6 +207,132 @@ const RecipeDetailsScreen = () => {
     const numeric = typeof value === 'number' ? value : parseFloat(value);
     if (Number.isNaN(numeric)) return `${value}`.includes('g') ? `${value}` : '0g';
     return `${numeric}g`;
+  };
+
+
+  const parseNutritionNumber = (value) => {
+    if (value === null || value === undefined || value === '') return null;
+    const numeric = typeof value === 'number' ? value : parseFloat(value);
+    return Number.isFinite(numeric) ? numeric : null;
+  };
+
+  const getSafetyHighlights = () => {
+    const carbs = parseNutritionNumber(recipe.nutrition.carbs);
+    const fiber = parseNutritionNumber(recipe.nutrition.fiber);
+    const sugar = parseNutritionNumber(recipe.nutrition.sugar);
+    const protein = parseNutritionNumber(recipe.nutrition.protein);
+    const highlights = [];
+
+    if (fiber !== null && fiber >= 5) {
+      highlights.push({ icon: 'leaf', text: `High fiber (${fiber}g)` });
+    }
+    if (sugar !== null && sugar <= 5) {
+      highlights.push({ icon: 'water', text: `Low sugar (${sugar}g)` });
+    }
+    if (protein !== null && protein >= 20) {
+      highlights.push({ icon: 'fitness', text: `High protein (${protein}g)` });
+    }
+    if (protein !== null && protein < 20 && highlights.length < 3) {
+      highlights.push({ icon: 'fitness', text: `Protein (${protein}g)` });
+    }
+    if (!highlights.length) {
+      highlights.push({ icon: 'heart', text: 'Balanced nutrition' });
+    }
+    return highlights.slice(0, 3);
+  };
+
+  const getSafetySections = () => {
+    const carbs = parseNutritionNumber(recipe.nutrition.carbs);
+    const fiber = parseNutritionNumber(recipe.nutrition.fiber);
+    const sugar = parseNutritionNumber(recipe.nutrition.sugar);
+    const protein = parseNutritionNumber(recipe.nutrition.protein);
+    const fat = parseNutritionNumber(recipe.nutrition.fat);
+    const calories = parseNutritionNumber(recipe.nutrition.calories);
+    const sections = [];
+
+    if (calories !== null) {
+      const calorieText =
+        calories <= 400
+          ? `Calories are ${calories} per serving, a moderate portion that supports steady energy.`
+          : `Calories are ${calories} per serving. Consider portion size for blood sugar balance.`;
+      sections.push({
+        icon: 'flame',
+        title: 'Calories Per Serving',
+        text: calorieText,
+      });
+    }
+    if (carbs !== null) {
+      const carbText =
+        carbs <= 30
+          ? `Carbs are ${carbs}g per serving, helping reduce rapid blood sugar spikes.`
+          : `Carbs are ${carbs}g per serving. Pair with fiber and protein for steadier glucose response.`;
+      sections.push({
+        icon: 'trending-down',
+        title: 'Carbohydrate Impact',
+        text: carbText,
+      });
+    }
+    if (fiber !== null && fiber >= 5) {
+      sections.push({
+        icon: 'leaf',
+        title: 'High Fiber Content',
+        text: `With ${fiber}g of fiber, this meal supports steadier glucose absorption and fullness.`,
+      });
+    }
+    if (fiber !== null && fiber < 5) {
+      sections.push({
+        icon: 'leaf',
+        title: 'Fiber Support',
+        text: `This recipe provides ${fiber}g of fiber per serving to help with steady energy.`,
+      });
+    }
+    if (sugar !== null && sugar <= 5) {
+      sections.push({
+        icon: 'water',
+        title: 'Low Added Sugar',
+        text: `Sugar is kept low at ${sugar}g per serving, helping avoid rapid glucose rises.`,
+      });
+    }
+    if (sugar !== null && sugar > 5) {
+      sections.push({
+        icon: 'water',
+        title: 'Moderate Sugar',
+        text: `Sugar is ${sugar}g per serving. Consider smaller portions if needed.`,
+      });
+    }
+    if (protein !== null && protein >= 20) {
+      sections.push({
+        icon: 'fitness',
+        title: 'High Protein Balance',
+        text: `Protein at ${protein}g per serving supports satiety and balanced energy.`,
+      });
+    }
+    if (protein !== null && protein < 20) {
+      sections.push({
+        icon: 'fitness',
+        title: 'Protein Support',
+        text: `Protein is ${protein}g per serving, helping with fullness and steady energy.`,
+      });
+    }
+    if (fat !== null) {
+      const fatText =
+        fat <= 15
+          ? `Fat is ${fat}g per serving, supporting steady energy without excess.`
+          : `Fat is ${fat}g per serving. Choose healthy fats and watch portions.`;
+      sections.push({
+        icon: 'water',
+        title: 'Healthy Fat Balance',
+        text: fatText,
+      });
+    }
+    if (!sections.length) {
+      sections.push({
+        icon: 'heart',
+        title: 'Balanced Nutrition',
+        text: 'This recipe is designed to support blood sugar management using balanced portions.',
+      });
+    }
+    return sections;
   };
 
   const toggleBookmark = () => {
@@ -269,25 +411,12 @@ const RecipeDetailsScreen = () => {
     <View style={styles.titleSection}>
       <Text style={styles.recipeTitle}>{recipe.title}</Text>
       <Text style={styles.recipeDescription}>{recipe.description}</Text>
-      
-      <View style={styles.authorRow}>
-        <View style={styles.authorAvatar}>
-          <Ionicons name="person-circle" size={40} color="#4CAF50" />
-        </View>
-        <View style={styles.authorInfo}>
-          <Text style={styles.authorName}>{recipe.author}</Text>
-          <Text style={styles.authorRole}>{recipe.authorRole}</Text>
-        </View>
-        <View style={styles.ratingContainer}>
-          <Ionicons name="star" size={16} color="#FFD700" />
-          <Text style={styles.ratingText}>{recipe.rating}</Text>
-          <Text style={styles.reviewCount}>({recipe.reviewCount})</Text>
-        </View>
-      </View>
     </View>
   );
 
-  const renderSafetySection = () => (
+  const renderSafetySection = () => {
+    const highlights = getSafetyHighlights();
+    return (
     <TouchableOpacity 
       style={styles.safetyCard}
       onPress={() => setShowSafetyModal(true)}
@@ -299,27 +428,22 @@ const RecipeDetailsScreen = () => {
         </View>
         <View style={styles.safetyTextContainer}>
           <Text style={styles.safetyTitle}>Why This Is Diabetes-Safe</Text>
-          <Text style={styles.safetySubtitle}>Expert-approved for blood sugar management</Text>
+          <Text style={styles.safetySubtitle}>Based on nutrition per serving</Text>
         </View>
         <Ionicons name="chevron-forward" size={20} color="#4CAF50" />
       </View>
       
       <View style={styles.safetyHighlights}>
-        <View style={styles.highlightItem}>
-          <Ionicons name="trending-down" size={16} color="#4CAF50" />
-          <Text style={styles.highlightText}>Low Glycemic</Text>
-        </View>
-        <View style={styles.highlightItem}>
-          <Ionicons name="leaf" size={16} color="#4CAF50" />
-          <Text style={styles.highlightText}>High Fiber</Text>
-        </View>
-        <View style={styles.highlightItem}>
-          <Ionicons name="fitness" size={16} color="#4CAF50" />
-          <Text style={styles.highlightText}>Balanced Macros</Text>
-        </View>
+        {highlights.map((item, index) => (
+          <View key={`${item.text}-${index}`} style={styles.highlightItem}>
+            <Ionicons name={item.icon} size={16} color="#4CAF50" />
+            <Text style={styles.highlightText}>{item.text}</Text>
+          </View>
+        ))}
       </View>
     </TouchableOpacity>
-  );
+    );
+  };
 
   const renderIngredientsSection = () => (
     <View style={styles.section}>
@@ -384,7 +508,7 @@ const RecipeDetailsScreen = () => {
       <Text style={styles.sectionTitle}>Instructions</Text>
       
       {recipe.instructions.length === 0 ? (
-        <Text style={styles.emptyText}>Instructions will appear here once available.</Text>
+        <Text style={styles.emptyText}>No instructions available for this recipe yet.</Text>
       ) : (
         recipe.instructions.map((step, index) => (
           <View key={index} style={styles.instructionStep}>
@@ -461,7 +585,9 @@ const RecipeDetailsScreen = () => {
     </View>
   );
 
-  const renderSafetyModal = () => (
+  const renderSafetyModal = () => {
+    const sections = getSafetySections();
+    return (
     <Modal
       visible={showSafetyModal}
       animationType="slide"
@@ -478,51 +604,18 @@ const RecipeDetailsScreen = () => {
           </View>
           
           <ScrollView style={styles.modalBody}>
-            <View style={styles.modalSection}>
-              <View style={styles.modalIcon}>
-                <Ionicons name="trending-down" size={28} color="#4CAF50" />
+            {sections.map((section, index) => (
+              <View key={`${section.title}-${index}`}>
+                <View style={styles.modalSection}>
+                  <View style={styles.modalIcon}>
+                    <Ionicons name={section.icon} size={28} color="#4CAF50" />
+                  </View>
+                  <Text style={styles.modalSectionTitle}>{section.title}</Text>
+                  <Text style={styles.modalSectionText}>{section.text}</Text>
+                </View>
+                {index < sections.length - 1 && <View style={styles.modalDivider} />}
               </View>
-              <Text style={styles.modalSectionTitle}>Low Glycemic Impact</Text>
-              <Text style={styles.modalSectionText}>
-                This recipe uses quinoa instead of white rice or pasta, which has a much lower glycemic index. This means it raises blood sugar levels slowly and steadily.
-              </Text>
-            </View>
-            
-            <View style={styles.modalDivider} />
-            
-            <View style={styles.modalSection}>
-              <View style={styles.modalIcon}>
-                <Ionicons name="leaf" size={28} color="#4CAF50" />
-              </View>
-              <Text style={styles.modalSectionTitle}>High Fiber Content</Text>
-              <Text style={styles.modalSectionText}>
-                With {recipe.nutrition.fiber} of fiber, this meal helps slow down carbohydrate absorption and improves blood sugar control.
-              </Text>
-            </View>
-            
-            <View style={styles.modalDivider} />
-            
-            <View style={styles.modalSection}>
-              <View style={styles.modalIcon}>
-                <Ionicons name="pie-chart" size={28} color="#4CAF50" />
-              </View>
-              <Text style={styles.modalSectionTitle}>Balanced Macronutrients</Text>
-              <Text style={styles.modalSectionText}>
-                The perfect balance of protein ({recipe.nutrition.protein}), carbs ({recipe.nutrition.carbs}), and healthy fats ({recipe.nutrition.fat}) supports stable energy levels.
-              </Text>
-            </View>
-            
-            <View style={styles.modalDivider} />
-            
-            <View style={styles.modalSection}>
-              <View style={styles.modalIcon}>
-                <Ionicons name="time" size={28} color="#4CAF50" />
-              </View>
-              <Text style={styles.modalSectionTitle}>Portion Control</Text>
-              <Text style={styles.modalSectionText}>
-                Pre-portioned servings help maintain consistent carbohydrate intake, crucial for diabetes management.
-              </Text>
-            </View>
+            ))}
           </ScrollView>
           
           <TouchableOpacity 
@@ -534,7 +627,8 @@ const RecipeDetailsScreen = () => {
         </View>
       </View>
     </Modal>
-  );
+    );
+  };
 
   const renderIngredientsModal = () => (
     <Modal

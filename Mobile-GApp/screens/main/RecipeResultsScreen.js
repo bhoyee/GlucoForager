@@ -181,7 +181,12 @@ export default function RecipeResultsScreen() {
               <TouchableOpacity
                 key={recipe.id || `${title}-${index}`}
                 style={styles.recipeCard}
-                onPress={() => navigation.navigate('RecipeDetail', { recipe })}
+                onPress={() =>
+                  navigation.navigate('RecipeDetail', {
+                    recipe,
+                    selectedIngredients,
+                  })
+                }
               >
                 {imageUrl ? (
                   <Image source={{ uri: imageUrl }} style={styles.recipeImage} />
