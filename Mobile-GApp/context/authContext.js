@@ -1,6 +1,9 @@
 // context/authContext.js - UPDATED
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { configureRevenueCat } from '../utils/revenuecat';
+import { API_ENDPOINTS, API_URL } from '../config/api';
+import { apiFetch } from '../utils/api';
 
 // Create the context
 const AuthContext = createContext({});
@@ -21,11 +24,47 @@ export function AuthProvider({ children }) {
       const onboarded = await AsyncStorage.getItem('hasCompletedOnboarding');
       // Check login status
       const token = await AsyncStorage.getItem('userToken');
+      const publicId = await AsyncStorage.getItem('publicUserId');
       
       console.log('Auth check:', { onboarded, token });
       
       setHasCompletedOnboarding(onboarded === 'true');
-      setUserToken(token);
+      if (token) {
+        const isValid = await validateToken(token);
+        if (isValid) {
+          setUserToken(token);
+          let resolvedPublicId = publicId;
+          let resolvedEmail = null;
+          let resolvedName = null;
+          if (!resolvedPublicId) {
+            const profile = await fetchProfile(token);
+            if (profile?.public_id) {
+              resolvedPublicId = profile.public_id;
+              await AsyncStorage.setItem('publicUserId', profile.public_id);
+            }
+            resolvedEmail = profile?.email || null;
+            resolvedName = profile?.full_name || null;
+          } else {
+            const profile = await fetchProfile(token);
+            resolvedEmail = profile?.email || null;
+            resolvedName = profile?.full_name || null;
+          }
+          await configureRevenueCat({
+            token,
+            publicId: resolvedPublicId,
+            email: resolvedEmail,
+            fullName: resolvedName,
+          });
+        } else {
+          await AsyncStorage.removeItem('userToken');
+          await AsyncStorage.removeItem('publicUserId');
+          setUserToken(null);
+          await configureRevenueCat({});
+        }
+      } else {
+        setUserToken(null);
+        await configureRevenueCat({});
+      }
     } catch (error) {
       console.error('Error checking auth status:', error);
     } finally {
@@ -33,10 +72,51 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const signIn = async (token) => {
+  const validateToken = async (token) => {
+    try {
+      const response = await apiFetch(
+        `${API_URL}${API_ENDPOINTS.USER_PROFILE}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (response.status === 401) {
+        return false;
+      }
+      return response.ok;
+    } catch (error) {
+      // If network is down, keep the token and retry later.
+      return true;
+    }
+  };
+
+  const fetchProfile = async (token) => {
+    try {
+      const response = await apiFetch(
+        `${API_URL}${API_ENDPOINTS.USER_PROFILE}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!response.ok) {
+        return null;
+      }
+      return await response.json();
+    } catch (error) {
+      return null;
+    }
+  };
+
+  const signIn = async (token, publicId) => {
     try {
       await AsyncStorage.setItem('userToken', token);
+      if (publicId) {
+        await AsyncStorage.setItem('publicUserId', publicId);
+      }
       setUserToken(token);
+      const profile = await fetchProfile(token);
+      await configureRevenueCat({
+        token,
+        publicId,
+        email: profile?.email || null,
+        fullName: profile?.full_name || null,
+      });
       console.log('User signed in with token:', token);
     } catch (error) {
       console.error('Error signing in:', error);
@@ -47,7 +127,9 @@ export function AuthProvider({ children }) {
   const signOut = async () => {
     try {
       await AsyncStorage.removeItem('userToken');
+      await AsyncStorage.removeItem('publicUserId');
       setUserToken(null);
+      await configureRevenueCat({});
       console.log('User signed out');
     } catch (error) {
       console.error('Error signing out:', error);

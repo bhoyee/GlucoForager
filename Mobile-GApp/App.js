@@ -6,6 +6,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 // Import Auth Provider
 import { AuthProvider, useAuth } from './context/authContext';
+import { configureRevenueCat } from './utils/revenuecat';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Import screens
 import SplashScreen from './screens/SplashScreen';
@@ -83,6 +85,20 @@ function AppNavigator() {
   );
 }
 
+function RevenueCatBootstrap() {
+  const { userToken } = useAuth();
+
+  useEffect(() => {
+    const sync = async () => {
+      const publicId = await AsyncStorage.getItem('publicUserId');
+      await configureRevenueCat({ token: userToken, publicId });
+    };
+    sync();
+  }, [userToken]);
+
+  return null;
+}
+
 // Add imports for View and Text
 import { View, Text } from 'react-native';
 
@@ -92,6 +108,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
+        <RevenueCatBootstrap />
         <AppNavigator />
       </AuthProvider>
     </SafeAreaProvider>

@@ -1,10 +1,14 @@
 // screens/main/ProfileScreen.js
-import React, { useContext } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Linking, Share, Platform } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import React, { useCallback, useContext, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Linking, Share, Platform, ActivityIndicator } from 'react-native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { AuthContext } from '../../context/authContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_ENDPOINTS, API_URL } from '../../config/api';
+import { apiFetch } from '../../utils/api';
+import { configureRevenueCat, getCustomerInfo, isPremiumEntitled, presentCustomerCenter, presentPaywall } from '../../utils/revenuecat';
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
@@ -12,6 +16,126 @@ export default function ProfileScreen() {
   const appStoreUrl = 'itms-apps://itunes.apple.com/app/id0000000000';
   const playStoreUrl = 'market://details?id=com.glucoforager.app';
   const shareUrl = 'https://glucoforager.com/app';
+  const [profile, setProfile] = useState({
+    fullName: '',
+    email: '',
+    subscriptionTier: 'free',
+  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [isUpgrading, setIsUpgrading] = useState(false);
+
+  const syncSubscription = async () => {
+    const token = await AsyncStorage.getItem('userToken');
+    if (!token) return false;
+    const response = await apiFetch(
+      `${API_URL}${API_ENDPOINTS.SUBSCRIPTION_UPGRADE}`,
+      { method: 'POST', headers: { Authorization: `Bearer ${token}` } },
+      { onUnauthorized: signOut }
+    );
+    return response.ok;
+  };
+
+  const getInitials = (name, email) => {
+    const safeName = `${name || ''}`.trim();
+    if (safeName) {
+      const parts = safeName.split(/\s+/).filter(Boolean);
+      const initials = parts.slice(0, 2).map((part) => part[0]?.toUpperCase() || '');
+      return initials.join('') || 'GF';
+    }
+    const emailPrefix = `${email || ''}`.split('@')[0];
+    if (emailPrefix) {
+      return emailPrefix.slice(0, 2).toUpperCase();
+    }
+    return 'GF';
+  };
+
+  const loadProfile = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setLoadError('');
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        setProfile({ fullName: '', email: '', subscriptionTier: 'free' });
+        return;
+      }
+      const response = await apiFetch(
+        `${API_URL}${API_ENDPOINTS.USER_PROFILE}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+        { onUnauthorized: signOut }
+      );
+      if (response.status === 401) {
+        return;
+      }
+      if (!response.ok) {
+        setLoadError('Unable to load profile right now.');
+        return;
+      }
+      const data = await response.json();
+      const nextProfile = {
+        fullName: data.full_name || '',
+        email: data.email || '',
+        subscriptionTier: data.subscription_tier || 'free',
+      };
+      setProfile(nextProfile);
+
+      try {
+        const info = await getCustomerInfo();
+        const hasPremium = isPremiumEntitled(info);
+        if (hasPremium && nextProfile.subscriptionTier !== 'premium') {
+          await syncSubscription();
+          setProfile((prev) => ({ ...prev, subscriptionTier: 'premium' }));
+        }
+      } catch (error) {
+        // Ignore RevenueCat sync errors.
+      }
+    } catch (error) {
+      setLoadError('Unable to load profile right now.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [signOut]);
+
+  const handleUpgrade = async () => {
+    try {
+      setIsUpgrading(true);
+      const token = await AsyncStorage.getItem('userToken');
+      if (token) {
+        const profileResponse = await apiFetch(
+          `${API_URL}${API_ENDPOINTS.USER_PROFILE}`,
+          { headers: { Authorization: `Bearer ${token}` } },
+          { onUnauthorized: signOut }
+        );
+        if (profileResponse.status !== 401 && profileResponse.ok) {
+          const profileData = await profileResponse.json();
+          await configureRevenueCat({
+            token,
+            publicId: profileData?.public_id || null,
+            email: profileData?.email || null,
+            fullName: profileData?.full_name || null,
+          });
+        }
+      }
+      const result = await presentPaywall();
+      const info = result?.customerInfo ? result.customerInfo : await getCustomerInfo();
+      const hasPremium = isPremiumEntitled(info);
+      if (hasPremium) {
+        await syncSubscription();
+        await loadProfile();
+        Alert.alert('Success', 'Premium unlocked.');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Unable to start subscription right now.');
+    } finally {
+      setIsUpgrading(false);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      loadProfile();
+    }, [loadProfile])
+  );
 
   const handleRateUs = async () => {
     const url = Platform.OS === 'ios' ? appStoreUrl : playStoreUrl;
@@ -46,26 +170,50 @@ export default function ProfileScreen() {
       {/* User Info */}
       <View style={styles.userCard}>
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>JD</Text>
+          <Text style={styles.avatarText}>
+            {getInitials(profile.fullName, profile.email)}
+          </Text>
         </View>
         <View style={styles.userInfo}>
-          <Text style={styles.userName}>John Doe</Text>
-          <Text style={styles.userEmail}>john@example.com</Text>
+          {isLoading ? (
+            <View style={styles.loadingRow}>
+              <ActivityIndicator size="small" color={Colors.primary} />
+              <Text style={styles.loadingText}>Loading profile...</Text>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.userName}>
+                {profile.fullName || 'User'}
+              </Text>
+              <Text style={styles.userEmail}>
+                {profile.email || 'No email on file'}
+              </Text>
+            </>
+          )}
+          {loadError ? <Text style={styles.errorText}>{loadError}</Text> : null}
           <View style={styles.membershipBadge}>
             <Ionicons name="star" size={14} color={Colors.warning} />
-            <Text style={styles.membershipText}>Free Plan</Text>
+            <Text style={styles.membershipText}>
+              {profile.subscriptionTier === 'premium' ? 'Premium Plan' : 'Free Plan'}
+            </Text>
           </View>
         </View>
       </View>
 
       {/* Upgrade Card */}
-      <TouchableOpacity style={styles.upgradeCard}>
-        <View>
-          <Text style={styles.upgradeTitle}>Upgrade to Premium</Text>
-          <Text style={styles.upgradeSubtitle}>Unlock all features</Text>
-        </View>
-        <Ionicons name="arrow-forward" size={24} color={Colors.primary} />
-      </TouchableOpacity>
+      {profile.subscriptionTier !== 'premium' && (
+        <TouchableOpacity style={styles.upgradeCard} onPress={handleUpgrade} disabled={isUpgrading}>
+          <View>
+            <Text style={styles.upgradeTitle}>Upgrade to Premium</Text>
+            <Text style={styles.upgradeSubtitle}>Unlock all features</Text>
+          </View>
+          {isUpgrading ? (
+            <ActivityIndicator size="small" color={Colors.primary} />
+          ) : (
+            <Ionicons name="arrow-forward" size={24} color={Colors.primary} />
+          )}
+        </TouchableOpacity>
+      )}
 
       {/* Menu Items */}
       <View style={styles.menuSection}>
@@ -75,6 +223,14 @@ export default function ProfileScreen() {
           <View style={styles.menuItemLeft}>
             <Ionicons name="person-outline" size={22} color={Colors.text} />
             <Text style={styles.menuText}>Edit Personal Info</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.menuItem} onPress={presentCustomerCenter}>
+          <View style={styles.menuItemLeft}>
+            <Ionicons name="card-outline" size={22} color={Colors.text} />
+            <Text style={styles.menuText}>Manage Subscription</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
         </TouchableOpacity>
@@ -152,7 +308,10 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.versionContainer}>
-        <Text style={styles.versionText}>GlucoForager v1.0.0</Text>
+        <View style={styles.versionRow}>
+          <Text style={styles.versionText}>GlucoForager</Text>
+          <Text style={styles.versionSubText}>v1.0</Text>
+        </View>
       </View>
     </ScrollView>
   );
@@ -238,6 +397,21 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 4,
   },
+  loadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  loadingText: {
+    marginLeft: 8,
+    fontSize: 12,
+    color: Colors.textLight,
+  },
+  errorText: {
+    fontSize: 12,
+    color: Colors.error,
+    marginBottom: 6,
+  },
   upgradeCard: {
     backgroundColor: Colors.primary,
     marginHorizontal: 20,
@@ -301,8 +475,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 30,
   },
+  versionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   versionText: {
     fontSize: 14,
     color: Colors.textLight,
+  },
+  versionSubText: {
+    marginLeft: 6,
+    fontSize: 12,
+    color: Colors.textMuted,
   },
 });

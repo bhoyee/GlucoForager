@@ -26,7 +26,8 @@
       "edgeToEdgeEnabled": true,
       "permissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE"
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
       ],
       "package": "com.anonymous.MobileGApp"
     },
@@ -40,6 +41,12 @@
           "photosPermission": "Allow Mobile-GApp to access your photo library to select ingredient images"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "3a807650-6f05-4001-b6e4-703f2c21aef3"
+      }
+    },
+    "owner": "binsalith"
   }
 }
