@@ -31,6 +31,9 @@ export default function HomeScreen() {
   const [suggestedRecipes, setSuggestedRecipes] = useState([]);
   const [isFetchingRecipes, setIsFetchingRecipes] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(true);
+  const [networkError, setNetworkError] = useState(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [userStats, setUserStats] = useState({
     recipesGenerated: 0,
     scansToday: 0,
@@ -45,38 +48,90 @@ export default function HomeScreen() {
     return generated;
   };
 
+  const loadCachedData = async () => {
+    try {
+      const cachedScan = await AsyncStorage.getItem('home_scan_status');
+      if (cachedScan) {
+        const data = JSON.parse(cachedScan);
+        if (typeof data.isPremium === 'boolean') {
+          setUserIsPremium(data.isPremium);
+        }
+        if (typeof data.todayScans === 'number') {
+          setTodayScans(data.todayScans);
+        }
+        if (typeof data.remainingScans === 'number') {
+          setRemainingScans(data.remainingScans);
+        }
+        if (typeof data.dailyLimit === 'number') {
+          setDailyLimit(data.dailyLimit);
+        }
+      }
+
+      const cachedStats = await AsyncStorage.getItem('home_user_stats');
+      if (cachedStats) {
+        const stats = JSON.parse(cachedStats);
+        setUserStats({
+          recipesGenerated: stats.recipesGenerated || 0,
+          scansToday: stats.scansToday || 0,
+          favoritesSaved: stats.favoritesSaved || 0,
+        });
+      }
+
+      const cachedSuggestions = await AsyncStorage.getItem('home_suggestions');
+      if (cachedSuggestions) {
+        const suggestions = JSON.parse(cachedSuggestions);
+        if (Array.isArray(suggestions)) {
+          setSuggestedRecipes(suggestions);
+        }
+      }
+    } catch (error) {
+      // Ignore cache errors.
+    }
+  };
+
+  const loadUserData = useCallback(async () => {
+    try {
+      if (isInitialLoad) {
+        setIsLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
+      setNetworkError(null);
+
+      await loadCachedData();
+
+      const results = await Promise.allSettled([
+        loadScanStatus(),
+        loadUserStats(),
+        loadRecipes(),
+      ]);
+
+      const allFailed = results.every((result) => result.status === 'rejected');
+      if (allFailed) {
+        setNetworkError('Unable to connect. Check your internet or server.');
+      }
+    } catch (error) {
+      setNetworkError('Unable to connect. Check your internet or server.');
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+      setIsInitialLoad(false);
+    }
+  }, [isInitialLoad]);
+
   // Load user data
   useFocusEffect(
     useCallback(() => {
       let isActive = true;
-      const loadUserData = async () => {
-        try {
-          setIsLoading(true);
-
-          // Load user data from AsyncStorage
-          await loadScanStatus();
-          await loadUserStats();
-          await loadRecipes();
-        } catch (error) {
-          console.error('Error loading user data:', error);
-          // Set defaults on error
-          setUserIsPremium(false);
-          setTodayScans(0);
-          setRemainingScans(3);
-          setDailyLimit(3);
-          setUserStats({ recipesGenerated: 0, scansToday: 0, favoritesSaved: 0 });
-        } finally {
-          if (isActive) {
-            setIsLoading(false);
-          }
-        }
+      const loadIfActive = async () => {
+        if (!isActive) return;
+        await loadUserData();
       };
-
-      loadUserData();
+      loadIfActive();
       return () => {
         isActive = false;
       };
-    }, [])
+    }, [loadUserData])
   );
 
   const loadScanStatus = async () => {
@@ -93,7 +148,7 @@ export default function HomeScreen() {
     const response = await apiFetch(
       `${API_URL}${API_ENDPOINTS.SCANS_TODAY}`,
       { headers: { Authorization: `Bearer ${token}`, 'X-Device-Id': deviceId } },
-      { onUnauthorized: signOut }
+      { onUnauthorized: signOut, timeoutMs: 5000 }
     );
     if (response.status === 401) {
       setUserIsPremium(false);
@@ -116,6 +171,17 @@ export default function HomeScreen() {
       typeof data.searches_left === 'number' ? data.searches_left : 0
     );
     setDailyLimit(typeof data.daily_limit === 'number' ? data.daily_limit : 3);
+
+    await AsyncStorage.setItem(
+      'home_scan_status',
+      JSON.stringify({
+        isPremium,
+        todayScans: data.total || 0,
+        remainingScans:
+          typeof data.searches_left === 'number' ? data.searches_left : 0,
+        dailyLimit: typeof data.daily_limit === 'number' ? data.daily_limit : 3,
+      })
+    );
   };
 
   const getMealType = () => {
@@ -135,7 +201,7 @@ export default function HomeScreen() {
     const response = await apiFetch(
       `${API_URL}${API_ENDPOINTS.USER_STATS}`,
       { headers: { Authorization: `Bearer ${token}` } },
-      { onUnauthorized: signOut }
+      { onUnauthorized: signOut, timeoutMs: 5000 }
     );
     if (response.status === 401) {
       setUserStats({ recipesGenerated: 0, scansToday: 0, favoritesSaved: 0 });
@@ -151,6 +217,14 @@ export default function HomeScreen() {
       scansToday: data.scans_today || 0,
       favoritesSaved: data.favorites_saved || 0,
     });
+    await AsyncStorage.setItem(
+      'home_user_stats',
+      JSON.stringify({
+        recipesGenerated: data.recipes_generated || 0,
+        scansToday: data.scans_today || 0,
+        favoritesSaved: data.favorites_saved || 0,
+      })
+    );
   };
 
   const loadRecipes = async () => {
@@ -164,8 +238,7 @@ export default function HomeScreen() {
 
       await fetchSuggestions(token);
     } catch (error) {
-      console.error('Error loading recipes:', error);
-      setSuggestedRecipes([]);
+      // Keep last known suggestions on error.
     } finally {
       setIsFetchingRecipes(false);
     }
@@ -176,7 +249,7 @@ export default function HomeScreen() {
     const response = await apiFetch(
       `${API_URL}${API_ENDPOINTS.RECIPE_SUGGESTIONS}?limit=3&meal_type=${mealType}`,
       { headers: { Authorization: `Bearer ${token}` } },
-      { onUnauthorized: signOut }
+      { onUnauthorized: signOut, timeoutMs: 5000 }
     );
     if (response.status === 401) {
       return;
@@ -184,6 +257,7 @@ export default function HomeScreen() {
     const data = await response.json();
     const items = Array.isArray(data.items) ? data.items : [];
     setSuggestedRecipes(items);
+    await AsyncStorage.setItem('home_suggestions', JSON.stringify(items));
   };
 
   const handleShuffleSuggestions = async () => {
@@ -302,7 +376,6 @@ export default function HomeScreen() {
         );
       }
     } catch (error) {
-      console.error('Error checking scan limit:', error);
       Alert.alert('Error', 'Unable to check scan limit. Please try again.');
     }
   };
@@ -316,7 +389,7 @@ export default function HomeScreen() {
   };
 
   const handleViewRecipeDetail = (recipe) => {
-    navigation.navigate('RecipeDetail', { recipe });
+    navigation.navigate('RecipeDetail', { recipe, source: 'admin' });
   };
 
   const handleViewAllRecipes = () => {
@@ -354,7 +427,7 @@ export default function HomeScreen() {
     );
   };
 
-  if (isLoading) {
+  if (isLoading && isInitialLoad) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={Colors.primary} />
@@ -384,6 +457,21 @@ export default function HomeScreen() {
             <Ionicons name="notifications-outline" size={24} color={Colors.text} />
           </TouchableOpacity>
         </View>
+        {isRefreshing && (
+          <View style={styles.refreshRow}>
+            <ActivityIndicator size="small" color={Colors.primary} />
+            <Text style={styles.refreshText}>Refreshing data…</Text>
+          </View>
+        )}
+        {networkError && (
+          <View style={styles.errorBanner}>
+            <Ionicons name="cloud-offline-outline" size={18} color={Colors.danger} />
+            <Text style={styles.errorText}>{networkError}</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={loadUserData}>
+              <Text style={styles.retryText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Search Counter Card */}
         <View style={styles.counterCard}>
@@ -627,6 +715,18 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingBottom: 20,
   },
+  refreshRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 8,
+    gap: 8,
+  },
+  refreshText: {
+    fontSize: 12,
+    color: Colors.textLight,
+    fontWeight: '500',
+  },
   greeting: {
     fontSize: 28,
     fontWeight: 'bold',
@@ -649,6 +749,34 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: `${Colors.danger}12`,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginHorizontal: 20,
+    marginBottom: 16,
+    gap: 8,
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 13,
+    color: Colors.danger,
+    fontWeight: '600',
+  },
+  retryButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: `${Colors.danger}20`,
+  },
+  retryText: {
+    fontSize: 12,
+    color: Colors.danger,
+    fontWeight: '600',
   },
   counterCard: {
     backgroundColor: Colors.primary,
