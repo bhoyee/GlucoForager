@@ -92,3 +92,44 @@ def send_password_reset_code(to_email: str, code: str) -> None:
         logger.info("Sent password reset email to %s", to_email)
     except Exception as exc:
         logger.exception("Failed to send password reset email to %s", to_email)
+
+
+def send_premium_activated_email(to_email: str, full_name: str | None = None) -> None:
+    if not settings.smtp_host or not settings.smtp_username or not settings.smtp_password:
+        logger.info("SMTP not configured; skipping premium email for %s", to_email)
+        return
+
+    subject = "Your GlucoForager Premium is active"
+    greeting_name = full_name.strip().split(" ")[0] if full_name else "there"
+    html_body = f"""
+    <html>
+      <body style="font-family: Arial, sans-serif; color: #0C1824;">
+        <div style="max-width:520px; margin:0 auto; border:1px solid #e5e7eb; border-radius:12px; padding:20px;">
+          <h2 style="color:#0FB7A5; margin-top:0;">Premium activated</h2>
+          <p>Hi {greeting_name},</p>
+          <p>Your GlucoForager Premium subscription is now active.</p>
+          <ul>
+            <li>Unlimited recipe searches and scans</li>
+            <li>Full access to diabetes-friendly meal planning</li>
+          </ul>
+          <p style="margin-top:16px;">Thanks for supporting GlucoForager.</p>
+          <p style="margin-top:24px; color:#6b7280;">Stay steady, eat well.<br/>The GlucoForager team</p>
+        </div>
+      </body>
+    </html>
+    """
+    msg = _build_message(to_email, subject, html_body)
+
+    try:
+        if (settings.smtp_encryption or "").lower() == "ssl":
+            with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port) as server:
+                server.login(settings.smtp_username, settings.smtp_password)
+                server.send_message(msg)
+        else:
+            with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as server:
+                server.starttls()
+                server.login(settings.smtp_username, settings.smtp_password)
+                server.send_message(msg)
+        logger.info("Sent premium activation email to %s", to_email)
+    except Exception as exc:
+        logger.exception("Failed to send premium activation email to %s", to_email)

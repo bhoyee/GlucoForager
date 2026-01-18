@@ -22,6 +22,7 @@ from .api.endpoints import (
     history,
     meal_plan,
     shopping_list,
+    revenuecat,
 )
 from .core.config import settings
 from .database import Base, engine
@@ -109,3 +110,4 @@ app.include_router(user_router.router, prefix="/api")
 app.include_router(history.router, prefix="/api")
 app.include_router(meal_plan.router, prefix="/api")
 app.include_router(shopping_list.router, prefix="/api")
+app.include_router(revenuecat.router, prefix="/api")

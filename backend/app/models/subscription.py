@@ -15,5 +15,10 @@ class Subscription(Base):
     status = Column(String, default="active")
     started_at = Column(DateTime, default=datetime.utcnow)
     expires_at = Column(DateTime, nullable=True)
+    transaction_id = Column(String, nullable=True)
+    original_transaction_id = Column(String, nullable=True)
+    product_id = Column(String, nullable=True)
+    store = Column(String, nullable=True)
+    environment = Column(String, nullable=True)
 
     user = relationship("User", back_populates="subscriptions")
