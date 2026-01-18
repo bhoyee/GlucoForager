@@ -18,7 +18,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 
 const { width } = Dimensions.get('window');
 
@@ -79,6 +80,10 @@ const mockRecipe = {
 const RecipeDetailsScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
+  const headerTop = Math.max(insets.top, 16);
+  const contentBottomPadding = tabBarHeight + Math.max(insets.bottom, 16);
   const recipeSourceFromRoute = route.params?.source || null;
   const selectedFromRouteRaw = route.params?.selectedIngredients || [];
   const selectedFromRoute = Array.isArray(selectedFromRouteRaw)
@@ -463,7 +468,7 @@ const RecipeDetailsScreen = () => {
   const ingredientProgress = totalIngredients ? (ownedCount / totalIngredients) * 100 : 0;
 
   const renderHeader = () => (
-    <View style={styles.header}>
+    <View style={[styles.header, { top: headerTop }]}>
       <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
         <Ionicons name="arrow-back" size={24} color="#FFF" />
       </TouchableOpacity>
@@ -838,9 +843,12 @@ const RecipeDetailsScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      {renderHeader()}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: contentBottomPadding }}
+      >
         {renderHeroSection()}
-        {renderHeader()}
         <View style={styles.content}>
           {renderStatsBar()}
           {renderTitleSection()}
@@ -865,7 +873,6 @@ const styles = StyleSheet.create({
   },
   header: {
     position: 'absolute',
-    top: 50,
     left: 0,
     right: 0,
     flexDirection: 'row',

@@ -305,7 +305,7 @@ const styles = StyleSheet.create({
   },
   navigation: {
     paddingHorizontal: 20,
-    paddingBottom: 40,
+    paddingBottom: 64,
     paddingTop: 20,
   },
   buttonContainer: {

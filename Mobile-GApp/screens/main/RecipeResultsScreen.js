@@ -10,6 +10,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -17,6 +19,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 export default function RecipeResultsScreen() {
   const navigation = useNavigation();
   const route = useRoute();
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
+  const headerPaddingTop = Math.max(insets.top, 16);
+  const contentBottomPadding = tabBarHeight + Math.max(insets.bottom, 16);
   const {
     photoUri,
     images,
@@ -100,7 +106,7 @@ export default function RecipeResultsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
@@ -119,7 +125,7 @@ export default function RecipeResultsScreen() {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
       >
         {heroImage && (
           <View style={styles.section}>
@@ -297,7 +303,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 60,
     paddingBottom: 20,
     backgroundColor: Colors.background,
   },
@@ -329,7 +334,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   scrollContent: {
-    paddingBottom: 40,
+    paddingTop: 8,
   },
   section: {
     marginBottom: 30,

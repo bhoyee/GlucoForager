@@ -12,6 +12,8 @@ import {
   Image,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -22,6 +24,10 @@ import { apiFetch } from '../../utils/api';
 export default function HomeScreen() {
   const navigation = useNavigation();
   const { signOut } = useAuth();
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
+  const headerPaddingTop = Math.max(insets.top, 16);
+  const contentBottomPadding = tabBarHeight + Math.max(insets.bottom, 16);
   
   const [userIsPremium, setUserIsPremium] = useState(false);
   const [todayScans, setTodayScans] = useState(0);
@@ -439,24 +445,22 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
-      
+      <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
+        <View>
+          <Text style={styles.greeting}>Welcome back</Text>
+          <Text style={styles.subGreeting}>What's cooking today?</Text>
+        </View>
+        <TouchableOpacity 
+          style={styles.notificationButton}
+          onPress={() => navigation.navigate('Profile')}
+        >
+          <Ionicons name="notifications-outline" size={24} color={Colors.text} />
+        </TouchableOpacity>
+      </View>
       <ScrollView 
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>Welcome back</Text>
-            <Text style={styles.subGreeting}>What's cooking today?</Text>
-          </View>
-          <TouchableOpacity 
-            style={styles.notificationButton}
-            onPress={() => navigation.navigate('Profile')}
-          >
-            <Ionicons name="notifications-outline" size={24} color={Colors.text} />
-          </TouchableOpacity>
-        </View>
         {isRefreshing && (
           <View style={styles.refreshRow}>
             <ActivityIndicator size="small" color={Colors.primary} />
@@ -705,14 +709,13 @@ const styles = StyleSheet.create({
     color: Colors.textLight,
   },
   scrollContent: {
-    paddingBottom: 30,
+    paddingTop: 8,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 60,
     paddingBottom: 20,
   },
   refreshRow: {

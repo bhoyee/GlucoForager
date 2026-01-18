@@ -11,6 +11,8 @@ import {
   Alert,
 } from 'react-native';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -22,6 +24,10 @@ export default function ManualInputScreen() {
   const navigation = useNavigation();
   const isFocused = useIsFocused();
   const { signOut } = useAuth();
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
+  const headerPaddingTop = Math.max(insets.top, 16);
+  const contentBottomPadding = tabBarHeight + Math.max(insets.bottom, 16);
   const [ingredients, setIngredients] = useState(['']);
   const [isLoading, setIsLoading] = useState(false);
   const [scanStatus, setScanStatus] = useState({
@@ -179,21 +185,20 @@ export default function ManualInputScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
+      <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Ionicons name="arrow-back" size={24} color={Colors.text} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Type Ingredients</Text>
+        <View style={styles.headerRight} />
+      </View>
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={24} color={Colors.text} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Type Ingredients</Text>
-          <View style={styles.headerRight} />
-        </View>
 
         {/* Instructions */}
         <View style={styles.instructionsContainer}>
@@ -320,14 +325,13 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 40,
+    paddingTop: 8,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
     paddingBottom: 20,
   },
   backButton: {

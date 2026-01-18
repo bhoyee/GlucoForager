@@ -2,6 +2,8 @@
 import React, { useCallback, useContext, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Linking, Share, Platform, ActivityIndicator } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { AuthContext } from '../../context/authContext';
@@ -13,6 +15,10 @@ import { configureRevenueCat, getCustomerInfo, isPremiumEntitled, presentCustome
 export default function ProfileScreen() {
   const navigation = useNavigation();
   const { signOut } = useContext(AuthContext);
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
+  const headerPaddingTop = Math.max(insets.top, 16);
+  const contentBottomPadding = tabBarHeight + Math.max(insets.bottom, 16);
   const appStoreUrl = 'itms-apps://itunes.apple.com/app/id0000000000';
   const playStoreUrl = 'market://details?id=com.glucoforager.app';
   const shareUrl = 'https://glucoforager.com/app';
@@ -158,14 +164,17 @@ export default function ProfileScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Header */}
-      <View style={styles.header}>
+    <View style={styles.container}>
+      <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
         <Text style={styles.title}>Profile</Text>
         <TouchableOpacity onPress={signOut}>
           <Text style={styles.logoutText}>Logout</Text>
         </TouchableOpacity>
       </View>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
+      >
 
       {/* User Info */}
       <View style={styles.userCard}>
@@ -313,7 +322,8 @@ export default function ProfileScreen() {
           <Text style={styles.versionSubText}>v1.0</Text>
         </View>
       </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -322,12 +332,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
+  scrollContent: {
+    paddingBottom: 20,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 60,
     paddingBottom: 20,
   },
   title: {

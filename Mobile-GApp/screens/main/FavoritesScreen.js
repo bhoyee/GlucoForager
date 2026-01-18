@@ -12,6 +12,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -23,6 +25,10 @@ export default function FavoritesScreen() {
   const navigation = useNavigation();
   const isFocused = useIsFocused();
   const { signOut } = useAuth();
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
+  const headerPaddingTop = Math.max(insets.top, 16);
+  const contentBottomPadding = tabBarHeight + Math.max(insets.bottom, 16);
 
   const [favorites, setFavorites] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -130,7 +136,7 @@ export default function FavoritesScreen() {
   if (favorites.length === 0) {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
           <Text style={styles.headerTitle}>My Favorites</Text>
         </View>
         
@@ -157,7 +163,7 @@ export default function FavoritesScreen() {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
@@ -175,6 +181,7 @@ export default function FavoritesScreen() {
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: contentBottomPadding }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -282,7 +289,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 60,
     paddingBottom: 20,
     backgroundColor: Colors.background,
   },

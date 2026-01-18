@@ -4,6 +4,10 @@ import { REVENUECAT_API_KEY, REVENUECAT_ENTITLEMENT } from '../config/revenuecat
 
 let configured = false;
 let currentUserId = null;
+const isAnonymousId = (value) => {
+  if (!value) return true;
+  return `${value}`.startsWith('$RCAnonymousID');
+};
 
 export const configureRevenueCat = async ({ token, publicId, email, fullName } = {}) => {
   if (!REVENUECAT_API_KEY) {
@@ -41,7 +45,7 @@ export const configureRevenueCat = async ({ token, publicId, email, fullName } =
     try {
       const info = await Purchases.getCustomerInfo();
       const originalId = info?.originalAppUserId || '';
-      if (originalId && !originalId.startsWith('$RCAnonymousID')) {
+      if (!isAnonymousId(originalId) && originalId === currentUserId) {
         await Purchases.logOut();
       }
     } catch (error) {

@@ -12,6 +12,7 @@ import {
   Alert,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../../constants/Colors";
 import { LinearGradient } from "expo-linear-gradient";
@@ -21,6 +22,9 @@ import { API_ENDPOINTS, API_URL } from "../../config/api";
 export default function SignUpScreen() {
   const navigation = useNavigation();
   const { signIn } = useAuth();
+  const insets = useSafeAreaInsets();
+  const headerPaddingTop = Math.max(insets.top, 16);
+  const contentBottomPadding = Math.max(insets.bottom, 16) + 24;
   
   const [formData, setFormData] = useState({
     fullName: "",
@@ -88,23 +92,22 @@ export default function SignUpScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={styles.container}
     >
+      <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Ionicons name="arrow-back" size={24} color={Colors.text} />
+        </TouchableOpacity>
+        
+        <TouchableOpacity onPress={() => navigation.navigate("Login")}>
+          <Text style={styles.loginText}>Sign In</Text>
+        </TouchableOpacity>
+      </View>
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={24} color={Colors.text} />
-          </TouchableOpacity>
-          
-          <TouchableOpacity onPress={() => navigation.navigate("Login")}>
-            <Text style={styles.loginText}>Sign In</Text>
-          </TouchableOpacity>
-        </View>
 
         {/* Logo & Title */}
         <View style={styles.logoContainer}>
@@ -294,14 +297,13 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 40,
+    paddingTop: 8,
   },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === "ios" ? 60 : 40,
     paddingBottom: 20,
   },
   backButton: {
@@ -474,6 +476,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
+    marginBottom: 24,
   },
   loginPrompt: {
     color: Colors.textLight,

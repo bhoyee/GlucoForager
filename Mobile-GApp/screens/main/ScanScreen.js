@@ -12,6 +12,8 @@ import {
   ScrollView,
 } from 'react-native';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -39,6 +41,10 @@ export default function ScanScreen() {
   const navigation = useNavigation();
   const isFocused = useIsFocused();
   const { signOut } = useAuth();
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
+  const headerTop = Math.max(insets.top, 16);
+  const bottomPadding = tabBarHeight + Math.max(insets.bottom, 16);
   
   const [userIsPremium, setUserIsPremium] = useState(false);
   const [remainingScans, setRemainingScans] = useState(3);
@@ -283,7 +289,7 @@ export default function ScanScreen() {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { top: headerTop }]}>
         <TouchableOpacity 
           style={styles.backButton}
           onPress={() => navigation.goBack()}
@@ -360,7 +366,7 @@ export default function ScanScreen() {
       )}
 
       {/* Bottom Controls */}
-      <View style={styles.bottomControls}>
+      <View style={[styles.bottomControls, { paddingBottom: bottomPadding }]}>
         {/* Scan Counter */}
         <View style={styles.counterCard}>
           <View style={styles.counterContent}>
@@ -507,7 +513,6 @@ const styles = StyleSheet.create({
   },
   header: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 50 : 40,
     left: 0,
     right: 0,
     flexDirection: 'row',

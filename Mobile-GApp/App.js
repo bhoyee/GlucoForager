@@ -59,7 +59,7 @@ function AppNavigator() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setMinimumSplashDone(true);
-    }, 800);
+    }, 1200);
     return () => clearTimeout(timer);
   }, []);
   
