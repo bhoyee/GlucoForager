@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -8,10 +8,16 @@ import {
   ScrollView,
   Modal,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { countries } from '../../utils/countries';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_ENDPOINTS, API_URL } from '../../config/api';
+import { apiFetch } from '../../utils/api';
+import { useAuth } from '../../context/authContext';
 
 const genders = ['Male', 'Female', 'Other', 'Prefer not to say'];
 
@@ -23,13 +29,120 @@ const flagFromCode = (code) =>
 const countryLabel = (item) => `${flagFromCode(item.code)} ${item.name} (${item.code})`;
 
 export default function PersonalInfoScreen({ navigation }) {
-  const [name, setName] = useState('John Doe');
-  const [gender, setGender] = useState('Male');
-  const [country, setCountry] = useState({ code: 'US', name: 'United States' });
-  const [email, setEmail] = useState('john@example.com');
-  const [password, setPassword] = useState('password123');
+  const { signOut } = useAuth();
+  const [name, setName] = useState('');
+  const [gender, setGender] = useState('');
+  const [country, setCountry] = useState(null);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showCountries, setShowCountries] = useState(false);
   const [showGender, setShowGender] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [loadError, setLoadError] = useState('');
+
+  const resolveCountry = (value) => {
+    if (!value) return null;
+    const normalized = `${value}`.toLowerCase().trim();
+    return (
+      countries.find((item) => item.code.toLowerCase() === normalized) ||
+      countries.find((item) => item.name.toLowerCase() === normalized) ||
+      countries.find((item) => normalized.includes(item.name.toLowerCase())) ||
+      null
+    );
+  };
+
+  const loadProfile = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setLoadError('');
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        setIsLoading(false);
+        return;
+      }
+      const response = await apiFetch(
+        `${API_URL}${API_ENDPOINTS.USER_PROFILE}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+        { onUnauthorized: signOut }
+      );
+      if (response.status === 401) {
+        return;
+      }
+      if (!response.ok) {
+        setLoadError('Unable to load your profile.');
+        return;
+      }
+      const data = await response.json();
+      setName(data.full_name || '');
+      setGender(data.gender || '');
+      setEmail(data.email || '');
+      setCountry(resolveCountry(data.country));
+      setPassword('');
+    } catch (error) {
+      setLoadError('Unable to load your profile.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [signOut]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadProfile();
+    }, [loadProfile])
+  );
+
+  const handleUpdate = async () => {
+    try {
+      if (!email.trim()) {
+        Alert.alert('Missing email', 'Please enter a valid email address.');
+        return;
+      }
+      setIsSaving(true);
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        Alert.alert('Sign in required', 'Please sign in to update your profile.');
+        return;
+      }
+      const payload = {
+        full_name: name.trim() || null,
+        gender: gender || null,
+        country: country?.name || null,
+        email: email.trim(),
+      };
+      if (password.trim()) {
+        payload.password = password.trim();
+      }
+      const response = await apiFetch(
+        `${API_URL}${API_ENDPOINTS.USER_PROFILE}`,
+        {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        },
+        { onUnauthorized: signOut }
+      );
+      if (response.status === 401) {
+        return;
+      }
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        Alert.alert('Update failed', data?.detail || 'Please try again.');
+        return;
+      }
+      const data = await response.json();
+      setName(data.full_name || '');
+      setGender(data.gender || '');
+      setEmail(data.email || '');
+      setCountry(resolveCountry(data.country));
+      setPassword('');
+      Alert.alert('Updated', 'Personal info updated successfully.');
+    } catch (error) {
+      Alert.alert('Error', 'Unable to update your info right now.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -42,18 +155,27 @@ export default function PersonalInfoScreen({ navigation }) {
       </View>
 
       <View style={styles.card}>
+        {isLoading ? (
+          <View style={styles.loadingRow}>
+            <ActivityIndicator size="small" color={Colors.primary} />
+            <Text style={styles.loadingText}>Loading your info...</Text>
+          </View>
+        ) : null}
+        {loadError ? <Text style={styles.errorText}>{loadError}</Text> : null}
         <Text style={styles.label}>Full name</Text>
         <TextInput value={name} onChangeText={setName} style={styles.input} />
 
         <Text style={styles.label}>Gender</Text>
         <TouchableOpacity style={styles.select} onPress={() => setShowGender(true)}>
-          <Text style={styles.selectText}>{gender}</Text>
+          <Text style={styles.selectText}>{gender || 'Select gender'}</Text>
           <Ionicons name="chevron-down" size={18} color={Colors.textLight} />
         </TouchableOpacity>
 
         <Text style={styles.label}>Country</Text>
         <TouchableOpacity style={styles.select} onPress={() => setShowCountries(true)}>
-          <Text style={styles.selectText}>{countryLabel(country)}</Text>
+          <Text style={styles.selectText}>
+            {country ? countryLabel(country) : 'Select country'}
+          </Text>
           <Ionicons name="chevron-down" size={18} color={Colors.textLight} />
         </TouchableOpacity>
 
@@ -72,18 +194,26 @@ export default function PersonalInfoScreen({ navigation }) {
           onChangeText={setPassword}
           secureTextEntry
           style={styles.input}
+          placeholder="Update password"
         />
       </View>
 
       <TouchableOpacity
         style={styles.updateButton}
-        onPress={() => Alert.alert('Updated', 'Personal info updated (mock).')}
+        onPress={handleUpdate}
+        disabled={isSaving}
       >
-        <Ionicons name="save-outline" size={18} color="white" />
-        <Text style={styles.updateText}>Update</Text>
+        {isSaving ? (
+          <ActivityIndicator size="small" color="white" />
+        ) : (
+          <>
+            <Ionicons name="save-outline" size={18} color="white" />
+            <Text style={styles.updateText}>Update</Text>
+          </>
+        )}
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.logoutButton}>
+      <TouchableOpacity style={styles.logoutButton} onPress={signOut}>
         <Ionicons name="log-out-outline" size={18} color={Colors.primary} />
         <Text style={styles.logoutText}>Log out</Text>
       </TouchableOpacity>
@@ -127,7 +257,9 @@ export default function PersonalInfoScreen({ navigation }) {
                   <Text style={styles.countryText} numberOfLines={2}>
                     {countryLabel(item)}
                   </Text>
-                  {item.code === country.code && <Ionicons name="checkmark" size={18} color={Colors.primary} />}
+                  {item.code === country?.code && (
+                    <Ionicons name="checkmark" size={18} color={Colors.primary} />
+                  )}
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -242,6 +374,21 @@ const styles = StyleSheet.create({
   updateText: {
     color: 'white',
     fontWeight: '600',
+  },
+  loadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  loadingText: {
+    marginLeft: 8,
+    color: Colors.textLight,
+    fontSize: 13,
+  },
+  errorText: {
+    color: Colors.error,
+    fontSize: 13,
+    marginBottom: 10,
   },
   logoutButton: {
     marginTop: 20,

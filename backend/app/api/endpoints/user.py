@@ -1,9 +1,11 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends, Header, HTTPException, status
+from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
 from ...database import get_db
+from ...core.security import get_password_hash
 from ...models.ai_request import AIRequest
 from ...models.favorite import Favorite
 from ...models.recipe_history import RecipeHistory
@@ -17,7 +19,65 @@ router = APIRouter(prefix="/user", tags=["user"])
 def profile(current_user: User = Depends(get_current_user)):
     return {
         "id": current_user.id,
+        "public_id": current_user.public_id,
         "email": current_user.email,
+        "full_name": current_user.full_name,
+        "gender": current_user.gender,
+        "country": current_user.country,
+        "subscription_tier": current_user.subscription_tier,
+    }
+
+
+class ProfileUpdate(BaseModel):
+    full_name: str | None = None
+    gender: str | None = None
+    country: str | None = None
+    email: EmailStr | None = None
+    password: str | None = None
+
+
+@router.patch("/profile")
+def update_profile(
+    payload: ProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if payload.email:
+        new_email = payload.email.lower()
+        if new_email != current_user.email:
+            exists = db.query(User).filter(User.email == new_email).first()
+            if exists:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Email already in use",
+                )
+            current_user.email = new_email
+
+    if payload.full_name is not None:
+        current_user.full_name = payload.full_name.strip() or None
+    if payload.gender is not None:
+        current_user.gender = payload.gender
+    if payload.country is not None:
+        current_user.country = payload.country
+
+    if payload.password:
+        if len(payload.password) < 6:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Password must be at least 6 characters",
+            )
+        current_user.hashed_password = get_password_hash(payload.password)
+
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
+    return {
+        "id": current_user.id,
+        "public_id": current_user.public_id,
+        "email": current_user.email,
+        "full_name": current_user.full_name,
+        "gender": current_user.gender,
+        "country": current_user.country,
         "subscription_tier": current_user.subscription_tier,
     }
 

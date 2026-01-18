@@ -1,6 +1,7 @@
 import hashlib
 import logging
 import secrets
+import uuid
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -26,6 +27,7 @@ class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
     message: str | None = None
+    public_id: str | None = None
 
 
 class UserCreate(BaseModel):
@@ -103,6 +105,7 @@ def signup(payload: UserCreate, db: Session = Depends(get_db)):
             full_name=payload.full_name,
             gender=payload.gender,
             country=payload.country,
+            public_id=str(uuid.uuid4()),
         )
         db.add(user)
         db.commit()
@@ -112,7 +115,7 @@ def signup(payload: UserCreate, db: Session = Depends(get_db)):
             send_welcome_email(payload.email, payload.full_name)
         except Exception:
             logger.exception("Welcome email failed for email=%s", payload.email)
-        return Token(access_token=token, message="Signup successful")
+        return Token(access_token=token, message="Signup successful", public_id=user.public_id)
     except HTTPException:
         # Bubble up expected API errors unchanged.
         raise
@@ -146,7 +149,7 @@ def login(
 
     login_throttler.record_success(identifier)
     token = create_access_token({"sub": str(user.id)})
-    return Token(access_token=token, message="Login successful")
+    return Token(access_token=token, message="Login successful", public_id=user.public_id)
 
 
 @router.post("/login", response_model=Token)
@@ -178,7 +181,7 @@ def login_alias(
 
     login_throttler.record_success(identifier)
     token = create_access_token({"sub": str(user.id)})
-    return Token(access_token=token, message="Login successful")
+    return Token(access_token=token, message="Login successful", public_id=user.public_id)
 
 
 @router.post("/forgot-password")
