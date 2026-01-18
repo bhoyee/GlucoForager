@@ -74,7 +74,7 @@ function FavoritesStackNavigator() {
         animation: 'slide_from_right'
       }}
     >
-      <FavoritesStack.Screen name="Favorites" component={FavoritesScreen} />
+      <FavoritesStack.Screen name="FavoritesMain" component={FavoritesScreen} />
       <FavoritesStack.Screen name="RecipeDetail" component={RecipeDetailScreen} />
       <FavoritesStack.Screen name="StartCooking" component={StartCookingScreen} />
     </FavoritesStack.Navigator>
@@ -91,7 +91,7 @@ function ProfileStackNavigator() {
         animation: 'slide_from_right'
       }}
     >
-      <ProfileStack.Screen name="Profile" component={ProfileScreen} />
+      <ProfileStack.Screen name="ProfileMain" component={ProfileScreen} />
       <ProfileStack.Screen name="PersonalInfo" component={PersonalInfoScreen} />
       <ProfileStack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
       <ProfileStack.Screen name="Terms" component={TermsScreen} />
