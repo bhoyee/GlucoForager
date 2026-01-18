@@ -189,6 +189,7 @@ class AIRecipeGenerator:
                                 description = "Diabetes-friendly option with " + ", ".join(parts) + "."
                         item.setdefault("description", description or "Diabetes-friendly recipe.")
                         item.setdefault("instructions", item.get("instructions") or [])
+                        item.setdefault("tips", item.get("tips") or [])
                         item.setdefault("ingredients", item.get("ingredients") or [])
                         item.setdefault("prep_time", item.get("prep_time", 0))
                         item.setdefault("cook_time", item.get("cook_time", 0))

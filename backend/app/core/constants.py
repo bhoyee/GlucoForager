@@ -39,7 +39,8 @@ REQUIREMENTS FOR EACH RECIPE:
 5. Nutritional info PER SERVING: calories, carbs, protein, fat, fiber, sugar, sodium
 6. Short description (1-2 sentences) describing why it is diabetes-friendly
 7. Diabetes analysis: glycemic impact, carb type, safety rating
-8. Tags: diabetes-friendly, low-carb, etc.
+8. Diabetes management tips: 3-5 concise tips (array of strings)
+9. Tags: diabetes-friendly, low-carb, etc.
 
 NUTRITIONAL CONSTRAINTS:
 - Calories: 250-400 per serving
@@ -75,6 +76,7 @@ FORMAT: Return VALID JSON with this EXACT structure:
         "carb_type": "Complex carbohydrates",
         "safety_rating": "Excellent"
       },
+      "tips": ["Tip 1", "Tip 2", "Tip 3"],
       "tags": ["diabetes-friendly", "low-carb"]
     },
     {
