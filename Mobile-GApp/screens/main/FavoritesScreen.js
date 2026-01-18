@@ -1,5 +1,5 @@
 // screens/main/FavoritesScreen.js
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -9,189 +9,136 @@ import {
   Image,
   Alert,
   RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
-
-// Mock favorite recipes data
-const MOCK_FAVORITES = [
-  {
-    id: '1',
-    name: 'Low-Carb Chicken Salad',
-    description: 'High protein, low carb chicken salad with fresh vegetables',
-    image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c',
-    rating: 4.8,
-    prepTime: '15 min',
-    calories: 320,
-    isGlutenFree: true,
-    isVegan: false,
-    lastViewed: '2 hours ago',
-  },
-  {
-    id: '2',
-    name: 'Quinoa Buddha Bowl',
-    description: 'Nutrient-packed bowl with quinoa, avocado, and roasted veggies',
-    image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd',
-    rating: 4.6,
-    prepTime: '20 min',
-    calories: 450,
-    isGlutenFree: true,
-    isVegan: true,
-    lastViewed: '1 day ago',
-  },
-  {
-    id: '3',
-    name: 'Salmon with Asparagus',
-    description: 'Omega-3 rich salmon with lemon butter asparagus',
-    image: 'https://images.unsplash.com/photo-1467003909585-2f8a72700288',
-    rating: 4.9,
-    prepTime: '25 min',
-    calories: 380,
-    isGlutenFree: true,
-    isVegan: false,
-    lastViewed: '3 days ago',
-  },
-  {
-    id: '4',
-    name: 'Berry Protein Smoothie',
-    description: 'Antioxidant-rich smoothie with whey protein',
-    image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4',
-    rating: 4.5,
-    prepTime: '5 min',
-    calories: 280,
-    isGlutenFree: true,
-    isVegan: false,
-    lastViewed: '1 week ago',
-  },
-  {
-    id: '5',
-    name: 'Zucchini Noodles with Pesto',
-    description: 'Low-carb zucchini noodles with fresh basil pesto',
-    image: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d',
-    rating: 4.7,
-    prepTime: '18 min',
-    calories: 290,
-    isGlutenFree: true,
-    isVegan: true,
-    lastViewed: '2 weeks ago',
-  },
-];
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_ENDPOINTS, API_URL } from '../../config/api';
+import { apiFetch } from '../../utils/api';
+import { useAuth } from '../../context/authContext';
 
 export default function FavoritesScreen() {
   const navigation = useNavigation();
   const isFocused = useIsFocused();
-  
-  const [favorites, setFavorites] = useState(MOCK_FAVORITES);
-  const [showMockData, setShowMockData] = useState(true); // Toggle for demo
-  const [refreshing, setRefreshing] = useState(false);
-  const [sortBy, setSortBy] = useState('recent'); // recent, rating, calories
+  const { signOut } = useAuth();
 
-  // Simulate loading real data (empty array for production)
-  const realUserFavorites = [];
+  const [favorites, setFavorites] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const getRecipeTimeValue = (recipe) => {
+    const prepRaw =
+      recipe?.prep_time_minutes ??
+      recipe?.prepTime ??
+      recipe?.prep_time ??
+      null;
+    const cookRaw = recipe?.cook_time_minutes ?? recipe?.cookTime ?? recipe?.cook_time ?? null;
+    const prep = typeof prepRaw === 'number' ? prepRaw : parseFloat(prepRaw);
+    const cook = typeof cookRaw === 'number' ? cookRaw : parseFloat(cookRaw);
+    if (Number.isFinite(prep) || Number.isFinite(cook)) {
+      const total = (Number.isFinite(prep) ? prep : 0) + (Number.isFinite(cook) ? cook : 0);
+      return total ? `${total} min` : 'Time N/A';
+    }
+    const totalRaw = recipe?.total_time ?? recipe?.totalTime ?? recipe?.time ?? null;
+    const total = typeof totalRaw === 'number' ? totalRaw : parseFloat(totalRaw);
+    if (Number.isFinite(total)) {
+      return `${total} min`;
+    }
+    return 'Time N/A';
+  };
+
+  const getCaloriesValue = (nutrition) => {
+    if (!nutrition) return 'N/A';
+    const raw = nutrition.calories ?? nutrition.calorie ?? null;
+    if (raw === null || raw === undefined || raw === '') return 'N/A';
+    const numeric = typeof raw === 'number' ? raw : parseFloat(raw);
+    return Number.isFinite(numeric) ? `${numeric}` : `${raw}`;
+  };
+
+  const normalizeFavorite = (item, index) => {
+    const recipe = item.recipe || {};
+    const nutrition = recipe.nutrition || recipe.nutrition_per_serving || {};
+    return {
+      id: item.id || `${index}`,
+      favoriteId: item.id || `${index}`,
+      recipeId: recipe.id || null,
+      recipe,
+      name: recipe.title || recipe.name || item.title || 'Recipe',
+      description: recipe.description || 'Diabetes-friendly recipe.',
+      image: recipe.image_url || recipe.image || '',
+      time: getRecipeTimeValue(recipe),
+      calories: getCaloriesValue(nutrition),
+    };
+  };
+
+  const loadFavorites = useCallback(async () => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        setFavorites([]);
+        return;
+      }
+      const response = await apiFetch(
+        `${API_URL}${API_ENDPOINTS.FAVORITES}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+        { onUnauthorized: signOut }
+      );
+      if (response.status === 401) {
+        setFavorites([]);
+        return;
+      }
+      const data = await response.json();
+      const items = Array.isArray(data.items) ? data.items : [];
+      setFavorites(items.map(normalizeFavorite));
+    } catch (error) {
+      Alert.alert('Error', 'Unable to load favorites right now.');
+    } finally {
+      setIsLoading(false);
+      setRefreshing(false);
+    }
+  }, [signOut]);
+
+  useEffect(() => {
+    if (isFocused) {
+      setIsLoading(true);
+      loadFavorites();
+    }
+  }, [isFocused, loadFavorites]);
 
   const onRefresh = () => {
     setRefreshing(true);
-    // Simulate API call
-    setTimeout(() => {
-      setRefreshing(false);
-      Alert.alert('Refreshed', 'Your favorites have been updated.');
-    }, 1500);
-  };
-
-  const removeFromFavorites = (id) => {
-    Alert.alert(
-      'Remove Favorite',
-      'Are you sure you want to remove this recipe from favorites?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: () => {
-            const updatedFavorites = favorites.filter(item => item.id !== id);
-            setFavorites(updatedFavorites);
-            if (updatedFavorites.length === 0) {
-              setShowMockData(false);
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const clearAllFavorites = () => {
-    if (favorites.length === 0) return;
-    
-    Alert.alert(
-      'Clear All Favorites',
-      'Are you sure you want to remove all recipes from favorites?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear All',
-          style: 'destructive',
-          onPress: () => {
-            setFavorites([]);
-            setShowMockData(false);
-          },
-        },
-      ]
-    );
-  };
-
-  const sortFavorites = (type) => {
-    setSortBy(type);
-    let sorted = [...favorites];
-    
-    switch (type) {
-      case 'recent':
-        // Already sorted by recent in mock data
-        break;
-      case 'rating':
-        sorted.sort((a, b) => b.rating - a.rating);
-        break;
-      case 'calories':
-        sorted.sort((a, b) => a.calories - b.calories);
-        break;
-    }
-    
-    setFavorites(sorted);
+    loadFavorites();
   };
 
   const navigateToRecipe = (recipe) => {
-    navigation.navigate('RecipeDetail', { recipe });
+    const source = recipe.recipeId || recipe.recipe?.id ? 'admin' : 'ai';
+    navigation.navigate('RecipeDetail', { recipe: recipe.recipe || recipe, source });
   };
 
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+        <Text style={styles.loadingText}>Loading favorites...</Text>
+      </View>
+    );
+  }
+
   // Show empty state if no favorites
-  if (!showMockData || favorites.length === 0) {
+  if (favorites.length === 0) {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>My Favorites</Text>
-          <TouchableOpacity 
-            style={styles.mockToggle}
-            onPress={() => setShowMockData(!showMockData)}
-          >
-            <Ionicons 
-              name={showMockData ? "eye-off-outline" : "eye-outline"} 
-              size={24} 
-              color={Colors.primary} 
-            />
-            <Text style={styles.mockToggleText}>
-              {showMockData ? "Hide Mock" : "Show Mock"}
-            </Text>
-          </TouchableOpacity>
         </View>
         
         <View style={styles.emptyContainer}>
           <Ionicons name="heart-outline" size={100} color={Colors.textLight} />
           <Text style={styles.emptyTitle}>No Favorites Yet</Text>
           <Text style={styles.emptySubtitle}>
-            {showMockData 
-              ? 'Mock data is hidden. Toggle to show sample favorites.'
-              : 'Save recipes you love to see them here'
-            }
+            Save recipes you love to see them here
           </Text>
           
           <TouchableOpacity 
@@ -200,14 +147,6 @@ export default function FavoritesScreen() {
           >
             <Ionicons name="restaurant-outline" size={20} color="white" />
             <Text style={styles.buttonText}>Browse Recipes</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.button, styles.secondaryButton]}
-            onPress={() => setShowMockData(true)}
-          >
-            <Ionicons name="color-wand-outline" size={20} color={Colors.primary} />
-            <Text style={styles.secondaryButtonText}>Show Sample Favorites</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -219,70 +158,17 @@ export default function FavoritesScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <View>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Ionicons name="arrow-back" size={22} color={Colors.text} />
+        </TouchableOpacity>
+        <View style={styles.headerText}>
           <Text style={styles.headerTitle}>My Favorites</Text>
           <Text style={styles.headerSubtitle}>{favorites.length} saved recipes</Text>
         </View>
         
-        <TouchableOpacity 
-          style={styles.mockToggle}
-          onPress={() => setShowMockData(!showMockData)}
-        >
-          <Ionicons 
-            name={showMockData ? "eye-off-outline" : "eye-outline"} 
-            size={24} 
-            color={Colors.primary} 
-          />
-          <Text style={styles.mockToggleText}>
-            {showMockData ? "Hide Mock" : "Show Mock"}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Sort Options */}
-      <View style={styles.sortContainer}>
-        <Text style={styles.sortLabel}>Sort by:</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sortButtons}>
-          <TouchableOpacity 
-            style={[styles.sortButton, sortBy === 'recent' && styles.sortButtonActive]}
-            onPress={() => sortFavorites('recent')}
-          >
-            <Ionicons name="time-outline" size={16} color={sortBy === 'recent' ? 'white' : Colors.text} />
-            <Text style={[styles.sortButtonText, sortBy === 'recent' && styles.sortButtonTextActive]}>
-              Recent
-            </Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.sortButton, sortBy === 'rating' && styles.sortButtonActive]}
-            onPress={() => sortFavorites('rating')}
-          >
-            <Ionicons name="star-outline" size={16} color={sortBy === 'rating' ? 'white' : Colors.text} />
-            <Text style={[styles.sortButtonText, sortBy === 'rating' && styles.sortButtonTextActive]}>
-              Rating
-            </Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.sortButton, sortBy === 'calories' && styles.sortButtonActive]}
-            onPress={() => sortFavorites('calories')}
-          >
-            <Ionicons name="flame-outline" size={16} color={sortBy === 'calories' ? 'white' : Colors.text} />
-            <Text style={[styles.sortButtonText, sortBy === 'calories' && styles.sortButtonTextActive]}>
-              Calories
-            </Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.sortButton, styles.clearButton]}
-            onPress={clearAllFavorites}
-          >
-            <Ionicons name="trash-outline" size={16} color={Colors.danger} />
-            <Text style={[styles.sortButtonText, { color: Colors.danger }]}>
-              Clear All
-            </Text>
-          </TouchableOpacity>
-        </ScrollView>
       </View>
 
       {/* Favorites List */}
@@ -312,24 +198,23 @@ export default function FavoritesScreen() {
                 defaultSource={{ uri: 'https://via.placeholder.com/300x200/CCCCCC/666666?text=Recipe+Image' }}
               />
               <View style={styles.imageOverlay}>
-                <View style={styles.ratingBadge}>
-                  <Ionicons name="star" size={12} color="#FFD700" />
-                  <Text style={styles.ratingText}>{item.rating}</Text>
+                <View style={styles.favoriteBadge}>
+                  <Ionicons name="heart" size={12} color="white" />
+                  <Text style={styles.favoriteBadgeText}>Saved</Text>
                 </View>
-                <TouchableOpacity
-                  style={styles.heartButton}
-                  onPress={() => removeFromFavorites(item.id)}
-                >
-                  <Ionicons name="heart" size={20} color={Colors.danger} />
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity
+                style={styles.removeButton}
+                onPress={() => removeFromFavorites(item.favoriteId)}
+              >
+                <Ionicons name="trash-outline" size={16} color="white" />
+              </TouchableOpacity>
             </View>
+          </View>
 
             {/* Recipe Info */}
             <View style={styles.recipeInfo}>
               <View style={styles.recipeHeader}>
                 <Text style={styles.recipeName} numberOfLines={1}>{item.name}</Text>
-                <Text style={styles.lastViewed}>{item.lastViewed}</Text>
               </View>
               
               <Text style={styles.recipeDescription} numberOfLines={2}>
@@ -339,44 +224,52 @@ export default function FavoritesScreen() {
               <View style={styles.recipeMeta}>
                 <View style={styles.metaItem}>
                   <Ionicons name="time-outline" size={14} color={Colors.textLight} />
-                  <Text style={styles.metaText}>{item.prepTime}</Text>
+                  <Text style={styles.metaText}>{item.time}</Text>
                 </View>
                 
                 <View style={styles.metaItem}>
                   <Ionicons name="flame-outline" size={14} color={Colors.textLight} />
                   <Text style={styles.metaText}>{item.calories} cal</Text>
                 </View>
-                
-                {item.isGlutenFree && (
-                  <View style={[styles.metaItem, styles.badge]}>
-                    <Text style={styles.badgeText}>GF</Text>
-                  </View>
-                )}
-                
-                {item.isVegan && (
-                  <View style={[styles.metaItem, styles.badge, styles.veganBadge]}>
-                    <Text style={styles.badgeText}>Vegan</Text>
-                  </View>
-                )}
               </View>
             </View>
           </TouchableOpacity>
         ))}
-
-        {/* Info Box */}
-        <View style={styles.infoBox}>
-          <Ionicons name="information-circle-outline" size={24} color={Colors.primary} />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoTitle}>Demo Mode Active</Text>
-            <Text style={styles.infoText}>
-              This is showing sample favorite recipes. In production, users will see their actual saved recipes.
-              Toggle "Hide Mock" to see the empty state.
-            </Text>
-          </View>
-        </View>
       </ScrollView>
     </View>
   );
+
+  function removeFromFavorites(favoriteId) {
+    Alert.alert(
+      'Remove Favorite',
+      'Are you sure you want to remove this recipe from favorites?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const token = await AsyncStorage.getItem('userToken');
+              if (!token) return;
+              const response = await apiFetch(
+                `${API_URL}${API_ENDPOINTS.FAVORITES}/${favoriteId}`,
+                { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } },
+                { onUnauthorized: signOut }
+              );
+              if (!response.ok) {
+                Alert.alert('Error', 'Unable to remove favorite right now.');
+                return;
+              }
+              setFavorites((prev) => prev.filter((item) => item.favoriteId !== favoriteId));
+            } catch (error) {
+              Alert.alert('Error', 'Unable to remove favorite right now.');
+            }
+          },
+        },
+      ]
+    );
+  }
 }
 
 const styles = StyleSheet.create({
@@ -393,6 +286,18 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     backgroundColor: Colors.background,
   },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  headerText: {
+    flex: 1,
+  },
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
@@ -403,19 +308,16 @@ const styles = StyleSheet.create({
     color: Colors.textLight,
     marginTop: 4,
   },
-  mockToggle: {
-    flexDirection: 'row',
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(74, 144, 226, 0.1)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
+    backgroundColor: Colors.background,
   },
-  mockToggleText: {
-    color: Colors.primary,
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 6,
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: Colors.textLight,
   },
   emptyContainer: {
     flex: 1,
@@ -454,53 +356,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 8,
   },
-  secondaryButton: {
-    backgroundColor: 'rgba(74, 144, 226, 0.1)',
-  },
-  secondaryButtonText: {
-    color: Colors.primary,
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  sortContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.05)',
-  },
-  sortLabel: {
-    fontSize: 14,
-    color: Colors.textLight,
-    marginBottom: 10,
-  },
-  sortButtons: {
-    flexDirection: 'row',
-  },
-  sortButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginRight: 10,
-  },
-  sortButtonActive: {
-    backgroundColor: Colors.primary,
-  },
-  sortButtonText: {
-    color: Colors.text,
-    fontSize: 14,
-    fontWeight: '500',
-    marginLeft: 6,
-  },
-  sortButtonTextActive: {
-    color: 'white',
-  },
-  clearButton: {
-    backgroundColor: 'rgba(255, 59, 48, 0.1)',
-  },
   scrollView: {
     flex: 1,
     paddingHorizontal: 20,
@@ -534,7 +389,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 12,
   },
-  ratingBadge: {
+  favoriteBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.7)',
@@ -542,17 +397,17 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 12,
   },
-  ratingText: {
+  favoriteBadgeText: {
     color: 'white',
     fontSize: 12,
     fontWeight: '600',
-    marginLeft: 4,
+    marginLeft: 6,
   },
-  heartButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.9)',
+  removeButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -570,11 +425,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: Colors.text,
     flex: 1,
-  },
-  lastViewed: {
-    fontSize: 12,
-    color: Colors.textLight,
-    marginLeft: 8,
   },
   recipeDescription: {
     fontSize: 14,
@@ -596,42 +446,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textLight,
     marginLeft: 4,
-  },
-  badge: {
-    backgroundColor: 'rgba(74, 144, 226, 0.1)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  veganBadge: {
-    backgroundColor: 'rgba(76, 175, 80, 0.1)',
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: Colors.primary,
-  },
-  infoBox: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(74, 144, 226, 0.05)',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 30,
-    marginTop: 10,
-  },
-  infoContent: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  infoTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.primary,
-    marginBottom: 4,
-  },
-  infoText: {
-    fontSize: 14,
-    color: Colors.textLight,
-    lineHeight: 18,
   },
 });

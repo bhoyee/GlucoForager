@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -21,7 +22,12 @@ def list_favorites(
     current_user: User = Depends(get_current_user),
 ):
     favorites = db.query(Favorite).filter(Favorite.user_id == current_user.id).order_by(Favorite.created_at.desc()).all()
-    return {"items": [{"title": f.title, "recipe": f.recipe, "created_at": f.created_at} for f in favorites]}
+    return {
+        "items": [
+            {"id": f.id, "title": f.title, "recipe": f.recipe, "created_at": f.created_at}
+            for f in favorites
+        ]
+    }
 
 
 @router.post("")
@@ -30,9 +36,17 @@ def save_favorite(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Enforce premium-only favorites
-    if current_user.subscription_tier != "premium":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Premium required to save favorites")
+    total = db.query(func.count(Favorite.id)).filter(Favorite.user_id == current_user.id).scalar() or 0
+    if total >= 20:
+        oldest = (
+            db.query(Favorite)
+            .filter(Favorite.user_id == current_user.id)
+            .order_by(Favorite.created_at.asc())
+            .first()
+        )
+        if oldest:
+            db.delete(oldest)
+            db.commit()
     exists = (
         db.query(Favorite)
         .filter(Favorite.user_id == current_user.id, Favorite.title == payload.title)
@@ -44,3 +58,21 @@ def save_favorite(
     db.add(fav)
     db.commit()
     return {"detail": "Saved"}
+
+
+@router.delete("/{favorite_id}")
+def delete_favorite(
+    favorite_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    favorite = (
+        db.query(Favorite)
+        .filter(Favorite.user_id == current_user.id, Favorite.id == favorite_id)
+        .first()
+    )
+    if not favorite:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Favorite not found")
+    db.delete(favorite)
+    db.commit()
+    return {"detail": "Deleted"}

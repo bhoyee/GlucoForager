@@ -108,6 +108,7 @@ export default function ScanResultsScreen() {
       selectedIngredients: selectedItems,
       images: images,
       recipes: recipesFromApi,
+      source: 'vision',
     });
   };
 

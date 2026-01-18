@@ -5,6 +5,8 @@ import {
   ScrollView,
   Image,
   TouchableOpacity,
+  Share,
+  Alert,
   StyleSheet,
   Dimensions,
   Modal,
@@ -77,6 +79,7 @@ const mockRecipe = {
 const RecipeDetailsScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
+  const recipeSourceFromRoute = route.params?.source || null;
   const selectedFromRouteRaw = route.params?.selectedIngredients || [];
   const selectedFromRoute = Array.isArray(selectedFromRouteRaw)
     ? selectedFromRouteRaw
@@ -92,6 +95,7 @@ const RecipeDetailsScreen = () => {
   const [showSafetyModal, setShowSafetyModal] = useState(false);
   const [servings, setServings] = useState(recipe.servings);
   const [expandedTip, setExpandedTip] = useState(null);
+  const [isSavingFavorite, setIsSavingFavorite] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -144,6 +148,7 @@ const RecipeDetailsScreen = () => {
   };
 
   const normalizeRecipe = (item) => {
+    const isAdminRecipe = Boolean(item.id);
     const ingredients = Array.isArray(item.ingredients)
       ? item.ingredients.map((ingredient, index) => ({
           id: ingredient.id || `${item.id || 'ing'}-${index}`,
@@ -163,22 +168,35 @@ const RecipeDetailsScreen = () => {
 
     const nutrition = item.nutrition || item.nutrition_per_serving || {};
 
-    const prepTime = item.prep_time_minutes ?? item.prepTime ?? item.prep_time ?? 0;
-    const cookTime = item.cook_time_minutes ?? item.cookTime ?? item.cook_time ?? 0;
+    const prepTimeRaw = item.prep_time_minutes ?? item.prepTime ?? item.prep_time ?? null;
+    const cookTimeRaw = item.cook_time_minutes ?? item.cookTime ?? item.cook_time ?? null;
+    const prepTime = typeof prepTimeRaw === 'number' ? prepTimeRaw : parseFloat(prepTimeRaw);
+    const cookTime = typeof cookTimeRaw === 'number' ? cookTimeRaw : parseFloat(cookTimeRaw);
+    const totalTimeRaw = item.total_time ?? item.totalTime ?? item.time ?? null;
+    const totalTimeParsed =
+      typeof totalTimeRaw === 'number' ? totalTimeRaw : parseFloat(totalTimeRaw);
+    const hasPrepCook = Number.isFinite(prepTime) || Number.isFinite(cookTime);
+    const totalTime = hasPrepCook
+      ? (Number.isFinite(prepTime) ? prepTime : 0) + (Number.isFinite(cookTime) ? cookTime : 0)
+      : Number.isFinite(totalTimeParsed)
+      ? totalTimeParsed
+      : 0;
 
     return {
       id: item.id || '0',
       title: item.name || item.title || 'Recipe',
       category: item.category || 'Diabetes-Friendly',
-      prepTime,
-      cookTime,
-      totalTime: (prepTime || 0) + (cookTime || 0),
+      prepTime: Number.isFinite(prepTime) ? prepTime : 0,
+      cookTime: Number.isFinite(cookTime) ? cookTime : 0,
+      totalTime,
       servings: item.servings || 1,
       difficulty: item.difficulty || 'Easy',
+      source: recipeSourceFromRoute || (isAdminRecipe ? 'admin' : 'ai'),
       image: item.image_url || item.image || '',
       diabetesAnalysis: item.diabetes_analysis || item.diabetesAnalysis || null,
       isBookmarked: Boolean(item.isBookmarked),
       description: item.description || 'A diabetes-friendly recipe curated for balanced nutrition.',
+      tips: Array.isArray(item.tips) ? item.tips : [],
       nutrition: {
         calories: nutrition.calories || 0,
         carbs: formatNutritionValue(nutrition.carbs),
@@ -335,8 +353,109 @@ const RecipeDetailsScreen = () => {
     return sections;
   };
 
-  const toggleBookmark = () => {
-    setRecipe({ ...recipe, isBookmarked: !recipe.isBookmarked });
+  const toggleBookmark = async () => {
+    if (recipe.isBookmarked || isSavingFavorite) {
+      return;
+    }
+    try {
+      setIsSavingFavorite(true);
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        Alert.alert('Sign in required', 'Please sign in to save favorites.');
+        return;
+      }
+      let recipeToSave = recipe;
+      const needsDetails =
+        Boolean(recipe.id) &&
+        (!recipe.ingredients?.length ||
+          (!recipe.prepTime && !recipe.prep_time_minutes) ||
+          (!recipe.cookTime && !recipe.cook_time_minutes));
+      if (needsDetails) {
+        const detailResponse = await apiFetch(
+          `${API_URL}${API_ENDPOINTS.RECIPE_DETAIL}/${recipe.id}`,
+          { headers: { Authorization: `Bearer ${token}` } },
+          { onUnauthorized: signOut }
+        );
+        if (detailResponse.ok) {
+          const detailData = await detailResponse.json();
+          recipeToSave = { ...recipe, ...detailData };
+        }
+      }
+      const response = await apiFetch(
+        `${API_URL}${API_ENDPOINTS.FAVORITES}`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: recipeToSave.title || recipeToSave.name || recipe.title,
+            recipe: {
+              ...recipeToSave,
+              title: recipeToSave.title || recipeToSave.name || recipe.title,
+              image_url: recipeToSave.image_url || recipeToSave.image,
+              nutrition: recipeToSave.nutrition || recipeToSave.nutrition_per_serving,
+              prep_time_minutes:
+                recipeToSave.prep_time_minutes ??
+                recipeToSave.prepTime ??
+                recipeToSave.prep_time ??
+                recipe.prepTime ??
+                recipe.prep_time_minutes,
+              cook_time_minutes:
+                recipeToSave.cook_time_minutes ??
+                recipeToSave.cookTime ??
+                recipeToSave.cook_time ??
+                recipe.cookTime ??
+                recipe.cook_time_minutes,
+              total_time:
+                recipeToSave.total_time ??
+                recipeToSave.totalTime ??
+                recipeToSave.time ??
+                recipe.totalTime ??
+                recipe.time,
+              ingredients: recipeToSave.ingredients || recipe.ingredients || [],
+              instructions: recipeToSave.instructions || recipe.instructions || [],
+            },
+          }),
+        },
+        { onUnauthorized: signOut }
+      );
+      if (response.status === 403) {
+        Alert.alert(
+          'Premium required',
+          'Saving favorites is available on Premium plans.',
+          [
+            { text: 'OK', style: 'cancel' },
+            { text: 'Upgrade', onPress: () => navigation.navigate('Profile') },
+          ]
+        );
+        return;
+      }
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        Alert.alert('Unable to save', data?.detail || 'Please try again.');
+        return;
+      }
+      setRecipe({ ...recipe, isBookmarked: true });
+      Alert.alert('Saved', 'Recipe added to favorites.');
+    } catch (error) {
+      Alert.alert('Error', 'Unable to save favorite right now.');
+    } finally {
+      setIsSavingFavorite(false);
+    }
+  };
+
+  const handleShare = async () => {
+    try {
+      const messageParts = [
+        `GlucoForager Recipe: ${recipe.title}`,
+        recipe.description || 'Diabetes-friendly recipe',
+        'Find more at https://glucoforager.com',
+      ];
+      await Share.share({
+        message: messageParts.join('\n\n'),
+      });
+    } catch (error) {
+      Alert.alert('Error', 'Unable to open share sheet.');
+    }
   };
 
   const ownedCount = recipe.ingredients.filter(item => item.owned).length;
@@ -348,13 +467,18 @@ const RecipeDetailsScreen = () => {
       <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
         <Ionicons name="arrow-back" size={24} color="#FFF" />
       </TouchableOpacity>
-      <TouchableOpacity style={styles.bookmarkButton} onPress={toggleBookmark}>
-        <Ionicons
-          name={recipe.isBookmarked ? "bookmark" : "bookmark-outline"}
-          size={24}
-          color="#FFF"
-        />
-      </TouchableOpacity>
+      <View style={styles.headerActions}>
+        <TouchableOpacity style={styles.headerIconButton} onPress={handleShare}>
+          <Ionicons name="share-social-outline" size={22} color="#FFF" />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.headerIconButton} onPress={toggleBookmark}>
+          <Ionicons
+            name={recipe.isBookmarked ? "bookmark" : "bookmark-outline"}
+            size={24}
+            color="#FFF"
+          />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
@@ -507,6 +631,7 @@ const RecipeDetailsScreen = () => {
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>Instructions</Text>
       
+      <View style={styles.instructionsList}>
       {recipe.instructions.length === 0 ? (
         <Text style={styles.emptyText}>No instructions available for this recipe yet.</Text>
       ) : (
@@ -519,71 +644,96 @@ const RecipeDetailsScreen = () => {
           </View>
         ))
       )}
+      </View>
     </View>
   );
 
-  const renderTipsSection = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Diabetes Management Tips</Text>
-      
-      <View style={styles.tipsContainer}>
-        {recipe.tips.map((tip, index) => (
-          <TouchableOpacity
-            key={index}
-            style={styles.tipCard}
-            onPress={() => setExpandedTip(expandedTip === index ? null : index)}
-            activeOpacity={0.8}
-          >
-            <View style={styles.tipHeader}>
-              <View style={styles.tipIcon}>
-                <Ionicons name="medical" size={18} color="#4CAF50" />
+  const renderTipsSection = () => {
+    if (recipe.source === 'admin') {
+      return null;
+    }
+    return (
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Diabetes Management Tips</Text>
+        
+        <View style={styles.tipsContainer}>
+          {recipe.tips.map((tip, index) => (
+            <TouchableOpacity
+              key={index}
+              style={styles.tipCard}
+              onPress={() => setExpandedTip(expandedTip === index ? null : index)}
+              activeOpacity={0.8}
+            >
+              <View style={styles.tipHeader}>
+                <View style={styles.tipIcon}>
+                  <Ionicons name="medical" size={18} color="#4CAF50" />
+                </View>
+                <Text style={styles.tipTitle}>Tip {index + 1}</Text>
+                <Ionicons 
+                  name={expandedTip === index ? "chevron-up" : "chevron-down"} 
+                  size={18} 
+                  color="#666" 
+                />
               </View>
-              <Text style={styles.tipTitle}>Tip {index + 1}</Text>
-              <Ionicons 
-                name={expandedTip === index ? "chevron-up" : "chevron-down"} 
-                size={18} 
-                color="#666" 
-              />
-            </View>
-            {expandedTip === index && (
-              <Text style={styles.tipContent}>{tip}</Text>
-            )}
-          </TouchableOpacity>
+              {expandedTip === index && (
+                <Text style={styles.tipContent}>{tip}</Text>
+              )}
+            </TouchableOpacity>
+          ))}
+          {recipe.tips.length === 0 && (
+            <Text style={styles.emptyText}>No tips available for this recipe yet.</Text>
+          )}
+        </View>
+      </View>
+    );
+  };
+
+  const renderNutritionSection = () => {
+    const nutritionCards = [
+      { label: 'Calories', value: `${recipe.nutrition.calories} cal` },
+      { label: 'Carbs', value: recipe.nutrition.carbs },
+      { label: 'Protein', value: recipe.nutrition.protein },
+      { label: 'Fat', value: recipe.nutrition.fat },
+      { label: 'Fiber', value: recipe.nutrition.fiber },
+      { label: 'Sugar', value: recipe.nutrition.sugar },
+    ];
+
+    return (
+      <View style={styles.section}>
+      <Text style={styles.sectionTitle}>Nutrition Facts</Text>
+
+      <View style={styles.nutritionGrid}>
+        {nutritionCards.map((item) => (
+          <View key={item.label} style={styles.nutritionCard}>
+            <Text style={styles.nutritionValue}>{item.value}</Text>
+            <Text style={styles.nutritionLabel}>{item.label}</Text>
+          </View>
         ))}
       </View>
-    </View>
-  );
 
-  const renderNutritionSection = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Nutrition Facts</Text>
-      
-      <View style={styles.nutritionGrid}>
-        <View style={styles.nutritionCard}>
-          <Text style={styles.nutritionValue}>{recipe.nutrition.calories}</Text>
-          <Text style={styles.nutritionLabel}>Calories</Text>
-        </View>
-        
-        <View style={styles.nutritionCard}>
-          <Text style={styles.nutritionValue}>{recipe.nutrition.carbs}</Text>
-          <Text style={styles.nutritionLabel}>Carbs</Text>
-          <Text style={styles.nutritionSubtext}>
-            Fiber: {recipe.nutrition.fiber}
+      <View style={styles.recipeActions}>
+        <TouchableOpacity style={styles.secondaryActionButton} onPress={handleShare}>
+          <Ionicons name="share-social-outline" size={18} color="#4CAF50" />
+          <Text style={styles.secondaryActionText}>Share</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.primaryActionButton}
+          onPress={toggleBookmark}
+          disabled={isSavingFavorite}
+        >
+          <Ionicons
+            name={recipe.isBookmarked ? 'bookmark' : 'bookmark-outline'}
+            size={18}
+            color="#FFF"
+          />
+          <Text style={styles.primaryActionText}>
+            {recipe.isBookmarked ? 'Saved' : 'Add to Favorites'}
           </Text>
-        </View>
-        
-        <View style={styles.nutritionCard}>
-          <Text style={styles.nutritionValue}>{recipe.nutrition.protein}</Text>
-          <Text style={styles.nutritionLabel}>Protein</Text>
-        </View>
-        
-        <View style={styles.nutritionCard}>
-          <Text style={styles.nutritionValue}>{recipe.nutrition.fat}</Text>
-          <Text style={styles.nutritionLabel}>Fat</Text>
-        </View>
+        </TouchableOpacity>
       </View>
     </View>
   );
+  };
 
   const renderSafetyModal = () => {
     const sections = getSafetySections();
@@ -702,21 +852,6 @@ const RecipeDetailsScreen = () => {
         </View>
       </ScrollView>
       
-      <View style={styles.footer}>
-        <TouchableOpacity style={styles.logButton}>
-          <Ionicons name="nutrition-outline" size={20} color="#4CAF50" />
-          <Text style={styles.logButtonText}>Log Meal</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={styles.cookButton}
-          onPress={() => navigation.navigate('StartCooking', { recipe })}
-        >
-          <Ionicons name="restaurant-outline" size={20} color="#FFF" />
-          <Text style={styles.cookButtonText}>Start Cooking</Text>
-        </TouchableOpacity>
-      </View>
-      
       {renderSafetyModal()}
       {renderIngredientsModal()}
     </SafeAreaView>
@@ -738,6 +873,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     zIndex: 10,
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   backButton: {
     width: 44,
     height: 44,
@@ -747,7 +887,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backdropFilter: 'blur(10px)',
   },
-  bookmarkButton: {
+  headerIconButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
@@ -1074,6 +1214,9 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     borderLeftColor: '#4CAF50',
   },
+  instructionsList: {
+    marginTop: 12,
+  },
   stepNumber: {
     width: 30,
     height: 30,
@@ -1138,72 +1281,68 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
+    marginTop: 12,
   },
   nutritionCard: {
-    width: '48%',
+    width: '31%',
     backgroundColor: '#F8FDF9',
     borderRadius: 12,
-    padding: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
     marginBottom: 12,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#E8F5E9',
   },
   nutritionValue: {
-    fontSize: 24,
+    fontSize: 18,
     fontWeight: '700',
     color: '#1B5E20',
     marginBottom: 4,
   },
   nutritionLabel: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#666',
     marginBottom: 2,
+    textAlign: 'center',
+    width: '100%',
   },
-  nutritionSubtext: {
-    fontSize: 12,
-    color: '#4CAF50',
-    fontWeight: '500',
-  },
-  footer: {
+  recipeActions: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: '#FFF',
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
+    marginTop: 16,
+    gap: 12,
   },
-  logButton: {
+  secondaryActionButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
-    backgroundColor: '#F1F8E9',
+    paddingVertical: 12,
     borderRadius: 12,
-    marginRight: 10,
+    borderWidth: 1,
+    borderColor: '#4CAF50',
+    backgroundColor: '#F1F8E9',
   },
-  logButtonText: {
-    fontSize: 16,
+  secondaryActionText: {
+    marginLeft: 8,
+    fontSize: 15,
     fontWeight: '600',
     color: '#4CAF50',
-    marginLeft: 8,
   },
-  cookButton: {
-    flex: 2,
+  primaryActionButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
-    backgroundColor: '#4CAF50',
+    paddingVertical: 12,
     borderRadius: 12,
-    marginLeft: 10,
+    backgroundColor: '#4CAF50',
   },
-  cookButtonText: {
-    fontSize: 16,
+  primaryActionText: {
+    marginLeft: 8,
+    fontSize: 15,
     fontWeight: '600',
     color: '#FFF',
-    marginLeft: 8,
   },
   modalContainer: {
     flex: 1,

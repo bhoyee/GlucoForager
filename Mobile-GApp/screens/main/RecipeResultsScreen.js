@@ -185,6 +185,7 @@ export default function RecipeResultsScreen() {
                   navigation.navigate('RecipeDetail', {
                     recipe,
                     selectedIngredients,
+                    source,
                   })
                 }
               >
