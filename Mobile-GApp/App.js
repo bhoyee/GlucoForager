@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { LogBox, View, Text } from 'react-native';
 
 // Import Auth Provider
 import { AuthProvider, useAuth } from './context/authContext';
@@ -99,11 +100,12 @@ function RevenueCatBootstrap() {
   return null;
 }
 
-// Add imports for View and Text
-import { View, Text } from 'react-native';
-
 export default function App() {
   console.log('App component rendering');
+
+  useEffect(() => {
+    LogBox.ignoreLogs(['[RevenueCat]']);
+  }, []);
   
   return (
     <SafeAreaProvider>

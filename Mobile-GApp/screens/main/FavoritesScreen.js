@@ -28,7 +28,7 @@ export default function FavoritesScreen() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const headerPaddingTop = Math.max(insets.top, 16);
-  const contentBottomPadding = tabBarHeight + Math.max(insets.bottom, 16);
+  const contentBottomPadding = Math.max(tabBarHeight - 12, 8);
 
   const [favorites, setFavorites] = useState([]);
   const [isLoading, setIsLoading] = useState(true);

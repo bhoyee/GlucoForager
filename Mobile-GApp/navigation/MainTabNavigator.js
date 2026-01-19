@@ -110,8 +110,8 @@ export default function MainTabNavigator() {
           backgroundColor: Colors.surface,
           borderTopColor: Colors.border,
           paddingTop: 8,
-          paddingBottom: Math.max(8, insets.bottom),
-          height: 60 + Math.max(0, insets.bottom - 4),
+          paddingBottom: Math.max(18, insets.bottom + 14),
+          height: 72 + Math.max(0, insets.bottom + 14),
         },
         tabBarLabelStyle: {
           fontSize: 12,

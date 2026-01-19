@@ -25,7 +25,7 @@ export default function ScanResultsScreen() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const headerPaddingTop = Math.max(insets.top, 16);
-  const contentBottomPadding = tabBarHeight + Math.max(insets.bottom, 16);
+  const contentBottomPadding = Math.max(tabBarHeight - 12, 8);
   const { images, userIsPremium, scansUsed, detectedIngredients: detectedFromApi, warning, recipes: recipesFromApi } = route.params || {};
   
   const [isLoading, setIsLoading] = useState(true);

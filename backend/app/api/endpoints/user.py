@@ -141,20 +141,27 @@ def user_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    today = date.today()
+    tomorrow = date.fromordinal(today.toordinal() + 1)
     recipe_histories = (
         db.query(RecipeHistory)
-        .filter(RecipeHistory.user_id == current_user.id)
+        .filter(
+            RecipeHistory.user_id == current_user.id,
+            RecipeHistory.created_at >= today,
+            RecipeHistory.created_at < tomorrow,
+        )
         .all()
     )
     recipes_generated = sum(len(row.recipes or []) for row in recipe_histories)
     favorites_saved = (
         db.query(Favorite)
-        .filter(Favorite.user_id == current_user.id)
+        .filter(
+            Favorite.user_id == current_user.id,
+            Favorite.created_at >= today,
+            Favorite.created_at < tomorrow,
+        )
         .count()
     )
-
-    today = date.today()
-    tomorrow = date.fromordinal(today.toordinal() + 1)
     scans_today_count = (
         db.query(AIRequest)
         .filter(

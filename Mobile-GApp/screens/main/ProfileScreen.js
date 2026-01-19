@@ -18,7 +18,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const headerPaddingTop = Math.max(insets.top, 16);
-  const contentBottomPadding = tabBarHeight + Math.max(insets.bottom, 16);
+  const contentBottomPadding = Math.max(insets.bottom + 4, 4);
   const appStoreUrl = 'itms-apps://itunes.apple.com/app/id0000000000';
   const playStoreUrl = 'market://details?id=com.glucoforager.app';
   const shareUrl = 'https://glucoforager.com/app';
@@ -333,7 +333,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   scrollContent: {
-    paddingBottom: 20,
+    paddingBottom: 8,
   },
   header: {
     flexDirection: 'row',
@@ -485,7 +485,7 @@ const styles = StyleSheet.create({
   },
   versionContainer: {
     alignItems: 'center',
-    paddingVertical: 30,
+    paddingVertical: 12,
   },
   versionRow: {
     flexDirection: 'row',

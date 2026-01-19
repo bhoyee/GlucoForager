@@ -19,7 +19,6 @@ import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 
 const { width } = Dimensions.get('window');
 
@@ -81,9 +80,8 @@ const RecipeDetailsScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
   const insets = useSafeAreaInsets();
-  const tabBarHeight = useBottomTabBarHeight();
   const headerTop = Math.max(insets.top, 16);
-  const contentBottomPadding = tabBarHeight + Math.max(insets.bottom, 16);
+  const contentBottomPadding = 0;
   const recipeSourceFromRoute = route.params?.source || null;
   const selectedFromRouteRaw = route.params?.selectedIngredients || [];
   const selectedFromRoute = Array.isArray(selectedFromRouteRaw)
@@ -704,40 +702,40 @@ const RecipeDetailsScreen = () => {
     ];
 
     return (
-      <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Nutrition Facts</Text>
+      <View style={[styles.section, styles.sectionLast]}>
+        <Text style={styles.sectionTitle}>Nutrition Facts</Text>
 
-      <View style={styles.nutritionGrid}>
-        {nutritionCards.map((item) => (
-          <View key={item.label} style={styles.nutritionCard}>
-            <Text style={styles.nutritionValue}>{item.value}</Text>
-            <Text style={styles.nutritionLabel}>{item.label}</Text>
-          </View>
-        ))}
-      </View>
+        <View style={styles.nutritionGrid}>
+          {nutritionCards.map((item) => (
+            <View key={item.label} style={styles.nutritionCard}>
+              <Text style={styles.nutritionValue}>{item.value}</Text>
+              <Text style={styles.nutritionLabel}>{item.label}</Text>
+            </View>
+          ))}
+        </View>
 
-      <View style={styles.recipeActions}>
-        <TouchableOpacity style={styles.secondaryActionButton} onPress={handleShare}>
-          <Ionicons name="share-social-outline" size={18} color="#4CAF50" />
-          <Text style={styles.secondaryActionText}>Share</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.primaryActionButton}
-          onPress={toggleBookmark}
-          disabled={isSavingFavorite}
-        >
-          <Ionicons
-            name={recipe.isBookmarked ? 'bookmark' : 'bookmark-outline'}
-            size={18}
-            color="#FFF"
-          />
-          <Text style={styles.primaryActionText}>
-            {recipe.isBookmarked ? 'Saved' : 'Add to Favorites'}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.recipeActions}>
+          <TouchableOpacity style={styles.secondaryActionButton} onPress={handleShare}>
+            <Ionicons name="share-social-outline" size={18} color="#4CAF50" />
+            <Text style={styles.secondaryActionText}>Share</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.primaryActionButton}
+            onPress={toggleBookmark}
+            disabled={isSavingFavorite}
+          >
+            <Ionicons
+              name={recipe.isBookmarked ? 'bookmark' : 'bookmark-outline'}
+              size={18}
+              color="#FFF"
+            />
+            <Text style={styles.primaryActionText}>
+              {recipe.isBookmarked ? 'Saved' : 'Add to Favorites'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
-  );
+    );
   };
 
   const renderSafetyModal = () => {
@@ -1108,6 +1106,9 @@ const styles = StyleSheet.create({
   section: {
     paddingHorizontal: 20,
     marginBottom: 28,
+  },
+  sectionLast: {
+    marginBottom: 0,
   },
   sectionHeader: {
     flexDirection: 'row',

@@ -12,7 +12,6 @@ import {
   Image,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
@@ -26,9 +25,8 @@ export default function HomeScreen() {
   const navigation = useNavigation();
   const { signOut } = useAuth();
   const insets = useSafeAreaInsets();
-  const tabBarHeight = useBottomTabBarHeight();
   const headerPaddingTop = Math.max(insets.top, 16);
-  const contentBottomPadding = tabBarHeight + Math.max(insets.bottom, 16);
+  const contentBottomPadding = Math.max(insets.bottom + 4, 6);
   
   const [userIsPremium, setUserIsPremium] = useState(false);
   const [todayScans, setTodayScans] = useState(0);
@@ -596,9 +594,13 @@ export default function HomeScreen() {
                   <Text style={styles.recipeName} numberOfLines={2}>
                     {recipe.name || recipe.title}
                   </Text>
-                  <Text style={styles.recipeMatch}>
-                    {getRecipeCalories(recipe)} | {getRecipeProtein(recipe)} | {getRecipeFiber(recipe)}
-                  </Text>
+                  <View style={styles.recipeMetaRow}>
+                    <Text style={[styles.recipeMetaValue, styles.recipeCal]}>{getRecipeCalories(recipe)}</Text>
+                    <Text style={styles.recipeMetaDivider}>|</Text>
+                    <Text style={[styles.recipeMetaValue, styles.recipePro]}>{getRecipeProtein(recipe)}</Text>
+                    <Text style={styles.recipeMetaDivider}>|</Text>
+                    <Text style={[styles.recipeMetaValue, styles.recipeFib]}>{getRecipeFiber(recipe)}</Text>
+                  </View>
                 </View>
               </TouchableOpacity>
             ))}
@@ -646,7 +648,7 @@ export default function HomeScreen() {
           <View style={styles.statsGrid}>
             <View style={styles.statCard}>
               <Text style={styles.statValue}>{userStats.recipesGenerated}</Text>
-              <Text style={styles.statLabel}>Recipes generated</Text>
+              <Text style={styles.statLabel}>Recipes today</Text>
             </View>
             <View style={styles.statCard}>
               <Text style={styles.statValue}>{userStats.scansToday}</Text>
@@ -654,7 +656,7 @@ export default function HomeScreen() {
             </View>
             <View style={styles.statCard}>
               <Text style={styles.statValue}>{userStats.favoritesSaved}</Text>
-              <Text style={styles.statLabel}>Favorites saved</Text>
+              <Text style={styles.statLabel}>Favorites today</Text>
             </View>
           </View>
         </View>
@@ -805,6 +807,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 12,
+    backgroundColor: Colors.error,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
   },
   upgradeText: {
     color: 'white',
@@ -937,9 +943,28 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     lineHeight: 22,
   },
-  recipeMatch: {
+  recipeMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  recipeMetaValue: {
     fontSize: 14,
-    color: Colors.textLight,
+    fontWeight: '600',
+  },
+  recipeMetaDivider: {
+    marginHorizontal: 8,
+    fontSize: 14,
+    color: Colors.textMuted,
+  },
+  recipeCal: {
+    color: Colors.accent,
+  },
+  recipePro: {
+    color: Colors.primary,
+  },
+  recipeFib: {
+    color: Colors.secondary,
   },
   shuffleButton: {
     flexDirection: 'row',
@@ -999,6 +1024,7 @@ const styles = StyleSheet.create({
   },
   statsSection: {
     paddingHorizontal: 20,
+    paddingBottom: 4,
   },
   statsGrid: {
     flexDirection: 'row',

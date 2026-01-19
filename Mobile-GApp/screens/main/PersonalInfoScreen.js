@@ -35,7 +35,7 @@ export default function PersonalInfoScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const headerPaddingTop = Math.max(insets.top, 16);
-  const contentBottomPadding = tabBarHeight + Math.max(insets.bottom, 16);
+  const contentBottomPadding = Math.max(insets.bottom + 4, 4);
   const [name, setName] = useState('');
   const [gender, setGender] = useState('');
   const [country, setCountry] = useState(null);
@@ -313,7 +313,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   scrollContent: {
-    paddingBottom: 24,
+    paddingBottom: 8,
   },
   header: {
     flexDirection: 'row',
@@ -428,7 +428,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 30,
+    marginBottom: 8,
   },
   deleteText: {
     color: Colors.error,
