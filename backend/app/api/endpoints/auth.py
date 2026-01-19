@@ -191,31 +191,33 @@ def forgot_password(payload: ForgotPasswordPayload, db: Session = Depends(get_db
 
     email = _normalize_email(payload.email)
     user = db.query(User).filter(User.email == email).first()
-    if user:
-        now = datetime.utcnow()
-        db.query(PasswordResetToken).filter(
-            PasswordResetToken.user_id == user.id,
-            PasswordResetToken.used_at.is_(None),
-        ).update({PasswordResetToken.used_at: now})
+    if not user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No account found for this email.")
 
-        code = _generate_reset_code()
-        token = PasswordResetToken(
-            user_id=user.id,
-            code_hash=_hash_reset_code(code),
-            expires_at=now + timedelta(minutes=settings.password_reset_code_ttl_minutes),
-        )
-        db.add(token)
-        db.commit()
-        try:
-            send_password_reset_code(email, code)
-        except Exception as exc:
-            logger.exception("Password reset email failed for email=%s", email)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to send reset code",
-            ) from exc
+    now = datetime.utcnow()
+    db.query(PasswordResetToken).filter(
+        PasswordResetToken.user_id == user.id,
+        PasswordResetToken.used_at.is_(None),
+    ).update({PasswordResetToken.used_at: now})
 
-    return {"message": "If that email exists, a reset code has been sent."}
+    code = _generate_reset_code()
+    token = PasswordResetToken(
+        user_id=user.id,
+        code_hash=_hash_reset_code(code),
+        expires_at=now + timedelta(minutes=settings.password_reset_code_ttl_minutes),
+    )
+    db.add(token)
+    db.commit()
+    try:
+        send_password_reset_code(email, code)
+    except Exception as exc:
+        logger.exception("Password reset email failed for email=%s", email)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to send reset code",
+        ) from exc
+
+    return {"message": "Reset code sent. Check your email for the 8-digit code."}
 
 
 @router.post("/reset-password")

@@ -1,3 +1,5 @@
+import hashlib
+import json
 import re
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
@@ -8,11 +10,15 @@ from ...api.dependencies import check_user_access, get_current_user
 from ...database import get_db
 from ...models.user import User
 from ...services.ai_pipeline import AIPipeline
+from ...services.cache_service import CacheService
+from ...services.cost_tracker import record_ai_request
 from ...services.ingredient_classifier import IngredientClassifier
 
 router = APIRouter(prefix="/ai/text", tags=["ai"])
 pipeline = AIPipeline()
 classifier = IngredientClassifier()
+cache = CacheService()
+TEXT_CACHE_TTL_SECONDS = 21600
 
 
 ALLOWED_INGREDIENT_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9\s\-'/%]*$"
@@ -52,6 +58,14 @@ class TextRecipeRequest(BaseModel):
         return value
 
 
+def _cache_key(user_id: int, tier: str, ingredients: list[str], filters: list[str] | None) -> str:
+    normalized = sorted({item.strip().lower() for item in ingredients if item})
+    filter_items = sorted({item.strip().lower() for item in (filters or []) if item})
+    raw = f"{user_id}|{tier}|{','.join(normalized)}|{','.join(filter_items)}"
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
+    return f"text_recipes:{digest}"
+
+
 @router.post("/recipes")
 def generate_from_text(
     payload: TextRecipeRequest,
@@ -73,6 +87,30 @@ def generate_from_text(
             detail="Content not related to food. Please enter real ingredients.",
         )
     ingredients = classified["food"]
+    cache_key = _cache_key(current_user.id, tier, ingredients, payload.filters or [])
+    cached = cache.get(cache_key)
+    if cached:
+        try:
+            cached_recipes = json.loads(cached) if isinstance(cached, str) else cached
+        except json.JSONDecodeError:
+            cached_recipes = None
+        if cached_recipes:
+            record_ai_request(
+                db,
+                current_user.id,
+                tier,
+                "text",
+                model_used="cache",
+                tokens_used=0,
+                cost_estimate=0,
+                device_id=device_id,
+            )
+            return {
+                "results": cached_recipes,
+                "access": access,
+                "filtered_out": classified["non_food"],
+                "classification_source": classified["source"],
+            }
     try:
         recipes = pipeline.text_to_recipes(
             db,
@@ -85,6 +123,7 @@ def generate_from_text(
     except RuntimeError as exc:
         # AI not configured (missing keys) or other pipeline errors
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    cache.set(cache_key, json.dumps(recipes), ttl_seconds=TEXT_CACHE_TTL_SECONDS)
     return {
         "results": recipes,
         "access": access,
