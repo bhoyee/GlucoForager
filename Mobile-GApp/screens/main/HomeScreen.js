@@ -20,6 +20,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
+import { presentPaywall } from '../../utils/revenuecat';
 
 export default function HomeScreen() {
   const navigation = useNavigation();
@@ -409,28 +410,12 @@ export default function HomeScreen() {
     navigation.navigate('Profile');
   };
 
-  // Development reset button (remove in production)
-  const handleResetScans = async () => {
-    if (!__DEV__) return; // Only in development
-    
-    Alert.alert(
-      'Reset Scans (Dev Only)',
-      'This will reset your scan counter to 0.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset',
-          onPress: async () => {
-            try {
-              await loadScanStatus();
-              Alert.alert('Success', 'Scan status refreshed');
-            } catch (error) {
-              Alert.alert('Error', 'Failed to reset scans');
-            }
-          }
-        }
-      ]
-    );
+  const handleUpgradePaywall = async () => {
+    try {
+      await presentPaywall();
+    } catch (error) {
+      Alert.alert('Unavailable', 'Unable to open the premium paywall right now.');
+    }
   };
 
   if (isLoading && isInitialLoad) {
@@ -502,12 +487,12 @@ export default function HomeScreen() {
             </View>
           )}
           
-          {!userIsPremium && remainingScans === 0 && (
+          {!userIsPremium && Number(remainingScans) <= 0 && (
             <TouchableOpacity 
               style={styles.upgradePrompt}
-              onPress={handleUpgradePress}
+              onPress={handleUpgradePaywall}
             >
-              <Text style={styles.upgradeText}>Upgrade to Premium for unlimited scans</Text>
+              <Text style={styles.upgradeText}>Upgrade to Premium</Text>
               <Ionicons name="arrow-forward" size={16} color={Colors.primary} />
             </TouchableOpacity>
           )}
@@ -675,19 +660,6 @@ export default function HomeScreen() {
         </View>
       </ScrollView>
 
-      {/* Development Only: Reset Button */}
-      {__DEV__ && (
-        <TouchableOpacity 
-          style={styles.devResetButton}
-          onPress={handleResetScans}
-          onLongPress={async () => {
-            await loadScanStatus();
-            Alert.alert('Dev Mode', 'Refreshed server scan status');
-          }}
-        >
-          <Ionicons name="bug-outline" size={20} color="white" />
-        </TouchableOpacity>
-      )}
     </View>
   );
 }

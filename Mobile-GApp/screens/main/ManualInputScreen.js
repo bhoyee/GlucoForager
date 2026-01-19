@@ -146,7 +146,7 @@ export default function ManualInputScreen() {
         },
         body: JSON.stringify({ ingredients: normalized }),
         },
-        { onUnauthorized: signOut }
+        { onUnauthorized: signOut, timeoutMs: 45000 }
       );
       if (response.status === 401) {
         return;

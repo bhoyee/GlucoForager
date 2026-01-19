@@ -10,6 +10,7 @@ import {
   Platform,
   ScrollView,
   Alert,
+  Image,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -47,6 +48,11 @@ export default function SignUpScreen() {
     // Validation
     if (!fullName || !email || !password || !confirmPassword) {
       Alert.alert("Error", "Please fill in all fields");
+      return;
+    }
+
+    if (!formData.hasDiabetes) {
+      Alert.alert("Required", "Please confirm if you have diabetes or pre-diabetes.");
       return;
     }
 
@@ -111,14 +117,11 @@ export default function SignUpScreen() {
 
         {/* Logo & Title */}
         <View style={styles.logoContainer}>
-          <LinearGradient
-            colors={["#2E8B57", "#48BB78"]}
-            style={styles.logoGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            <Text style={styles.logo}>🍎</Text>
-          </LinearGradient>
+          <Image
+            source={require("../../assets/logo.png")}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
           <Text style={styles.title}>Create Account</Text>
           <Text style={styles.subtitle}>Join GlucoForager for diabetes-friendly recipes</Text>
         </View>
@@ -329,21 +332,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginBottom: 30,
   },
-  logoGradient: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    justifyContent: "center",
-    alignItems: "center",
+  logoImage: {
+    width: 110,
+    height: 110,
     marginBottom: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  logo: {
-    fontSize: 48,
   },
   title: {
     fontSize: 32,

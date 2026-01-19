@@ -4,6 +4,7 @@ import { REVENUECAT_API_KEY, REVENUECAT_ENTITLEMENT } from '../config/revenuecat
 
 let configured = false;
 let currentUserId = null;
+let hasLoggedInUser = false;
 const isAnonymousId = (value) => {
   if (!value) return true;
   return `${value}`.startsWith('$RCAnonymousID');
@@ -25,6 +26,7 @@ export const configureRevenueCat = async ({ token, publicId, email, fullName } =
     try {
       await Purchases.logIn(userId);
       currentUserId = userId;
+      hasLoggedInUser = true;
     } catch (error) {
       // Ignore login errors; keep anonymous user.
     }
@@ -41,7 +43,11 @@ export const configureRevenueCat = async ({ token, publicId, email, fullName } =
     }
   }
 
-  if (!userId && currentUserId) {
+  if (!userId) {
+    if (!hasLoggedInUser) {
+      currentUserId = null;
+      return;
+    }
     try {
       const info = await Purchases.getCustomerInfo();
       const originalId = info?.originalAppUserId || '';
@@ -52,6 +58,7 @@ export const configureRevenueCat = async ({ token, publicId, email, fullName } =
       // Ignore logout errors.
     } finally {
       currentUserId = null;
+      hasLoggedInUser = false;
     }
   }
 };

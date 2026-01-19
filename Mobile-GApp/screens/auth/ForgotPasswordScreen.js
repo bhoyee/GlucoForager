@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  ScrollView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -61,7 +62,8 @@ export default function ForgotPasswordScreen() {
   };
 
   const submitNewPassword = async () => {
-    if (!code || code.length !== 8) {
+    const trimmedCode = code.trim();
+    if (!trimmedCode || trimmedCode.length !== 8) {
       Alert.alert('Error', 'Please enter the 8-digit code.');
       return;
     }
@@ -88,14 +90,19 @@ export default function ForgotPasswordScreen() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email,
-          code,
+          email: email.trim(),
+          code: trimmedCode,
           new_password: newPassword,
         }),
       });
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data?.detail || data?.message || 'Failed to reset password.');
+        const detail = data?.detail;
+        const message =
+          typeof detail === 'string'
+            ? detail
+            : detail?.message || data?.message || 'Failed to reset password.';
+        throw new Error(message);
       }
 
       Alert.alert('Success', data.message || 'Password updated successfully.', [
@@ -127,13 +134,15 @@ export default function ForgotPasswordScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
-      <View style={styles.content}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color={Colors.text} />
-          </TouchableOpacity>
-        </View>
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={24} color={Colors.text} />
+        </TouchableOpacity>
+      </View>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
 
         {/* Illustration & Title */}
         <View style={styles.illustrationContainer}>
@@ -159,7 +168,7 @@ export default function ForgotPasswordScreen() {
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
-                editable={!isLoading}
+                editable={!isLoading && step === 'request'}
               />
             </View>
           </View>
@@ -271,7 +280,7 @@ export default function ForgotPasswordScreen() {
             <Text style={styles.backToLoginText}>Back to Sign In</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -282,8 +291,10 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
     paddingHorizontal: 20,
+    paddingBottom: 32,
+    paddingTop: 8,
   },
   header: {
     paddingTop: Platform.OS === 'ios' ? 60 : 40,

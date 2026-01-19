@@ -10,6 +10,7 @@ import {
   Platform,
   ScrollView,
   Alert,
+  Image,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
@@ -65,10 +66,6 @@ export default function LoginScreen() {
     }
   };
 
-  const handleSocialLogin = (provider) => {
-    Alert.alert('Coming Soon', `${provider} login will be available soon!`);
-  };
-
   const handleBackPress = () => {
     // Go back to onboarding if coming from there, otherwise go back normally
     if (navigation.canGoBack()) {
@@ -103,14 +100,11 @@ export default function LoginScreen() {
 
         {/* Logo & Title */}
         <View style={styles.logoContainer}>
-          <LinearGradient
-            colors={['#2E8B57', '#48BB78']}
-            style={styles.logoGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            <Text style={styles.logo}>🍎</Text>
-          </LinearGradient>
+          <Image
+            source={require("../../assets/logo.png")}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
           <Text style={styles.title}>Welcome Back</Text>
           <Text style={styles.subtitle}>Sign in to continue to GlucoForager</Text>
         </View>
@@ -200,33 +194,9 @@ export default function LoginScreen() {
             </LinearGradient>
           </TouchableOpacity>
 
-          {/* Divider */}
-          <View style={styles.dividerContainer}>
-            <View style={styles.divider} />
-            <Text style={styles.dividerText}>Or continue with</Text>
-            <View style={styles.divider} />
-          </View>
 
-          {/* Social Login */}
-          <View style={styles.socialContainer}>
-            <TouchableOpacity 
-              style={[styles.socialButton, isLoading && styles.socialButtonDisabled]}
-              onPress={() => handleSocialLogin('Google')}
-              disabled={isLoading}
-            >
-              <Ionicons name="logo-google" size={24} color="#DB4437" />
-              <Text style={styles.socialButtonText}>Google</Text>
-            </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={[styles.socialButton, isLoading && styles.socialButtonDisabled]}
-              onPress={() => handleSocialLogin('Apple')}
-              disabled={isLoading}
-            >
-              <Ionicons name="logo-apple" size={24} color="#000000" />
-              <Text style={styles.socialButtonText}>Apple</Text>
-            </TouchableOpacity>
-          </View>
+
         </View>
 
         {/* Sign Up Link */}
@@ -286,21 +256,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginBottom: 40,
   },
-  logoGradient: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
+  logoImage: {
+    width: 110,
+    height: 110,
     marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  logo: {
-    fontSize: 48,
   },
   title: {
     fontSize: 32,
@@ -387,47 +346,6 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
-  },
-  dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 30,
-  },
-  divider: {
-    flex: 1,
-    height: 1,
-    backgroundColor: Colors.border,
-  },
-  dividerText: {
-    marginHorizontal: 16,
-    color: Colors.textLight,
-    fontSize: 14,
-  },
-  socialContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 40,
-  },
-  socialButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    paddingVertical: 16,
-    marginHorizontal: 6,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  socialButtonDisabled: {
-    opacity: 0.5,
-  },
-  socialButtonText: {
-    marginLeft: 8,
-    fontSize: 16,
-    fontWeight: '500',
-    color: Colors.text,
   },
   signUpContainer: {
     flexDirection: 'row',
