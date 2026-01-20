@@ -27,7 +27,7 @@ export default function ManualInputScreen() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const headerPaddingTop = Math.max(insets.top, 16);
-  const contentBottomPadding = Math.max(tabBarHeight - 12, 8);
+  const contentBottomPadding = Math.max(insets.bottom, 0);
   const [ingredients, setIngredients] = useState(['']);
   const [isLoading, setIsLoading] = useState(false);
   const [scanStatus, setScanStatus] = useState({
@@ -263,21 +263,9 @@ export default function ManualInputScreen() {
           <View style={styles.examplesRow}>
             <TouchableOpacity
               style={styles.examplePill}
-              onPress={() => setIngredients(['chicken breast', 'broccoli', 'garlic'])}
+              onPress={() => setIngredients(['tomato', 'garlic'])}
             >
-              <Text style={styles.exampleText}>Chicken & Veggies</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.examplePill}
-              onPress={() => setIngredients(['salmon', 'asparagus', 'lemon'])}
-            >
-              <Text style={styles.exampleText}>Fish Dinner</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.examplePill}
-              onPress={() => setIngredients(['eggs', 'spinach', 'mushrooms'])}
-            >
-              <Text style={styles.exampleText}>Breakfast</Text>
+              <Text style={styles.exampleText}>Tomato</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -324,8 +312,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   scrollContent: {
-    flexGrow: 1,
     paddingTop: 8,
+    paddingBottom: 0,
   },
   header: {
     flexDirection: 'row',
@@ -436,7 +424,7 @@ const styles = StyleSheet.create({
   },
   examplesContainer: {
     paddingHorizontal: 20,
-    marginBottom: 32,
+    marginBottom: 20,
   },
   examplesTitle: {
     fontSize: 16,
@@ -459,17 +447,20 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     alignSelf: 'flex-start',
     maxWidth: '100%',
+    minWidth: 84,
+    flexShrink: 0,
   },
   exampleText: {
     fontSize: 14,
     color: Colors.primary,
-    flexShrink: 1,
+    flexShrink: 0,
   },
   findButton: {
     backgroundColor: Colors.primary,
     marginHorizontal: 20,
     borderRadius: 12,
     paddingVertical: 18,
+    marginBottom: -8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
