@@ -6,6 +6,14 @@ export const apiFetch = async (
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
+  if (options.signal) {
+    options.signal.addEventListener(
+      'abort',
+      () => controller.abort(),
+      { once: true }
+    );
+  }
+
   try {
     const response = await fetch(url, { ...options, signal: controller.signal });
     if (response.status === 401 && onUnauthorized) {

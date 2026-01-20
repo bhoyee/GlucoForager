@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
@@ -30,6 +32,7 @@ export default function ManualInputScreen() {
   const contentBottomPadding = Math.max(insets.bottom, 0);
   const [ingredients, setIngredients] = useState(['']);
   const [isLoading, setIsLoading] = useState(false);
+  const requestControllerRef = useRef(null);
   const [scanStatus, setScanStatus] = useState({
     remaining: null,
     isPremium: false,
@@ -38,10 +41,12 @@ export default function ManualInputScreen() {
   const allowedIngredientPattern = /^[A-Za-z0-9][A-Za-z0-9\s\-'/%%]*$/;
 
   const handleAddIngredient = () => {
+    if (isLoading) return;
     setIngredients([...ingredients, '']);
   };
 
   const handleRemoveIngredient = (index) => {
+    if (isLoading) return;
     if (ingredients.length > 1) {
       const newIngredients = [...ingredients];
       newIngredients.splice(index, 1);
@@ -50,6 +55,7 @@ export default function ManualInputScreen() {
   };
 
   const handleIngredientChange = (text, index) => {
+    if (isLoading) return;
     const newIngredients = [...ingredients];
     newIngredients[index] = text;
     setIngredients(newIngredients);
@@ -100,6 +106,7 @@ export default function ManualInputScreen() {
   }, [isFocused]);
 
   const handleFindRecipes = async () => {
+    if (isLoading) return;
     const normalized = ingredients
       .map((ing) => ing.trim().replace(/\s+/g, ' '))
       .filter((ing) => ing !== '');
@@ -126,6 +133,8 @@ export default function ManualInputScreen() {
       return;
     }
 
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
     setIsLoading(true);
     
     try {
@@ -145,6 +154,7 @@ export default function ManualInputScreen() {
           'X-Device-Id': deviceId,
         },
         body: JSON.stringify({ ingredients: normalized }),
+        signal: controller.signal,
         },
         { onUnauthorized: signOut, timeoutMs: 45000 }
       );
@@ -174,10 +184,21 @@ export default function ManualInputScreen() {
         source: 'text',
       });
     } catch (error) {
+      if (error?.name === 'AbortError') {
+        return;
+      }
       Alert.alert('Request failed', 'Unable to reach the server. Please try again.');
     } finally {
       setIsLoading(false);
+      requestControllerRef.current = null;
     }
+  };
+
+  const handleCancelRequest = () => {
+    if (requestControllerRef.current) {
+      requestControllerRef.current.abort();
+    }
+    setIsLoading(false);
   };
 
   return (
@@ -235,11 +256,13 @@ export default function ManualInputScreen() {
                 value={ingredient}
                 onChangeText={(text) => handleIngredientChange(text, index)}
                 autoCapitalize="none"
+                editable={!isLoading}
               />
               {ingredients.length > 1 && (
                 <TouchableOpacity
                   style={styles.removeButton}
                   onPress={() => handleRemoveIngredient(index)}
+                  disabled={isLoading}
                 >
                   <Ionicons name="close-circle" size={24} color={Colors.error} />
                 </TouchableOpacity>
@@ -251,6 +274,7 @@ export default function ManualInputScreen() {
           <TouchableOpacity
             style={styles.addButton}
             onPress={handleAddIngredient}
+            disabled={isLoading}
           >
             <Ionicons name="add-circle-outline" size={24} color={Colors.primary} />
             <Text style={styles.addButtonText}>Add Another Ingredient</Text>
@@ -259,16 +283,17 @@ export default function ManualInputScreen() {
 
         {/* Examples */}
         <View style={styles.examplesContainer}>
-          <Text style={styles.examplesTitle}>Examples:</Text>
-          <View style={styles.examplesRow}>
-            <TouchableOpacity
-              style={styles.examplePill}
-              onPress={() => setIngredients(['tomato', 'garlic'])}
-            >
-              <Text style={styles.exampleText}>Tomato</Text>
-            </TouchableOpacity>
-          </View>
+        <Text style={styles.examplesTitle}>Examples:</Text>
+        <View style={styles.examplesRow}>
+          <TouchableOpacity
+            style={styles.examplePill}
+            disabled={isLoading}
+            onPress={() => setIngredients(['tomato', 'garlic'])}
+          >
+            <Text style={styles.exampleText}>Tomato</Text>
+          </TouchableOpacity>
         </View>
+      </View>
 
         {/* Find Recipes Button */}
         <TouchableOpacity
@@ -302,6 +327,23 @@ export default function ManualInputScreen() {
           </View>
         </TouchableOpacity>
       </ScrollView>
+      <Modal transparent visible={isLoading} animationType="fade">
+        <View style={styles.loadingOverlay}>
+          <View style={styles.loadingCard}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+            <Text style={styles.loadingTitle}>Generating recipes...</Text>
+            <Text style={styles.loadingSubtitle}>
+              Please wait while we prepare your diabetes-safe options.
+            </Text>
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={handleCancelRequest}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -314,6 +356,46 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingTop: 8,
     paddingBottom: 0,
+  },
+  loadingOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  loadingCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 320,
+  },
+  loadingTitle: {
+    marginTop: 16,
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  loadingSubtitle: {
+    marginTop: 8,
+    fontSize: 13,
+    color: Colors.textLight,
+    textAlign: 'center',
+  },
+  cancelButton: {
+    marginTop: 16,
+    backgroundColor: Colors.primary,
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    borderRadius: 20,
+  },
+  cancelButtonText: {
+    color: 'white',
+    fontWeight: '600',
+    fontSize: 14,
   },
   header: {
     flexDirection: 'row',
