@@ -44,7 +44,13 @@ class TieredAIService:
             self.cache.set(key, json.dumps(result), ttl_seconds=300)
         return result
 
-    def generate_recipes(self, ingredients: List[str], tier: str, filters: List[str] | None = None) -> List[Dict[str, Any]]:
+    def generate_recipes(
+        self,
+        ingredients: List[str],
+        tier: str,
+        filters: List[str] | None = None,
+        generate_images: bool = True,
+    ) -> List[Dict[str, Any]]:
         payload = {"ingredients": ingredients, "tier": tier, "filters": filters or []}
         key = self._cache_key("recipes", payload)
         if self._should_cache(tier):
@@ -54,7 +60,12 @@ class TieredAIService:
                     return json.loads(cached)
                 except Exception:
                     pass
-        result = self.generator.generate(ingredients, tier=tier, filters=filters or [])
+        result = self.generator.generate(
+            ingredients,
+            tier=tier,
+            filters=filters or [],
+            generate_images=generate_images,
+        )
         if self._should_cache(tier):
             self.cache.set(key, json.dumps(result), ttl_seconds=300)
         return result

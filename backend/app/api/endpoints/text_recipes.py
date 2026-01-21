@@ -1,15 +1,19 @@
 import hashlib
 import json
 import re
+import uuid
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
 from pydantic import BaseModel, conlist, constr, validator
 from sqlalchemy.orm import Session
 
 from ...api.dependencies import check_user_access, get_current_user
 from ...database import get_db
+from ...database import SessionLocal
+from ...models.ai_job import AIJob
 from ...models.user import User
 from ...services.ai_pipeline import AIPipeline
+from ...services.ai_recipe_generator import AIRecipeGenerator
 from ...services.cache_service import CacheService
 from ...services.cost_tracker import record_ai_request
 from ...services.ingredient_classifier import IngredientClassifier
@@ -18,6 +22,7 @@ router = APIRouter(prefix="/ai/text", tags=["ai"])
 pipeline = AIPipeline()
 classifier = IngredientClassifier()
 cache = CacheService()
+image_helper = AIRecipeGenerator()
 TEXT_CACHE_TTL_SECONDS = 21600
 
 
@@ -66,6 +71,68 @@ def _cache_key(user_id: int, tier: str, ingredients: list[str], filters: list[st
     return f"text_recipes:{digest}"
 
 
+def _ensure_images(recipes: list[dict], tier: str, ingredients: list[str]) -> list[dict]:
+    if not recipes:
+        return recipes
+    missing = any(not recipe.get("image_url") for recipe in recipes)
+    if missing:
+        image_helper._attach_placeholders(recipes)
+    return recipes
+
+
+def _run_text_job(job_id: str) -> None:
+    db = SessionLocal()
+    try:
+        job = db.query(AIJob).filter(AIJob.id == job_id).first()
+        if not job:
+            return
+        job.status = "running"
+        db.commit()
+
+        payload = job.payload or {}
+        ingredients = payload.get("ingredients") or []
+        filters = payload.get("filters") or []
+        device_id = payload.get("device_id")
+
+        user = db.query(User).filter(User.id == job.user_id).first()
+        if not user:
+            job.status = "failed"
+            job.error = "User not found."
+            db.commit()
+            return
+
+        classified = classifier.classify(ingredients)
+        if not classified["food"]:
+            job.status = "failed"
+            job.error = "Content not related to food. Please enter real ingredients."
+            db.commit()
+            return
+
+        recipes = pipeline.text_to_recipes(
+            db,
+            user.id,
+            user.subscription_tier or "free",
+            classified["food"],
+            filters=filters,
+            device_id=device_id,
+        )
+        job.result = {
+            "results": recipes,
+            "filtered_out": classified["non_food"],
+            "classification_source": classified["source"],
+        }
+        job.status = "completed"
+        job.error = None
+        db.commit()
+    except Exception as exc:  # noqa: BLE001
+        if "job" in locals() and job:
+            job.status = "failed"
+            job.error = str(exc)
+            db.commit()
+    finally:
+        db.close()
+
+
 @router.post("/recipes")
 def generate_from_text(
     payload: TextRecipeRequest,
@@ -95,6 +162,8 @@ def generate_from_text(
         except json.JSONDecodeError:
             cached_recipes = None
         if cached_recipes:
+            cached_recipes = _ensure_images(cached_recipes, tier, ingredients)
+            cache.set(cache_key, json.dumps(cached_recipes), ttl_seconds=TEXT_CACHE_TTL_SECONDS)
             record_ai_request(
                 db,
                 current_user.id,
@@ -129,4 +198,59 @@ def generate_from_text(
         "access": access,
         "filtered_out": classified["non_food"],
         "classification_source": classified["source"],
+    }
+
+
+@router.post("/recipes/async")
+def generate_from_text_async(
+    payload: TextRecipeRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    device_id: str = Header(..., alias="X-Device-Id"),
+):
+    access = check_user_access(current_user, db, device_id)
+    if not access["allowed"]:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Daily limit reached. Scans left: {access['searches_left']}",
+        )
+
+    job_id = str(uuid.uuid4())
+    job = AIJob(
+        id=job_id,
+        user_id=current_user.id,
+        source="text",
+        status="pending",
+        payload={
+            "ingredients": payload.ingredients,
+            "filters": payload.filters or [],
+            "device_id": device_id,
+        },
+    )
+    db.add(job)
+    db.commit()
+
+    background_tasks.add_task(_run_text_job, job_id)
+    return {"job_id": job_id, "status": job.status, "access": access}
+
+
+@router.get("/recipes/async/{job_id}")
+def get_text_job(
+    job_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    job = (
+        db.query(AIJob)
+        .filter(AIJob.id == job_id, AIJob.user_id == current_user.id)
+        .first()
+    )
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found.")
+    return {
+        "job_id": job.id,
+        "status": job.status,
+        "error": job.error,
+        "result": job.result,
     }

@@ -77,7 +77,12 @@ class AIPipeline:
                 "risk_level": "low",
                 "source": classified.get("source", "rules"),
             }
-        recipes = self.ai.generate_recipes(food_only, tier, filters=filters)
+        recipes = self.ai.generate_recipes(
+            food_only,
+            tier,
+            filters=filters,
+            generate_images=False,
+        )
         record_ai_request(db, user_id, tier, "vision", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
         record_ai_request(db, user_id, tier, "recipes", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
         db.add(RecipeHistory(user_id=user_id, source="vision", recipes=recipes))
@@ -129,7 +134,12 @@ class AIPipeline:
                 "risk_level": "low",
                 "source": classified.get("source", "rules"),
             }
-        recipes = self.ai.generate_recipes(food_only, tier, filters=filters)
+        recipes = self.ai.generate_recipes(
+            food_only,
+            tier,
+            filters=filters,
+            generate_images=False,
+        )
         record_ai_request(db, user_id, tier, "vision_batch", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
         record_ai_request(db, user_id, tier, "recipes", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
         db.add(RecipeHistory(user_id=user_id, source="vision", recipes=recipes))
@@ -150,7 +160,12 @@ class AIPipeline:
         filters: list[str] | None = None,
         device_id: str | None = None,
     ) -> List[Dict[str, Any]]:
-        recipes = self.ai.generate_recipes(ingredients, tier, filters=filters)
+        recipes = self.ai.generate_recipes(
+            ingredients,
+            tier,
+            filters=filters,
+            generate_images=False,
+        )
         record_ai_request(db, user_id, tier, "text", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
         db.add(RecipeHistory(user_id=user_id, source="text", recipes=recipes))
         db.commit()

@@ -54,12 +54,7 @@ class AIRecipeGenerator:
         return resp.choices[0].message.content or ""
 
     def _placeholder_image(self, recipe: Dict[str, Any]) -> str:
-        # Simple category-based placeholder to avoid blank spaces
-        tags = [t.lower() for t in recipe.get("tags") or []]
-        if any("fish" in t or "omega" in t for t in tags):
-            return "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&q=80"
-        if any("protein" in t or "chicken" in t for t in tags):
-            return "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&q=80"
+        # Single, consistent placeholder image for all AI recipes.
         return "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&q=80"
 
     def _image_cache_key(self, recipe: Dict[str, Any]) -> str:
@@ -68,77 +63,34 @@ class AIRecipeGenerator:
         return f"img:{hashlib.sha256((title + desc).encode()).hexdigest()}"
 
     def _attach_images(self, recipes: List[Dict[str, Any]], tier: str, ingredients: List[str]) -> None:
-        """For premium, try DALL-E images; for free or failures, set placeholders."""
-        import hashlib
+        """Always attach placeholders (AI images disabled)."""
+        self._attach_placeholders(recipes)
 
-        is_premium = tier == "premium"
+    def _attach_placeholders(self, recipes: List[Dict[str, Any]]) -> None:
         if not recipes:
             return
-
         for recipe in recipes:
-            # Skip if already has an image
-            if recipe.get("image_url"):
-                continue
-
-            # Free tier: placeholders only
-            if not is_premium or not self.primary_client:
+            if not recipe.get("image_url"):
                 recipe["image_url"] = self._placeholder_image(recipe)
-                continue
+                recipe["image_source"] = "placeholder"
 
-            # Premium: attempt cached DALL-E image
-            cache_key = self._image_cache_key(recipe)
-            cached = self.cache.get(cache_key)
-            if cached:
-                recipe["image_url"] = cached
-                continue
+    def generate_image_for_recipe(
+        self, recipe: Dict[str, Any], tier: str, ingredients: List[str] | None = None
+    ) -> Dict[str, Any]:
+        if not recipe:
+            return {"image_url": None, "image_source": "none"}
+        return {
+            "image_url": self._placeholder_image(recipe),
+            "image_source": "placeholder",
+        }
 
-            title = recipe.get("title", "diabetes-friendly meal")
-            description = recipe.get("description") or ""
-            ingredient_names = []
-            for item in recipe.get("ingredients") or []:
-                if isinstance(item, dict):
-                    name = item.get("name")
-                else:
-                    name = str(item)
-                if name:
-                    ingredient_names.append(name)
-            prompt = (
-                f"Photorealistic food photography of {title}. "
-                f"{description} " if description else f"Photorealistic food photography of {title}. "
-            )
-            if ingredient_names:
-                prompt += (
-                    "Must visually include these ingredients: "
-                    f"{', '.join(ingredient_names)}. "
-                    "Do not include ingredients not listed. "
-                )
-            elif ingredients:
-                prompt += (
-                    "Must visually reflect these ingredients: "
-                    f"{', '.join(ingredients)}. "
-                    "Do not include ingredients not listed. "
-                )
-            prompt += (
-                "Clean, modern plating. Natural soft light. 1:1 aspect. No text, no watermarks."
-            )
-            try:
-                resp = self.primary_client.images.generate(
-                    model=self.image_model,
-                    prompt=prompt,
-                    size="512x512",
-                    quality="standard",
-                    n=1,
-                )
-                url = resp.data[0].url if resp and resp.data else None
-                recipe["image_url"] = url or self._placeholder_image(recipe)
-                # Cache for 24h
-                if url:
-                    self.cache.set(cache_key, url, ttl_seconds=86400)
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("Image generation failed for '%s': %s", recipe.get("title"), exc)
-                recipe["image_url"] = self._placeholder_image(recipe)
-
-    def generate(self, ingredients: List[str], tier: str, filters: List[str] | None = None) -> List[Dict[str, Any]]:
+    def generate(
+        self,
+        ingredients: List[str],
+        tier: str,
+        filters: List[str] | None = None,
+        generate_images: bool = True,
+    ) -> List[Dict[str, Any]]:
         filters = filters or []
         from ..core.constants import TIER_CONFIG  # local import to avoid cycle
         tier_cfg = TIER_CONFIG.get(tier, {})
@@ -302,7 +254,10 @@ class AIRecipeGenerator:
 
         if not self.enabled:
             fallback = emergency_recipes()
-            self._attach_images(fallback, tier, ingredients)
+            if generate_images:
+                self._attach_images(fallback, tier, ingredients)
+            else:
+                self._attach_placeholders(fallback)
             return fallback
 
         # Iterate through model chain with provider-specific clients
@@ -315,12 +270,18 @@ class AIRecipeGenerator:
                 content = self._call(client, model, ingredients, filters)
                 recipes = parse_content(content)
                 if recipes:
-                    self._attach_images(recipes, tier, ingredients)
+                    if generate_images:
+                        self._attach_images(recipes, tier, ingredients)
+                    else:
+                        self._attach_placeholders(recipes)
                     return recipes[:3]
             except OpenAIError as exc:
                 logger.warning("Model %s failed, trying next: %s", model, exc)
                 continue
 
         fallback = emergency_recipes()
-        self._attach_images(fallback, tier, ingredients)
+        if generate_images:
+            self._attach_images(fallback, tier, ingredients)
+        else:
+            self._attach_placeholders(fallback)
         return fallback
