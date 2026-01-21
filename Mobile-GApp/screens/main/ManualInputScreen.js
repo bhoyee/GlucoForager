@@ -33,6 +33,9 @@ export default function ManualInputScreen() {
   const [ingredients, setIngredients] = useState(['']);
   const [isLoading, setIsLoading] = useState(false);
   const requestControllerRef = useRef(null);
+  const pollingRef = useRef(null);
+  const timeoutRef = useRef(null);
+  const [activeJobId, setActiveJobId] = useState(null);
   const [scanStatus, setScanStatus] = useState({
     remaining: null,
     isPremium: false,
@@ -105,6 +108,75 @@ export default function ManualInputScreen() {
     }
   }, [isFocused]);
 
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+      }
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+
+  const stopPolling = () => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+  };
+
+  const handleJobResult = (result, normalized) => {
+    const recipes = result?.results || [];
+    if (!recipes.length) {
+      Alert.alert('No recipes found', 'Try different ingredients and try again.');
+      return;
+    }
+    navigation.navigate('RecipeResults', {
+      recipes,
+      selectedIngredients: normalized,
+      source: 'text',
+      detectedIngredients: result?.filtered_out || [],
+    });
+  };
+
+  const pollJob = async (jobId, normalized) => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        setIsLoading(false);
+        stopPolling();
+        return;
+      }
+      const response = await apiFetch(
+        `${API_URL}${API_ENDPOINTS.AI_TEXT_RECIPES_ASYNC_STATUS}/${jobId}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+        { onUnauthorized: signOut, timeoutMs: 10000 }
+      );
+      if (!response.ok) {
+        return;
+      }
+      const data = await response.json();
+      if (data.status === 'completed') {
+        stopPolling();
+        setIsLoading(false);
+        setActiveJobId(null);
+        handleJobResult(data.result, normalized);
+      } else if (data.status === 'failed') {
+        stopPolling();
+        setIsLoading(false);
+        setActiveJobId(null);
+        Alert.alert('Request failed', data.error || 'Unable to generate recipes.');
+      }
+    } catch (error) {
+      // Ignore intermittent polling errors.
+    }
+  };
+
   const handleFindRecipes = async () => {
     if (isLoading) return;
     const normalized = ingredients
@@ -141,11 +213,12 @@ export default function ManualInputScreen() {
       const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         Alert.alert('Sign in required', 'Please sign in to find recipes.');
+        setIsLoading(false);
         return;
       }
       const deviceId = await getDeviceId();
       const response = await apiFetch(
-        `${API_URL}${API_ENDPOINTS.AI_TEXT_RECIPES}`,
+        `${API_URL}${API_ENDPOINTS.AI_TEXT_RECIPES_ASYNC}`,
         {
         method: 'POST',
         headers: {
@@ -170,26 +243,37 @@ export default function ManualInputScreen() {
         const detail = data?.detail;
         const message = detail?.message || detail || 'Unable to generate recipes.';
         Alert.alert('Request failed', message);
+        setIsLoading(false);
         return;
       }
-
-      if (!data?.results?.length) {
-        Alert.alert('No recipes found', 'Try different ingredients and try again.');
+      if (!data?.job_id) {
+        Alert.alert('Request failed', 'Unable to start recipe generation.');
+        setIsLoading(false);
         return;
       }
-
-      navigation.navigate('RecipeResults', {
-        recipes: data.results,
-        selectedIngredients: normalized,
-        source: 'text',
-      });
+      const jobId = data.job_id;
+      setActiveJobId(jobId);
+      await pollJob(jobId, normalized);
+      pollingRef.current = setInterval(() => {
+        pollJob(jobId, normalized);
+      }, 3000);
+      timeoutRef.current = setTimeout(() => {
+        stopPolling();
+        setIsLoading(false);
+        setActiveJobId(null);
+        Alert.alert(
+          'Taking longer than usual',
+          'Please try again in a moment. Your ingredients are still here.'
+        );
+      }, 120000);
     } catch (error) {
       if (error?.name === 'AbortError') {
+        setIsLoading(false);
         return;
       }
       Alert.alert('Request failed', 'Unable to reach the server. Please try again.');
-    } finally {
       setIsLoading(false);
+    } finally {
       requestControllerRef.current = null;
     }
   };
@@ -198,6 +282,8 @@ export default function ManualInputScreen() {
     if (requestControllerRef.current) {
       requestControllerRef.current.abort();
     }
+    stopPolling();
+    setActiveJobId(null);
     setIsLoading(false);
   };
 
