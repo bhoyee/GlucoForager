@@ -19,6 +19,7 @@ import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import RecipePlaceholder from '../../assets/images/recipe-placeholder.jpeg';
 
 const { width } = Dimensions.get('window');
 
@@ -99,6 +100,7 @@ const RecipeDetailsScreen = () => {
   const [servings, setServings] = useState(recipe.servings);
   const [expandedTip, setExpandedTip] = useState(null);
   const [isSavingFavorite, setIsSavingFavorite] = useState(false);
+  const [imageLoadError, setImageLoadError] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -114,6 +116,7 @@ const RecipeDetailsScreen = () => {
     };
     init();
   }, [route.params]);
+
 
   const fetchRecipeDetail = async (recipeId) => {
     try {
@@ -196,6 +199,7 @@ const RecipeDetailsScreen = () => {
       difficulty: item.difficulty || 'Easy',
       source: recipeSourceFromRoute || (isAdminRecipe ? 'admin' : 'ai'),
       image: item.image_url || item.image || '',
+      imageSource: item.image_source || 'unknown',
       diabetesAnalysis: item.diabetes_analysis || item.diabetesAnalysis || null,
       isBookmarked: Boolean(item.isBookmarked),
       description: item.description || 'A diabetes-friendly recipe curated for balanced nutrition.',
@@ -487,12 +491,14 @@ const RecipeDetailsScreen = () => {
 
   const renderHeroSection = () => (
     <View style={styles.heroContainer}>
-      {recipe.image ? (
-        <Image source={{ uri: recipe.image }} style={styles.recipeImage} />
+      {recipe.image && recipe.imageSource !== 'placeholder' && !imageLoadError ? (
+        <Image
+          source={{ uri: recipe.image }}
+          style={styles.recipeImage}
+          onError={() => setImageLoadError(true)}
+        />
       ) : (
-        <View style={styles.recipeImagePlaceholder}>
-          <Ionicons name="image-outline" size={48} color="#A0A0A0" />
-        </View>
+        <Image source={RecipePlaceholder} style={styles.recipeImage} />
       )}
       <View style={styles.imageOverlay}>
         <View style={styles.heroContent}>

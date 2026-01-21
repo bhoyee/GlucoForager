@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { LinearGradient } from 'expo-linear-gradient';
+import RecipePlaceholder from '../../assets/images/recipe-placeholder.jpeg';
 
 export default function RecipeResultsScreen() {
   const navigation = useNavigation();
@@ -35,6 +36,7 @@ export default function RecipeResultsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [detectedIngredients, setDetectedIngredients] = useState([]);
   const [recipes, setRecipes] = useState([]);
+  const [failedImages, setFailedImages] = useState({});
 
   useEffect(() => {
     const ingredientSource = source === 'text' ? 'Input' : 'Detected';
@@ -104,6 +106,14 @@ export default function RecipeResultsScreen() {
     return `${matches.length}/${selectedIngredients.length} ingredients`;
   };
 
+  const toIngredientImageUrl = (name) => {
+    if (!name) return null;
+    const cleaned = `${name}`.trim();
+    if (!cleaned) return null;
+    const encoded = encodeURIComponent(cleaned.replace(/\s+/g, '_'));
+    return `https://www.themealdb.com/images/ingredients/${encoded}.png`;
+  };
+
   return (
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
@@ -155,7 +165,15 @@ export default function RecipeResultsScreen() {
             {detectedIngredients.map((item) => (
               <View key={item.id} style={styles.ingredientCard}>
                 <View style={styles.ingredientIconContainer}>
-                  <Ionicons name="nutrition-outline" size={26} color={Colors.primary} />
+                  {toIngredientImageUrl(item.name) ? (
+                    <Image
+                      source={{ uri: toIngredientImageUrl(item.name) }}
+                      style={styles.ingredientImage}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Ionicons name="nutrition-outline" size={26} color={Colors.primary} />
+                  )}
                 </View>
                 <Text style={styles.ingredientName} numberOfLines={1}>{item.name}</Text>
                 <View style={styles.confidenceBadge}>
@@ -182,10 +200,14 @@ export default function RecipeResultsScreen() {
             const carbs = nutrition.carbs ?? recipe?.carbs ?? 'N/A';
             const title = recipe?.title || recipe?.name || `Recipe ${index + 1}`;
             const imageUrl = recipe?.image_url;
+            const usePlaceholder =
+              recipe?.image_source === 'placeholder' || !imageUrl;
             const matchText = getMatchText(recipe);
+            const imageKey = recipe.id || `${title}-${index}`;
+            const imageFailed = Boolean(failedImages[imageKey]);
             return (
               <TouchableOpacity
-                key={recipe.id || `${title}-${index}`}
+                key={imageKey}
                 style={styles.recipeCard}
                 onPress={() =>
                   navigation.navigate('RecipeDetail', {
@@ -195,15 +217,16 @@ export default function RecipeResultsScreen() {
                   })
                 }
               >
-                {imageUrl ? (
-                  <Image source={{ uri: imageUrl }} style={styles.recipeImage} />
+                {imageUrl && !usePlaceholder && !imageFailed ? (
+                  <Image
+                    source={{ uri: imageUrl }}
+                    style={styles.recipeImage}
+                    onError={() =>
+                      setFailedImages((prev) => ({ ...prev, [imageKey]: true }))
+                    }
+                  />
                 ) : (
-                  <LinearGradient
-                    colors={[Colors.primary + '20', Colors.primary + '10']}
-                    style={styles.recipeIcon}
-                  >
-                    <Ionicons name="restaurant-outline" size={28} color={Colors.primary} />
-                  </LinearGradient>
+                  <Image source={RecipePlaceholder} style={styles.recipeImage} />
                 )}
 
                 <View style={styles.recipeInfo}>
@@ -412,6 +435,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
+    overflow: 'hidden',
+  },
+  ingredientImage: {
+    width: '100%',
+    height: '100%',
   },
   ingredientName: {
     fontSize: 14,

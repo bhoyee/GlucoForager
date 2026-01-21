@@ -20,6 +20,7 @@ import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
 import { presentPaywall } from '../../utils/revenuecat';
+import RecipePlaceholder from '../../assets/images/recipe-placeholder.jpeg';
 
 export default function HomeScreen() {
   const navigation = useNavigation();
@@ -563,12 +564,10 @@ export default function HomeScreen() {
                 style={styles.recipeCard}
                 onPress={() => handleViewRecipeDetail(recipe)}
               >
-                {recipe.image_url ? (
+                {recipe.image_url && recipe.image_source !== 'placeholder' ? (
                   <Image source={{ uri: recipe.image_url }} style={styles.recipeImage} />
                 ) : (
-                  <View style={styles.recipeImagePlaceholder}>
-                    <Ionicons name="restaurant-outline" size={40} color={Colors.textLight} />
-                  </View>
+                  <Image source={RecipePlaceholder} style={styles.recipeImage} />
                 )}
                 <View style={styles.recipeInfo}>
                   <View style={styles.recipeHeader}>

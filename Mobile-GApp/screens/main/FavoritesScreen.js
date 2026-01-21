@@ -20,6 +20,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
 import { useAuth } from '../../context/authContext';
+import RecipePlaceholder from '../../assets/images/recipe-placeholder.jpeg';
 
 export default function FavoritesScreen() {
   const navigation = useNavigation();
@@ -74,6 +75,7 @@ export default function FavoritesScreen() {
       name: recipe.title || recipe.name || item.title || 'Recipe',
       description: recipe.description || 'Diabetes-friendly recipe.',
       image: recipe.image_url || recipe.image || '',
+      imageSource: recipe.image_source || 'unknown',
       time: getRecipeTimeValue(recipe),
       calories: getCaloriesValue(nutrition),
     };
@@ -199,11 +201,11 @@ export default function FavoritesScreen() {
           >
             {/* Recipe Image */}
             <View style={styles.imageContainer}>
-              <Image
-                source={{ uri: item.image }}
-                style={styles.recipeImage}
-                defaultSource={{ uri: 'https://via.placeholder.com/300x200/CCCCCC/666666?text=Recipe+Image' }}
-              />
+              {item.image && item.imageSource !== 'placeholder' ? (
+                <Image source={{ uri: item.image }} style={styles.recipeImage} />
+              ) : (
+                <Image source={RecipePlaceholder} style={styles.recipeImage} />
+              )}
               <View style={styles.imageOverlay}>
                 <View style={styles.favoriteBadge}>
                   <Ionicons name="heart" size={12} color="white" />
