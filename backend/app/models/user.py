@@ -17,6 +17,8 @@ class User(Base):
     gender = Column(String, nullable=True)
     country = Column(String, nullable=True)
     subscription_tier = Column(String, default="free")
+    suspended_at = Column(DateTime, nullable=True)
+    suspended_reason = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     searches = relationship("SearchLog", back_populates="user", cascade="all, delete-orphan")

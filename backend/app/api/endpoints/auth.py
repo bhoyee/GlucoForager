@@ -146,6 +146,8 @@ def login(
         remaining_attempts = login_throttler.record_failure(identifier)
         logger.warning("Login failed for email=%s, remaining_attempts=%s", form_data.username, remaining_attempts)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    if user.suspended_at:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account locked. Contact support.")
 
     login_throttler.record_success(identifier)
     token = create_access_token({"sub": str(user.id)})
@@ -178,6 +180,8 @@ def login_alias(
         remaining_attempts = login_throttler.record_failure(identifier)
         logger.warning("Login failed for email=%s, remaining_attempts=%s", email, remaining_attempts)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    if user.suspended_at:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account locked. Contact support.")
 
     login_throttler.record_success(identifier)
     token = create_access_token({"sub": str(user.id)})
