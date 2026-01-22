@@ -275,6 +275,8 @@ def list_users(
                 "subscription_status": sub_status,
                 "expires_at": sub_expires,
                 "status": status_label,
+                "suspended_at": user.suspended_at,
+                "suspended_reason": user.suspended_reason,
                 "created_at": user.created_at,
             }
         )
