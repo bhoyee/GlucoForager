@@ -25,6 +25,12 @@ export default function AdminUserDetail() {
   const [message, setMessage] = useState('');
   const [pendingAction, setPendingAction] = useState(null);
   const [actionBusy, setActionBusy] = useState(false);
+  const [txSearch, setTxSearch] = useState('');
+  const [txStatusFilter, setTxStatusFilter] = useState('all');
+  const [txSortKey, setTxSortKey] = useState('started_at');
+  const [txSortOrder, setTxSortOrder] = useState('desc');
+  const [txPage, setTxPage] = useState(1);
+  const TX_PAGE_SIZE = 8;
 
   const loadUser = async () => {
     if (!token) {
@@ -246,6 +252,43 @@ export default function AdminUserDetail() {
   };
 
   const confirmContent = getConfirmContent(pendingAction);
+  const transactions = Array.isArray(user.subscriptions) ? user.subscriptions : [];
+  const filteredTransactions = transactions
+    .filter((sub) => {
+      if (txStatusFilter === 'all') return true;
+      return sub.status === txStatusFilter;
+    })
+    .filter((sub) => {
+      if (!txSearch.trim()) return true;
+      const term = txSearch.trim().toLowerCase();
+      return [
+        sub.plan,
+        sub.status,
+        sub.product_id,
+        sub.transaction_id,
+        sub.store,
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(term));
+    })
+    .sort((a, b) => {
+      const getDate = (value) => (value ? new Date(value).getTime() : 0);
+      const getValue = (value) => (value ? String(value).toLowerCase() : '');
+      let result = 0;
+      if (txSortKey === 'status') {
+        result = getValue(a.status).localeCompare(getValue(b.status));
+      } else if (txSortKey === 'plan') {
+        result = getValue(a.plan).localeCompare(getValue(b.plan));
+      } else if (txSortKey === 'expires_at') {
+        result = getDate(a.expires_at) - getDate(b.expires_at);
+      } else {
+        result = getDate(a.started_at) - getDate(b.started_at);
+      }
+      return txSortOrder === 'asc' ? result : -result;
+    });
+  const txTotalPages = Math.max(1, Math.ceil(filteredTransactions.length / TX_PAGE_SIZE));
+  const txStart = (txPage - 1) * TX_PAGE_SIZE;
+  const txPageItems = filteredTransactions.slice(txStart, txStart + TX_PAGE_SIZE);
 
   return (
     <div className="admin-card">
@@ -338,6 +381,45 @@ export default function AdminUserDetail() {
 
       <div className="admin-card" style={{ marginTop: '24px' }}>
         <h3 className="admin-title">Transactions</h3>
+        <div className="admin-toolbar">
+          <input
+            type="text"
+            placeholder="Search transactions..."
+            value={txSearch}
+            onChange={(event) => {
+              setTxSearch(event.target.value);
+              setTxPage(1);
+            }}
+          />
+          <select
+            value={txStatusFilter}
+            onChange={(event) => {
+              setTxStatusFilter(event.target.value);
+              setTxPage(1);
+            }}
+          >
+            <option value="all">All status</option>
+            <option value="active">Active</option>
+            <option value="expired">Expired</option>
+            <option value="canceled">Canceled</option>
+          </select>
+          <select
+            value={`${txSortKey}:${txSortOrder}`}
+            onChange={(event) => {
+              const [nextKey, nextOrder] = event.target.value.split(':');
+              setTxSortKey(nextKey);
+              setTxSortOrder(nextOrder);
+              setTxPage(1);
+            }}
+          >
+            <option value="started_at:desc">Newest first</option>
+            <option value="started_at:asc">Oldest first</option>
+            <option value="expires_at:desc">Expires latest</option>
+            <option value="expires_at:asc">Expires soon</option>
+            <option value="status:asc">Status (A-Z)</option>
+            <option value="plan:asc">Plan (A-Z)</option>
+          </select>
+        </div>
         <table className="admin-table">
           <thead>
             <tr>
@@ -351,8 +433,8 @@ export default function AdminUserDetail() {
             </tr>
           </thead>
           <tbody>
-            {user.subscriptions?.length ? (
-              user.subscriptions.map((sub) => (
+            {txPageItems.length ? (
+              txPageItems.map((sub) => (
                 <tr key={sub.id}>
                   <td>{sub.status}</td>
                   <td>{sub.plan}</td>
@@ -370,6 +452,21 @@ export default function AdminUserDetail() {
             )}
           </tbody>
         </table>
+        <div className="admin-pagination">
+          <button type="button" onClick={() => setTxPage(Math.max(1, txPage - 1))} disabled={txPage === 1}>
+            Prev
+          </button>
+          <span>
+            Page {txPage} of {txTotalPages} ({filteredTransactions.length} transactions)
+          </span>
+          <button
+            type="button"
+            onClick={() => setTxPage(Math.min(txTotalPages, txPage + 1))}
+            disabled={txPage === txTotalPages}
+          >
+            Next
+          </button>
+        </div>
       </div>
 
       {pendingAction && confirmContent && (
