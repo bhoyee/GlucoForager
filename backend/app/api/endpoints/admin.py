@@ -4,6 +4,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from pydantic import BaseModel, EmailStr, Field, HttpUrl, validator
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from ..admin_dependencies import get_current_admin
@@ -12,6 +13,8 @@ from ...core.security import create_access_token, get_password_hash, verify_pass
 from ...database import get_db
 from ...models.admin_user import AdminUser
 from ...models.recipe import Recipe
+from ...models.subscription import Subscription
+from ...models.user import User
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -126,6 +129,129 @@ def list_recipes(
             }
             for r in items
         ]
+    }
+
+
+@router.get("/users")
+def list_users(
+    q: str | None = None,
+    tier: str | None = None,
+    status_filter: str | None = None,
+    sort: str | None = None,
+    order: str | None = None,
+    page: int = 1,
+    page_size: int = 20,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    page = max(page, 1)
+    page_size = min(max(page_size, 1), 100)
+    sort_key = sort or "created_at"
+    sort_order = (order or "desc").lower()
+
+    latest_sub = (
+        db.query(
+            Subscription.user_id.label("user_id"),
+            func.max(Subscription.started_at).label("max_started_at"),
+        )
+        .group_by(Subscription.user_id)
+        .subquery()
+    )
+    latest_sub_join = (
+        db.query(Subscription)
+        .join(
+            latest_sub,
+            (Subscription.user_id == latest_sub.c.user_id)
+            & (Subscription.started_at == latest_sub.c.max_started_at),
+        )
+        .subquery()
+    )
+
+    query = (
+        db.query(
+            User,
+            latest_sub_join.c.status.label("sub_status"),
+            latest_sub_join.c.expires_at.label("sub_expires_at"),
+        )
+        .outerjoin(latest_sub_join, User.id == latest_sub_join.c.user_id)
+    )
+
+    if q:
+        search = f"%{q.strip().lower()}%"
+        query = query.filter(
+            func.lower(User.email).like(search)
+            | func.lower(func.coalesce(User.full_name, "")).like(search)
+        )
+
+    if tier in {"free", "premium"}:
+        query = query.filter(User.subscription_tier == tier)
+
+    now = datetime.utcnow()
+    if status_filter in {"active", "inactive"}:
+        if status_filter == "active":
+            query = query.filter(
+                User.subscription_tier == "premium",
+                (latest_sub_join.c.status == "active"),
+                (
+                    (latest_sub_join.c.expires_at.is_(None))
+                    | (latest_sub_join.c.expires_at > now)
+                ),
+            )
+        else:
+            query = query.filter(
+                or_(
+                    User.subscription_tier != "premium",
+                    latest_sub_join.c.status.is_(None),
+                    latest_sub_join.c.status != "active",
+                    (
+                        latest_sub_join.c.expires_at.is_not(None)
+                        & (latest_sub_join.c.expires_at <= now)
+                    ),
+                ),
+            )
+
+    if sort_key == "email":
+        order_column = User.email
+    elif sort_key == "tier":
+        order_column = User.subscription_tier
+    else:
+        order_column = User.created_at
+
+    if sort_order == "asc":
+        query = query.order_by(order_column.asc())
+    else:
+        query = query.order_by(order_column.desc())
+
+    total = query.count()
+    rows = query.offset((page - 1) * page_size).limit(page_size).all()
+
+    items = []
+    for user, sub_status, sub_expires in rows:
+        is_premium = user.subscription_tier == "premium"
+        is_active = (
+            is_premium
+            and (sub_status == "active")
+            and (sub_expires is None or sub_expires > now)
+        )
+        status_label = "active" if is_active else "inactive"
+        items.append(
+            {
+                "id": user.id,
+                "email": user.email,
+                "full_name": user.full_name,
+                "subscription_tier": user.subscription_tier or "free",
+                "subscription_status": sub_status,
+                "expires_at": sub_expires,
+                "status": status_label,
+                "created_at": user.created_at,
+            }
+        )
+
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
     }
 
 
