@@ -25,6 +25,8 @@ export default function AdminUsersPage() {
   const [totalItems, setTotalItems] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [pendingAction, setPendingAction] = useState(null);
+  const [actionBusy, setActionBusy] = useState(false);
 
   const buildQuery = () => {
     const params = new URLSearchParams();
@@ -38,13 +40,16 @@ export default function AdminUsersPage() {
     return params.toString();
   };
 
-  const loadUsers = useCallback(async () => {
+  const loadUsers = useCallback(async (options = {}) => {
+    const { silent = false } = options;
     if (!token) {
       router.push('/admin');
       return;
     }
-    setIsLoading(true);
-    setMessage('');
+    if (!silent) {
+      setIsLoading(true);
+      setMessage('');
+    }
     try {
       const response = await fetch(`${API_URL}/api/admin/users?${buildQuery()}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -60,9 +65,13 @@ export default function AdminUsersPage() {
       setTotalItems(data.total || items.length);
       setTotalPages(Math.max(1, Math.ceil((data.total || items.length) / PAGE_SIZE)));
     } catch (error) {
-      setMessage('Failed to load users.');
+      if (!silent) {
+        setMessage('Failed to load users.');
+      }
     } finally {
-      setIsLoading(false);
+      if (!silent) {
+        setIsLoading(false);
+      }
     }
   }, [token, page, sortKey, sortOrder, search, tierFilter, statusFilter, router]);
 
@@ -77,13 +86,12 @@ export default function AdminUsersPage() {
   useEffect(() => {
     if (!autoRefresh) return undefined;
     const timer = setInterval(() => {
-      loadUsers();
+      loadUsers({ silent: true });
     }, 20000);
     return () => clearInterval(timer);
   }, [autoRefresh, loadUsers]);
 
   const handleSuspend = async (user) => {
-    if (!confirm(`Suspend ${user.email}? They will be unable to log in.`)) return;
     try {
       const response = await fetch(`${API_URL}/api/admin/users/${user.id}/suspend`, {
         method: 'POST',
@@ -96,9 +104,11 @@ export default function AdminUsersPage() {
         return;
       }
       if (!response.ok) throw new Error();
-      loadUsers();
+      loadUsers({ silent: true });
+      return true;
     } catch (error) {
       setMessage('Failed to suspend user.');
+      return false;
     }
   };
 
@@ -114,15 +124,16 @@ export default function AdminUsersPage() {
         return;
       }
       if (!response.ok) throw new Error();
-      loadUsers();
+      loadUsers({ silent: true });
+      return true;
     } catch (error) {
       setMessage('Failed to unsuspend user.');
+      return false;
     }
   };
 
   const handleTierChange = async (user) => {
     const nextTier = user.subscription_tier === 'premium' ? 'free' : 'premium';
-    if (!confirm(`Change ${user.email} to ${nextTier}?`)) return;
     try {
       const response = await fetch(`${API_URL}/api/admin/users/${user.id}/tier`, {
         method: 'POST',
@@ -135,14 +146,15 @@ export default function AdminUsersPage() {
         return;
       }
       if (!response.ok) throw new Error();
-      loadUsers();
+      loadUsers({ silent: true });
+      return true;
     } catch (error) {
       setMessage('Failed to update subscription tier.');
+      return false;
     }
   };
 
   const handleDelete = async (user) => {
-    if (!confirm(`Delete ${user.email} permanently? This cannot be undone.`)) return;
     try {
       const response = await fetch(`${API_URL}/api/admin/users/${user.id}`, {
         method: 'DELETE',
@@ -154,11 +166,74 @@ export default function AdminUsersPage() {
         return;
       }
       if (!response.ok) throw new Error();
-      loadUsers();
+      loadUsers({ silent: true });
+      return true;
     } catch (error) {
       setMessage('Failed to delete user.');
+      return false;
     }
   };
+
+  const requestAction = (type, user) => {
+    setPendingAction({ type, user });
+  };
+
+  const getConfirmContent = (action) => {
+    if (!action) return null;
+    const { type, user } = action;
+    if (type === 'suspend') {
+      return {
+        title: 'Suspend user',
+        message: `Suspend ${user.email}? They will be unable to log in.`,
+        confirmLabel: 'Suspend',
+        tone: 'danger',
+      };
+    }
+    if (type === 'unsuspend') {
+      return {
+        title: 'Unsuspend user',
+        message: `Restore access for ${user.email}?`,
+        confirmLabel: 'Unsuspend',
+        tone: 'secondary',
+      };
+    }
+    if (type === 'tier') {
+      const nextTier = user.subscription_tier === 'premium' ? 'free' : 'premium';
+      return {
+        title: 'Change plan',
+        message: `Change ${user.email} to ${nextTier}?`,
+        confirmLabel: `Switch to ${nextTier}`,
+        tone: 'primary',
+      };
+    }
+    return {
+      title: 'Delete user',
+      message: `Delete ${user.email} permanently? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    };
+  };
+
+  const confirmAction = async () => {
+    if (!pendingAction) return;
+    setActionBusy(true);
+    let ok = false;
+    if (pendingAction.type === 'suspend') {
+      ok = await handleSuspend(pendingAction.user);
+    } else if (pendingAction.type === 'unsuspend') {
+      ok = await handleUnsuspend(pendingAction.user);
+    } else if (pendingAction.type === 'tier') {
+      ok = await handleTierChange(pendingAction.user);
+    } else if (pendingAction.type === 'delete') {
+      ok = await handleDelete(pendingAction.user);
+    }
+    setActionBusy(false);
+    if (ok) {
+      setPendingAction(null);
+    }
+  };
+
+  const confirmContent = getConfirmContent(pendingAction);
 
   return (
     <div className="admin-card">
@@ -240,9 +315,11 @@ export default function AdminUsersPage() {
               </tr>
             </thead>
             <tbody>
-              {users.map((user) => (
-                <tr key={user.id}>
-                  <td>{user.full_name || '—'}</td>
+              {users.map((user) => {
+                const isSuspended = Boolean(user.suspended_at);
+                return (
+                <tr key={user.id} className={isSuspended ? 'admin-row-suspended' : undefined}>
+                  <td>{user.full_name || '--'}</td>
                   <td>{user.email}</td>
                   <td>
                     <span className={`admin-badge ${user.subscription_tier === 'premium' ? '' : 'secondary'}`}>
@@ -250,16 +327,20 @@ export default function AdminUsersPage() {
                     </span>
                   </td>
                   <td>
-                    <span className={`admin-badge ${user.status === 'active' ? 'success' : 'warning'}`}>
-                      {user.status}
+                    <span
+                      className={`admin-badge ${
+                        isSuspended ? 'danger' : user.status === 'active' ? 'success' : 'warning'
+                      }`}
+                    >
+                      {isSuspended ? 'suspended' : user.status}
                     </span>
                   </td>
                   <td>
                     {user.expires_at
                       ? new Date(user.expires_at).toLocaleDateString()
-                      : '—'}
+                      : '--'}
                   </td>
-                  <td>{user.created_at ? new Date(user.created_at).toLocaleDateString() : '—'}</td>
+                  <td>{user.created_at ? new Date(user.created_at).toLocaleDateString() : '--'}</td>
                   <td>
                     <div className="admin-action-buttons">
                       <button
@@ -269,41 +350,41 @@ export default function AdminUsersPage() {
                       >
                         Details
                       </button>
-                      {user.status === 'active' ? (
+                      {isSuspended ? (
                         <button
                           type="button"
-                          className="admin-button danger"
-                          onClick={() => handleSuspend(user)}
+                          className="admin-button secondary"
+                          onClick={() => requestAction('unsuspend', user)}
                         >
-                          Suspend
+                          Unsuspend
                         </button>
                       ) : (
                         <button
                           type="button"
-                          className="admin-button secondary"
-                          onClick={() => handleUnsuspend(user)}
+                          className="admin-button danger"
+                          onClick={() => requestAction('suspend', user)}
                         >
-                          Unsuspend
+                          Suspend
                         </button>
                       )}
                       <button
                         type="button"
                         className="admin-button"
-                        onClick={() => handleTierChange(user)}
+                        onClick={() => requestAction('tier', user)}
                       >
                         {user.subscription_tier === 'premium' ? 'Downgrade' : 'Upgrade'}
                       </button>
                       <button
                         type="button"
                         className="admin-button danger"
-                        onClick={() => handleDelete(user)}
+                        onClick={() => requestAction('delete', user)}
                       >
                         Delete
                       </button>
                     </div>
                   </td>
                 </tr>
-              ))}
+              )})}
             </tbody>
           </table>
 
@@ -323,6 +404,33 @@ export default function AdminUsersPage() {
             </button>
           </div>
         </>
+      )}
+
+      {pendingAction && confirmContent && (
+        <div className="admin-modal-backdrop" role="presentation">
+          <div className="admin-modal" role="dialog" aria-modal="true">
+            <h3>{confirmContent.title}</h3>
+            <p>{confirmContent.message}</p>
+            <div className="admin-actions">
+              <button
+                type="button"
+                className="admin-button secondary"
+                onClick={() => setPendingAction(null)}
+                disabled={actionBusy}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={`admin-button${confirmContent.tone === 'danger' ? ' danger' : ''}`}
+                onClick={confirmAction}
+                disabled={actionBusy}
+              >
+                {actionBusy ? 'Working...' : confirmContent.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
