@@ -23,6 +23,8 @@ export default function AdminUserDetail() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [pendingAction, setPendingAction] = useState(null);
+  const [actionBusy, setActionBusy] = useState(false);
 
   const loadUser = async () => {
     if (!token) {
@@ -92,7 +94,6 @@ export default function AdminUserDetail() {
   const handleTierChange = async () => {
     if (!user) return;
     const nextTier = user.subscription_tier === 'premium' ? 'free' : 'premium';
-    if (!confirm(`Change ${user.email} to ${nextTier}?`)) return;
     try {
       const response = await fetch(`${API_URL}/api/admin/users/${userId}/tier`, {
         method: 'POST',
@@ -116,7 +117,6 @@ export default function AdminUserDetail() {
 
   const handleSuspend = async () => {
     if (!user) return;
-    if (!confirm(`Suspend ${user.email}? They will be unable to log in.`)) return;
     try {
       const response = await fetch(`${API_URL}/api/admin/users/${userId}/suspend`, {
         method: 'POST',
@@ -162,7 +162,6 @@ export default function AdminUserDetail() {
 
   const handleDelete = async () => {
     if (!user) return;
-    if (!confirm(`Delete ${user.email} permanently? This cannot be undone.`)) return;
     try {
       const response = await fetch(`${API_URL}/api/admin/users/${userId}`, {
         method: 'DELETE',
@@ -191,25 +190,82 @@ export default function AdminUserDetail() {
     return <div className="admin-card">User not found.</div>;
   }
 
+  const requestAction = (type) => {
+    setPendingAction({ type });
+  };
+
+  const getConfirmContent = (action) => {
+    if (!action || !user) return null;
+    if (action.type === 'tier') {
+      const nextTier = user.subscription_tier === 'premium' ? 'free' : 'premium';
+      return {
+        title: 'Change plan',
+        message: `Change ${user.email} to ${nextTier}?`,
+        confirmLabel: `Switch to ${nextTier}`,
+        tone: 'primary',
+      };
+    }
+    if (action.type === 'suspend') {
+      return {
+        title: 'Suspend user',
+        message: `Suspend ${user.email}? They will be unable to log in.`,
+        confirmLabel: 'Suspend',
+        tone: 'danger',
+      };
+    }
+    if (action.type === 'unsuspend') {
+      return {
+        title: 'Unsuspend user',
+        message: `Restore access for ${user.email}?`,
+        confirmLabel: 'Unsuspend',
+        tone: 'secondary',
+      };
+    }
+    return {
+      title: 'Delete user',
+      message: `Delete ${user.email} permanently? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    };
+  };
+
+  const confirmAction = async () => {
+    if (!pendingAction) return;
+    setActionBusy(true);
+    if (pendingAction.type === 'tier') {
+      await handleTierChange();
+    } else if (pendingAction.type === 'suspend') {
+      await handleSuspend();
+    } else if (pendingAction.type === 'unsuspend') {
+      await handleUnsuspend();
+    } else if (pendingAction.type === 'delete') {
+      await handleDelete();
+    }
+    setActionBusy(false);
+    setPendingAction(null);
+  };
+
+  const confirmContent = getConfirmContent(pendingAction);
+
   return (
     <div className="admin-card">
       <div className="admin-actions">
         <button className="admin-button secondary" type="button" onClick={() => router.push('/admin/users')}>
           Back to Users
         </button>
-        <button className="admin-button" type="button" onClick={handleTierChange}>
+        <button className="admin-button" type="button" onClick={() => requestAction('tier')}>
           {user.subscription_tier === 'premium' ? 'Downgrade' : 'Upgrade'}
         </button>
         {user.suspended_at ? (
-          <button className="admin-button secondary" type="button" onClick={handleUnsuspend}>
+          <button className="admin-button secondary" type="button" onClick={() => requestAction('unsuspend')}>
             Unsuspend
           </button>
         ) : (
-          <button className="admin-button danger" type="button" onClick={handleSuspend}>
+          <button className="admin-button danger" type="button" onClick={() => requestAction('suspend')}>
             Suspend
           </button>
         )}
-        <button className="admin-button danger" type="button" onClick={handleDelete}>
+        <button className="admin-button danger" type="button" onClick={() => requestAction('delete')}>
           Delete
         </button>
       </div>
@@ -271,10 +327,10 @@ export default function AdminUserDetail() {
               Status: <strong>{user.status}</strong>
             </p>
             <p className="admin-subtitle">
-              Expires: <strong>{user.expires_at ? new Date(user.expires_at).toLocaleDateString() : '—'}</strong>
+              Expires: <strong>{user.expires_at ? new Date(user.expires_at).toLocaleDateString() : '--'}</strong>
             </p>
             <p className="admin-subtitle">
-              Suspended: <strong>{user.suspended_at ? new Date(user.suspended_at).toLocaleString() : 'No'}</strong>
+              Suspended: <strong>{user.suspended_at ? new Date(user.suspended_at).toLocaleString() : "No"}</strong>
             </p>
           </div>
         </div>
@@ -300,11 +356,11 @@ export default function AdminUserDetail() {
                 <tr key={sub.id}>
                   <td>{sub.status}</td>
                   <td>{sub.plan}</td>
-                  <td>{sub.started_at ? new Date(sub.started_at).toLocaleDateString() : '—'}</td>
-                  <td>{sub.expires_at ? new Date(sub.expires_at).toLocaleDateString() : '—'}</td>
-                  <td>{sub.product_id || '—'}</td>
-                  <td>{sub.transaction_id || '—'}</td>
-                  <td>{sub.store || '—'}</td>
+                  <td>{sub.started_at ? new Date(sub.started_at).toLocaleDateString() : '--'}</td>
+                  <td>{sub.expires_at ? new Date(sub.expires_at).toLocaleDateString() : '--'}</td>
+                  <td>{sub.product_id || '--'}</td>
+                  <td>{sub.transaction_id || '--'}</td>
+                  <td>{sub.store || '--'}</td>
                 </tr>
               ))
             ) : (
@@ -315,6 +371,33 @@ export default function AdminUserDetail() {
           </tbody>
         </table>
       </div>
+
+      {pendingAction && confirmContent && (
+        <div className="admin-modal-backdrop" role="presentation">
+          <div className="admin-modal" role="dialog" aria-modal="true">
+            <h3>{confirmContent.title}</h3>
+            <p>{confirmContent.message}</p>
+            <div className="admin-actions">
+              <button
+                className="admin-button secondary"
+                type="button"
+                onClick={() => setPendingAction(null)}
+                disabled={actionBusy}
+              >
+                Cancel
+              </button>
+              <button
+                className={`admin-button${confirmContent.tone === 'danger' ? ' danger' : ''}`}
+                type="button"
+                onClick={confirmAction}
+                disabled={actionBusy}
+              >
+                {actionBusy ? 'Working...' : confirmContent.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
