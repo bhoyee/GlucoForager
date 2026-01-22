@@ -82,6 +82,84 @@ export default function AdminUsersPage() {
     return () => clearInterval(timer);
   }, [autoRefresh, loadUsers]);
 
+  const handleSuspend = async (user) => {
+    if (!confirm(`Suspend ${user.email}? They will be unable to log in.`)) return;
+    try {
+      const response = await fetch(`${API_URL}/api/admin/users/${user.id}/suspend`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'Account locked by admin.' }),
+      });
+      if (response.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      if (!response.ok) throw new Error();
+      loadUsers();
+    } catch (error) {
+      setMessage('Failed to suspend user.');
+    }
+  };
+
+  const handleUnsuspend = async (user) => {
+    try {
+      const response = await fetch(`${API_URL}/api/admin/users/${user.id}/unsuspend`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      if (!response.ok) throw new Error();
+      loadUsers();
+    } catch (error) {
+      setMessage('Failed to unsuspend user.');
+    }
+  };
+
+  const handleTierChange = async (user) => {
+    const nextTier = user.subscription_tier === 'premium' ? 'free' : 'premium';
+    if (!confirm(`Change ${user.email} to ${nextTier}?`)) return;
+    try {
+      const response = await fetch(`${API_URL}/api/admin/users/${user.id}/tier`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tier: nextTier }),
+      });
+      if (response.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      if (!response.ok) throw new Error();
+      loadUsers();
+    } catch (error) {
+      setMessage('Failed to update subscription tier.');
+    }
+  };
+
+  const handleDelete = async (user) => {
+    if (!confirm(`Delete ${user.email} permanently? This cannot be undone.`)) return;
+    try {
+      const response = await fetch(`${API_URL}/api/admin/users/${user.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      if (!response.ok) throw new Error();
+      loadUsers();
+    } catch (error) {
+      setMessage('Failed to delete user.');
+    }
+  };
+
   return (
     <div className="admin-card">
       <h2 className="admin-title">Users</h2>
@@ -158,6 +236,7 @@ export default function AdminUsersPage() {
                 <th>Status</th>
                 <th>Expires</th>
                 <th>Joined</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -181,6 +260,48 @@ export default function AdminUsersPage() {
                       : '—'}
                   </td>
                   <td>{user.created_at ? new Date(user.created_at).toLocaleDateString() : '—'}</td>
+                  <td>
+                    <div className="admin-action-buttons">
+                      <button
+                        type="button"
+                        className="admin-button secondary"
+                        onClick={() => router.push(`/admin/users/${user.id}`)}
+                      >
+                        Details
+                      </button>
+                      {user.status === 'active' ? (
+                        <button
+                          type="button"
+                          className="admin-button danger"
+                          onClick={() => handleSuspend(user)}
+                        >
+                          Suspend
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="admin-button secondary"
+                          onClick={() => handleUnsuspend(user)}
+                        >
+                          Unsuspend
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="admin-button"
+                        onClick={() => handleTierChange(user)}
+                      >
+                        {user.subscription_tier === 'premium' ? 'Downgrade' : 'Upgrade'}
+                      </button>
+                      <button
+                        type="button"
+                        className="admin-button danger"
+                        onClick={() => handleDelete(user)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

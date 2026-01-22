@@ -300,3 +300,14 @@
   padding: 6px 10px;
   cursor: pointer;
 }
+
+.admin-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-action-buttons .admin-button {
+  padding: 8px 12px;
+  font-size: 12px;
+}
