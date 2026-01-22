@@ -20,6 +20,7 @@ import RecipeResultsScreen from '../screens/main/RecipeResultsScreen';
 import ScanResultsScreen from '../screens/main/ScanResultsScreen';
 import ScanProcessingScreen from '../screens/main/ScanProcessingScreen';
 import StartCookingScreen from '../screens/main/StartCookingScreen';
+import RecentRecipesScreen from '../screens/main/RecentRecipesScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -40,6 +41,7 @@ function HomeStackNavigator() {
       <HomeStack.Screen name="RecipeResults" component={RecipeResultsScreen} />
       <HomeStack.Screen name="RecipeDetail" component={RecipeDetailScreen} />
       <HomeStack.Screen name="StartCooking" component={StartCookingScreen} />
+      <HomeStack.Screen name="RecentRecipes" component={RecentRecipesScreen} />
     </HomeStack.Navigator>
   );
 }

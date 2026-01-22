@@ -23,13 +23,14 @@ export default function RecipeResultsScreen() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const headerPaddingTop = Math.max(insets.top, 16);
-  const contentBottomPadding = Math.max(tabBarHeight - 12, 8);
+  const contentBottomPadding = Math.max(insets.bottom + 4, 4);
   const {
     photoUri,
     images,
     recipes: recipesFromParams,
     selectedIngredients,
     detectedIngredients: detectedFromParams,
+    warning,
     source,
   } = route.params || {};
 
@@ -40,7 +41,10 @@ export default function RecipeResultsScreen() {
 
   useEffect(() => {
     const ingredientSource = source === 'text' ? 'Input' : 'Detected';
-    const rawIngredients = detectedFromParams?.length
+    const useDetected = source === 'text'
+      ? Array.isArray(detectedFromParams)
+      : detectedFromParams?.length;
+    const rawIngredients = useDetected
       ? detectedFromParams
       : selectedIngredients || [];
 
@@ -151,6 +155,13 @@ export default function RecipeResultsScreen() {
           </View>
         )}
 
+        {warning && (
+          <View style={styles.warningBanner}>
+            <Ionicons name="alert-circle-outline" size={18} color={Colors.warning} />
+            <Text style={styles.warningText}>{warning?.message || warning}</Text>
+          </View>
+        )}
+
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Detected Ingredients</Text>
@@ -179,7 +190,6 @@ export default function RecipeResultsScreen() {
                 <View style={styles.confidenceBadge}>
                   <Text style={styles.confidenceText}>{item.confidence}</Text>
                 </View>
-                <Text style={styles.ingredientCategory}>Ingredient</Text>
               </View>
             ))}
           </ScrollView>
@@ -256,7 +266,6 @@ export default function RecipeResultsScreen() {
                     >
                       <Text style={styles.matchText}>{matchText}</Text>
                     </LinearGradient>
-                    <Text style={styles.matchLabel}>ingredients match</Text>
                   </View>
                 </View>
 
@@ -278,7 +287,7 @@ export default function RecipeResultsScreen() {
             onPress={() => navigation.navigate('ManualInput')}
           >
             <Ionicons name="add-circle-outline" size={22} color="white" />
-            <Text style={styles.primaryButtonText}>Add Missing Ingredients</Text>
+            <Text style={styles.primaryButtonText}>Add Another Ingredient</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -298,6 +307,24 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  warningBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: `${Colors.warning}15`,
+    marginHorizontal: 20,
+    marginTop: 12,
+    marginBottom: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  warningText: {
+    marginLeft: 8,
+    color: Colors.warning,
+    fontSize: 13,
+    lineHeight: 18,
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,

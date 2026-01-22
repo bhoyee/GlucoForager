@@ -778,7 +778,7 @@ const RecipeDetailsScreen = () => {
           </ScrollView>
           
           <TouchableOpacity 
-            style={styles.modalButton}
+            style={[styles.modalButton, { marginBottom: Math.max(insets.bottom, 16) }]}
             onPress={() => setShowSafetyModal(false)}
           >
             <Text style={styles.modalButtonText}>Got It!</Text>

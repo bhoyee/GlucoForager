@@ -35,6 +35,7 @@ export default function HomeScreen() {
   const [dailyLimit, setDailyLimit] = useState(3);
   const [isLoading, setIsLoading] = useState(true);
   const [suggestedRecipes, setSuggestedRecipes] = useState([]);
+  const [recentRecipes, setRecentRecipes] = useState([]);
   const [isFetchingRecipes, setIsFetchingRecipes] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(true);
   const [networkError, setNetworkError] = useState(null);
@@ -88,6 +89,14 @@ export default function HomeScreen() {
         const suggestions = JSON.parse(cachedSuggestions);
         if (Array.isArray(suggestions)) {
           setSuggestedRecipes(suggestions);
+        }
+      }
+
+      const cachedRecent = await AsyncStorage.getItem('home_recent_recipes');
+      if (cachedRecent) {
+        const recentItems = JSON.parse(cachedRecent);
+        if (Array.isArray(recentItems)) {
+          setRecentRecipes(recentItems);
         }
       }
     } catch (error) {
@@ -239,10 +248,14 @@ export default function HomeScreen() {
       const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         setSuggestedRecipes([]);
+        setRecentRecipes([]);
         return;
       }
 
-      await fetchSuggestions(token);
+      await Promise.allSettled([
+        fetchSuggestions(token),
+        fetchRecentRecipes(token),
+      ]);
     } catch (error) {
       // Keep last known suggestions on error.
     } finally {
@@ -264,6 +277,21 @@ export default function HomeScreen() {
     const items = Array.isArray(data.items) ? data.items : [];
     setSuggestedRecipes(items);
     await AsyncStorage.setItem('home_suggestions', JSON.stringify(items));
+  };
+
+  const fetchRecentRecipes = async (token) => {
+    const response = await apiFetch(
+      `${API_URL}${API_ENDPOINTS.RECENT_RECIPES}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+      { onUnauthorized: signOut, timeoutMs: 5000 }
+    );
+    if (response.status === 401) {
+      return;
+    }
+    const data = await response.json();
+    const items = Array.isArray(data.items) ? data.items : [];
+    setRecentRecipes(items);
+    await AsyncStorage.setItem('home_recent_recipes', JSON.stringify(items));
   };
 
   const handleShuffleSuggestions = async () => {
@@ -392,6 +420,10 @@ export default function HomeScreen() {
 
   const handleManualInputPress = () => {
     checkScanLimit('manual');
+  };
+
+  const handleViewRecentRecipes = () => {
+    navigation.navigate('RecentRecipes', { initialRecipes: recentRecipes });
   };
 
   const handleViewRecipeDetail = (recipe) => {
@@ -543,6 +575,22 @@ export default function HomeScreen() {
               <Ionicons name="chevron-forward" size={24} color={Colors.textLight} />
             </View>
           </TouchableOpacity>
+
+          {recentRecipes.length > 0 && (
+            <TouchableOpacity
+              style={styles.recentRow}
+              onPress={handleViewRecentRecipes}
+            >
+              <View style={styles.recentRowContent}>
+                <Ionicons name="time-outline" size={18} color={Colors.primary} />
+                <Text style={styles.recentRowText}>Last Recipes</Text>
+              </View>
+              <View style={styles.recentRowRight}>
+                <Text style={styles.recentRowCount}>{recentRecipes.length}</Text>
+                <Ionicons name="chevron-forward" size={18} color={Colors.textLight} />
+              </View>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Suggest Me 3 Recipes */}
@@ -876,6 +924,38 @@ const styles = StyleSheet.create({
   actionDescription: {
     fontSize: 14,
     color: Colors.textLight,
+  },
+  recentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: `${Colors.primary}12`,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: `${Colors.primary}30`,
+  },
+  recentRowContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  recentRowText: {
+    fontSize: 15,
+    color: Colors.text,
+    fontWeight: '600',
+  },
+  recentRowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  recentRowCount: {
+    fontSize: 12,
+    color: Colors.textLight,
+    fontWeight: '600',
   },
   recipeCard: {
     width: 280,

@@ -29,7 +29,8 @@ export default function ManualInputScreen() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const headerPaddingTop = Math.max(insets.top, 16);
-  const contentBottomPadding = Math.max(insets.bottom, 0);
+  const footerHeight = 68;
+  const contentBottomPadding = footerHeight + Math.max(insets.bottom, 12);
   const [ingredients, setIngredients] = useState(['']);
   const [isLoading, setIsLoading] = useState(false);
   const requestControllerRef = useRef(null);
@@ -140,7 +141,8 @@ export default function ManualInputScreen() {
       recipes,
       selectedIngredients: normalized,
       source: 'text',
-      detectedIngredients: result?.filtered_out || [],
+      detectedIngredients: result?.detected || [],
+      warning: result?.warning || null,
     });
   };
 
@@ -289,7 +291,8 @@ export default function ManualInputScreen() {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'position' : undefined}
+      keyboardVerticalOffset={headerPaddingTop}
       style={styles.container}
     >
       <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
@@ -305,6 +308,7 @@ export default function ManualInputScreen() {
       <ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
 
         {/* Instructions */}
@@ -337,13 +341,22 @@ export default function ManualInputScreen() {
             <View key={index} style={styles.ingredientRow}>
               <TextInput
                 style={styles.ingredientInput}
-                placeholder={`Ingredient ${index + 1} (e.g., chicken, tomatoes)`}
+                placeholder={`Ingredient ${index + 1} (e.g., tomato)`}
                 placeholderTextColor={Colors.textMuted}
                 value={ingredient}
                 onChangeText={(text) => handleIngredientChange(text, index)}
                 autoCapitalize="none"
                 editable={!isLoading}
               />
+              {index === ingredients.length - 1 && (
+                <TouchableOpacity
+                  style={styles.addInlineButton}
+                  onPress={handleAddIngredient}
+                  disabled={isLoading}
+                >
+                  <Ionicons name="add" size={18} color="white" />
+                </TouchableOpacity>
+              )}
               {ingredients.length > 1 && (
                 <TouchableOpacity
                   style={styles.removeButton}
@@ -356,15 +369,7 @@ export default function ManualInputScreen() {
             </View>
           ))}
 
-          {/* Add More Button */}
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={handleAddIngredient}
-            disabled={isLoading}
-          >
-            <Ionicons name="add-circle-outline" size={24} color={Colors.primary} />
-            <Text style={styles.addButtonText}>Add Another Ingredient</Text>
-          </TouchableOpacity>
+          <Text style={styles.addHint}>Tap + to add another ingredient</Text>
         </View>
 
         {/* Examples */}
@@ -374,14 +379,20 @@ export default function ManualInputScreen() {
           <TouchableOpacity
             style={styles.examplePill}
             disabled={isLoading}
-            onPress={() => setIngredients(['tomato', 'garlic'])}
+            onPress={() => setIngredients(['tomato'])}
           >
             <Text style={styles.exampleText}>Tomato</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-        {/* Find Recipes Button */}
+      </ScrollView>
+      <View
+        style={[
+          styles.footerBar,
+          { paddingBottom: Math.max(insets.bottom, 8), height: footerHeight + Math.max(insets.bottom, 8) },
+        ]}
+      >
         <TouchableOpacity
           style={[
             styles.findButton,
@@ -412,7 +423,7 @@ export default function ManualInputScreen() {
             )}
           </View>
         </TouchableOpacity>
-      </ScrollView>
+      </View>
       <Modal transparent visible={isLoading} animationType="fade">
         <View style={styles.loadingOverlay}>
           <View style={styles.loadingCard}>
@@ -442,6 +453,17 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingTop: 8,
     paddingBottom: 0,
+  },
+  footerBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 20,
+    paddingTop: 2,
+    backgroundColor: Colors.background,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
   },
   loadingOverlay: {
     flex: 1,
@@ -570,25 +592,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
+  addInlineButton: {
+    marginLeft: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   removeButton: {
     marginLeft: 12,
   },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderStyle: 'dashed',
-  },
-  addButtonText: {
-    marginLeft: 8,
-    fontSize: 16,
-    color: Colors.primary,
-    fontWeight: '500',
+  addHint: {
+    marginTop: 6,
+    fontSize: 13,
+    color: Colors.textLight,
   },
   examplesContainer: {
     paddingHorizontal: 20,
@@ -625,10 +644,9 @@ const styles = StyleSheet.create({
   },
   findButton: {
     backgroundColor: Colors.primary,
-    marginHorizontal: 20,
     borderRadius: 12,
     paddingVertical: 18,
-    marginBottom: -8,
+    marginBottom: 0,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,

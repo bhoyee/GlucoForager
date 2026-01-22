@@ -1,0 +1,364 @@
+// screens/main/RecentRecipesScreen.js
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Image,
+  ActivityIndicator,
+  Alert,
+  RefreshControl,
+} from 'react-native';
+import { useNavigation, useRoute, useIsFocused } from '@react-navigation/native';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Colors } from '../../constants/Colors';
+import { API_ENDPOINTS, API_URL } from '../../config/api';
+import { apiFetch } from '../../utils/api';
+import { useAuth } from '../../context/authContext';
+import RecipePlaceholder from '../../assets/images/recipe-placeholder.jpeg';
+
+export default function RecentRecipesScreen() {
+  const navigation = useNavigation();
+  const route = useRoute();
+  const isFocused = useIsFocused();
+  const { signOut } = useAuth();
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
+  const headerPaddingTop = Math.max(insets.top, 16);
+  const contentBottomPadding = Math.max(tabBarHeight - 12, 8);
+  const initialRecipes = Array.isArray(route.params?.initialRecipes)
+    ? route.params.initialRecipes
+    : [];
+
+  const [recipes, setRecipes] = useState(initialRecipes);
+  const [isLoading, setIsLoading] = useState(initialRecipes.length === 0);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const getRecipeTimeValue = (recipe) => {
+    const prepRaw =
+      recipe?.prep_time_minutes ??
+      recipe?.prepTime ??
+      recipe?.prep_time ??
+      null;
+    const cookRaw = recipe?.cook_time_minutes ?? recipe?.cookTime ?? recipe?.cook_time ?? null;
+    const prep = typeof prepRaw === 'number' ? prepRaw : parseFloat(prepRaw);
+    const cook = typeof cookRaw === 'number' ? cookRaw : parseFloat(cookRaw);
+    if (Number.isFinite(prep) || Number.isFinite(cook)) {
+      const total = (Number.isFinite(prep) ? prep : 0) + (Number.isFinite(cook) ? cook : 0);
+      return total ? `${total} min` : 'Time N/A';
+    }
+    const totalRaw = recipe?.total_time ?? recipe?.totalTime ?? recipe?.time ?? null;
+    const total = typeof totalRaw === 'number' ? totalRaw : parseFloat(totalRaw);
+    if (Number.isFinite(total)) {
+      return `${total} min`;
+    }
+    return 'Time N/A';
+  };
+
+  const getCaloriesValue = (recipe) => {
+    const nutrition = recipe?.nutrition || recipe?.nutrition_per_serving || {};
+    const raw = nutrition.calories ?? recipe?.calories ?? null;
+    if (raw === null || raw === undefined || raw === '') return 'N/A';
+    const numeric = typeof raw === 'number' ? raw : parseFloat(raw);
+    return Number.isFinite(numeric) ? `${numeric}` : `${raw}`;
+  };
+
+  const loadRecent = useCallback(async () => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        setRecipes([]);
+        return;
+      }
+      const response = await apiFetch(
+        `${API_URL}${API_ENDPOINTS.RECENT_RECIPES}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+        { onUnauthorized: signOut }
+      );
+      if (response.status === 401) {
+        setRecipes([]);
+        return;
+      }
+      if (!response.ok) {
+        Alert.alert('Error', 'Unable to load recent recipes right now.');
+        return;
+      }
+      const data = await response.json();
+      const items = Array.isArray(data.items) ? data.items : [];
+      setRecipes(items);
+    } catch (error) {
+      Alert.alert('Error', 'Unable to load recent recipes right now.');
+    } finally {
+      setIsLoading(false);
+      setRefreshing(false);
+    }
+  }, [signOut]);
+
+  useEffect(() => {
+    if (isFocused) {
+      loadRecent();
+    }
+  }, [isFocused, loadRecent]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadRecent();
+  };
+
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+        <Text style={styles.loadingText}>Loading recent recipes...</Text>
+      </View>
+    );
+  }
+
+  if (recipes.length === 0) {
+    return (
+      <View style={styles.container}>
+        <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={22} color={Colors.text} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Recent Recipes</Text>
+          <View style={styles.headerRight} />
+        </View>
+
+        <View style={styles.emptyContainer}>
+          <Ionicons name="time-outline" size={96} color={Colors.textLight} />
+          <Text style={styles.emptyTitle}>No recent recipes</Text>
+          <Text style={styles.emptySubtitle}>
+            Your most recent AI results will show here.
+          </Text>
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => navigation.navigate('Home')}
+          >
+            <Ionicons name="restaurant-outline" size={20} color="white" />
+            <Text style={styles.buttonText}>Find Recipes</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Ionicons name="arrow-back" size={22} color={Colors.text} />
+        </TouchableOpacity>
+        <View style={styles.headerText}>
+          <Text style={styles.headerTitle}>Recent Recipes</Text>
+          <Text style={styles.headerSubtitle}>{recipes.length} recipes</Text>
+        </View>
+      </View>
+
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: contentBottomPadding }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[Colors.primary]}
+          />
+        }
+      >
+        {recipes.map((recipe, index) => {
+          const title = recipe.name || recipe.title || `Recipe ${index + 1}`;
+          const imageUrl = recipe.image_url || recipe.image || '';
+          const imageSource = recipe.image_source || 'unknown';
+          return (
+            <TouchableOpacity
+              key={recipe.id || `${title}-${index}`}
+              style={styles.recipeCard}
+              onPress={() => navigation.navigate('RecipeDetail', { recipe, source: 'admin' })}
+              activeOpacity={0.7}
+            >
+              <View style={styles.imageContainer}>
+                {imageUrl && imageSource !== 'placeholder' ? (
+                  <Image source={{ uri: imageUrl }} style={styles.recipeImage} />
+                ) : (
+                  <Image source={RecipePlaceholder} style={styles.recipeImage} />
+                )}
+              </View>
+              <View style={styles.recipeInfo}>
+                <Text style={styles.recipeName} numberOfLines={1}>{title}</Text>
+                <Text style={styles.recipeDescription} numberOfLines={2}>
+                  {recipe.description || 'Diabetes-friendly recipe.'}
+                </Text>
+                <View style={styles.recipeMeta}>
+                  <View style={styles.metaItem}>
+                    <Ionicons name="time-outline" size={14} color={Colors.textLight} />
+                    <Text style={styles.metaText}>{getRecipeTimeValue(recipe)}</Text>
+                  </View>
+                  <View style={styles.metaItem}>
+                    <Ionicons name="flame-outline" size={14} color={Colors.textLight} />
+                    <Text style={styles.metaText}>{getCaloriesValue(recipe)} cal</Text>
+                  </View>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    backgroundColor: Colors.background,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  headerText: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  headerSubtitle: {
+    fontSize: 13,
+    color: Colors.textLight,
+    marginTop: 4,
+  },
+  headerRight: {
+    width: 40,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: Colors.background,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: Colors.textLight,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  emptyTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: Colors.text,
+    marginTop: 16,
+    marginBottom: 6,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: Colors.textLight,
+    textAlign: 'center',
+    marginBottom: 20,
+    paddingHorizontal: 24,
+  },
+  button: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 15,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  scrollView: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  recipeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  imageContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 14,
+    overflow: 'hidden',
+    marginRight: 14,
+  },
+  recipeImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  recipeInfo: {
+    flex: 1,
+  },
+  recipeName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.text,
+    marginBottom: 4,
+  },
+  recipeDescription: {
+    fontSize: 13,
+    color: Colors.textLight,
+    marginBottom: 8,
+  },
+  recipeMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  metaText: {
+    marginLeft: 4,
+    fontSize: 12,
+    color: Colors.textLight,
+  },
+});

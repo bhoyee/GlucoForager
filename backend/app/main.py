@@ -2,6 +2,8 @@ import logging
 import time
 
 import os
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -42,6 +44,31 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s - %(message)s",
 )
 logger = logging.getLogger("glucoforager")
+
+log_dir = os.getenv("LOG_DIR", "logs")
+os.makedirs(log_dir, exist_ok=True)
+log_path = os.path.join(log_dir, "app.log")
+retention_days = int(os.getenv("LOG_RETENTION_DAYS", "15"))
+retention_seconds = retention_days * 24 * 60 * 60
+now = time.time()
+for path in Path(log_dir).glob("app.log*"):
+    try:
+        if now - path.stat().st_mtime > retention_seconds:
+            path.unlink(missing_ok=True)
+    except OSError:
+        continue
+file_handler = RotatingFileHandler(log_path, maxBytes=5 * 1024 * 1024, backupCount=5, encoding="utf-8")
+file_handler.setLevel(logging.INFO)
+file_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s - %(message)s"))
+
+root_logger = logging.getLogger()
+if not any(getattr(h, "baseFilename", None) == file_handler.baseFilename for h in root_logger.handlers):
+    root_logger.addHandler(file_handler)
+
+for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+    uv_logger = logging.getLogger(name)
+    if not any(getattr(h, "baseFilename", None) == file_handler.baseFilename for h in uv_logger.handlers):
+        uv_logger.addHandler(file_handler)
 
 app = FastAPI(title=settings.project_name)
 

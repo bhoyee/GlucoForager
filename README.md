@@ -13,6 +13,11 @@ Diabetes-friendly recipe suggestions from the ingredients you already have. Mobi
 3. Premium features: Camera flow, subscriptions, favorites, profile/history.
 4. Landing page: Marketing site with pricing, feature comparison, gallery, and SEO focus.
 
+## EAS Update channels
+- `main` branch is treated as production. Push OTA updates with `eas update --branch production`.
+- `preview` branch maps to the preview channel.
+- `development` branch maps to the development channel.
+
 ## AI endpoints (AI-first)
 - `POST /api/ai/recipes/vision`: Fridge photo (base64) → ingredients via vision → 3 AI recipes. Tier-aware models and caching.
 - `POST /api/ai/text/recipes`: Text ingredient list → 3 AI recipes. Tier-aware models and caching.

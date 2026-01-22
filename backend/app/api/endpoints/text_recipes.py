@@ -116,10 +116,19 @@ def _run_text_job(job_id: str) -> None:
             filters=filters,
             device_id=device_id,
         )
+        warning = None
+        if classified["non_food"]:
+            warning = {
+                "code": "non_food_ignored",
+                "message": "Some items were not food ingredients and were ignored.",
+                "source": classified["source"],
+            }
         job.result = {
             "results": recipes,
+            "detected": classified["food"],
             "filtered_out": classified["non_food"],
             "classification_source": classified["source"],
+            "warning": warning,
         }
         job.status = "completed"
         job.error = None
@@ -174,11 +183,20 @@ def generate_from_text(
                 cost_estimate=0,
                 device_id=device_id,
             )
+            warning = None
+            if classified["non_food"]:
+                warning = {
+                    "code": "non_food_ignored",
+                    "message": "Some items were not food ingredients and were ignored.",
+                    "source": classified["source"],
+                }
             return {
                 "results": cached_recipes,
                 "access": access,
+                "detected": classified["food"],
                 "filtered_out": classified["non_food"],
                 "classification_source": classified["source"],
+                "warning": warning,
             }
     try:
         recipes = pipeline.text_to_recipes(
@@ -193,11 +211,20 @@ def generate_from_text(
         # AI not configured (missing keys) or other pipeline errors
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
     cache.set(cache_key, json.dumps(recipes), ttl_seconds=TEXT_CACHE_TTL_SECONDS)
+    warning = None
+    if classified["non_food"]:
+        warning = {
+            "code": "non_food_ignored",
+            "message": "Some items were not food ingredients and were ignored.",
+            "source": classified["source"],
+        }
     return {
         "results": recipes,
         "access": access,
+        "detected": classified["food"],
         "filtered_out": classified["non_food"],
         "classification_source": classified["source"],
+        "warning": warning,
     }
 
 
