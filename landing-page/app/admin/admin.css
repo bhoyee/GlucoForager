@@ -6,7 +6,7 @@
 }
 
 .admin-container {
-  max-width: 1100px;
+  max-width: 1400px;
   margin: 0 auto;
 }
 
@@ -225,10 +225,49 @@
   color: #9a4a00;
 }
 
+.admin-badge.danger {
+  background: rgba(229, 57, 53, 0.16);
+  color: #b71c1c;
+}
+
+.admin-row-suspended td {
+  color: #9aa8a0;
+}
+
+.admin-row-suspended td:first-child,
+.admin-row-suspended td:nth-child(2) {
+  text-decoration: line-through;
+}
+
 .admin-inline {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.admin-subcards {
+  margin: 12px 0 16px;
+}
+
+.admin-subcard {
+  background: #f4fbf6;
+  border: 1px solid #dbe9e1;
+  border-radius: 12px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 150px;
+}
+
+.admin-subcard span {
+  font-size: 12px;
+  color: #5c7368;
+}
+
+.admin-subcard strong {
+  font-size: 18px;
+  color: #2e7d32;
 }
 
 .admin-inline .admin-field {
@@ -310,4 +349,39 @@
 .admin-action-buttons .admin-button {
   padding: 8px 12px;
   font-size: 12px;
+}
+
+.admin-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(18, 36, 28, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 80;
+  padding: 24px;
+}
+
+.admin-modal {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 22px 24px;
+  max-width: 480px;
+  width: 100%;
+  box-shadow: 0 18px 40px rgba(18, 47, 34, 0.2);
+  border: 1px solid #e5eee9;
+}
+
+.admin-modal h3 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.admin-modal p {
+  margin: 0 0 18px;
+  color: #4f6b5c;
+}
+
+.admin-modal .admin-actions {
+  justify-content: flex-end;
 }
