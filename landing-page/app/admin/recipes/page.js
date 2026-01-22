@@ -21,6 +21,8 @@ export default function AdminRecipesList() {
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [pendingAction, setPendingAction] = useState(null);
+  const [actionBusy, setActionBusy] = useState(false);
 
   useEffect(() => {
     if (!token) {
@@ -51,7 +53,6 @@ export default function AdminRecipesList() {
   };
 
   const handleDelete = async (recipeId) => {
-    if (!confirm('Delete this recipe permanently?')) return;
     try {
       const response = await fetch(`${API_URL}/api/admin/recipes/${recipeId}`, {
         method: 'DELETE',
@@ -67,6 +68,18 @@ export default function AdminRecipesList() {
     } catch (error) {
       setMessage('Failed to delete recipe.');
     }
+  };
+
+  const requestDelete = (recipe) => {
+    setPendingAction({ recipe });
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingAction?.recipe) return;
+    setActionBusy(true);
+    await handleDelete(pendingAction.recipe.id);
+    setActionBusy(false);
+    setPendingAction(null);
   };
 
   const filtered = recipes
@@ -152,7 +165,7 @@ export default function AdminRecipesList() {
                     <button
                       type="button"
                       className="admin-button danger"
-                      onClick={() => handleDelete(recipe.id)}
+                      onClick={() => requestDelete(recipe)}
                     >
                       Delete
                     </button>
@@ -178,6 +191,33 @@ export default function AdminRecipesList() {
             </button>
           </div>
         </>
+      )}
+
+      {pendingAction && (
+        <div className="admin-modal-backdrop" role="presentation">
+          <div className="admin-modal" role="dialog" aria-modal="true">
+            <h3>Delete recipe</h3>
+            <p>Delete {pendingAction.recipe.name} permanently? This cannot be undone.</p>
+            <div className="admin-actions">
+              <button
+                className="admin-button secondary"
+                type="button"
+                onClick={() => setPendingAction(null)}
+                disabled={actionBusy}
+              >
+                Cancel
+              </button>
+              <button
+                className="admin-button danger"
+                type="button"
+                onClick={confirmDelete}
+                disabled={actionBusy}
+              >
+                {actionBusy ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
