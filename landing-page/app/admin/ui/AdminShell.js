@@ -35,6 +35,9 @@ export default function AdminShell({ children }) {
             <Link href="/admin/recipes" className={pathname === '/admin/recipes' ? 'active' : ''}>
               Recipes
             </Link>
+            <Link href="/admin/users" className={pathname === '/admin/users' ? 'active' : ''}>
+              Users
+            </Link>
             <Link
               href="/admin/recipes/new"
               className={pathname === '/admin/recipes/new' ? 'active' : ''}

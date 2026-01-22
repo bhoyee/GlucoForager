@@ -210,6 +210,21 @@
   font-weight: 600;
 }
 
+.admin-badge.secondary {
+  background: rgba(99, 99, 99, 0.12);
+  color: #4a4a4a;
+}
+
+.admin-badge.success {
+  background: rgba(76, 175, 80, 0.18);
+  color: #1b5e20;
+}
+
+.admin-badge.warning {
+  background: rgba(255, 152, 0, 0.16);
+  color: #9a4a00;
+}
+
 .admin-inline {
   display: flex;
   gap: 12px;
@@ -255,6 +270,20 @@
   border-radius: 10px;
   border: 1px solid #cfe0d8;
   font-size: 14px;
+}
+
+.admin-inline-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #4f6b5c;
+  font-weight: 600;
+}
+
+.admin-inline-toggle input {
+  width: 16px;
+  height: 16px;
 }
 
 .admin-pagination {
