@@ -145,7 +145,16 @@ def login(
     if not user or not verify_password(form_data.password, user.hashed_password):
         remaining_attempts = login_throttler.record_failure(identifier)
         logger.warning("Login failed for email=%s, remaining_attempts=%s", form_data.username, remaining_attempts)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+        if remaining_attempts == 0:
+            allowed, remaining = login_throttler.check_allowed(identifier)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Too many failed attempts. Try again in {remaining} seconds.",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid credentials. {remaining_attempts} attempts remaining.",
+        )
     if user.suspended_at:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -182,7 +191,16 @@ def login_alias(
     if not user or not verify_password(payload.password, user.hashed_password):
         remaining_attempts = login_throttler.record_failure(identifier)
         logger.warning("Login failed for email=%s, remaining_attempts=%s", email, remaining_attempts)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+        if remaining_attempts == 0:
+            allowed, remaining = login_throttler.check_allowed(identifier)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Too many failed attempts. Try again in {remaining} seconds.",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid credentials. {remaining_attempts} attempts remaining.",
+        )
     if user.suspended_at:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
