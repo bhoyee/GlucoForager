@@ -16,6 +16,8 @@ import OnboardingScreen from './screens/onboarding/OnboardingScreen';
 import LoginScreen from './screens/auth/LoginScreen';
 import SignUpScreen from './screens/auth/SignUpScreen';
 import ForgotPasswordScreen from './screens/auth/ForgotPasswordScreen';
+import TermsScreen from './screens/main/TermsScreen';
+import PrivacyPolicyScreen from './screens/main/PrivacyPolicyScreen';
 
 // Import main app
 import MainTabNavigator from './navigation/MainTabNavigator';
@@ -33,6 +35,8 @@ function AuthStack() {
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="SignUp" component={SignUpScreen} />
       <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+      <Stack.Screen name="Terms" component={TermsScreen} />
+      <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
     </Stack.Navigator>
   );
 }
@@ -77,7 +81,11 @@ function AppNavigator() {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {userToken ? (
-          <Stack.Screen name="MainTabs" component={MainTabNavigator} />
+          <>
+            <Stack.Screen name="MainTabs" component={MainTabNavigator} />
+            <Stack.Screen name="Terms" component={TermsScreen} />
+            <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
+          </>
         ) : (
           <Stack.Screen name="Auth" component={AuthStack} />
         )}

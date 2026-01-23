@@ -11,6 +11,8 @@ import OnboardingScreen from "../screens/onboarding/OnboardingScreen";
 import LoginScreen from "../screens/auth/LoginScreen";
 import SignUpScreen from "../screens/auth/SignUpScreen";
 import ForgotPasswordScreen from "../screens/auth/ForgotPasswordScreen";
+import TermsScreen from "../screens/main/TermsScreen";
+import PrivacyPolicyScreen from "../screens/main/PrivacyPolicyScreen";
 import MainTabNavigator from "./MainTabNavigator";
 
 export function RootNavigatorContent() {
@@ -112,6 +114,16 @@ export function RootNavigatorContent() {
               component={ForgotPasswordScreen}
               options={{ headerShown: false }}
             />
+            <Stack.Screen
+              name="Terms"
+              component={TermsScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="PrivacyPolicy"
+              component={PrivacyPolicyScreen}
+              options={{ headerShown: false }}
+            />
           </>
         ) : (
           // Returning users (no token, has seen onboarding): Auth flow
@@ -129,6 +141,16 @@ export function RootNavigatorContent() {
             <Stack.Screen
               name="ForgotPassword"
               component={ForgotPasswordScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="Terms"
+              component={TermsScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="PrivacyPolicy"
+              component={PrivacyPolicyScreen}
               options={{ headerShown: false }}
             />
           </>
