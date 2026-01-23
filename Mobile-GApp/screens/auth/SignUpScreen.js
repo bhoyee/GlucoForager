@@ -244,8 +244,21 @@ export default function SignUpScreen() {
           <View style={styles.termsContainer}>
             <Text style={styles.termsText}>
               By signing up, you agree to our{" "}
-              <Text style={styles.termsLink}>Terms of Service</Text> and{" "}
-              <Text style={styles.termsLink}>Privacy Policy</Text>
+              <Text
+                style={styles.termsLink}
+                onPress={() => navigation.navigate("Terms")}
+                suppressHighlighting
+              >
+                Terms of Service
+              </Text>{" "}
+              and{" "}
+              <Text
+                style={styles.termsLink}
+                onPress={() => navigation.navigate("PrivacyPolicy")}
+                suppressHighlighting
+              >
+                Privacy Policy
+              </Text>
             </Text>
           </View>
 

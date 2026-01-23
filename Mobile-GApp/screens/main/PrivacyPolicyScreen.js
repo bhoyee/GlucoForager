@@ -2,14 +2,12 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function PrivacyPolicyScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const tabBarHeight = useBottomTabBarHeight();
   const headerPaddingTop = Math.max(insets.top, 16);
-  const contentBottomPadding = Math.max(tabBarHeight - 12, 8);
+  const contentBottomPadding = Math.max(insets.bottom, 16) + 16;
   return (
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
@@ -94,8 +92,7 @@ export default function PrivacyPolicyScreen({ navigation }) {
 
         <Text style={styles.sectionTitle}>9. Contact Us</Text>
         <Text style={styles.paragraph}>
-          Email: privacy@glucoforager.com{"\n"}
-          Address: 123 Health Street, San Francisco, CA 94107
+          Email: hello@glucoforager.com
         </Text>
         </View>
       </ScrollView>
