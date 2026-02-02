@@ -61,7 +61,7 @@ def check_user_access(user: User, db: Session, device_id: str | None = None) -> 
             db.query(AIRequest)
             .filter(
                 AIRequest.user_id == user.id,
-                AIRequest.request_type.in_(["vision", "text"]),
+                AIRequest.request_type.in_(["vision", "vision_batch", "text"]),
                 AIRequest.created_at >= today,
                 AIRequest.created_at < tomorrow,
             )
@@ -78,7 +78,7 @@ def check_user_access(user: User, db: Session, device_id: str | None = None) -> 
                 db.query(AIRequest)
                 .filter(
                     AIRequest.device_id == device_id,
-                    AIRequest.request_type.in_(["vision", "text"]),
+                    AIRequest.request_type.in_(["vision", "vision_batch", "text"]),
                     AIRequest.created_at >= today,
                     AIRequest.created_at < tomorrow,
                 )
