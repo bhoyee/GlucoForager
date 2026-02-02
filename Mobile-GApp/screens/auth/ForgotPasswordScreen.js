@@ -47,7 +47,7 @@ export default function ForgotPasswordScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       });
-      const data = await response.json();
+      const data = await safeReadJson(response);
       if (!response.ok) {
         throw new Error(data?.detail || data?.message || 'Failed to send reset code.');
       }
@@ -95,7 +95,7 @@ export default function ForgotPasswordScreen() {
           new_password: newPassword,
         }),
       });
-      const data = await response.json().catch(() => ({}));
+      const data = await safeReadJson(response);
       if (!response.ok) {
         const detail = data?.detail;
         const message =
@@ -112,6 +112,18 @@ export default function ForgotPasswordScreen() {
       Alert.alert('Error', error.message || 'Failed to reset password.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const safeReadJson = async (response) => {
+    const rawText = await response.text().catch(() => '');
+    if (!rawText) return {};
+    try {
+      return JSON.parse(rawText);
+    } catch (error) {
+      const preview = rawText.slice(0, 120).replace(/\s+/g, ' ');
+      console.warn('Non-JSON response:', preview);
+      return { detail: 'Unable to process request right now. Please try again.' };
     }
   };
 
