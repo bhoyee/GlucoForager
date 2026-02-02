@@ -1,9 +1,8 @@
 // config/api.js
 import { Platform } from 'react-native';
 
-const DEV_DEFAULT_URL =
-  Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://localhost:8000';
-const PROD_DEFAULT_URL = 'https://your-production-api.com';
+const DEV_DEFAULT_URL = 'https://api.glucoforager.com';
+const PROD_DEFAULT_URL = 'https://api.glucoforager.com';
 
 export const API_URL =
   process.env.EXPO_PUBLIC_API_URL || (__DEV__ ? DEV_DEFAULT_URL : PROD_DEFAULT_URL);

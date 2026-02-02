@@ -89,7 +89,7 @@ export default function ScanProcessingScreen() {
                 ? JSON.stringify({ images_base64: imagesBase64 })
                 : JSON.stringify({ image_base64: imagesBase64[0] }),
           },
-          { onUnauthorized: signOut }
+          { onUnauthorized: signOut, timeoutMs: 60000 }
         );
 
         if (response.status === 401) {
@@ -125,6 +125,7 @@ export default function ScanProcessingScreen() {
           navigation.goBack();
         }, 120000);
       } catch (error) {
+        console.warn('Scan analysis error:', error?.message || error);
         Alert.alert('Scan failed', 'Unable to analyze image. Please try again.');
         navigation.goBack();
       }
