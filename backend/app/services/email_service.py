@@ -1,5 +1,4 @@
 import logging
-import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
@@ -52,33 +51,10 @@ def _send_resend_email(to_email: str, subject: str, html_body: str) -> bool:
         return False
 
 
-def _send_smtp_email(to_email: str, subject: str, html_body: str) -> bool:
-    if not settings.smtp_host or not settings.smtp_username or not settings.smtp_password:
-        return False
-
-    msg = _build_message(to_email, subject, html_body)
-    try:
-        if (settings.smtp_encryption or "").lower() == "ssl":
-            with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port) as server:
-                server.login(settings.smtp_username, settings.smtp_password)
-                server.send_message(msg)
-        else:
-            with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as server:
-                server.starttls()
-                server.login(settings.smtp_username, settings.smtp_password)
-                server.send_message(msg)
-        return True
-    except Exception:
-        logger.exception("SMTP send failed")
-        return False
-
-
 def _send_email(to_email: str, subject: str, html_body: str) -> None:
     if _send_resend_email(to_email, subject, html_body):
         return
-    if _send_smtp_email(to_email, subject, html_body):
-        return
-    logger.info("Email not sent (no provider configured) for %s", to_email)
+    logger.info("Email not sent (Resend not configured) for %s", to_email)
 
 
 def send_welcome_email(to_email: str, full_name: str | None = None) -> None:
