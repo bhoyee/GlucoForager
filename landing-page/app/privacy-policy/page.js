@@ -25,7 +25,7 @@ export default function PrivacyPolicy() {
             href="/" 
             className="text-teal-600 hover:text-teal-700 font-medium"
           >
-            ← Back to Home
+            <- Back to Home
           </Link>
         </div>
       </header>
@@ -167,10 +167,11 @@ export default function PrivacyPolicy() {
 
         <div className="mt-12 pt-8 border-t border-gray-200">
           <a href="/" className="text-teal-600 hover:text-teal-700 font-medium">
-            ← Back to Home
+            <- Back to Home
           </a>
         </div>
       </div>
     </div>
   );
 }
+
