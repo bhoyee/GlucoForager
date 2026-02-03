@@ -29,7 +29,7 @@
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.RECORD_AUDIO"
       ],
-      "package": "com.anonymous.MobileGApp"
+      "package": "com.glucoforager.app"
     },
     "web": {
       "favicon": "./assets/favicon.png"
