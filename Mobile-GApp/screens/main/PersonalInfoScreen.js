@@ -213,10 +213,10 @@ export default function PersonalInfoScreen({ navigation }) {
         <Text style={styles.label}>Email</Text>
         <TextInput
           value={email}
-          onChangeText={setEmail}
           keyboardType="email-address"
           autoCapitalize="none"
           style={styles.input}
+          editable={false}
         />
 
         <Text style={styles.label}>Password</Text>
