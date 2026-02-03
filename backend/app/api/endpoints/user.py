@@ -9,6 +9,7 @@ from ...core.security import get_password_hash
 from ...models.ai_request import AIRequest
 from ...models.favorite import Favorite
 from ...models.recipe_history import RecipeHistory
+from ...models.subscription import Subscription
 from ...models.user import SearchLog, User
 from ..dependencies import check_user_access, get_current_user
 
@@ -177,3 +178,19 @@ def user_stats(
         "favorites_saved": favorites_saved,
         "scans_today": scans_today_count,
     }
+
+
+@router.delete("/account")
+def delete_account(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    user_id = current_user.id
+    db.query(AIRequest).filter(AIRequest.user_id == user_id).delete(synchronize_session=False)
+    db.query(SearchLog).filter(SearchLog.user_id == user_id).delete(synchronize_session=False)
+    db.query(Favorite).filter(Favorite.user_id == user_id).delete(synchronize_session=False)
+    db.query(RecipeHistory).filter(RecipeHistory.user_id == user_id).delete(synchronize_session=False)
+    db.query(Subscription).filter(Subscription.user_id == user_id).delete(synchronize_session=False)
+    db.delete(current_user)
+    db.commit()
+    return {"detail": "Account deleted"}
