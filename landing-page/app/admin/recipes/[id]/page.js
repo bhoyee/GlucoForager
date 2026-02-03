@@ -16,6 +16,38 @@ export default function EditRecipePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState('');
 
+  const parseErrorResponse = async (response) => {
+    try {
+      const data = await response.json();
+      const detail = data?.detail;
+      if (typeof detail === 'string') return detail;
+      if (Array.isArray(detail)) {
+        const messages = detail.map((item) => item?.msg).filter(Boolean);
+        if (messages.length) return messages.join(' ');
+      }
+      if (detail && typeof detail === 'object') return JSON.stringify(detail);
+      return data?.message || 'Request failed.';
+    } catch (error) {
+      try {
+        const text = await response.text();
+        return text || 'Request failed.';
+      } catch (readError) {
+        return 'Request failed.';
+      }
+    }
+  };
+
+  const validateRecipe = (formState) => {
+    const missing = [];
+    if (!formState.name?.trim()) missing.push('meal name');
+    if (!formState.image_url?.trim()) missing.push('image');
+    const hasIngredient = formState.ingredients?.some((item) => item.name?.trim());
+    if (!hasIngredient) missing.push('at least one ingredient');
+    if (!formState.instructions?.trim()) missing.push('instructions');
+    if (!`${formState.nutrition?.calories ?? ''}`.trim()) missing.push('calories');
+    return missing;
+  };
+
   useEffect(() => {
     if (!token) {
       router.push('/admin');
@@ -30,11 +62,12 @@ export default function EditRecipePage() {
         router.push('/admin');
         return;
       }
-      const data = await response.json();
       if (!response.ok) {
-        alert(data.detail || 'Unable to load recipe.');
+        const errorMessage = await parseErrorResponse(response);
+        alert(errorMessage || 'Unable to load recipe.');
         return;
       }
+      const data = await response.json();
       setInitialData({
         name: data.name || '',
         meal_type: data.meal_type || 'breakfast',
@@ -72,11 +105,12 @@ export default function EditRecipePage() {
       router.push('/admin');
       return null;
     }
-    const data = await response.json();
     if (!response.ok) {
-      alert(data.detail || 'Upload failed.');
+      const errorMessage = await parseErrorResponse(response);
+      alert(errorMessage || 'Upload failed.');
       return null;
     }
+    const data = await response.json();
     return data.url;
   };
 
@@ -85,8 +119,9 @@ export default function EditRecipePage() {
       router.push('/admin');
       return;
     }
-    if (!formState.image_url) {
-      setMessage('Please provide an image URL or upload an image.');
+    const missingFields = validateRecipe(formState);
+    if (missingFields.length) {
+      setMessage(`Please provide ${missingFields.join(', ')}.`);
       return;
     }
     setIsSubmitting(true);
@@ -127,12 +162,13 @@ export default function EditRecipePage() {
       router.push('/admin');
       return;
     }
-    const data = await response.json();
     if (!response.ok) {
-      setMessage(data.detail || 'Failed to update recipe.');
+      const errorMessage = await parseErrorResponse(response);
+      setMessage(errorMessage || 'Failed to update recipe.');
       setIsSubmitting(false);
       return;
     }
+    await response.json().catch(() => null);
     setIsSubmitting(false);
     setMessage('Recipe updated successfully.');
     router.push('/admin/recipes');
