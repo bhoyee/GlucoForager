@@ -140,13 +140,27 @@ export default function PrivacyPolicy() {
           </section>
 
           <section className="mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">9. Contact Us</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">9. Account Deletion</h2>
+            <p className="text-gray-700 mb-3">
+              You can request deletion of your account and associated personal data at any time.
+            </p>
+            <ul className="list-disc pl-6 text-gray-700 mb-3">
+              <li>Email us at hello@glucoforager.com with the subject "Delete My Account".</li>
+              <li>Include the email address associated with your GlucoForager account.</li>
+            </ul>
+            <p className="text-gray-700 mb-4">
+              We will delete your account and associated personal data within 30 days, unless we are required to
+              retain certain information for legal, security, or fraud-prevention purposes.
+            </p>
+          </section>
+
+          <section className="mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">10. Contact Us</h2>
             <p className="text-gray-700">
               If you have questions or concerns about this Privacy Policy, please contact us at:
             </p>
             <p className="text-gray-700 mt-2">
-              Email: privacy@glucoforager.com<br />
-              Address: 123 Health Street, San Francisco, CA 94107
+              Email: hello@glucoforager.com
             </p>
           </section>
         </div>
