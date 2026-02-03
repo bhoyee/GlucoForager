@@ -45,6 +45,7 @@ export default function PersonalInfoScreen({ navigation }) {
   const [showGender, setShowGender] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [loadError, setLoadError] = useState('');
 
   const parseApiError = async (response) => {
@@ -171,6 +172,37 @@ export default function PersonalInfoScreen({ navigation }) {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    try {
+      setIsDeleting(true);
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        Alert.alert('Sign in required', 'Please sign in to delete your account.');
+        return;
+      }
+      const response = await apiFetch(
+        `${API_URL}${API_ENDPOINTS.USER_DELETE_ACCOUNT}`,
+        { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } },
+        { onUnauthorized: signOut }
+      );
+      if (response.status === 401) {
+        return;
+      }
+      if (!response.ok) {
+        const errorMessage = await parseApiError(response);
+        Alert.alert('Delete failed', errorMessage);
+        return;
+      }
+      await response.json().catch(() => null);
+      Alert.alert('Account deleted', 'Your account has been deleted.');
+      await signOut();
+    } catch (error) {
+      Alert.alert('Error', 'Unable to delete your account right now.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
@@ -257,13 +289,20 @@ export default function PersonalInfoScreen({ navigation }) {
             "This action is permanent. You won't be able to get your account back.",
             [
               { text: 'Cancel', style: 'cancel' },
-              { text: 'Delete', style: 'destructive' },
+              { text: 'Delete', style: 'destructive', onPress: handleDeleteAccount },
             ]
           )
         }
+        disabled={isDeleting}
       >
-        <Ionicons name="trash-outline" size={18} color={Colors.error} />
-        <Text style={styles.deleteText}>Delete account</Text>
+        {isDeleting ? (
+          <ActivityIndicator size="small" color={Colors.error} />
+        ) : (
+          <>
+            <Ionicons name="trash-outline" size={18} color={Colors.error} />
+            <Text style={styles.deleteText}>Delete account</Text>
+          </>
+        )}
       </TouchableOpacity>
 
       <Modal visible={showCountries} transparent animationType="slide" onRequestClose={() => setShowCountries(false)}>
