@@ -202,6 +202,7 @@ export default function RecipeForm({ initialData, onSubmit, onUpload, isSubmitti
             type="number"
             step="0.1"
             value={formState.nutrition.calories}
+            required
             onChange={(event) =>
               setFormState({
                 ...formState,
