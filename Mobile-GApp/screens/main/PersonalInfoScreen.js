@@ -47,6 +47,27 @@ export default function PersonalInfoScreen({ navigation }) {
   const [isSaving, setIsSaving] = useState(false);
   const [loadError, setLoadError] = useState('');
 
+  const parseApiError = async (response) => {
+    try {
+      const data = await response.json();
+      const detail = data?.detail;
+      if (typeof detail === 'string') return detail;
+      if (Array.isArray(detail)) {
+        const messages = detail.map((item) => item?.msg).filter(Boolean);
+        if (messages.length) return messages.join(' ');
+      }
+      if (detail && typeof detail === 'object') return JSON.stringify(detail);
+      return data?.message || 'Please try again.';
+    } catch (error) {
+      try {
+        const text = await response.text();
+        return text || 'Please try again.';
+      } catch (readError) {
+        return 'Please try again.';
+      }
+    }
+  };
+
   const resolveCountry = (value) => {
     if (!value) return null;
     const normalized = `${value}`.toLowerCase().trim();
@@ -132,8 +153,8 @@ export default function PersonalInfoScreen({ navigation }) {
         return;
       }
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        Alert.alert('Update failed', data?.detail || 'Please try again.');
+        const errorMessage = await parseApiError(response);
+        Alert.alert('Update failed', errorMessage);
         return;
       }
       const data = await response.json();
