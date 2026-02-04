@@ -14,6 +14,7 @@ import ProfileScreen from '../screens/main/ProfileScreen';
 import PersonalInfoScreen from '../screens/main/PersonalInfoScreen';
 import PrivacyPolicyScreen from '../screens/main/PrivacyPolicyScreen';
 import TermsScreen from '../screens/main/TermsScreen';
+import DebugLogsScreen from '../screens/main/DebugLogsScreen';
 import ManualInputScreen from '../screens/main/ManualInputScreen';
 import RecipeDetailScreen from '../screens/main/RecipeDetailScreen';
 import RecipeResultsScreen from '../screens/main/RecipeResultsScreen';
@@ -97,6 +98,7 @@ function ProfileStackNavigator() {
       <ProfileStack.Screen name="PersonalInfo" component={PersonalInfoScreen} />
       <ProfileStack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
       <ProfileStack.Screen name="Terms" component={TermsScreen} />
+      <ProfileStack.Screen name="DebugLogs" component={DebugLogsScreen} />
     </ProfileStack.Navigator>
   );
 }

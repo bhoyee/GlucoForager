@@ -9,6 +9,7 @@ import { LogBox, View, Text } from 'react-native';
 import { AuthProvider, useAuth } from './context/authContext';
 import { configureRevenueCat } from './utils/revenuecat';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { startMobileLogUploader } from './utils/mobileLogUploader';
 
 // Import screens
 import SplashScreen from './screens/SplashScreen';
@@ -113,6 +114,15 @@ export default function App() {
 
   useEffect(() => {
     LogBox.ignoreLogs(['[RevenueCat]']);
+  }, []);
+
+  useEffect(() => {
+    const stopUploader = startMobileLogUploader();
+    return () => {
+      if (typeof stopUploader === 'function') {
+        stopUploader();
+      }
+    };
   }, []);
   
   return (
