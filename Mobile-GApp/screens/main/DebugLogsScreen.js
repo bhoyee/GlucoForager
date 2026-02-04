@@ -3,12 +3,14 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Share, Alert, Act
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { Colors } from '../../constants/Colors';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
 import { clearDebugLogs, getDebugLogs, subscribeDebugLogs } from '../../utils/debugLogger';
 
 export default function DebugLogsScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const [logs, setLogs] = useState(() => getDebugLogs());
   const [isSending, setIsSending] = useState(false);
 
@@ -90,7 +92,7 @@ export default function DebugLogsScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
         <TouchableOpacity onPress={handleClose}>
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </TouchableOpacity>
