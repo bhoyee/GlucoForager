@@ -10,7 +10,7 @@ import { AuthContext } from '../../context/authContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
-import { configureRevenueCat, getCustomerInfo, isPremiumEntitled, isRevenueCatConfigured, presentCustomerCenter, presentPaywall } from '../../utils/revenuecat';
+import { configureRevenueCat, getCustomerInfo, getOfferings, isPremiumEntitled, isRevenueCatConfigured, presentCustomerCenter, presentPaywall } from '../../utils/revenuecat';
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
@@ -131,6 +131,9 @@ export default function ProfileScreen() {
             email: profileData?.email || null,
             fullName: profileData?.full_name || null,
           });
+          if (revenueCatReady) {
+            await getOfferings();
+          }
         }
       }
       const result = await presentPaywall();

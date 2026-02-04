@@ -103,6 +103,20 @@ export const presentPaywall = async () => {
   }
 };
 
+export const getOfferings = async () => {
+  try {
+    return await Purchases.getOfferings();
+  } catch (error) {
+    addDebugLog({
+      source: 'RevenueCat',
+      level: 'error',
+      message: 'Failed to fetch offerings.',
+      details: `${error?.message || error}`,
+    });
+    throw error;
+  }
+};
+
 export const presentCustomerCenter = async () => {
   try {
     return await PurchasesUI.presentCustomerCenter();
