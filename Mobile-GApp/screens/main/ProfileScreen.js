@@ -30,6 +30,9 @@ export default function ProfileScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [isUpgrading, setIsUpgrading] = useState(false);
+  const [debugTapCount, setDebugTapCount] = useState(0);
+  const [debugTapTimer, setDebugTapTimer] = useState(null);
+  const debugTapThreshold = 7;
   const revenueCatReady = isRevenueCatConfigured();
 
   const syncSubscription = async () => {
@@ -203,6 +206,25 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleDebugTap = () => {
+    if (debugTapTimer) {
+      clearTimeout(debugTapTimer);
+    }
+    const nextCount = debugTapCount + 1;
+    setDebugTapCount(nextCount);
+    if (nextCount >= debugTapThreshold) {
+      setDebugTapCount(0);
+      setDebugTapTimer(null);
+      navigation.navigate('DebugLogs');
+      return;
+    }
+    const timer = setTimeout(() => {
+      setDebugTapCount(0);
+      setDebugTapTimer(null);
+    }, 1200);
+    setDebugTapTimer(timer);
+  };
+
   return (
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
@@ -359,7 +381,7 @@ export default function ProfileScreen() {
       <TouchableOpacity
         style={styles.versionContainer}
         activeOpacity={0.8}
-        onLongPress={() => navigation.navigate('DebugLogs')}
+        onPress={handleDebugTap}
       >
         <View style={styles.versionRow}>
           <Text style={styles.versionText}>GlucoForager</Text>
