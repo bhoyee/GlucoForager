@@ -665,30 +665,6 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Upgrade Banner */}
-        {!userIsPremium && (
-          <View style={styles.section}>
-            <TouchableOpacity 
-              style={styles.upgradeBanner}
-              onPress={handleUpgradePress}
-            >
-              <View style={styles.upgradeContent}>
-                <View>
-                  <Text style={styles.upgradeBannerTitle}>Unlock Premium Features</Text>
-                  <Text style={styles.upgradeBannerSubtitle}>
-                    Unlimited scans, advanced filters, and no ads
-                  </Text>
-                  <View style={styles.priceContainer}>
-                    <Text style={styles.price}>$2.99</Text>
-                    <Text style={styles.pricePeriod}>/month</Text>
-                  </View>
-                </View>
-                <Ionicons name="sparkles" size={32} color="white" />
-              </View>
-            </TouchableOpacity>
-          </View>
-        )}
-
         {/* Quick Stats */}
         <View style={styles.statsSection}>
           <Text style={styles.sectionTitle}>Your Stats</Text>
@@ -1060,46 +1036,6 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontWeight: '600',
     fontSize: 14,
-  },
-  upgradeBanner: {
-    backgroundColor: Colors.primary,
-    borderRadius: 16,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  upgradeContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  upgradeBannerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: 'white',
-    marginBottom: 4,
-  },
-  upgradeBannerSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.9)',
-    marginBottom: 12,
-  },
-  priceContainer: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-  },
-  price: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: 'white',
-  },
-  pricePeriod: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.9)',
-    marginLeft: 4,
   },
   statsSection: {
     paddingHorizontal: 20,
