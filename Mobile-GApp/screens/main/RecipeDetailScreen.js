@@ -708,7 +708,7 @@ const RecipeDetailsScreen = () => {
     ];
 
     return (
-      <View style={[styles.section, styles.sectionLast]}>
+      <View style={styles.section}>
         <Text style={styles.sectionTitle}>Nutrition Facts</Text>
 
         <View style={styles.nutritionGrid}>
@@ -720,29 +720,34 @@ const RecipeDetailsScreen = () => {
           ))}
         </View>
 
-        <View style={styles.recipeActions}>
-          <TouchableOpacity style={styles.secondaryActionButton} onPress={handleShare}>
-            <Ionicons name="share-social-outline" size={18} color="#4CAF50" />
-            <Text style={styles.secondaryActionText}>Share</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.primaryActionButton}
-            onPress={toggleBookmark}
-            disabled={isSavingFavorite}
-          >
-            <Ionicons
-              name={recipe.isBookmarked ? 'bookmark' : 'bookmark-outline'}
-              size={18}
-              color="#FFF"
-            />
-            <Text style={styles.primaryActionText}>
-              {recipe.isBookmarked ? 'Saved' : 'Add to Favorites'}
-            </Text>
-          </TouchableOpacity>
-        </View>
       </View>
     );
   };
+
+  const renderActionsSection = () => (
+    <View style={[styles.section, styles.sectionLast]}>
+      <View style={styles.recipeActions}>
+        <TouchableOpacity style={styles.secondaryActionButton} onPress={handleShare}>
+          <Ionicons name="share-social-outline" size={18} color="#4CAF50" />
+          <Text style={styles.secondaryActionText}>Share</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.primaryActionButton}
+          onPress={toggleBookmark}
+          disabled={isSavingFavorite}
+        >
+          <Ionicons
+            name={recipe.isBookmarked ? 'bookmark' : 'bookmark-outline'}
+            size={18}
+            color="#FFF"
+          />
+          <Text style={styles.primaryActionText}>
+            {recipe.isBookmarked ? 'Saved' : 'Add to Favorites'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
 
   const renderSafetyModal = () => {
     const sections = getSafetySections();
@@ -857,10 +862,11 @@ const RecipeDetailsScreen = () => {
           {renderStatsBar()}
           {renderTitleSection()}
           {renderSafetySection()}
-          {renderIngredientsSection()}
-          {renderInstructionsSection()}
-          {renderTipsSection()}
           {renderNutritionSection()}
+          {renderIngredientsSection()}
+          {renderTipsSection()}
+          {renderInstructionsSection()}
+          {renderActionsSection()}
         </View>
       </ScrollView>
       
