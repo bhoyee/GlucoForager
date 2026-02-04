@@ -10,6 +10,8 @@ export const API_URL =
 export const API_ENDPOINTS = {
   SIGNUP: '/api/auth/signup',
   LOGIN: '/api/auth/login',
+  REFRESH: '/api/auth/refresh',
+  LOGOUT: '/api/auth/logout',
   FORGOT_PASSWORD: '/api/auth/forgot-password',
   RESET_PASSWORD: '/api/auth/reset-password',
   RECIPE_SUGGESTIONS: '/api/recipes/suggestions',
