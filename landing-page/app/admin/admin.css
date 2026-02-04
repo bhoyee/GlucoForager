@@ -340,6 +340,49 @@
   cursor: pointer;
 }
 
+.admin-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.admin-log-card {
+  border: 1px solid #e5eee9;
+  border-radius: 14px;
+  padding: 14px 16px;
+  background: #ffffff;
+  box-shadow: 0 6px 18px rgba(18, 47, 34, 0.06);
+}
+
+.admin-log-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  color: #5c7368;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.admin-log-message {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.admin-log-details {
+  color: #4f6b5c;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.admin-log-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 12px;
+  color: #7a8a82;
+}
+
 .admin-action-buttons {
   display: flex;
   flex-wrap: wrap;
