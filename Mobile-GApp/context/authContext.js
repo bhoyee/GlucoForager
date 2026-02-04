@@ -3,7 +3,7 @@ import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { configureRevenueCat } from '../utils/revenuecat';
 import { API_ENDPOINTS, API_URL } from '../config/api';
-import { apiFetch } from '../utils/api';
+import { apiFetch, setAuthRefreshHandler } from '../utils/api';
 
 // Create the context
 const AuthContext = createContext({});
@@ -15,6 +15,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     // Check auth status on app start
+    setAuthRefreshHandler(refreshAccessToken);
     checkAuthStatus();
   }, []);
 
@@ -56,19 +57,51 @@ export function AuthProvider({ children }) {
             fullName: resolvedName,
           });
         } else {
-          await AsyncStorage.removeItem('userToken');
-          await AsyncStorage.removeItem('publicUserId');
-          setUserToken(null);
-          await configureRevenueCat({});
+          await clearAuthState();
         }
       } else {
-        setUserToken(null);
-        await configureRevenueCat({});
+        await clearAuthState();
       }
     } catch (error) {
       console.error('Error checking auth status:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const clearAuthState = async () => {
+    await AsyncStorage.removeItem('userToken');
+    await AsyncStorage.removeItem('refreshToken');
+    await AsyncStorage.removeItem('publicUserId');
+    setUserToken(null);
+    await configureRevenueCat({});
+  };
+
+  const refreshAccessToken = async () => {
+    try {
+      const refreshToken = await AsyncStorage.getItem('refreshToken');
+      if (!refreshToken) return null;
+      const response = await apiFetch(
+        `${API_URL}${API_ENDPOINTS.REFRESH}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        }
+      );
+      if (!response.ok) {
+        return null;
+      }
+      const data = await response.json();
+      if (!data?.access_token) return null;
+      await AsyncStorage.setItem('userToken', data.access_token);
+      if (data.refresh_token) {
+        await AsyncStorage.setItem('refreshToken', data.refresh_token);
+      }
+      setUserToken(data.access_token);
+      return data.access_token;
+    } catch (error) {
+      return null;
     }
   };
 
@@ -79,7 +112,8 @@ export function AuthProvider({ children }) {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (response.status === 401) {
-        return false;
+        const refreshed = await refreshAccessToken();
+        return Boolean(refreshed);
       }
       return response.ok;
     } catch (error) {
@@ -103,9 +137,12 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const signIn = async (token, publicId) => {
+  const signIn = async (token, publicId, refreshToken) => {
     try {
       await AsyncStorage.setItem('userToken', token);
+      if (refreshToken) {
+        await AsyncStorage.setItem('refreshToken', refreshToken);
+      }
       if (publicId) {
         await AsyncStorage.setItem('publicUserId', publicId);
       }
@@ -126,7 +163,19 @@ export function AuthProvider({ children }) {
 
   const signOut = async () => {
     try {
+      const refreshToken = await AsyncStorage.getItem('refreshToken');
+      if (refreshToken) {
+        await apiFetch(
+          `${API_URL}${API_ENDPOINTS.LOGOUT}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refresh_token: refreshToken }),
+          }
+        );
+      }
       await AsyncStorage.removeItem('userToken');
+      await AsyncStorage.removeItem('refreshToken');
       await AsyncStorage.removeItem('publicUserId');
       setUserToken(null);
       await configureRevenueCat({});
