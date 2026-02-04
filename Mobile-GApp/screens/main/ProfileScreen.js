@@ -10,7 +10,7 @@ import { AuthContext } from '../../context/authContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
-import { configureRevenueCat, getCustomerInfo, isPremiumEntitled, presentCustomerCenter, presentPaywall } from '../../utils/revenuecat';
+import { configureRevenueCat, getCustomerInfo, isPremiumEntitled, isRevenueCatConfigured, presentCustomerCenter, presentPaywall } from '../../utils/revenuecat';
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
@@ -30,6 +30,7 @@ export default function ProfileScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [isUpgrading, setIsUpgrading] = useState(false);
+  const revenueCatReady = isRevenueCatConfigured();
 
   const syncSubscription = async () => {
     const token = await AsyncStorage.getItem('userToken');
@@ -105,6 +106,13 @@ export default function ProfileScreen() {
   const handleUpgrade = async () => {
     try {
       setIsUpgrading(true);
+      if (!revenueCatReady) {
+        Alert.alert(
+          'Payments unavailable',
+          'RevenueCat is not configured in this build. Please update the app or contact support.'
+        );
+        return;
+      }
       const token = await AsyncStorage.getItem('userToken');
       if (token) {
         const profileResponse = await apiFetch(
@@ -134,6 +142,38 @@ export default function ProfileScreen() {
       Alert.alert('Error', 'Unable to start subscription right now.');
     } finally {
       setIsUpgrading(false);
+    }
+  };
+
+  const handleManageSubscription = async () => {
+    try {
+      if (!revenueCatReady) {
+        Alert.alert(
+          'Payments unavailable',
+          'RevenueCat is not configured in this build. Please update the app or contact support.'
+        );
+        return;
+      }
+      const token = await AsyncStorage.getItem('userToken');
+      if (token) {
+        const profileResponse = await apiFetch(
+          `${API_URL}${API_ENDPOINTS.USER_PROFILE}`,
+          { headers: { Authorization: `Bearer ${token}` } },
+          { onUnauthorized: signOut }
+        );
+        if (profileResponse.status !== 401 && profileResponse.ok) {
+          const profileData = await profileResponse.json();
+          await configureRevenueCat({
+            token,
+            publicId: profileData?.public_id || null,
+            email: profileData?.email || null,
+            fullName: profileData?.full_name || null,
+          });
+        }
+      }
+      await presentCustomerCenter();
+    } catch (error) {
+      Alert.alert('Error', 'Unable to open subscription settings right now.');
     }
   };
 
@@ -236,7 +276,7 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.menuItem} onPress={presentCustomerCenter}>
+        <TouchableOpacity style={styles.menuItem} onPress={handleManageSubscription}>
           <View style={styles.menuItemLeft}>
             <Ionicons name="card-outline" size={22} color={Colors.text} />
             <Text style={styles.menuText}>Manage Subscription</Text>
