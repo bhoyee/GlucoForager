@@ -25,7 +25,7 @@ export default function PrivacyPolicy() {
             href="/" 
             className="text-teal-600 hover:text-teal-700 font-medium"
           >
-            <- Back to Home
+            Back to Home
           </Link>
         </div>
       </header>
