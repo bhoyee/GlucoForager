@@ -316,12 +316,16 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.versionContainer}>
+      <TouchableOpacity
+        style={styles.versionContainer}
+        activeOpacity={0.8}
+        onLongPress={() => navigation.navigate('DebugLogs')}
+      >
         <View style={styles.versionRow}>
           <Text style={styles.versionText}>GlucoForager</Text>
           <Text style={styles.versionSubText}>v1.0</Text>
         </View>
-      </View>
+      </TouchableOpacity>
       </ScrollView>
     </View>
   );

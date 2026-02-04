@@ -1,3 +1,5 @@
+import { addDebugLog } from './debugLogger';
+
 const buildNetworkErrorResponse = (url, error) => ({
   ok: false,
   status: 0,
@@ -68,8 +70,22 @@ export const apiFetch = async (
     if (response.status === 401 && onUnauthorized) {
       await onUnauthorized();
     }
+    if (!response.ok) {
+      addDebugLog({
+        source: 'API',
+        level: 'warn',
+        message: `Request failed (${response.status})`,
+        details: url,
+      });
+    }
     return withSafeBodyParsing(response);
   } catch (error) {
+    addDebugLog({
+      source: 'API',
+      level: 'error',
+      message: 'Network request failed.',
+      details: `${url} | ${error?.message || error}`,
+    });
     return buildNetworkErrorResponse(url, error);
   } finally {
     clearTimeout(timeoutId);
