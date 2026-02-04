@@ -105,7 +105,20 @@ export const presentPaywall = async () => {
 
 export const getOfferings = async () => {
   try {
-    return await Purchases.getOfferings();
+    const offerings = await Purchases.getOfferings();
+    const hasCurrent = Boolean(offerings?.current);
+    const hasAny =
+      offerings &&
+      typeof offerings === 'object' &&
+      Object.keys(offerings?.all || {}).length > 0;
+    if (!hasCurrent && !hasAny) {
+      addDebugLog({
+        source: 'RevenueCat',
+        level: 'warn',
+        message: 'Offerings are empty.',
+      });
+    }
+    return offerings;
   } catch (error) {
     addDebugLog({
       source: 'RevenueCat',
