@@ -1,5 +1,11 @@
 import { addDebugLog } from './debugLogger';
 
+let authRefreshHandler = null;
+
+export const setAuthRefreshHandler = (handler) => {
+  authRefreshHandler = handler;
+};
+
 const buildNetworkErrorResponse = (url, error) => ({
   ok: false,
   status: 0,
@@ -56,6 +62,7 @@ export const apiFetch = async (
 ) => {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const { _retry, ...fetchOptions } = options;
 
   if (options.signal) {
     options.signal.addEventListener(
@@ -66,7 +73,21 @@ export const apiFetch = async (
   }
 
   try {
-    const response = await fetch(url, { ...options, signal: controller.signal });
+    const response = await fetch(url, { ...fetchOptions, signal: controller.signal });
+    if (response.status === 401 && authRefreshHandler && !_retry) {
+      const newToken = await authRefreshHandler();
+      if (newToken) {
+        const nextHeaders = { ...(fetchOptions.headers || {}) };
+        if (nextHeaders.Authorization) {
+          nextHeaders.Authorization = `Bearer ${newToken}`;
+        }
+        return await apiFetch(
+          url,
+          { ...fetchOptions, headers: nextHeaders, _retry: true },
+          { onUnauthorized, timeoutMs }
+        );
+      }
+    }
     if (response.status === 401 && onUnauthorized) {
       await onUnauthorized();
     }
