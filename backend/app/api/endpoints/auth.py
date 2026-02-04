@@ -10,9 +10,16 @@ from pydantic import BaseModel, EmailStr, Field, validator
 from sqlalchemy.orm import Session
 
 from ...core.config import settings
-from ...core.security import create_access_token, get_password_hash, verify_password
+from ...core.security import (
+    create_access_token,
+    generate_refresh_token,
+    get_password_hash,
+    hash_refresh_token,
+    verify_password,
+)
 from ...database import get_db
 from ...models.password_reset import PasswordResetToken
+from ...models.refresh_token import RefreshToken
 from ...models.user import User
 from ...services.email_service import send_password_reset_code, send_welcome_email
 from ...services.login_throttler import LoginThrottler
@@ -28,6 +35,7 @@ class Token(BaseModel):
     token_type: str = "bearer"
     message: str | None = None
     public_id: str | None = None
+    refresh_token: str | None = None
 
 
 class UserCreate(BaseModel):
@@ -80,6 +88,22 @@ class ResetPasswordPayload(BaseModel):
     new_password: str
 
 
+class RefreshTokenPayload(BaseModel):
+    refresh_token: str
+
+
+def _issue_refresh_token(db: Session, user_id: int) -> str:
+    raw = generate_refresh_token()
+    token = RefreshToken(
+        user_id=user_id,
+        token_hash=hash_refresh_token(raw),
+        expires_at=datetime.utcnow() + timedelta(days=settings.refresh_token_expire_days),
+    )
+    db.add(token)
+    db.commit()
+    return raw
+
+
 def _normalize_email(email: str) -> str:
     return email.strip().lower()
 
@@ -110,12 +134,18 @@ def signup(payload: UserCreate, db: Session = Depends(get_db)):
         db.add(user)
         db.commit()
         db.refresh(user)
-        token = create_access_token({"sub": str(user.id)})
+        access_token = create_access_token({"sub": str(user.id)})
+        refresh_token = _issue_refresh_token(db, user.id)
         try:
             send_welcome_email(payload.email, payload.full_name)
         except Exception:
             logger.exception("Welcome email failed for email=%s", payload.email)
-        return Token(access_token=token, message="Signup successful", public_id=user.public_id)
+        return Token(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            message="Signup successful",
+            public_id=user.public_id,
+        )
     except HTTPException:
         # Bubble up expected API errors unchanged.
         raise
@@ -162,8 +192,14 @@ def login(
         )
 
     login_throttler.record_success(identifier)
-    token = create_access_token({"sub": str(user.id)})
-    return Token(access_token=token, message="Login successful", public_id=user.public_id)
+    access_token = create_access_token({"sub": str(user.id)})
+    refresh_token = _issue_refresh_token(db, user.id)
+    return Token(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        message="Login successful",
+        public_id=user.public_id,
+    )
 
 
 @router.post("/login", response_model=Token)
@@ -208,8 +244,64 @@ def login_alias(
         )
 
     login_throttler.record_success(identifier)
-    token = create_access_token({"sub": str(user.id)})
-    return Token(access_token=token, message="Login successful", public_id=user.public_id)
+    access_token = create_access_token({"sub": str(user.id)})
+    refresh_token = _issue_refresh_token(db, user.id)
+    return Token(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        message="Login successful",
+        public_id=user.public_id,
+    )
+
+
+@router.post("/refresh", response_model=Token)
+def refresh_token(payload: RefreshTokenPayload, db: Session = Depends(get_db)):
+    token_hash = hash_refresh_token(payload.refresh_token.strip())
+    token = (
+        db.query(RefreshToken)
+        .filter(
+            RefreshToken.token_hash == token_hash,
+            RefreshToken.revoked_at.is_(None),
+            RefreshToken.expires_at >= datetime.utcnow(),
+        )
+        .first()
+    )
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+
+    user = db.query(User).filter(User.id == token.user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+    if user.suspended_at:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account locked. Contact support: hello@glucoforager.com",
+        )
+
+    token.last_used_at = datetime.utcnow()
+    token.revoked_at = datetime.utcnow()
+    db.commit()
+
+    access_token = create_access_token({"sub": str(user.id)})
+    new_refresh = _issue_refresh_token(db, user.id)
+    return Token(access_token=access_token, refresh_token=new_refresh, public_id=user.public_id)
+
+
+@router.post("/logout")
+def logout(payload: RefreshTokenPayload, db: Session = Depends(get_db)):
+    token_hash = hash_refresh_token(payload.refresh_token.strip())
+    token = (
+        db.query(RefreshToken)
+        .filter(
+            RefreshToken.token_hash == token_hash,
+            RefreshToken.revoked_at.is_(None),
+        )
+        .first()
+    )
+    if token:
+        token.revoked_at = datetime.utcnow()
+        db.commit()
+    return {"message": "Logged out"}
 
 
 @router.post("/forgot-password")
