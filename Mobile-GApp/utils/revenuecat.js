@@ -6,6 +6,7 @@ import { addDebugLog } from './debugLogger';
 let configured = false;
 let currentUserId = null;
 let hasLoggedInUser = false;
+let missingKeyLogged = false;
 const isAnonymousId = (value) => {
   if (!value) return true;
   return `${value}`.startsWith('$RCAnonymousID');
@@ -13,7 +14,10 @@ const isAnonymousId = (value) => {
 
 export const configureRevenueCat = async ({ token, publicId, email, fullName } = {}) => {
   if (!REVENUECAT_API_KEY) {
-    addDebugLog({ source: 'RevenueCat', level: 'warn', message: 'Missing RevenueCat API key.' });
+    if (!missingKeyLogged) {
+      addDebugLog({ source: 'RevenueCat', level: 'warn', message: 'Missing RevenueCat API key.' });
+      missingKeyLogged = true;
+    }
     return;
   }
 
@@ -82,6 +86,8 @@ export const configureRevenueCat = async ({ token, publicId, email, fullName } =
     }
   }
 };
+
+export const isRevenueCatConfigured = () => Boolean(REVENUECAT_API_KEY);
 
 export const presentPaywall = async () => {
   try {
