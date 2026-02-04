@@ -8,6 +8,7 @@ from .favorite import Favorite  # noqa: F401
 from .meal_plan import MealPlan  # noqa: F401
 from .shopping_item import ShoppingItem  # noqa: F401
 from .password_reset import PasswordResetToken  # noqa: F401
+from .refresh_token import RefreshToken  # noqa: F401
 from .admin_user import AdminUser  # noqa: F401
 from .recipe import Recipe  # noqa: F401
 from .recipe_history import RecipeHistory  # noqa: F401

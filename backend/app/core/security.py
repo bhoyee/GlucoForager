@@ -1,3 +1,5 @@
+import hashlib
+import secrets
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
@@ -24,6 +26,15 @@ def create_access_token(data: dict[str, Any], expires_delta: Optional[timedelta]
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=settings.access_token_expire_minutes))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
+
+
+def generate_refresh_token() -> str:
+    return secrets.token_urlsafe(48)
+
+
+def hash_refresh_token(token: str) -> str:
+    payload = f"{token}:{settings.secret_key}".encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
 
 
 def decode_access_token(token: str) -> dict[str, Any]:

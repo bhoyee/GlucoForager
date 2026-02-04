@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     secret_key: str = Field(..., env="SECRET_KEY")
     algorithm: str = "HS256"
     access_token_expire_minutes: int = Field(60, env="ACCESS_TOKEN_EXPIRE_MINUTES")
+    refresh_token_expire_days: int = Field(30, env="REFRESH_TOKEN_EXPIRE_DAYS")
     stripe_secret_key: str | None = Field(None, env="STRIPE_SECRET_KEY")
     cors_origins: list[str] = Field(default_factory=lambda: ["*"])
     smtp_host: str | None = Field(None, env="SMTP_HOST")
