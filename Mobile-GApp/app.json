@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Mobile-GApp",
+    "name": "GlucoForager",
     "slug": "Mobile-GApp",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -19,6 +19,7 @@
       }
     },
     "android": {
+      "appName": "GlucoForager",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -38,7 +39,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Mobile-GApp to access your photo library to select ingredient images"
+          "photosPermission": "Allow GlucoForager to access your photo library to select ingredient images"
         }
       ]
     ],
