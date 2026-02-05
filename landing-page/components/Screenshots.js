@@ -2,27 +2,48 @@ import Image from 'next/image';
 
 export default function Screenshots() {
   const screenshots = [
-    { id: 1, alt: "Camera screen", description: "Scan your fridge with AI" },
-    { id: 2, alt: "Recipe results", description: "Get 3 diabetes-safe recipes" },
-    { id: 3, alt: "Recipe details", description: "Step-by-step cooking instructions" }
+    {
+      id: 1,
+      src: "/screenshots/home-screen.jpeg",
+      alt: "Home screen with daily scans and recipe shortcuts",
+      description: "Quick access to scans, typing, and last recipes"
+    },
+    {
+      id: 2,
+      src: "/screenshots/Scan-ingredients-(camera%20view).jpeg",
+      alt: "Scan ingredients with camera",
+      description: "Scan your fridge and detect ingredients"
+    },
+    {
+      id: 3,
+      src: "/screenshots/recipe-result.jpeg",
+      alt: "Recipe results list",
+      description: "Get 3 diabetes‑safe recipes instantly"
+    },
+    {
+      id: 4,
+      src: "/screenshots/Recip-detail.jpeg",
+      alt: "Recipe details screen",
+      description: "Nutrition facts and diabetes‑safe guidance"
+    }
   ];
   
   return (
-    <div className="flex flex-col md:flex-row items-center justify-center gap-8">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
       {screenshots.map((shot) => (
-        <div key={shot.id} className="relative">
-          {/* iPhone mockup frame */}
-          <div className="relative w-64 h-[550px] bg-gray-900 rounded-[2.5rem] border-[14px] border-gray-900 shadow-xl">
-            {/* Screen placeholder */}
-            <div className="absolute inset-[7px] bg-gradient-to-br from-teal-50 to-purple-50 rounded-[2rem] overflow-hidden">
-              <div className="h-full flex items-center justify-center text-gray-400">
-                App Screenshot {shot.id}
-              </div>
-            </div>
-            {/* Notch */}
-            <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-40 h-6 bg-gray-900 rounded-b-2xl"></div>
+        <div key={shot.id} className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden shadow-xl max-w-[220px] sm:max-w-[240px] mx-auto">
+          <div className="relative aspect-[9/16]">
+            <Image
+              src={shot.src}
+              alt={shot.alt}
+              fill
+              sizes="(max-width: 640px) 220px, (max-width: 1024px) 240px, 240px"
+              className="object-cover"
+            />
           </div>
-          <p className="text-center mt-4 text-gray-600">{shot.description}</p>
+          <div className="px-4 py-3">
+            <p className="text-sm text-gray-200">{shot.description}</p>
+          </div>
         </div>
       ))}
     </div>
