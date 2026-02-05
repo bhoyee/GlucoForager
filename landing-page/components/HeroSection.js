@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 
-export default function HeroSection() {
+export default function HeroSection({ onDownloadClick }) {
   return (
     <section className="container mx-auto px-4 py-4 md:py-10 relative overflow-hidden bg-gradient-to-br from-white via-teal-50/30 to-purple-50/20">
       {/* Scattered Food Images Background - BRIGHTER */}
@@ -137,8 +137,9 @@ export default function HeroSection() {
             </p>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start mb-10">
-              <a 
-                href="#" 
+              <button
+                type="button"
+                onClick={onDownloadClick}
                 className="inline-flex items-center justify-center gap-3 rounded-xl bg-black px-8 py-4 text-white hover:bg-gray-800 transition-all duration-300 transform hover:-translate-y-1 hover:shadow-xl z-10"
               >
                 <svg className="w-7 h-7" fill="currentColor" viewBox="0 0 384 512">
@@ -148,10 +149,11 @@ export default function HeroSection() {
                   <div className="text-xs opacity-80">Download on the</div>
                   <div className="font-semibold text-lg">App Store</div>
                 </div>
-              </a>
+              </button>
               
-              <a 
-                href="#" 
+              <button
+                type="button"
+                onClick={onDownloadClick}
                 className="inline-flex items-center justify-center gap-3 rounded-xl bg-black px-8 py-4 text-white hover:bg-gray-800 transition-all duration-300 transform hover:-translate-y-1 hover:shadow-xl z-10"
               >
                 <svg className="w-7 h-7" fill="currentColor" viewBox="0 0 512 512">
@@ -161,7 +163,7 @@ export default function HeroSection() {
                   <div className="text-xs opacity-80">GET IT ON</div>
                   <div className="font-semibold text-lg">Google Play</div>
                 </div>
-              </a>
+              </button>
             </div>
             
             <div className="text-gray-500 text-sm bg-white/80 backdrop-blur-sm rounded-lg py-3 px-6 inline-block border border-white/20 shadow-lg z-10">
