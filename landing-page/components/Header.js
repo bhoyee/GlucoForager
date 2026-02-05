@@ -6,7 +6,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 
 
-export default function Header() {
+export default function Header({ onDownloadClick }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
 
@@ -53,9 +53,6 @@ export default function Header() {
           <a href="#screenshots" className="text-gray-600 hover:text-teal-600 transition-colors">
             Screenshots
           </a>
-          <a href="#pricing" className="text-gray-600 hover:text-teal-600 transition-colors">
-            Pricing
-          </a>
           <a href="#faq" className="text-gray-600 hover:text-teal-600 transition-colors">
             FAQ
           </a>
@@ -65,12 +62,12 @@ export default function Header() {
         </nav>
         
         <div className="flex items-center gap-3">
-          <a 
-            href="#pricing" 
+          <button
+            onClick={() => onDownloadClick?.()}
             className="hidden sm:inline-flex items-center justify-center rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 transition-colors"
           >
             Download Free
-          </a>
+          </button>
           
           {/* Mobile Menu Button */}
           <button
@@ -110,13 +107,6 @@ export default function Header() {
               Screenshots
             </a>
             <a
-              href="#pricing"
-              onClick={() => setIsMenuOpen(false)}
-              className="block py-3 px-4 text-gray-700 hover:text-teal-600 hover:bg-gray-50 rounded-lg transition-colors"
-            >
-              Pricing
-            </a>
-            <a
               href="#faq"
               onClick={() => setIsMenuOpen(false)}
               className="block py-3 px-4 text-gray-700 hover:text-teal-600 hover:bg-gray-50 rounded-lg transition-colors"
@@ -130,13 +120,15 @@ export default function Header() {
             >
               Contact
             </a>
-            <a
-              href="#pricing"
-              onClick={() => setIsMenuOpen(false)}
-              className="block py-3 px-4 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors text-center mt-2"
+            <button
+              onClick={() => {
+                setIsMenuOpen(false);
+                onDownloadClick?.();
+              }}
+              className="block w-full py-3 px-4 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors text-center mt-2"
             >
               Download Free
-            </a>
+            </button>
           </div>
         </div>
       )}
