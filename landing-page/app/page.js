@@ -25,7 +25,7 @@ export default function HomePage() {
       {/* HERO SECTION with background pattern */}
       <section className="hero-background py-20" id="hero">
         <div className="container mx-auto px-4">
-          <HeroSection />
+          <HeroSection onDownloadClick={() => setShowDownloadModal(true)} />
         </div>
       </section>
 
