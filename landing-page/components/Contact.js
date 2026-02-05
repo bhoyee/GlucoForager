@@ -52,7 +52,7 @@ export default function Contact() {
             </div>
             
             {/* Quick Links */}
-            <div className="mt-8 pt-6 border-t border-white/20">
+            {/* <div className="mt-8 pt-6 border-t border-white/20">
               <h4 className="font-medium text-white mb-3">Quick Links</h4>
               <div className="space-y-2">
                 <a href="#faq" className="block text-gray-300 hover:text-white text-sm transition-colors">
@@ -65,7 +65,7 @@ export default function Contact() {
                   ↳ Features
                 </a>
               </div>
-            </div>
+            </div> */}
           </div>
           
           {/* Right Column: Contact Form */}

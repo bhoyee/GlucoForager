@@ -72,7 +72,6 @@ export default function Footer() {
             <ul className="space-y-3">
               <li><a href="#features" className="text-gray-400 hover:text-teal-400 transition-colors">Features</a></li>
               <li><a href="#screenshots" className="text-gray-400 hover:text-teal-400 transition-colors">Screenshots</a></li>
-              <li><a href="#pricing" className="text-gray-400 hover:text-teal-400 transition-colors">Pricing</a></li>
               <li><a href="#download" className="text-gray-400 hover:text-teal-400 transition-colors">Download</a></li>
             </ul>
           </div>

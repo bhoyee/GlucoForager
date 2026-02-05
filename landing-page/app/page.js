@@ -1,20 +1,24 @@
+ "use client";
+
+import { useState } from "react";
 import Header from "../components/Header";
 import HeroSection from "../components/HeroSection";
 import HowItWorks from "../components/HowItWorks";
 import Features from "../components/Features";
 import Screenshots from "../components/Screenshots";
-import Pricing from "../components/Pricing";
 import Testimonials from "../components/Testimonials";
 import FAQ from "../components/FAQ";
 import Footer from "../components/Footer";
 import Contact from "../components/Contact";
 import ScrollToTop from "../components/ScrollToTop";
+import DownloadModal from "../components/DownloadModal";
 
 
 export default function HomePage() {
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
   return (
     <div className="min-h-screen bg-white text-gray-900">
-      <Header />
+      <Header onDownloadClick={() => setShowDownloadModal(true)} />
       
       {/* Add pt-20 to push content down (matches header height) */}
       <div className="pt-5">
@@ -41,15 +45,15 @@ export default function HomePage() {
           
           {/* Responsive CTA Button */}
           <div className="text-center mt-12 sm:mt-16 md:mt-20 lg:mt-24">
-            <a 
-              href="#pricing" 
+            <button
+              onClick={() => setShowDownloadModal(true)}
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 px-6 sm:px-8 py-3 sm:py-4 text-white font-semibold text-sm sm:text-base hover:from-teal-600 hover:to-emerald-600 transition-all duration-300 transform hover:-translate-y-1 hover:shadow-xl active:scale-95"
             >
               <span>Start Free Today</span>
               <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
               </svg>
-            </a>
+            </button>
             <p className="text-gray-300 mt-3 sm:mt-4 text-xs sm:text-sm">
               No credit card required • 3 free AI scans daily
             </p>
@@ -77,29 +81,6 @@ export default function HomePage() {
         </div>
       </section>
       
-      {/* PRICING - White */}
-    <section className="py-16 bg-white" id="pricing">
-      <div className="container mx-auto px-4">
-        <h2 className="text-3xl font-bold text-center mb-4">
-          Simple, Transparent Pricing
-        </h2>
-        <p className="text-gray-600 text-center mb-12 max-w-2xl mx-auto">
-          Start free, upgrade anytime. Cancel whenever you want.
-        </p>
-        
-        {/* Add this note */}
-        <div className="text-center mb-8 max-w-lg mx-auto">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-full text-sm">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span>Click any plan to download the app & get started</span>
-          </div>
-        </div>
-        
-        <Pricing />
-      </div>
-    </section>
           
       {/* TESTIMONIALS - 01404F color */}
       <section className="py-16 md:py-24 bg-[#01404F] text-white" id="testimonials">
@@ -196,6 +177,7 @@ export default function HomePage() {
       
       <Footer />
        <ScrollToTop />
+      <DownloadModal open={showDownloadModal} onClose={() => setShowDownloadModal(false)} />
     </div>
     </div>
   );
