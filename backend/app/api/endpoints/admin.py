@@ -532,12 +532,23 @@ def delete_recipe(
 @router.post("/bootstrap")
 def bootstrap_admin(
     payload: AdminLoginPayload,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """
     One-time bootstrap to create the first admin user.
     Only allowed if no admin users exist.
     """
+    token = settings.admin_bootstrap_token
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Admin bootstrap token not configured",
+        )
+    provided = request.headers.get("x-admin-bootstrap-token")
+    if not provided or provided != token:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid bootstrap token")
+
     existing_admin = db.query(AdminUser).first()
     if existing_admin:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Admin already exists")
