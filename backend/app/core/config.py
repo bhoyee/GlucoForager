@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     deepseek_vision_model: str = Field("deepseek-chat", env="DEEPSEEK_VISION_MODEL")
     redis_url: str | None = Field(None, env="REDIS_URL")
     revenuecat_webhook_secret: str | None = Field(None, env="REVENUECAT_WEBHOOK_SECRET")
+    admin_bootstrap_token: str | None = Field(None, env="ADMIN_BOOTSTRAP_TOKEN")
 
     class Config:
         env_file = ".env"
