@@ -1,4 +1,6 @@
-from pydantic import BaseSettings, Field
+import json
+
+from pydantic import BaseSettings, Field, validator
 
 
 class Settings(BaseSettings):
@@ -9,7 +11,7 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = Field(60, env="ACCESS_TOKEN_EXPIRE_MINUTES")
     refresh_token_expire_days: int = Field(30, env="REFRESH_TOKEN_EXPIRE_DAYS")
     stripe_secret_key: str | None = Field(None, env="STRIPE_SECRET_KEY")
-    cors_origins: list[str] = Field(default_factory=lambda: ["*"])
+    cors_origins: list[str] = Field(default_factory=lambda: ["*"], env="CORS_ORIGINS")
     smtp_host: str | None = Field(None, env="SMTP_HOST")
     smtp_port: int | None = Field(None, env="SMTP_PORT")
     smtp_username: str | None = Field(None, env="SMTP_USERNAME")
@@ -37,6 +39,20 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+
+    @validator("cors_origins", pre=True)
+    def assemble_cors_origins(cls, v):
+        if isinstance(v, str):
+            value = v.strip()
+            if not value:
+                return ["*"]
+            if value.startswith("["):
+                try:
+                    return json.loads(value)
+                except json.JSONDecodeError:
+                    return ["*"]
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return v
 
 
 settings = Settings()
