@@ -20,10 +20,9 @@ from ...models.password_reset import PasswordResetToken
 from ...models.recipe import Recipe
 from ...models.recipe_history import RecipeHistory
 from ...models.shopping_item import ShoppingItem
+from ...models.refresh_token import RefreshToken
 from ...models.subscription import Subscription
 from ...models.user import SearchLog, User
-from ...models.subscription import Subscription
-from ...models.user import User
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -454,6 +453,7 @@ def delete_user(
     db.query(Favorite).filter(Favorite.user_id == user.id).delete(synchronize_session=False)
     db.query(MealPlan).filter(MealPlan.user_id == user.id).delete(synchronize_session=False)
     db.query(PasswordResetToken).filter(PasswordResetToken.user_id == user.id).delete(synchronize_session=False)
+    db.query(RefreshToken).filter(RefreshToken.user_id == user.id).delete(synchronize_session=False)
     db.query(RecipeHistory).filter(RecipeHistory.user_id == user.id).delete(synchronize_session=False)
     db.query(ShoppingItem).filter(ShoppingItem.user_id == user.id).delete(synchronize_session=False)
     db.query(Subscription).filter(Subscription.user_id == user.id).delete(synchronize_session=False)
