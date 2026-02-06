@@ -79,5 +79,6 @@ def read_mobile_logs(limit: int = 200, admin=Depends(get_current_admin)):  # noq
     if not log_path.exists():
         return {"items": []}
     lines = log_path.read_text(encoding="utf-8", errors="ignore").splitlines()
-    items = lines[-limit:]
+    # Newest first for admin view.
+    items = list(reversed(lines))[:limit]
     return {"items": items}
