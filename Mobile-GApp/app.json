@@ -13,10 +13,12 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "infoPlist": {
-        "NSPhotoLibraryUsageDescription": "Allow $(PRODUCT_NAME) to access your photo library to select ingredient images"
-      }
+        "NSPhotoLibraryUsageDescription": "Allow $(PRODUCT_NAME) to access your photo library to select ingredient images",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "com.glucoforager.app"
     },
     "android": {
       "appName": "GlucoForager",
@@ -26,6 +28,9 @@
       },
       "edgeToEdgeEnabled": true,
       "permissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.RECORD_AUDIO"
@@ -51,6 +56,9 @@
         "projectId": "3a807650-6f05-4001-b6e4-703f2c21aef3"
       }
     },
-    "owner": "binsalith"
+    "owner": "binsalith",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
   }
 }

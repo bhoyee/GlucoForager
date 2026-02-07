@@ -16,6 +16,7 @@ __pycache__/
 # landing page
 /landing-page/.next/
 /landing-page/node_modules/
+/landing-page/.env.local
 
 # mobile app build caches
 /mobile-app/.expo/
@@ -27,6 +28,9 @@ __pycache__/
 /Mobile-GApp/.expo-shared/
 /Mobile-GApp/android/.gradle/
 /Mobile-GApp/android/app/build/
+
+# uploads / user content (should live in object storage in prod)
+/backend/uploads/
 
 # IDEs
 .vscode/
