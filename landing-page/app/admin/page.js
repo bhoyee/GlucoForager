@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
+const ENABLE_BOOTSTRAP = process.env.NEXT_PUBLIC_ENABLE_ADMIN_BOOTSTRAP === 'true';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -21,7 +22,8 @@ export default function AdminLoginPage() {
         const data = await response.json();
         setHasAdmin(Boolean(data.has_admin));
       } catch (error) {
-        setHasAdmin(false);
+        // If status check fails, default to "admin exists" to avoid exposing bootstrap UI.
+        setHasAdmin(true);
       }
     };
     checkStatus();
@@ -33,6 +35,9 @@ export default function AdminLoginPage() {
     setMessage('');
 
     try {
+      if (!hasAdmin && !ENABLE_BOOTSTRAP) {
+        throw new Error('Admin setup is disabled.');
+      }
       const endpoint = hasAdmin ? '/api/admin/login' : '/api/admin/bootstrap';
       const response = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
@@ -64,7 +69,11 @@ export default function AdminLoginPage() {
       <div className="admin-card">
         <h1 className="admin-title">GlucoForager Admin</h1>
         <p className="admin-subtitle">
-          {hasAdmin ? 'Log in to manage recipes.' : 'Create the first admin account.'}
+          {hasAdmin
+            ? 'Log in to manage recipes.'
+            : ENABLE_BOOTSTRAP
+              ? 'Create the first admin account.'
+              : 'Admin setup is disabled. Please contact support.'}
         </p>
 
         <form onSubmit={handleSubmit}>
@@ -93,7 +102,13 @@ export default function AdminLoginPage() {
 
           <div className="admin-actions">
             <button className="admin-button" type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Please wait...' : hasAdmin ? 'Log in' : 'Create admin'}
+              {isSubmitting
+                ? 'Please wait...'
+                : hasAdmin
+                  ? 'Log in'
+                  : ENABLE_BOOTSTRAP
+                    ? 'Create admin'
+                    : 'Log in'}
             </button>
             {hasAdmin && (
               <Link className="admin-link" href="/admin/dashboard">
