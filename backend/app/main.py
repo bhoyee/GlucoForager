@@ -1,5 +1,6 @@
 import logging
 import time
+from datetime import datetime, timezone
 
 import os
 from logging.handlers import RotatingFileHandler
@@ -28,6 +29,7 @@ from .api.endpoints import (
     shopping_list,
     revenuecat,
     mobile_logs,
+    system_logs,
 )
 from .core.config import settings
 from .database import Base, engine
@@ -41,6 +43,7 @@ from .models import (  # ensure models are registered with SQLAlchemy
     recipe_history,
 )
 from .services.abuse_detector import AbuseDetector
+from .services.system_log_service import log_system_event
 
 logging.basicConfig(
     level=logging.INFO,
@@ -104,9 +107,30 @@ async def abuse_guard(request: Request, call_next):
         response = await call_next(request)
     except Exception as exc:  # noqa: BLE001
         logger.exception("Unhandled error: %s", exc)
+        log_system_event({
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "level": "error",
+            "source": "api",
+            "message": "Unhandled API error",
+            "details": str(exc),
+            "path": request.url.path,
+            "method": request.method,
+            "ip": request.client.host if request.client else None,
+        })
         return JSONResponse(status_code=500, content={"detail": "Internal server error"})
     duration_ms = (time.time() - start) * 1000
     logger.info("%s %s -> %s (%.1f ms)", request.method, request.url.path, response.status_code, duration_ms)
+    if response.status_code >= 400:
+        log_system_event({
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "level": "error" if response.status_code >= 500 else "warn",
+            "source": "api",
+            "message": "API request failed",
+            "details": f"status={response.status_code}",
+            "path": request.url.path,
+            "method": request.method,
+            "ip": request.client.host if request.client else None,
+        })
     return response
 
 
@@ -117,12 +141,32 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    log_system_event({
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "level": "warn",
+        "source": "api",
+        "message": "Validation error",
+        "details": str(exc.errors()),
+        "path": request.url.path,
+        "method": request.method,
+        "ip": request.client.host if request.client else None,
+    })
     return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
     logger.exception("Unhandled exception: %s", exc)
+    log_system_event({
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "level": "error",
+        "source": "api",
+        "message": "Unhandled exception",
+        "details": str(exc),
+        "path": request.url.path,
+        "method": request.method,
+        "ip": request.client.host if request.client else None,
+    })
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
@@ -162,3 +206,4 @@ app.include_router(meal_plan.router, prefix="/api")
 app.include_router(shopping_list.router, prefix="/api")
 app.include_router(revenuecat.router, prefix="/api")
 app.include_router(mobile_logs.router, prefix="/api")
+app.include_router(system_logs.router, prefix="/api")

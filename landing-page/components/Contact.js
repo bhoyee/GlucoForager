@@ -17,7 +17,7 @@ export default function Contact() {
                 </div>
                 <div>
                   <h4 className="font-medium text-white mb-1">Email</h4>
-                  <p className="text-gray-300 text-sm">support@glucoforager.com</p>
+                  <p className="text-gray-300 text-sm">hello@glucoforager.com</p>
                   <p className="text-gray-400 text-xs mt-1">Typically responds within 24 hours</p>
                 </div>
               </div>

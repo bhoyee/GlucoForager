@@ -27,6 +27,18 @@ export default function AdminUsersPage() {
   const [message, setMessage] = useState('');
   const [pendingAction, setPendingAction] = useState(null);
   const [actionBusy, setActionBusy] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Detect mobile screen size
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const buildQuery = () => {
     const params = new URLSearchParams();
@@ -251,6 +263,7 @@ export default function AdminUsersPage() {
             setSearch(event.target.value);
             setPage(1);
           }}
+          className="admin-search-input"
         />
         <label className="admin-inline-toggle">
           <input
@@ -258,7 +271,7 @@ export default function AdminUsersPage() {
             checked={autoRefresh}
             onChange={(event) => setAutoRefresh(event.target.checked)}
           />
-          Auto-refresh
+          {!isMobile ? 'Auto-refresh' : 'Auto'}
         </label>
         <select
           value={tierFilter}
@@ -266,6 +279,8 @@ export default function AdminUsersPage() {
             setTierFilter(event.target.value);
             setPage(1);
           }}
+          className="admin-filter-select"
+          aria-label="Filter by tier"
         >
           <option value="all">All plans</option>
           <option value="free">Free</option>
@@ -277,6 +292,8 @@ export default function AdminUsersPage() {
             setStatusFilter(event.target.value);
             setPage(1);
           }}
+          className="admin-filter-select"
+          aria-label="Filter by status"
         >
           <option value="all">All status</option>
           <option value="active">Active</option>
@@ -290,6 +307,8 @@ export default function AdminUsersPage() {
             setSortOrder(nextOrder);
             setPage(1);
           }}
+          className="admin-sort-select"
+          aria-label="Sort users"
         >
           <option value="created_at:desc">Newest first</option>
           <option value="created_at:asc">Oldest first</option>
@@ -299,104 +318,189 @@ export default function AdminUsersPage() {
       </div>
 
       {isLoading ? (
-        <p>Loading users...</p>
+        <p className="admin-loading">Loading users...</p>
       ) : (
         <>
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>User</th>
-                <th>Email</th>
-                <th>Subscription</th>
-                <th>Status</th>
-                <th>Expires</th>
-                <th>Joined</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((user) => {
-                const isSuspended = Boolean(user.suspended_at);
-                return (
-                <tr key={user.id} className={isSuspended ? 'admin-row-suspended' : undefined}>
-                  <td>{user.full_name || '--'}</td>
-                  <td>{user.email}</td>
-                  <td>
-                    <span className={`admin-badge ${user.subscription_tier === 'premium' ? '' : 'secondary'}`}>
-                      {user.subscription_tier}
-                    </span>
-                  </td>
-                  <td>
-                    <span
-                      className={`admin-badge ${
-                        isSuspended ? 'danger' : user.status === 'active' ? 'success' : 'warning'
-                      }`}
-                    >
-                      {isSuspended ? 'suspended' : user.status}
-                    </span>
-                  </td>
-                  <td>
-                    {user.expires_at
-                      ? new Date(user.expires_at).toLocaleDateString()
-                      : '--'}
-                  </td>
-                  <td>{user.created_at ? new Date(user.created_at).toLocaleDateString() : '--'}</td>
-                  <td>
-                    <div className="admin-action-buttons">
-                      <button
-                        type="button"
-                        className="admin-button secondary"
-                        onClick={() => router.push(`/admin/users/${user.id}`)}
-                      >
-                        Details
-                      </button>
-                      {isSuspended ? (
+          <div className="admin-table-container">
+            {isMobile ? (
+              // Mobile Card View
+              <div className="admin-mobile-user-list">
+                {users.map((user) => {
+                  const isSuspended = Boolean(user.suspended_at);
+                  
+                  return (
+                    <div key={user.id} className={`admin-mobile-user-card ${isSuspended ? 'suspended' : ''}`}>
+                      <div className="admin-mobile-user-header">
+                        <div className="admin-mobile-user-info">
+                          <div className="admin-mobile-user-name">{user.full_name || '--'}</div>
+                          <div className="admin-mobile-user-email">{user.email}</div>
+                        </div>
+                        <div className="admin-mobile-user-badges">
+                          <span className={`admin-badge ${user.subscription_tier === 'premium' ? '' : 'secondary'}`}>
+                            {user.subscription_tier}
+                          </span>
+                          <span
+                            className={`admin-badge ${
+                              isSuspended ? 'danger' : user.status === 'active' ? 'success' : 'warning'
+                            }`}
+                          >
+                            {isSuspended ? 'suspended' : user.status}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <div className="admin-mobile-user-details">
+                        <div className="admin-mobile-user-detail">
+                          <span className="admin-mobile-detail-label">Joined:</span>
+                          <span>{user.created_at ? new Date(user.created_at).toLocaleDateString() : '--'}</span>
+                        </div>
+                        <div className="admin-mobile-user-detail">
+                          <span className="admin-mobile-detail-label">Expires:</span>
+                          <span>{user.expires_at ? new Date(user.expires_at).toLocaleDateString() : '--'}</span>
+                        </div>
+                      </div>
+                      
+                      <div className="admin-mobile-actions">
                         <button
                           type="button"
-                          className="admin-button secondary"
-                          onClick={() => requestAction('unsuspend', user)}
+                          className="admin-button secondary admin-mobile-action-button"
+                          onClick={() => router.push(`/admin/users/${user.id}`)}
                         >
-                          Unsuspend
+                          Details
                         </button>
-                      ) : (
+                        {isSuspended ? (
+                          <button
+                            type="button"
+                            className="admin-button secondary admin-mobile-action-button"
+                            onClick={() => requestAction('unsuspend', user)}
+                          >
+                            Activate
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="admin-button danger admin-mobile-action-button"
+                            onClick={() => requestAction('suspend', user)}
+                          >
+                            Suspend
+                          </button>
+                        )}
                         <button
                           type="button"
-                          className="admin-button danger"
-                          onClick={() => requestAction('suspend', user)}
+                          className="admin-button admin-mobile-action-button"
+                          onClick={() => requestAction('tier', user)}
                         >
-                          Suspend
+                          {user.subscription_tier === 'premium' ? 'Downgrade' : 'Upgrade'}
                         </button>
-                      )}
-                      <button
-                        type="button"
-                        className="admin-button"
-                        onClick={() => requestAction('tier', user)}
-                      >
-                        {user.subscription_tier === 'premium' ? 'Downgrade' : 'Upgrade'}
-                      </button>
-                      <button
-                        type="button"
-                        className="admin-button danger"
-                        onClick={() => requestAction('delete', user)}
-                      >
-                        Delete
-                      </button>
+                        <button
+                          type="button"
+                          className="admin-button danger admin-mobile-action-button"
+                          onClick={() => requestAction('delete', user)}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
-                  </td>
-                </tr>
-              )})}
-            </tbody>
-          </table>
+                  );
+                })}
+              </div>
+            ) : (
+              // Desktop Table View
+              <div className="admin-table-wrap">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>User</th>
+                      <th>Email</th>
+                      <th>Subscription</th>
+                      <th>Status</th>
+                      <th>Expires</th>
+                      <th>Joined</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.map((user) => {
+                      const isSuspended = Boolean(user.suspended_at);
+
+                      return (
+                        <tr key={user.id} className={isSuspended ? 'admin-row-suspended' : undefined}>
+                          <td>{user.full_name || '--'}</td>
+                          <td>{user.email}</td>
+                          <td>
+                            <span className={`admin-badge ${user.subscription_tier === 'premium' ? '' : 'secondary'}`}>
+                              {user.subscription_tier}
+                            </span>
+                          </td>
+                          <td>
+                            <span
+                              className={`admin-badge ${
+                                isSuspended ? 'danger' : user.status === 'active' ? 'success' : 'warning'
+                              }`}
+                            >
+                              {isSuspended ? 'suspended' : user.status}
+                            </span>
+                          </td>
+                          <td>{user.expires_at ? new Date(user.expires_at).toLocaleDateString() : '--'}</td>
+                          <td>{user.created_at ? new Date(user.created_at).toLocaleDateString() : '--'}</td>
+                          <td>
+                            <div className="admin-action-buttons">
+                              <button
+                                type="button"
+                                className="admin-button secondary"
+                                onClick={() => router.push(`/admin/users/${user.id}`)}
+                              >
+                                Details
+                              </button>
+                              {isSuspended ? (
+                                <button
+                                  type="button"
+                                  className="admin-button secondary"
+                                  onClick={() => requestAction('unsuspend', user)}
+                                >
+                                  Unsuspend
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="admin-button danger"
+                                  onClick={() => requestAction('suspend', user)}
+                                >
+                                  Suspend
+                                </button>
+                              )}
+                              <button type="button" className="admin-button" onClick={() => requestAction('tier', user)}>
+                                {user.subscription_tier === 'premium' ? 'Downgrade' : 'Upgrade'}
+                              </button>
+                              <button type="button" className="admin-button danger" onClick={() => requestAction('delete', user)}>
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
 
           <div className="admin-pagination">
-            <button type="button" onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1}>
+            <button
+              type="button"
+              className="admin-pagination-button"
+              onClick={() => setPage(Math.max(1, page - 1))}
+              disabled={page === 1}
+            >
               Prev
             </button>
-            <span>
+            <span className="admin-pagination-info">
               Page {page} of {totalPages} ({totalItems} users)
             </span>
             <button
               type="button"
+              className="admin-pagination-button"
               onClick={() => setPage(Math.min(totalPages, page + 1))}
               disabled={page === totalPages}
             >
