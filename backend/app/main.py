@@ -120,7 +120,11 @@ async def abuse_guard(request: Request, call_next):
         return JSONResponse(status_code=500, content={"detail": "Internal server error"})
     duration_ms = (time.time() - start) * 1000
     logger.info("%s %s -> %s (%.1f ms)", request.method, request.url.path, response.status_code, duration_ms)
-    if response.status_code >= 400:
+
+    # Only record "API request failed" events for real API routes.
+    # This prevents system-log flooding from internet scanners probing random paths
+    # like "/.env", "/.git/config", "/wp-includes/...", etc.
+    if response.status_code >= 400 and request.url.path.startswith("/api/"):
         log_system_event({
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "level": "error" if response.status_code >= 500 else "warn",
