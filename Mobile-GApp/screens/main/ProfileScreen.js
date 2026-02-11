@@ -1,6 +1,6 @@
 // screens/main/ProfileScreen.js
 import React, { useCallback, useContext, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Linking, Share, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Linking, Share, Platform, ActivityIndicator, Modal, Pressable } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,7 +10,7 @@ import { AuthContext } from '../../context/authContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
-import { configureRevenueCat, getCustomerInfo, getOfferings, isPremiumEntitled, isRevenueCatConfigured, presentCustomerCenter, presentPaywall } from '../../utils/revenuecat';
+import { configureRevenueCat, getCustomerInfo, getOfferings, getPaywallOffering, isPremiumEntitled, isRevenueCatConfigured, presentCustomerCenter, presentPaywall, restorePurchases } from '../../utils/revenuecat';
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
@@ -22,6 +22,8 @@ export default function ProfileScreen() {
   const appStoreUrl = 'itms-apps://itunes.apple.com/app/id0000000000';
   const playStoreUrl = 'market://details?id=com.glucoforager.app';
   const shareUrl = 'https://glucoforager.com/app';
+  const privacyPolicyUrl = 'https://www.glucoforager.com/privacy-policy';
+  const eulaUrl = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
   const [profile, setProfile] = useState({
     fullName: '',
     email: '',
@@ -30,6 +32,12 @@ export default function ProfileScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [isUpgrading, setIsUpgrading] = useState(false);
+  const [premiumModalVisible, setPremiumModalVisible] = useState(false);
+  const [premiumModalBusy, setPremiumModalBusy] = useState(false);
+  const [premiumModalError, setPremiumModalError] = useState('');
+  const [premiumPriceLine, setPremiumPriceLine] = useState('');
+  const [premiumOfferingId, setPremiumOfferingId] = useState('');
+  const [premiumProductId, setPremiumProductId] = useState('');
   const [debugTapCount, setDebugTapCount] = useState(0);
   const [debugTapTimer, setDebugTapTimer] = useState(null);
   const debugTapThreshold = 7;
@@ -106,48 +114,145 @@ export default function ProfileScreen() {
     }
   }, [signOut]);
 
-  const handleUpgrade = async () => {
+  const ensureRevenueCatUser = async () => {
+    const token = await AsyncStorage.getItem('userToken');
+    if (!token) return;
+
+    const profileResponse = await apiFetch(
+      `${API_URL}${API_ENDPOINTS.USER_PROFILE}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+      { onUnauthorized: signOut }
+    );
+
+    if (profileResponse.status === 401 || !profileResponse.ok) return;
+
+    const profileData = await profileResponse.json();
+    await configureRevenueCat({
+      token,
+      publicId: profileData?.public_id || null,
+      email: profileData?.email || null,
+      fullName: profileData?.full_name || null,
+    });
+  };
+
+  const openPremiumModal = async () => {
     try {
       setIsUpgrading(true);
+      setPremiumModalError('');
+      setPremiumPriceLine('');
+      setPremiumOfferingId('');
+      setPremiumProductId('');
+      setPremiumModalVisible(true);
+
       if (!revenueCatReady) {
-        Alert.alert(
-          'Payments unavailable',
-          'RevenueCat is not configured in this build. Please update the app or contact support.'
+        setPremiumModalError(
+          'Payments are temporarily unavailable in this build. Please update the app or contact support.'
         );
         return;
       }
-      const token = await AsyncStorage.getItem('userToken');
-      if (token) {
-        const profileResponse = await apiFetch(
-          `${API_URL}${API_ENDPOINTS.USER_PROFILE}`,
-          { headers: { Authorization: `Bearer ${token}` } },
-          { onUnauthorized: signOut }
-        );
-        if (profileResponse.status !== 401 && profileResponse.ok) {
-          const profileData = await profileResponse.json();
-          await configureRevenueCat({
-            token,
-            publicId: profileData?.public_id || null,
-            email: profileData?.email || null,
-            fullName: profileData?.full_name || null,
-          });
-          if (revenueCatReady) {
-            await getOfferings();
+
+      await ensureRevenueCatUser();
+
+      let offering = null;
+      try {
+        offering = await getPaywallOffering();
+      } catch (error) {
+        // Ignore and fall back to empty UI.
+      }
+
+      if (offering) {
+        setPremiumOfferingId(offering?.identifier || '');
+        const pkg =
+          offering?.availablePackages?.find((p) => p?.identifier === '$rc_monthly') ||
+          offering?.availablePackages?.[0] ||
+          null;
+        const product = pkg?.product || null;
+        if (product) {
+          const priceString = product?.priceString || product?.price_string || '';
+          setPremiumProductId(product?.identifier || product?.productIdentifier || '');
+          if (priceString) {
+            setPremiumPriceLine(`${priceString} / month`);
           }
         }
       }
+
+      try {
+        await getOfferings();
+      } catch (error) {
+        setPremiumModalError(
+          'Subscriptions are temporarily unavailable (Apple sandbox is still processing billing info). Please try again later.'
+        );
+      }
+    } catch (error) {
+      setPremiumModalError('Unable to load subscriptions right now. Please try again later.');
+    } finally {
+      setIsUpgrading(false);
+    }
+  };
+
+  const handleUpgrade = async () => {
+    await openPremiumModal();
+  };
+
+  const handleStartPurchase = async () => {
+    try {
+      setPremiumModalBusy(true);
+      setPremiumModalError('');
+
+      if (!revenueCatReady) {
+        setPremiumModalError('Payments are temporarily unavailable in this build.');
+        return;
+      }
+
+      await ensureRevenueCatUser();
+
       const result = await presentPaywall();
       const info = result?.customerInfo ? result.customerInfo : await getCustomerInfo();
       const hasPremium = isPremiumEntitled(info);
       if (hasPremium) {
         await syncSubscription();
         await loadProfile();
+        setPremiumModalVisible(false);
         Alert.alert('Success', 'Premium unlocked.');
+        return;
       }
+
+      setPremiumModalError('Purchase was not completed.');
     } catch (error) {
-      Alert.alert('Error', 'Unable to start subscription right now.');
+      setPremiumModalError(
+        'Unable to start subscription right now. If this is a sandbox build, your Paid Apps Agreement may still be processing.'
+      );
     } finally {
-      setIsUpgrading(false);
+      setPremiumModalBusy(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    try {
+      setPremiumModalBusy(true);
+      setPremiumModalError('');
+
+      if (!revenueCatReady) {
+        setPremiumModalError('Payments are temporarily unavailable in this build.');
+        return;
+      }
+
+      await ensureRevenueCatUser();
+      const info = await restorePurchases();
+      const hasPremium = isPremiumEntitled(info);
+      if (hasPremium) {
+        await syncSubscription();
+        await loadProfile();
+        setPremiumModalVisible(false);
+        Alert.alert('Restored', 'Your Premium subscription has been restored.');
+        return;
+      }
+
+      Alert.alert('No purchases found', 'No active Premium subscription was found for this Apple ID.');
+    } catch (error) {
+      setPremiumModalError('Unable to restore purchases right now. Please try again later.');
+    } finally {
+      setPremiumModalBusy(false);
     }
   };
 
@@ -240,6 +345,81 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
       >
+      <Modal
+        visible={premiumModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setPremiumModalVisible(false)}
+      >
+        <View style={styles.premiumModalBackdrop}>
+          <View style={styles.premiumModalCard}>
+            <View style={styles.premiumModalHeader}>
+              <Text style={styles.premiumModalTitle}>GlucoForager Premium</Text>
+              <Pressable onPress={() => setPremiumModalVisible(false)} accessibilityLabel="Close">
+                <Ionicons name="close" size={24} color={Colors.text} />
+              </Pressable>
+            </View>
+
+            <Text style={styles.premiumModalSubtitle}>Monthly auto‑renewable subscription</Text>
+
+            <View style={styles.premiumInfoRow}>
+              <Text style={styles.premiumInfoLabel}>Price</Text>
+              <Text style={styles.premiumInfoValue}>{premiumPriceLine || 'Unavailable'}</Text>
+            </View>
+            {!!premiumProductId && (
+              <Text style={styles.premiumMetaText}>Product: {premiumProductId}</Text>
+            )}
+            {!!premiumOfferingId && (
+              <Text style={styles.premiumMetaText}>Offering: {premiumOfferingId}</Text>
+            )}
+
+            <View style={styles.premiumBenefits}>
+              <Text style={styles.premiumBenefitsTitle}>Includes:</Text>
+              <Text style={styles.premiumBenefitItem}>• Unlimited ingredient scans & searches</Text>
+              <Text style={styles.premiumBenefitItem}>• Full nutrition facts & diabetes‑safe tips</Text>
+              <Text style={styles.premiumBenefitItem}>• Unlimited favorites</Text>
+            </View>
+
+            <Text style={styles.premiumLegalText}>
+              Payment will be charged to your Apple ID account at confirmation of purchase. Subscription
+              automatically renews unless canceled at least 24 hours before the end of the current period.
+            </Text>
+
+            <View style={styles.premiumLinksRow}>
+              <Pressable onPress={() => Linking.openURL(privacyPolicyUrl)}>
+                <Text style={styles.premiumLink}>Privacy Policy</Text>
+              </Pressable>
+              <Text style={styles.premiumLinkSeparator}>•</Text>
+              <Pressable onPress={() => Linking.openURL(eulaUrl)}>
+                <Text style={styles.premiumLink}>Terms (EULA)</Text>
+              </Pressable>
+            </View>
+
+            {!!premiumModalError && <Text style={styles.premiumErrorText}>{premiumModalError}</Text>}
+
+            <View style={styles.premiumActions}>
+              <TouchableOpacity
+                style={[styles.premiumButton, styles.premiumButtonPrimary]}
+                onPress={handleStartPurchase}
+                disabled={premiumModalBusy}
+              >
+                {premiumModalBusy ? (
+                  <ActivityIndicator size="small" color={Colors.white} />
+                ) : (
+                  <Text style={styles.premiumButtonTextPrimary}>Continue</Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.premiumButton, styles.premiumButtonSecondary]}
+                onPress={handleRestore}
+                disabled={premiumModalBusy}
+              >
+                <Text style={styles.premiumButtonTextSecondary}>Restore Purchases</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* User Info */}
       <View style={styles.userCard}>
@@ -492,6 +672,134 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.error,
     marginBottom: 6,
+  },
+  premiumModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  premiumModalCard: {
+    backgroundColor: Colors.background,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 14,
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    maxHeight: '85%',
+  },
+  premiumModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  premiumModalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: Colors.text,
+  },
+  premiumModalSubtitle: {
+    fontSize: 13,
+    color: Colors.textLight,
+    marginBottom: 12,
+  },
+  premiumInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  premiumInfoLabel: {
+    fontSize: 13,
+    color: Colors.textLight,
+    fontWeight: '600',
+  },
+  premiumInfoValue: {
+    fontSize: 14,
+    color: Colors.text,
+    fontWeight: '700',
+  },
+  premiumMetaText: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  premiumBenefits: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: Colors.surface,
+  },
+  premiumBenefitsTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.text,
+    marginBottom: 6,
+  },
+  premiumBenefitItem: {
+    fontSize: 13,
+    color: Colors.text,
+    marginBottom: 4,
+  },
+  premiumLegalText: {
+    marginTop: 10,
+    fontSize: 12,
+    color: Colors.textLight,
+    lineHeight: 16,
+  },
+  premiumLinksRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  premiumLink: {
+    fontSize: 12,
+    color: Colors.primary,
+    fontWeight: '700',
+  },
+  premiumLinkSeparator: {
+    marginHorizontal: 8,
+    fontSize: 12,
+    color: Colors.textMuted,
+  },
+  premiumErrorText: {
+    marginTop: 10,
+    fontSize: 12,
+    color: Colors.error,
+    textAlign: 'center',
+  },
+  premiumActions: {
+    marginTop: 14,
+  },
+  premiumButton: {
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  premiumButtonPrimary: {
+    backgroundColor: Colors.primary,
+  },
+  premiumButtonSecondary: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border || 'rgba(0,0,0,0.08)',
+  },
+  premiumButtonTextPrimary: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  premiumButtonTextSecondary: {
+    color: Colors.text,
+    fontSize: 14,
+    fontWeight: '700',
   },
   upgradeCard: {
     backgroundColor: Colors.primary,
