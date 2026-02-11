@@ -96,29 +96,31 @@ export const configureRevenueCat = async ({ token, publicId, email, fullName } =
 
 export const isRevenueCatConfigured = () => Boolean(REVENUECAT_API_KEY);
 
+export const getPaywallOffering = async ({ offeringId = REVENUECAT_OFFERING_ID } = {}) => {
+  const offerings = await Purchases.getOfferings();
+  const selectedOffering = (offeringId && offerings?.all?.[offeringId]) || offerings?.current || null;
+  if (offeringId && !offerings?.all?.[offeringId]) {
+    addDebugLog({
+      source: 'RevenueCat',
+      level: 'warn',
+      message: `Offering "${offeringId}" not found; using current offering instead.`,
+    });
+  }
+  return selectedOffering;
+};
+
 export const presentPaywall = async ({ offeringId = REVENUECAT_OFFERING_ID } = {}) => {
   try {
     let selectedOffering = null;
-
-    if (offeringId) {
-      try {
-        const offerings = await Purchases.getOfferings();
-        selectedOffering = offerings?.all?.[offeringId] || null;
-        if (!selectedOffering) {
-          addDebugLog({
-            source: 'RevenueCat',
-            level: 'warn',
-            message: `Offering "${offeringId}" not found; using current offering instead.`,
-          });
-        }
-      } catch (error) {
-        addDebugLog({
-          source: 'RevenueCat',
-          level: 'warn',
-          message: 'Unable to resolve offering before presenting paywall; using current offering instead.',
-          details: `${error?.message || error}`,
-        });
-      }
+    try {
+      selectedOffering = await getPaywallOffering({ offeringId });
+    } catch (error) {
+      addDebugLog({
+        source: 'RevenueCat',
+        level: 'warn',
+        message: 'Unable to resolve offering before presenting paywall; using current offering instead.',
+        details: `${error?.message || error}`,
+      });
     }
 
     return await PurchasesUI.presentPaywall(selectedOffering ? { offering: selectedOffering } : {});
@@ -190,4 +192,18 @@ export const getCustomerInfo = async () => {
 
 export const isPremiumEntitled = (customerInfo) => {
   return Boolean(customerInfo?.entitlements?.active?.[REVENUECAT_ENTITLEMENT]);
+};
+
+export const restorePurchases = async () => {
+  try {
+    return await Purchases.restorePurchases();
+  } catch (error) {
+    addDebugLog({
+      source: 'RevenueCat',
+      level: 'error',
+      message: 'Restore purchases failed.',
+      details: `${error?.message || error}`,
+    });
+    throw error;
+  }
 };
