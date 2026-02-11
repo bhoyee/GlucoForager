@@ -1,6 +1,7 @@
+import { Platform } from 'react-native';
 import Purchases from 'react-native-purchases';
 import PurchasesUI from 'react-native-purchases-ui';
-import { REVENUECAT_API_KEY, REVENUECAT_ENTITLEMENT } from '../config/revenuecat';
+import { REVENUECAT_API_KEY, REVENUECAT_ENTITLEMENT, REVENUECAT_OFFERING_ID } from '../config/revenuecat';
 import { addDebugLog } from './debugLogger';
 
 let configured = false;
@@ -24,6 +25,12 @@ export const configureRevenueCat = async ({ token, publicId, email, fullName } =
   if (!configured) {
     Purchases.setDebugLogsEnabled(false);
     Purchases.configure({ apiKey: REVENUECAT_API_KEY });
+    addDebugLog({
+      source: 'RevenueCat',
+      level: 'info',
+      message: 'RevenueCat configured.',
+      details: `platform=${Platform.OS} key_prefix=${String(REVENUECAT_API_KEY).slice(0, 5)}`,
+    });
     configured = true;
   }
 
@@ -89,9 +96,32 @@ export const configureRevenueCat = async ({ token, publicId, email, fullName } =
 
 export const isRevenueCatConfigured = () => Boolean(REVENUECAT_API_KEY);
 
-export const presentPaywall = async () => {
+export const presentPaywall = async ({ offeringId = REVENUECAT_OFFERING_ID } = {}) => {
   try {
-    return await PurchasesUI.presentPaywall();
+    let selectedOffering = null;
+
+    if (offeringId) {
+      try {
+        const offerings = await Purchases.getOfferings();
+        selectedOffering = offerings?.all?.[offeringId] || null;
+        if (!selectedOffering) {
+          addDebugLog({
+            source: 'RevenueCat',
+            level: 'warn',
+            message: `Offering "${offeringId}" not found; using current offering instead.`,
+          });
+        }
+      } catch (error) {
+        addDebugLog({
+          source: 'RevenueCat',
+          level: 'warn',
+          message: 'Unable to resolve offering before presenting paywall; using current offering instead.',
+          details: `${error?.message || error}`,
+        });
+      }
+    }
+
+    return await PurchasesUI.presentPaywall(selectedOffering ? { offering: selectedOffering } : {});
   } catch (error) {
     addDebugLog({
       source: 'RevenueCat',
