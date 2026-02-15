@@ -19,7 +19,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
-import { presentPaywall } from '../../utils/revenuecat';
+
 import RecipePlaceholder from '../../assets/images/recipe-placeholder.jpeg';
 
 export default function HomeScreen() {
@@ -442,11 +442,7 @@ export default function HomeScreen() {
   };
 
   const handleUpgradePaywall = async () => {
-    try {
-      await presentPaywall();
-    } catch (error) {
-      Alert.alert('Unavailable', 'Unable to open the premium paywall right now.');
-    }
+    navigation.navigate('Profile', { openPremium: true });
   };
 
   if (isLoading && isInitialLoad) {

@@ -1,7 +1,7 @@
 // screens/main/ProfileScreen.js
 import React, { useCallback, useContext, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Linking, Share, Platform, ActivityIndicator, Modal, Pressable } from 'react-native';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +14,7 @@ import { configureRevenueCat, getCustomerInfo, getOfferings, getPaywallOffering,
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
   const { signOut } = useContext(AuthContext);
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
@@ -291,7 +292,11 @@ export default function ProfileScreen() {
   useFocusEffect(
     useCallback(() => {
       loadProfile();
-    }, [loadProfile])
+      if (route?.params?.openPremium && !premiumModalVisible) {
+        openPremiumModal();
+        navigation.setParams({ openPremium: undefined });
+      }
+    }, [loadProfile, navigation, openPremiumModal, premiumModalVisible, route?.params?.openPremium])
   );
 
   const handleRateUs = async () => {
@@ -360,11 +365,11 @@ export default function ProfileScreen() {
               </Pressable>
             </View>
 
-            <Text style={styles.premiumModalSubtitle}>Monthly auto‑renewable subscription</Text>
+            <Text style={styles.premiumModalSubtitle}>Monthly auto-renewable subscription</Text>
 
             <View style={styles.premiumInfoRow}>
               <Text style={styles.premiumInfoLabel}>Price</Text>
-              <Text style={styles.premiumInfoValue}>{premiumPriceLine || 'Unavailable'}</Text>
+              <Text style={styles.premiumInfoValue}>{premiumPriceLine || 'Loading...'}</Text>
             </View>
             {!!premiumProductId && (
               <Text style={styles.premiumMetaText}>Product: {premiumProductId}</Text>
@@ -376,7 +381,7 @@ export default function ProfileScreen() {
             <View style={styles.premiumBenefits}>
               <Text style={styles.premiumBenefitsTitle}>Includes:</Text>
               <Text style={styles.premiumBenefitItem}>• Unlimited ingredient scans & searches</Text>
-              <Text style={styles.premiumBenefitItem}>• Full nutrition facts & diabetes‑safe tips</Text>
+              <Text style={styles.premiumBenefitItem}>• Full nutrition facts & diabetes-safe tips</Text>
               <Text style={styles.premiumBenefitItem}>• Unlimited favorites</Text>
             </View>
 
