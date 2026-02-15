@@ -172,7 +172,7 @@ export default function ProfileScreen() {
           const priceString = product?.priceString || product?.price_string || '';
           setPremiumProductId(product?.identifier || product?.productIdentifier || '');
           if (priceString) {
-            setPremiumPriceLine(`${priceString} / month`);
+            setPremiumPriceLine(priceString);
           }
         }
       }
@@ -368,33 +368,37 @@ export default function ProfileScreen() {
             <Text style={styles.premiumModalSubtitle}>Monthly auto-renewable subscription</Text>
 
             <View style={styles.premiumInfoRow}>
-              <Text style={styles.premiumInfoLabel}>Price</Text>
-              <Text style={styles.premiumInfoValue}>{premiumPriceLine || 'Loading...'}</Text>
+              <Text style={styles.premiumInfoLabel}>Price (per month)</Text>
+              <Text style={styles.premiumInfoValue}>
+                {premiumPriceLine ? `${premiumPriceLine} per month` : 'Loading price...'}
+              </Text>
             </View>
-            {!!premiumProductId && (
-              <Text style={styles.premiumMetaText}>Product: {premiumProductId}</Text>
-            )}
-            {!!premiumOfferingId && (
-              <Text style={styles.premiumMetaText}>Offering: {premiumOfferingId}</Text>
-            )}
+            <View style={styles.premiumInfoRow}>
+              <Text style={styles.premiumInfoLabel}>Length</Text>
+              <Text style={styles.premiumInfoValue}>1 month</Text>
+            </View>
 
             <View style={styles.premiumBenefits}>
-              <Text style={styles.premiumBenefitsTitle}>Includes:</Text>
-              <Text style={styles.premiumBenefitItem}>• Unlimited ingredient scans & searches</Text>
-              <Text style={styles.premiumBenefitItem}>• Full nutrition facts & diabetes-safe tips</Text>
-              <Text style={styles.premiumBenefitItem}>• Unlimited favorites</Text>
+              <Text style={styles.premiumBenefitsTitle}>What you get:</Text>
+              <Text style={styles.premiumBenefitItem}>- Unlimited ingredient scans & searches</Text>
+              <Text style={styles.premiumBenefitItem}>- Diabetes-friendly recipe suggestions</Text>
+              <Text style={styles.premiumBenefitItem}>- Detailed nutrition insights</Text>
+              <Text style={styles.premiumBenefitItem}>- Unlimited favorites</Text>
             </View>
 
             <Text style={styles.premiumLegalText}>
               Payment will be charged to your Apple ID account at confirmation of purchase. Subscription
               automatically renews unless canceled at least 24 hours before the end of the current period.
             </Text>
+            <Text style={styles.premiumLegalText}>
+              Subscriptions can be managed and canceled in your Apple ID settings.
+            </Text>
 
             <View style={styles.premiumLinksRow}>
               <Pressable onPress={() => Linking.openURL(privacyPolicyUrl)}>
                 <Text style={styles.premiumLink}>Privacy Policy</Text>
               </Pressable>
-              <Text style={styles.premiumLinkSeparator}>•</Text>
+              <Text style={styles.premiumLinkSeparator}>|</Text>
               <Pressable onPress={() => Linking.openURL(eulaUrl)}>
                 <Text style={styles.premiumLink}>Terms (EULA)</Text>
               </Pressable>
@@ -406,7 +410,7 @@ export default function ProfileScreen() {
               <TouchableOpacity
                 style={[styles.premiumButton, styles.premiumButtonPrimary]}
                 onPress={handleStartPurchase}
-                disabled={premiumModalBusy}
+                disabled={premiumModalBusy || !revenueCatReady || !premiumPriceLine}
               >
                 {premiumModalBusy ? (
                   <ActivityIndicator size="small" color={Colors.white} />
