@@ -4,7 +4,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, Alert } 
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
-import { configureRevenueCat, getPaywallOffering, isRevenueCatConfigured } from '../../utils/revenuecat';
+import { getPaywallOffering, isRevenueCatConfigured } from '../../utils/revenuecat';
 
 export default function PremiumDetailsScreen() {
   const navigation = useNavigation();
@@ -32,7 +32,6 @@ export default function PremiumDetailsScreen() {
     const loadPrice = async () => {
       if (!isRevenueCatConfigured()) return;
       try {
-        await configureRevenueCat();
         const offering = await getPaywallOffering();
         const pkg =
           offering?.availablePackages?.find((p) => p?.identifier === '$rc_monthly') ||
@@ -82,7 +81,7 @@ export default function PremiumDetailsScreen() {
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Price (per month)</Text>
           <Text style={styles.infoValue}>
-            {priceLine ? `${priceLine} per month` : 'Price shown in App Store during purchase'}
+            {priceLine ? `${priceLine} / month` : 'Price shown on Apple purchase confirmation'}
           </Text>
         </View>
 
