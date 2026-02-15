@@ -102,6 +102,8 @@ function RevenueCatBootstrap() {
 
   useEffect(() => {
     const sync = async () => {
+      // Configure RevenueCat as early as possible (anonymous) so pricing can load pre-login.
+      await configureRevenueCat();
       const publicId = await AsyncStorage.getItem('publicUserId');
       await configureRevenueCat({ token: userToken, publicId });
     };
