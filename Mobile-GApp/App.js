@@ -8,7 +8,6 @@ import { LogBox, View, Text } from 'react-native';
 // Import Auth Provider
 import { AuthProvider, useAuth } from './context/authContext';
 import { configureRevenueCat } from './utils/revenuecat';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { startMobileLogUploader } from './utils/mobileLogUploader';
 
 // Import screens
@@ -98,17 +97,18 @@ function AppNavigator() {
 }
 
 function RevenueCatBootstrap() {
-  const { userToken } = useAuth();
-
   useEffect(() => {
-    const sync = async () => {
-      // Configure RevenueCat as early as possible (anonymous) so pricing can load pre-login.
-      await configureRevenueCat();
-      const publicId = await AsyncStorage.getItem('publicUserId');
-      await configureRevenueCat({ token: userToken, publicId });
+    // Configure RevenueCat exactly once per session (anonymous).
+    // Logged-in identity is linked later when needed (e.g. before purchase/customer center).
+    const boot = async () => {
+      try {
+        await configureRevenueCat();
+      } catch (error) {
+        // Never crash the app if RevenueCat fails in review/sandbox.
+      }
     };
-    sync();
-  }, [userToken]);
+    boot();
+  }, []);
 
   return null;
 }
