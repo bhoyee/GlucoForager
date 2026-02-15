@@ -165,8 +165,6 @@ export default function ProfileScreen() {
         return;
       }
 
-      await ensureRevenueCatUser();
-
       let offering = null;
       try {
         offering = await getPaywallOffering();

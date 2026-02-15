@@ -194,6 +194,16 @@ export default function LoginScreen() {
             </LinearGradient>
           </TouchableOpacity>
 
+          <TouchableOpacity
+            style={styles.premiumDetailsLink}
+            onPress={() => navigation.navigate('PremiumDetails')}
+            disabled={isLoading}
+          >
+            <Text style={[styles.premiumDetailsText, isLoading && { opacity: 0.5 }]}>
+              See Premium details
+            </Text>
+          </TouchableOpacity>
+
 
 
 
@@ -351,6 +361,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  premiumDetailsLink: {
+    marginTop: 14,
+    alignSelf: 'center',
+  },
+  premiumDetailsText: {
+    color: Colors.primary,
+    fontSize: 14,
+    fontWeight: '700',
   },
   signUpPrompt: {
     color: Colors.textLight,

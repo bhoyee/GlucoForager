@@ -209,6 +209,13 @@ const handleComplete = async () => {
           <Text style={styles.loginText}>Already have an account? </Text>
           <Text style={styles.loginLinkText}>Sign In</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.premiumDetailsLink}
+          onPress={() => navigation.navigate('PremiumDetails')}
+        >
+          <Text style={styles.premiumDetailsText}>See Premium details</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -388,5 +395,15 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontSize: 14,
     fontWeight: '600',
+  },
+  premiumDetailsLink: {
+    marginTop: 10,
+    alignSelf: 'center',
+    paddingVertical: 6,
+  },
+  premiumDetailsText: {
+    color: Colors.primary,
+    fontSize: 14,
+    fontWeight: '700',
   },
 });
