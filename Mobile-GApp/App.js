@@ -17,6 +17,7 @@ import OnboardingScreen from './screens/onboarding/OnboardingScreen';
 import LoginScreen from './screens/auth/LoginScreen';
 import SignUpScreen from './screens/auth/SignUpScreen';
 import ForgotPasswordScreen from './screens/auth/ForgotPasswordScreen';
+import PremiumDetailsScreen from './screens/auth/PremiumDetailsScreen';
 import TermsScreen from './screens/main/TermsScreen';
 import PrivacyPolicyScreen from './screens/main/PrivacyPolicyScreen';
 
@@ -36,6 +37,7 @@ function AuthStack() {
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="SignUp" component={SignUpScreen} />
       <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+      <Stack.Screen name="PremiumDetails" component={PremiumDetailsScreen} />
       <Stack.Screen name="Terms" component={TermsScreen} />
       <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
     </Stack.Navigator>
