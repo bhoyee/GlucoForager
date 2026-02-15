@@ -32,13 +32,21 @@ export default function PremiumDetailsScreen() {
     const loadPrice = async () => {
       if (!isRevenueCatConfigured()) return;
       try {
-        const offering = await getPaywallOffering();
-        const pkg =
-          offering?.availablePackages?.find((p) => p?.identifier === '$rc_monthly') ||
-          offering?.availablePackages?.[0] ||
-          null;
-        const product = pkg?.product || null;
-        const priceString = product?.priceString || product?.price_string || '';
+        const tryLoad = async () => {
+          const offering = await getPaywallOffering();
+          const pkg =
+            offering?.availablePackages?.find((p) => p?.identifier === '$rc_monthly') ||
+            offering?.availablePackages?.[0] ||
+            null;
+          const product = pkg?.product || null;
+          return product?.priceString || product?.price_string || '';
+        };
+
+        let priceString = await tryLoad();
+        if (!priceString) {
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+          priceString = await tryLoad();
+        }
         if (alive && priceString) setPriceLine(priceString);
       } catch (error) {
         // Keep fallback text if offerings aren't available yet.
