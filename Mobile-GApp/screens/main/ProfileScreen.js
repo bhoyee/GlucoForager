@@ -44,6 +44,19 @@ export default function ProfileScreen() {
   const debugTapThreshold = 7;
   const revenueCatReady = isRevenueCatConfigured();
 
+  const openExternalLink = async (url) => {
+    try {
+      const ok = await Linking.canOpenURL(url);
+      if (!ok) {
+        Alert.alert('Link unavailable', 'Unable to open this link right now.');
+        return;
+      }
+      await Linking.openURL(url);
+    } catch (error) {
+      Alert.alert('Link unavailable', 'Unable to open this link right now.');
+    }
+  };
+
   const syncSubscription = async () => {
     const token = await AsyncStorage.getItem('userToken');
     if (!token) return false;
@@ -370,7 +383,7 @@ export default function ProfileScreen() {
             <View style={styles.premiumInfoRow}>
               <Text style={styles.premiumInfoLabel}>Price (per month)</Text>
               <Text style={styles.premiumInfoValue}>
-                {premiumPriceLine ? `${premiumPriceLine} per month` : 'Loading price...'}
+                {premiumPriceLine ? `${premiumPriceLine} per month` : 'Price shown in App Store during purchase'}
               </Text>
             </View>
             <View style={styles.premiumInfoRow}>
@@ -389,17 +402,18 @@ export default function ProfileScreen() {
             <Text style={styles.premiumLegalText}>
               Payment will be charged to your Apple ID account at confirmation of purchase. Subscription
               automatically renews unless canceled at least 24 hours before the end of the current period.
+              Your account will be charged for renewal within 24 hours prior to the end of the current period.
             </Text>
             <Text style={styles.premiumLegalText}>
-              Subscriptions can be managed and canceled in your Apple ID settings.
+              Manage or cancel your subscription in Apple ID settings at any time.
             </Text>
 
             <View style={styles.premiumLinksRow}>
-              <Pressable onPress={() => Linking.openURL(privacyPolicyUrl)}>
+              <Pressable onPress={() => openExternalLink(privacyPolicyUrl)}>
                 <Text style={styles.premiumLink}>Privacy Policy</Text>
               </Pressable>
               <Text style={styles.premiumLinkSeparator}>|</Text>
-              <Pressable onPress={() => Linking.openURL(eulaUrl)}>
+              <Pressable onPress={() => openExternalLink(eulaUrl)}>
                 <Text style={styles.premiumLink}>Terms (EULA)</Text>
               </Pressable>
             </View>
@@ -410,7 +424,7 @@ export default function ProfileScreen() {
               <TouchableOpacity
                 style={[styles.premiumButton, styles.premiumButtonPrimary]}
                 onPress={handleStartPurchase}
-                disabled={premiumModalBusy || !revenueCatReady || !premiumPriceLine}
+                disabled={premiumModalBusy || !revenueCatReady}
               >
                 {premiumModalBusy ? (
                   <ActivityIndicator size="small" color={Colors.white} />
