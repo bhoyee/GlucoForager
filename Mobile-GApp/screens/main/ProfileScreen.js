@@ -128,7 +128,7 @@ export default function ProfileScreen() {
     }
   }, [signOut]);
 
-  const ensureRevenueCatUser = async () => {
+  const ensureRevenueCatUser = useCallback(async () => {
     const token = await AsyncStorage.getItem('userToken');
     if (!token) return;
 
@@ -147,9 +147,9 @@ export default function ProfileScreen() {
       email: profileData?.email || null,
       fullName: profileData?.full_name || null,
     });
-  };
+  }, [signOut]);
 
-  const openPremiumModal = async () => {
+  const openPremiumModal = useCallback(async () => {
     try {
       setIsUpgrading(true);
       setPremiumModalError('');
@@ -200,11 +200,11 @@ export default function ProfileScreen() {
     } finally {
       setIsUpgrading(false);
     }
-  };
+  }, [revenueCatReady]);
 
-  const handleUpgrade = async () => {
+  const handleUpgrade = useCallback(async () => {
     await openPremiumModal();
-  };
+  }, [openPremiumModal]);
 
   const handleStartPurchase = async () => {
     try {
