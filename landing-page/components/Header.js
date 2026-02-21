@@ -56,6 +56,9 @@ export default function Header({ onDownloadClick }) {
           <a href="#faq" className="text-gray-600 hover:text-teal-600 transition-colors">
             FAQ
           </a>
+          <Link href="/blog" className="text-gray-600 hover:text-teal-600 transition-colors">
+            Blog
+          </Link>
           <a href="#contact" className="text-gray-600 hover:text-teal-600 transition-colors">
             Contact
           </a>
@@ -113,6 +116,13 @@ export default function Header({ onDownloadClick }) {
             >
               FAQ
             </a>
+            <Link
+              href="/blog"
+              onClick={() => setIsMenuOpen(false)}
+              className="block py-3 px-4 text-gray-700 hover:text-teal-600 hover:bg-gray-50 rounded-lg transition-colors"
+            >
+              Blog
+            </Link>
             <a
               href="#contact"
               onClick={() => setIsMenuOpen(false)}
