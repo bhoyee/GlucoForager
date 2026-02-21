@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import Footer from '../../components/Footer';
+import ScrollControls from '../../components/ScrollControls';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -48,8 +49,8 @@ export default async function BlogIndexPage({ searchParams }) {
     <>
       <main className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
         <div className="container mx-auto max-w-6xl px-4 py-12 space-y-10">
-        <header className="flex items-center justify-between gap-4 flex-wrap">
-          <Link href="/" className="flex items-center gap-3">
+        <header className="flex items-center justify-between gap-4">
+          <Link href="/" className="flex items-center gap-3 min-w-0">
             <div className="relative h-10 w-10">
               <Image
                 src="/images/logo.png"
@@ -60,11 +61,11 @@ export default async function BlogIndexPage({ searchParams }) {
                 priority
               />
             </div>
-            <span className="text-lg font-extrabold text-gray-900">GlucoForager</span>
+            <span className="text-lg font-extrabold text-gray-900 whitespace-nowrap">GlucoForager</span>
           </Link>
           <Link
             href="/"
-            className="inline-flex items-center justify-center rounded-full bg-teal-600 px-5 py-2.5 text-white font-semibold shadow-sm hover:bg-teal-700 transition-colors"
+            className="inline-flex items-center justify-center rounded-full bg-teal-600 px-5 py-2.5 text-white font-semibold shadow-sm hover:bg-teal-700 transition-colors shrink-0"
           >
             Back to home
           </Link>
@@ -142,6 +143,7 @@ export default async function BlogIndexPage({ searchParams }) {
         ) : null}
         </div>
       </main>
+      <ScrollControls />
       <Footer />
     </>
   );
