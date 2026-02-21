@@ -346,6 +346,13 @@
   resize: vertical;
 }
 
+.admin-help {
+  font-size: 12px;
+  color: #60786c;
+  line-height: 1.4;
+  margin: 0;
+}
+
 .admin-actions {
   display: flex;
   gap: 12px;

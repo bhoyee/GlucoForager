@@ -30,6 +30,8 @@ from .api.endpoints import (
     revenuecat,
     mobile_logs,
     system_logs,
+    blog,
+    admin_blog,
 )
 from .core.config import settings
 from .database import Base, engine
@@ -41,6 +43,8 @@ from .models import (  # ensure models are registered with SQLAlchemy
     admin_user,
     recipe,
     recipe_history,
+    blog_post,
+    blog_comment,
 )
 from .services.abuse_detector import AbuseDetector
 from .services.system_log_service import log_system_event
@@ -211,3 +215,5 @@ app.include_router(shopping_list.router, prefix="/api")
 app.include_router(revenuecat.router, prefix="/api")
 app.include_router(mobile_logs.router, prefix="/api")
 app.include_router(system_logs.router, prefix="/api")
+app.include_router(blog.router, prefix="/api")
+app.include_router(admin_blog.router, prefix="/api")

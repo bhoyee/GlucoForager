@@ -8,6 +8,7 @@ import Features from "../components/Features";
 import Screenshots from "../components/Screenshots";
 import Testimonials from "../components/Testimonials";
 import FAQ from "../components/FAQ";
+import LatestBlogPosts from "../components/LatestBlogPosts";
 import Footer from "../components/Footer";
 import Contact from "../components/Contact";
 import ScrollToTop from "../components/ScrollToTop";
@@ -157,6 +158,8 @@ export default function HomePage() {
           <FAQ />
         </div>
       </section>
+
+      <LatestBlogPosts />
       
       {/* CONTACT - 01404F color */}
  
