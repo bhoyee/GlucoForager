@@ -32,6 +32,7 @@ from .api.endpoints import (
     system_logs,
     blog,
     admin_blog,
+    newsletter,
 )
 from .core.config import settings
 from .database import Base, engine
@@ -45,6 +46,7 @@ from .models import (  # ensure models are registered with SQLAlchemy
     recipe_history,
     blog_post,
     blog_comment,
+    newsletter_signup,
 )
 from .services.abuse_detector import AbuseDetector
 from .services.system_log_service import log_system_event
@@ -217,3 +219,4 @@ app.include_router(mobile_logs.router, prefix="/api")
 app.include_router(system_logs.router, prefix="/api")
 app.include_router(blog.router, prefix="/api")
 app.include_router(admin_blog.router, prefix="/api")
+app.include_router(newsletter.router, prefix="/api")
