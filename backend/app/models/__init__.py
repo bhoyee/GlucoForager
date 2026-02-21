@@ -12,3 +12,5 @@ from .refresh_token import RefreshToken  # noqa: F401
 from .admin_user import AdminUser  # noqa: F401
 from .recipe import Recipe  # noqa: F401
 from .recipe_history import RecipeHistory  # noqa: F401
+from .blog_post import BlogPost  # noqa: F401
+from .blog_comment import BlogComment  # noqa: F401

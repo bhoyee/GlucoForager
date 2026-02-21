@@ -74,10 +74,13 @@ export default function AdminShell({ children }) {
   const navItems = [
     { href: '/admin/dashboard', label: 'Dashboard', icon: '📊' },
     { href: '/admin/recipes', label: 'Recipes', icon: '🍲' },
+    { href: '/admin/blog', label: 'Blog', icon: '📝' },
     { href: '/admin/users', label: 'Users', icon: '👤' },
     { href: '/admin/mobile-logs', label: 'Mobile Logs', icon: '📱' },
     { href: '/admin/system-logs', label: 'System Logs', icon: '🧾' },
     { href: '/admin/recipes/new', label: 'New Recipe', icon: '➕' },
+    { href: '/admin/blog/new', label: 'New Post', icon: '➕' },
+    { href: '/admin/blog/comments', label: 'Comments', icon: '💬' },
   ];
 
   return (
@@ -176,7 +179,7 @@ export default function AdminShell({ children }) {
               </svg>
             </button>
             <h1>GlucoForager Admin</h1>
-            <p>Manage recipes and suggestions for the mobile app.</p>
+            <p>Manage recipes, blog posts, and moderation.</p>
           </header>
           {children}
         </main>

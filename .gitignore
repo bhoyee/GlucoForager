@@ -31,6 +31,7 @@ __pycache__/
 
 # uploads / user content (should live in object storage in prod)
 /backend/uploads/
+/backend/logs/
 
 # IDEs
 .vscode/
