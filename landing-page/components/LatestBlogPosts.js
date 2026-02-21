@@ -16,7 +16,7 @@ export default function LatestBlogPosts() {
       try {
         setIsLoading(true);
         setLoadFailed(false);
-        const response = await fetch(`${API_URL}/api/blog/posts?page=1&page_size=3`);
+        const response = await fetch(`${API_URL}/api/blog/posts?page=1&page_size=4`);
         if (!response.ok) throw new Error('Request failed');
         const data = await response.json();
         if (!alive) return;
