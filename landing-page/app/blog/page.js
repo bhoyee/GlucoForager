@@ -1,9 +1,10 @@
 import Link from 'next/link';
+import Footer from '../../components/Footer';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
 export const metadata = {
-  title: 'Blog',
+  title: 'GlucoForager Blog',
   description: 'Diabetes-friendly cooking tips, low-glycemic recipes, and product updates from GlucoForager.',
 };
 
@@ -24,7 +25,7 @@ function PostImagePlaceholder({ title }) {
 
 export default async function BlogIndexPage({ searchParams }) {
   const page = Math.max(1, Number(searchParams?.page || 1));
-  const pageSize = 10;
+  const pageSize = 12;
 
   let data = { items: [], total: 0 };
   let unavailable = false;
@@ -43,19 +44,23 @@ export default async function BlogIndexPage({ searchParams }) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
-      <div className="container mx-auto max-w-6xl px-4 py-12 space-y-10">
-      <div className="flex items-end justify-between gap-6 flex-wrap">
-        <div>
-          <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900">Blog</h1>
-          <p className="text-gray-600 mt-3 max-w-2xl">
-            Diabetes-friendly cooking tips, low-glycemic recipes, and product updates.
-          </p>
+    <>
+      <main className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
+        <div className="container mx-auto max-w-6xl px-4 py-12 space-y-10">
+        <div className="flex items-end justify-between gap-6 flex-wrap">
+          <div>
+            <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900">GlucoForager Blog</h1>
+            <p className="text-gray-600 mt-3 max-w-2xl">
+              Diabetes-friendly cooking tips, low-glycemic recipes, and product updates.
+            </p>
+          </div>
+          <Link
+            href="/"
+            className="inline-flex items-center justify-center rounded-full bg-teal-600 px-5 py-2.5 text-white font-semibold shadow-sm hover:bg-teal-700 transition-colors"
+          >
+            Back to home
+          </Link>
         </div>
-        <Link href="/" className="text-teal-700 font-semibold hover:text-teal-900">
-          Back to home
-        </Link>
-      </div>
 
       {items.length === 0 ? (
         <div className="rounded-2xl border border-gray-200 bg-white p-8">
@@ -93,26 +98,34 @@ export default async function BlogIndexPage({ searchParams }) {
         </div>
       )}
 
-      {totalPages > 1 ? (
-        <div className="flex items-center justify-between gap-4 pt-2">
-          <Link
-            href={`/blog?page=${Math.max(1, page - 1)}`}
-            className={`font-semibold ${page === 1 ? 'text-gray-400 pointer-events-none' : 'text-teal-700 hover:text-teal-900'}`}
-          >
-            Prev
-          </Link>
-          <p className="text-sm text-gray-600">
-            Page {page} of {totalPages}
-          </p>
-          <Link
-            href={`/blog?page=${Math.min(totalPages, page + 1)}`}
-            className={`font-semibold ${page === totalPages ? 'text-gray-400 pointer-events-none' : 'text-teal-700 hover:text-teal-900'}`}
-          >
-            Next
-          </Link>
+        {totalPages > 1 ? (
+          <div className="flex items-center justify-between gap-4 pt-4">
+            <Link
+              href={`/blog?page=${Math.max(1, page - 1)}`}
+              className={`inline-flex items-center justify-center rounded-full border px-4 py-2 text-sm font-semibold ${
+                page === 1 ? 'text-gray-400 border-gray-200 pointer-events-none' : 'text-teal-700 border-teal-200 hover:bg-teal-50'
+              }`}
+            >
+              Prev
+            </Link>
+            <p className="text-sm text-gray-600">
+              Page {page} of {totalPages}
+            </p>
+            <Link
+              href={`/blog?page=${Math.min(totalPages, page + 1)}`}
+              className={`inline-flex items-center justify-center rounded-full border px-4 py-2 text-sm font-semibold ${
+                page === totalPages
+                  ? 'text-gray-400 border-gray-200 pointer-events-none'
+                  : 'text-teal-700 border-teal-200 hover:bg-teal-50'
+              }`}
+            >
+              Next
+            </Link>
+          </div>
+        ) : null}
         </div>
-      ) : null}
-      </div>
-    </main>
+      </main>
+      <Footer />
+    </>
   );
 }
