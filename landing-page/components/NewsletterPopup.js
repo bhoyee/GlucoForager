@@ -95,13 +95,14 @@ export default function NewsletterPopup() {
       const response = await fetch(`${API_URL}/api/newsletter/subscribe`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), source: 'homepage_popup' }),
+        body: JSON.stringify({ email: email.trim(), source: 'homepage_popup', website: '' }),
       });
 
       if (!response.ok) throw new Error('Request failed');
+      const data = await response.json().catch(() => ({}));
 
       writeState({ subscribedAt: nowMs() });
-      setMessage('Thanks! You’re subscribed for blog updates.');
+      setMessage(data?.already ? 'You’re already subscribed.' : 'Thanks! You’re subscribed for blog updates.');
       setEmail('');
       setTimeout(() => setOpen(false), 900);
     } catch {
@@ -201,4 +202,3 @@ export default function NewsletterPopup() {
     </div>
   );
 }
-
