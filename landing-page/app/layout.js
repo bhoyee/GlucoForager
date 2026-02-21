@@ -1,5 +1,6 @@
 import "./globals.css";
 import SystemLogger from "../components/SystemLogger";
+import CookieBanner from "../components/CookieBanner";
 
 export const metadata = {
   title: {
@@ -81,6 +82,7 @@ export default function RootLayout({ children }) {
       <body className="antialiased">
         <SystemLogger />
         {children}
+        <CookieBanner />
       </body>
     </html>
   );
