@@ -15,6 +15,7 @@
     "ios": {
       "supportsTablet": false,
       "infoPlist": {
+        "NSCameraUsageDescription": "GlucoForager uses your camera to scan ingredients and identify items for diabetes-friendly recipe suggestions (e.g., take a photo of your fridge or pantry).",
         "NSPhotoLibraryUsageDescription": "Allow $(PRODUCT_NAME) to access your photo library to select ingredient images",
         "ITSAppUsesNonExemptEncryption": false
       },
@@ -44,6 +45,7 @@
       [
         "expo-image-picker",
         {
+          "cameraPermission": "GlucoForager uses your camera to scan ingredients and identify items for diabetes-friendly recipe suggestions (e.g., take a photo of your fridge or pantry).",
           "photosPermission": "Allow GlucoForager to access your photo library to select ingredient images"
         }
       ]
