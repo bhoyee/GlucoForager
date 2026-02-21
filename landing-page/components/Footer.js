@@ -1,4 +1,5 @@
 import Image from 'next/image';
+import Link from 'next/link';
 
 export default function Footer() {
   return (
@@ -72,6 +73,7 @@ export default function Footer() {
             <ul className="space-y-3">
               <li><a href="#features" className="text-gray-400 hover:text-teal-400 transition-colors">Features</a></li>
               <li><a href="#screenshots" className="text-gray-400 hover:text-teal-400 transition-colors">Screenshots</a></li>
+              <li><Link href="/blog" className="text-gray-400 hover:text-teal-400 transition-colors">Blog</Link></li>
               <li><a href="#download" className="text-gray-400 hover:text-teal-400 transition-colors">Download</a></li>
             </ul>
           </div>
@@ -136,6 +138,8 @@ export default function Footer() {
               <a href="/cookie-policy" className="text-gray-500 hover:text-white transition-colors">Cookie Policy</a>
               <span className="text-gray-600">•</span>
               <a href="/sitemap" className="text-gray-500 hover:text-white transition-colors">Sitemap</a>
+              <span className="text-gray-600">•</span>
+              <Link href="/blog" className="text-gray-500 hover:text-white transition-colors">Blog</Link>
             </div>
           </div>
           
