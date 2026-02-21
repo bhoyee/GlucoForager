@@ -5,6 +5,21 @@ import BlogShare from '../../../components/BlogShare';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.glucoforager.com').replace(/\/+$/, '');
 
+function PostHeroPlaceholder({ title }) {
+  const label = String(title || 'GF').trim();
+  const first = label ? label[0].toUpperCase() : 'G';
+  return (
+    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-teal-700 via-emerald-600 to-cyan-600">
+      <div className="absolute inset-0 opacity-25 bg-[radial-gradient(circle_at_30%_20%,white,transparent_55%)]" />
+      <div className="aspect-[16/7] flex items-center justify-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15 backdrop-blur border border-white/20">
+          <span className="text-3xl font-extrabold text-white">{first}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const escapeHtml = (value) =>
   String(value || '')
     .replaceAll('&', '&amp;')
@@ -53,7 +68,7 @@ function renderContent(content) {
 export async function generateMetadata({ params }) {
   try {
     const response = await fetch(`${API_URL}/api/blog/posts/${encodeURIComponent(params.slug)}`, {
-      next: { revalidate: 60 },
+      next: { revalidate: 10 },
     });
     if (!response.ok) return {};
     const post = await response.json();
@@ -78,8 +93,8 @@ export default async function BlogPostPage({ params }) {
   const slug = params.slug;
 
   const [postRes, commentsRes] = await Promise.all([
-    fetch(`${API_URL}/api/blog/posts/${encodeURIComponent(slug)}`, { next: { revalidate: 60 } }),
-    fetch(`${API_URL}/api/blog/posts/${encodeURIComponent(slug)}/comments`, { next: { revalidate: 60 } }),
+    fetch(`${API_URL}/api/blog/posts/${encodeURIComponent(slug)}`, { next: { revalidate: 10 } }),
+    fetch(`${API_URL}/api/blog/posts/${encodeURIComponent(slug)}/comments`, { next: { revalidate: 10 } }),
   ]);
 
   if (!postRes.ok) {
@@ -98,27 +113,32 @@ export default async function BlogPostPage({ params }) {
   const url = `${SITE_URL}/blog/${post.slug}`;
 
   return (
-    <main className="container mx-auto max-w-4xl px-4 py-10 space-y-6">
-      <div className="flex items-center justify-between gap-6 flex-wrap">
-        <Link href="/blog" className="text-teal-700 font-semibold hover:text-teal-900">
-          ← Blog
-        </Link>
-        <BlogShare title={post.title} url={url} />
-      </div>
-
-      <header className="space-y-3">
-        <h1 className="text-4xl font-bold text-gray-900">{post.title}</h1>
-        <div className="flex items-center gap-3 text-sm text-gray-600">
-          {post.author_name ? <span>By {post.author_name}</span> : null}
-          {post.published_at ? <span>{new Date(post.published_at).toLocaleDateString()}</span> : null}
+    <main className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
+      <div className="container mx-auto max-w-4xl px-4 py-10 space-y-6">
+        <div className="flex items-center justify-between gap-6 flex-wrap">
+          <Link href="/blog" className="text-teal-700 font-semibold hover:text-teal-900">
+            ← Blog
+          </Link>
+          <BlogShare title={post.title} url={url} />
         </div>
-        {post.excerpt ? <p className="text-lg text-gray-700">{post.excerpt}</p> : null}
-      </header>
 
-      <article className="space-y-4">{renderContent(post.content)}</article>
+        <PostHeroPlaceholder title={post.title} />
 
-      <BlogComments slug={post.slug} initialComments={initialComments} />
+        <header className="space-y-3">
+          <h1 className="text-4xl font-bold text-gray-900">{post.title}</h1>
+          <div className="flex items-center gap-3 text-sm text-gray-600">
+            {post.author_name ? <span>By {post.author_name}</span> : null}
+            {post.published_at ? <span>{new Date(post.published_at).toLocaleDateString()}</span> : null}
+          </div>
+          {post.excerpt ? <p className="text-lg text-gray-700">{post.excerpt}</p> : null}
+        </header>
+
+        <article className="space-y-4 rounded-2xl border border-gray-200 bg-white p-6">
+          {renderContent(post.content)}
+        </article>
+
+        <BlogComments slug={post.slug} initialComments={initialComments} />
+      </div>
     </main>
   );
 }
-
