@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import Footer from '../../components/Footer';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
@@ -47,19 +48,35 @@ export default async function BlogIndexPage({ searchParams }) {
     <>
       <main className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
         <div className="container mx-auto max-w-6xl px-4 py-12 space-y-10">
-        <div className="flex items-end justify-between gap-6 flex-wrap">
-          <div>
-            <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900">GlucoForager Blog</h1>
-            <p className="text-gray-600 mt-3 max-w-2xl">
-              Diabetes-friendly cooking tips, low-glycemic recipes, and product updates.
-            </p>
-          </div>
+        <header className="flex items-center justify-between gap-4 flex-wrap">
+          <Link href="/" className="flex items-center gap-3">
+            <div className="relative h-10 w-10">
+              <Image
+                src="/images/logo.png"
+                alt="GlucoForager Logo"
+                width={40}
+                height={40}
+                className="object-contain"
+                priority
+              />
+            </div>
+            <span className="text-lg font-extrabold text-gray-900">GlucoForager</span>
+          </Link>
           <Link
             href="/"
             className="inline-flex items-center justify-center rounded-full bg-teal-600 px-5 py-2.5 text-white font-semibold shadow-sm hover:bg-teal-700 transition-colors"
           >
             Back to home
           </Link>
+        </header>
+
+        <div className="flex items-end justify-between gap-6 flex-wrap">
+          <div>
+            <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900">Blog</h1>
+            <p className="text-gray-600 mt-3 max-w-2xl">
+              Diabetes-friendly cooking tips, low-glycemic recipes, and product updates.
+            </p>
+          </div>
         </div>
 
       {items.length === 0 ? (
