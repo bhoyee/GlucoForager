@@ -24,11 +24,12 @@ export default function Footer() {
       const response = await fetch(`${API_URL}/api/newsletter/subscribe`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, source: 'footer' }),
+        body: JSON.stringify({ email, source: 'footer', website: '' }),
       });
       if (!response.ok) throw new Error('Request failed');
+      const data = await response.json().catch(() => ({}));
       setNewsletterEmail('');
-      setNewsletterMessage('Subscribed! Check your inbox for updates.');
+      setNewsletterMessage(data?.already ? 'You’re already subscribed.' : 'Subscribed! Check your inbox for updates.');
     } catch {
       setNewsletterMessage('Could not subscribe right now. Please try again.');
     } finally {
