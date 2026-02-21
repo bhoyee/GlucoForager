@@ -48,7 +48,7 @@ export default async function BlogIndexPage({ searchParams }) {
   return (
     <>
       <main className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
-        <div className="container mx-auto max-w-6xl px-4 pt-6 pb-12 space-y-8">
+        <div className="container mx-auto max-w-6xl px-4 pt-2 pb-12 space-y-8">
           <header className="space-y-4">
             <Link href="/" className="inline-flex items-center gap-3">
               <div className="relative h-10 w-10">
