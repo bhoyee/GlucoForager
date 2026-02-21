@@ -6,7 +6,8 @@ import Link from 'next/link';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
 const STORAGE_KEY = 'gf_newsletter_popup_state_v1';
-const COOLDOWN_DAYS = 30;
+const COOLDOWN_DAYS = 7;
+const SCROLL_THRESHOLD = 0.5;
 
 function nowMs() {
   return Date.now();
@@ -47,17 +48,62 @@ export default function NewsletterPopup() {
   }, [busy, email]);
 
   useEffect(() => {
-    // Show after a short delay, unless dismissed recently or already subscribed.
-    const timer = setTimeout(() => {
-      const state = readState();
-      const dismissedAt = state?.dismissedAt ? Number(state.dismissedAt) : 0;
-      const subscribedAt = state?.subscribedAt ? Number(state.subscribedAt) : 0;
-      const last = Math.max(dismissedAt, subscribedAt);
-      if (last && nowMs() - last < daysToMs(COOLDOWN_DAYS)) return;
-      setOpen(true);
-    }, 4500);
+    // Show after the visitor has engaged (scrolled), unless dismissed recently or already subscribed.
+    const state = readState();
+    const dismissedAt = state?.dismissedAt ? Number(state.dismissedAt) : 0;
+    const subscribedAt = state?.subscribedAt ? Number(state.subscribedAt) : 0;
+    const last = Math.max(dismissedAt, subscribedAt);
+    if (last && nowMs() - last < daysToMs(COOLDOWN_DAYS)) return undefined;
 
-    return () => clearTimeout(timer);
+    let opened = false;
+
+    const maybeOpen = () => {
+      if (opened) return;
+      opened = true;
+      setOpen(true);
+    };
+
+    const getScrollProgress = () => {
+      const doc = document.documentElement;
+      const scrollTop = window.scrollY || doc.scrollTop || 0;
+      const scrollHeight = doc.scrollHeight || 0;
+      const clientHeight = doc.clientHeight || 0;
+      const maxScroll = Math.max(1, scrollHeight - clientHeight);
+      return scrollTop / maxScroll;
+    };
+
+    const onScroll = () => {
+      if (getScrollProgress() >= SCROLL_THRESHOLD) {
+        maybeOpen();
+      }
+    };
+
+    const attachTimer = setTimeout(() => {
+      try {
+        const doc = document.documentElement;
+        const maxScroll = Math.max(0, (doc.scrollHeight || 0) - (doc.clientHeight || 0));
+        if (maxScroll === 0) {
+          const shortTimer = setTimeout(maybeOpen, 6000);
+          return () => clearTimeout(shortTimer);
+        }
+      } catch {
+        // Ignore.
+      }
+
+      window.addEventListener('scroll', onScroll, { passive: true });
+      onScroll();
+      return () => window.removeEventListener('scroll', onScroll);
+    }, 2500);
+
+    const maxWaitTimer = setTimeout(() => {
+      maybeOpen();
+    }, 20000);
+
+    return () => {
+      clearTimeout(attachTimer);
+      clearTimeout(maxWaitTimer);
+      window.removeEventListener('scroll', onScroll);
+    };
   }, []);
 
   useEffect(() => {
