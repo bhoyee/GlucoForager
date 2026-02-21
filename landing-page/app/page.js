@@ -13,12 +13,14 @@ import Footer from "../components/Footer";
 import Contact from "../components/Contact";
 import ScrollToTop from "../components/ScrollToTop";
 import DownloadModal from "../components/DownloadModal";
+import NewsletterPopup from "../components/NewsletterPopup";
 
 
 export default function HomePage() {
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   return (
     <div className="min-h-screen bg-white text-gray-900">
+      <NewsletterPopup />
       <Header onDownloadClick={() => setShowDownloadModal(true)} />
       
       {/* Add pt-20 to push content down (matches header height) */}
