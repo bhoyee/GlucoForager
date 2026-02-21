@@ -37,7 +37,10 @@ export default function LatestBlogPosts() {
   const placeholders = Array.from({ length: 4 }).map((_, idx) => ({ id: `placeholder-${idx}` }));
 
   return (
-    <section className="py-16 bg-white" id="blog">
+    <section
+      className="py-16 bg-gradient-to-b from-gray-50 via-white to-white border-t border-gray-100"
+      id="blog"
+    >
       <div className="container mx-auto px-4">
         <div className="flex items-end justify-between gap-6 flex-wrap mb-10">
           <div>
