@@ -1,4 +1,6 @@
 import logging
+import smtplib
+import ssl
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
@@ -54,7 +56,36 @@ def _send_resend_email(to_email: str, subject: str, html_body: str) -> bool:
 def _send_email(to_email: str, subject: str, html_body: str) -> None:
     if _send_resend_email(to_email, subject, html_body):
         return
-    logger.info("Email not sent (Resend not configured) for %s", to_email)
+
+    if not settings.smtp_host or not settings.smtp_from_address:
+        logger.info("Email not sent (provider not configured) for %s", to_email)
+        return
+
+    msg = _build_message(to_email, subject, html_body)
+    encryption = (settings.smtp_encryption or "ssl").strip().lower()
+    port = int(settings.smtp_port or (465 if encryption == "ssl" else 587))
+
+    try:
+        if encryption == "ssl":
+            context = ssl.create_default_context()
+            with smtplib.SMTP_SSL(settings.smtp_host, port, context=context, timeout=10) as server:
+                if settings.smtp_username and settings.smtp_password:
+                    server.login(settings.smtp_username, settings.smtp_password)
+                server.sendmail(settings.smtp_from_address, [to_email], msg.as_string())
+            return
+
+        with smtplib.SMTP(settings.smtp_host, port, timeout=10) as server:
+            server.ehlo()
+            if encryption in {"starttls", "tls"}:
+                context = ssl.create_default_context()
+                server.starttls(context=context)
+                server.ehlo()
+            if settings.smtp_username and settings.smtp_password:
+                server.login(settings.smtp_username, settings.smtp_password)
+            server.sendmail(settings.smtp_from_address, [to_email], msg.as_string())
+    except Exception:
+        logger.exception("SMTP send failed for %s", to_email)
+        return
 
 
 def send_welcome_email(to_email: str, full_name: str | None = None) -> None:
@@ -125,3 +156,7 @@ def send_premium_activated_email(to_email: str, full_name: str | None = None) ->
     """
     _send_email(to_email, subject, html_body)
     logger.info("Sent premium activation email to %s", to_email)
+
+
+def send_newsletter_email(to_email: str, subject: str, html_body: str) -> None:
+    _send_email(to_email, subject, html_body)

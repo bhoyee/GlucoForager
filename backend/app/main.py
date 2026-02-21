@@ -33,6 +33,7 @@ from .api.endpoints import (
     blog,
     admin_blog,
     newsletter,
+    admin_newsletter,
 )
 from .core.config import settings
 from .database import Base, engine
@@ -220,3 +221,4 @@ app.include_router(system_logs.router, prefix="/api")
 app.include_router(blog.router, prefix="/api")
 app.include_router(admin_blog.router, prefix="/api")
 app.include_router(newsletter.router, prefix="/api")
+app.include_router(admin_newsletter.router, prefix="/api")

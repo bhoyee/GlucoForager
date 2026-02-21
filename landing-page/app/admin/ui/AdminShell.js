@@ -75,12 +75,14 @@ export default function AdminShell({ children }) {
     { href: '/admin/dashboard', label: 'Dashboard', icon: '📊' },
     { href: '/admin/recipes', label: 'Recipes', icon: '🍲' },
     { href: '/admin/blog', label: 'Blog', icon: '📝' },
+    { href: '/admin/newsletter', label: 'Newsletter', icon: '✉️' },
     { href: '/admin/users', label: 'Users', icon: '👤' },
     { href: '/admin/mobile-logs', label: 'Mobile Logs', icon: '📱' },
     { href: '/admin/system-logs', label: 'System Logs', icon: '🧾' },
     { href: '/admin/recipes/new', label: 'New Recipe', icon: '➕' },
     { href: '/admin/blog/new', label: 'New Post', icon: '➕' },
     { href: '/admin/blog/comments', label: 'Comments', icon: '💬' },
+    { href: '/admin/newsletter/send', label: 'Send Email', icon: '📨' },
   ];
 
   return (
