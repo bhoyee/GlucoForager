@@ -1,9 +1,11 @@
 ﻿"use client";
 
 import { useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
 
 export default function DownloadModal({ open, onClose }) {
   const [notice, setNotice] = useState("");
+  const googlePlayUrl = "https://play.google.com/store/apps/details?id=com.glucoforager.app";
   const handleStoreClick = (store) => {
     setNotice(`${store} is coming soon and currently under review.`);
     setTimeout(() => setNotice(""), 3000);
@@ -47,9 +49,10 @@ export default function DownloadModal({ open, onClose }) {
               </div>
             </button>
 
-            <button
-              type="button"
-              onClick={() => handleStoreClick("Google Play")}
+            <a
+              href={googlePlayUrl}
+              target="_blank"
+              rel="noopener noreferrer"
               className="flex items-center justify-center gap-3 w-full bg-black text-white rounded-xl px-6 py-4 hover:bg-gray-800 transition-all duration-300 hover:scale-[1.02]"
             >
               <svg className="w-7 h-7" fill="currentColor" viewBox="0 0 512 512">
@@ -59,7 +62,7 @@ export default function DownloadModal({ open, onClose }) {
                 <div className="text-xs opacity-80">GET IT ON</div>
                 <div className="font-semibold text-lg">Google Play</div>
               </div>
-            </button>
+            </a>
           </div>
 
           {notice && (
@@ -81,19 +84,24 @@ export default function DownloadModal({ open, onClose }) {
                 <div className="w-32 h-32 mx-auto bg-gray-100 rounded-lg flex items-center justify-center mb-2 border border-gray-200">
                   <div className="text-center">
                     <div className="text-xs font-semibold text-gray-600">iOS</div>
-                    <div className="text-xs text-gray-500 mt-1">QR coming soon</div>
+                    <div className="text-xs text-gray-500 mt-1">Under review</div>
                   </div>
                 </div>
                 <div className="text-xs text-gray-600">For iPhone</div>
               </div>
 
               <div className="text-center">
-                <div className="w-32 h-32 mx-auto bg-gray-100 rounded-lg flex items-center justify-center mb-2 border border-gray-200">
-                  <div className="text-center">
-                    <div className="text-xs font-semibold text-gray-600">Android</div>
-                    <div className="text-xs text-gray-500 mt-1">QR coming soon</div>
+                <a
+                  href={googlePlayUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block w-32 h-32 mx-auto bg-white rounded-lg overflow-hidden mb-2 border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
+                  aria-label="Open Google Play Store listing"
+                >
+                  <div className="w-full h-full flex items-center justify-center">
+                    <QRCodeSVG value={googlePlayUrl} size={112} includeMargin />
                   </div>
-                </div>
+                </a>
                 <div className="text-xs text-gray-600">For Android</div>
               </div>
             </div>
