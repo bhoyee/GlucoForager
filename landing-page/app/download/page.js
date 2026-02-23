@@ -1,15 +1,97 @@
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.glucoforager.com').replace(/\/+$/, '');
+const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.glucoforager.app';
+const APP_STORE_URL = process.env.NEXT_PUBLIC_IOS_APP_STORE_URL || '';
+
+export const metadata = {
+  title: 'Download',
+  description: 'Download GlucoForager for diabetes-friendly recipe suggestions, meal ideas, and nutrition insights.',
+  alternates: { canonical: '/download' },
+  openGraph: {
+    title: 'Download GlucoForager',
+    description: 'Get the app on Android and iOS to find diabetes-friendly recipes from your ingredients.',
+    url: `${SITE_URL}/download`,
+    type: 'website',
+  },
+  robots: { index: true, follow: true },
+};
+
 export default function DownloadPage() {
+  const hasIos = Boolean(APP_STORE_URL && APP_STORE_URL.startsWith('http'));
+
   return (
-    <main className="container mx-auto max-w-4xl px-4 py-10 space-y-6">
-      <h1 className="text-4xl font-bold">Get GlucoForager</h1>
-      <p className="text-slate-300">Mobile-first app for diabetes-friendly recipe matching.</p>
-      <div className="flex gap-3">
-        <a className="rounded-xl bg-black px-4 py-3 text-white" href="#">
-          App Store
-        </a>
-        <a className="rounded-xl bg-black px-4 py-3 text-white" href="#">
-          Google Play
-        </a>
+    <main className="min-h-screen bg-white">
+      <div className="container mx-auto max-w-4xl px-4 py-12 space-y-10">
+        <header className="space-y-3">
+          <h1 className="text-4xl font-extrabold text-gray-900">Download GlucoForager</h1>
+          <p className="text-gray-600">
+            GlucoForager helps you turn ingredients into diabetes-friendly meal ideas with clear nutrition context.
+          </p>
+        </header>
+
+        <section className="rounded-2xl border border-gray-200 bg-white p-6">
+          <h2 className="text-xl font-bold text-gray-900">Get the app</h2>
+          <p className="text-gray-600 mt-2">
+            Choose your platform below. If a store page is still processing, try again later.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-3">
+            {hasIos ? (
+              <a
+                className="inline-flex items-center justify-center rounded-xl bg-black px-5 py-3 text-white font-semibold"
+                href={APP_STORE_URL}
+                rel="noreferrer"
+                target="_blank"
+              >
+                App Store
+              </a>
+            ) : (
+              <span className="inline-flex items-center justify-center rounded-xl bg-gray-100 px-5 py-3 text-gray-600 font-semibold">
+                App Store (coming soon)
+              </span>
+            )}
+
+            <a
+              className="inline-flex items-center justify-center rounded-xl bg-black px-5 py-3 text-white font-semibold"
+              href={PLAY_STORE_URL}
+              rel="noreferrer"
+              target="_blank"
+            >
+              Google Play
+            </a>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-gray-200 bg-white p-6 space-y-3">
+          <h2 className="text-xl font-bold text-gray-900">What you can do with GlucoForager</h2>
+          <ul className="list-disc pl-6 text-gray-700 space-y-1">
+            <li>Search recipes using ingredients you already have.</li>
+            <li>Get diabetes-friendly suggestions and practical meal ideas.</li>
+            <li>See nutrition details to help you compare options confidently.</li>
+          </ul>
+          <p className="text-sm text-gray-500">
+            Note: GlucoForager provides informational recipe suggestions and is not medical advice.
+          </p>
+        </section>
+
+        <section className="flex flex-wrap gap-3">
+          <a
+            className="inline-flex items-center justify-center rounded-full border border-gray-300 px-5 py-2.5 text-gray-800 font-semibold hover:bg-gray-50 transition-colors"
+            href="/features"
+          >
+            View features
+          </a>
+          <a
+            className="inline-flex items-center justify-center rounded-full border border-gray-300 px-5 py-2.5 text-gray-800 font-semibold hover:bg-gray-50 transition-colors"
+            href="/pricing"
+          >
+            Pricing
+          </a>
+          <a
+            className="inline-flex items-center justify-center rounded-full border border-gray-300 px-5 py-2.5 text-gray-800 font-semibold hover:bg-gray-50 transition-colors"
+            href="/blog"
+          >
+            Read the blog
+          </a>
+        </section>
       </div>
     </main>
   );

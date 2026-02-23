@@ -32,6 +32,8 @@ from .api.endpoints import (
     system_logs,
     blog,
     admin_blog,
+    newsletter,
+    admin_newsletter,
 )
 from .core.config import settings
 from .database import Base, engine
@@ -45,6 +47,7 @@ from .models import (  # ensure models are registered with SQLAlchemy
     recipe_history,
     blog_post,
     blog_comment,
+    newsletter_signup,
 )
 from .services.abuse_detector import AbuseDetector
 from .services.system_log_service import log_system_event
@@ -95,6 +98,15 @@ app.add_middleware(
 
 abuse_detector = AbuseDetector()
 
+def _client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()[:64]
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()[:64]
+    return (request.client.host if request.client else "unknown")[:64]
+
 
 @app.on_event("startup")
 def on_startup():
@@ -103,7 +115,7 @@ def on_startup():
 
 @app.middleware("http")
 async def abuse_guard(request: Request, call_next):
-    identifier = request.client.host
+    identifier = _client_ip(request)
     if not abuse_detector.record_and_check(identifier):
         return JSONResponse(status_code=429, content={"detail": "Slow down"})
     start = time.time()
@@ -217,3 +229,5 @@ app.include_router(mobile_logs.router, prefix="/api")
 app.include_router(system_logs.router, prefix="/api")
 app.include_router(blog.router, prefix="/api")
 app.include_router(admin_blog.router, prefix="/api")
+app.include_router(newsletter.router, prefix="/api")
+app.include_router(admin_newsletter.router, prefix="/api")

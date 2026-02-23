@@ -22,6 +22,7 @@ class BlogPostListItem(BaseModel):
     slug: str
     title: str
     excerpt: str | None = None
+    image_url: str | None = None
     author_name: str | None = None
     published_at: datetime | None = None
 
@@ -31,6 +32,7 @@ class BlogPostDetail(BaseModel):
     slug: str
     title: str
     excerpt: str | None = None
+    image_url: str | None = None
     content: str
     author_name: str | None = None
     published_at: datetime | None = None
@@ -76,6 +78,7 @@ def list_posts(page: int = 1, page_size: int = 10, db: Session = Depends(get_db)
                 slug=post.slug,
                 title=post.title,
                 excerpt=post.excerpt,
+                image_url=post.image_url,
                 author_name=post.author_name,
                 published_at=post.published_at,
             )
@@ -101,6 +104,7 @@ def get_post(slug: str, db: Session = Depends(get_db)):
         slug=post.slug,
         title=post.title,
         excerpt=post.excerpt,
+        image_url=post.image_url,
         content=post.content,
         author_name=post.author_name,
         published_at=post.published_at,
@@ -154,4 +158,3 @@ def create_comment(slug: str, payload: CommentCreatePayload, request: Request, d
     db.add(comment)
     db.commit()
     return {"ok": True}
-

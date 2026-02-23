@@ -1,7 +1,54 @@
+'use client';
+
 import Image from 'next/image';
 import Link from 'next/link';
+import { useState } from 'react';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
 export default function Footer() {
+  const [newsletterEmail, setNewsletterEmail] = useState('');
+  const [newsletterBusy, setNewsletterBusy] = useState(false);
+  const [newsletterMessage, setNewsletterMessage] = useState('');
+
+  const handleNewsletterSubmit = async (event) => {
+    event.preventDefault();
+    if (newsletterBusy) return;
+
+    const email = newsletterEmail.trim();
+    if (!email) return;
+
+    setNewsletterBusy(true);
+    setNewsletterMessage('');
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 12000);
+      const response = await fetch(`${API_URL}/api/newsletter/subscribe`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({ email, source: 'footer', website: '' }),
+      });
+      clearTimeout(timer);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const detail = typeof data?.detail === 'string' ? data.detail : '';
+        if (response.status === 429) {
+          setNewsletterMessage(detail || 'Too many requests. Please wait a minute and try again.');
+          return;
+        }
+        setNewsletterMessage(detail || 'Could not subscribe right now. Please try again.');
+        return;
+      }
+      setNewsletterEmail('');
+      setNewsletterMessage(data?.already ? 'You’re already subscribed.' : 'Subscribed! Check your inbox for updates.');
+    } catch {
+      setNewsletterMessage('Could not subscribe right now. Please try again.');
+    } finally {
+      setNewsletterBusy(false);
+    }
+  };
+
   return (
     <footer className="bg-gray-900 text-white">
       <div className="container mx-auto px-4 py-12">
@@ -96,12 +143,14 @@ export default function Footer() {
               Get diabetes cooking tips, app updates, and health insights delivered to your inbox.
             </p>
             
-            <form className="space-y-3">
+            <form className="space-y-3" onSubmit={handleNewsletterSubmit}>
               <div>
                 <label htmlFor="footer-email" className="sr-only">Email address</label>
                 <input 
                   type="email" 
                   id="footer-email"
+                  value={newsletterEmail}
+                  onChange={(event) => setNewsletterEmail(event.target.value)}
                   placeholder="Your email address" 
                   className="w-full px-4 py-3 rounded-lg bg-gray-800 text-white placeholder-gray-500 border border-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                   required
@@ -110,14 +159,20 @@ export default function Footer() {
               
               <button 
                 type="submit"
+                disabled={newsletterBusy}
                 className="w-full bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 px-4 py-3 rounded-lg font-semibold transition-all duration-200 transform hover:-translate-y-0.5"
               >
-                Subscribe
+                {newsletterBusy ? 'Subscribing…' : 'Subscribe'}
               </button>
               
               <p className="text-gray-500 text-xs mt-2">
                 By subscribing, you agree to our Privacy Policy. Unsubscribe anytime.
               </p>
+              {newsletterMessage ? (
+                <p className="text-gray-300 text-xs">
+                  {newsletterMessage}
+                </p>
+              ) : null}
             </form>
           </div>
         </div>

@@ -33,10 +33,12 @@ const toApiPayload = (form) => {
     title: form.title,
     slug: form.slug || null,
     excerpt: form.excerpt || null,
+    image_url: form.image_url || null,
     content: form.content,
     status: form.status,
     author_name: form.author_name || null,
     published_at: publishedAt,
+    notify_newsletter: !!form.notify_newsletter,
   };
 };
 
@@ -89,8 +91,13 @@ export default function AdminNewBlogPostPage() {
     <div className="admin-card">
       <h2 className="admin-title">Create blog post</h2>
       <p className="admin-subtitle">Draft first, then publish when ready.</p>
-      <BlogPostForm onSubmit={handleSubmit} isSubmitting={isSubmitting} message={message} submitLabel="Create" />
+      <BlogPostForm
+        adminToken={token}
+        onSubmit={handleSubmit}
+        isSubmitting={isSubmitting}
+        message={message}
+        submitLabel="Create"
+      />
     </div>
   );
 }
-
