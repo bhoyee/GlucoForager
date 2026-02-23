@@ -20,7 +20,7 @@ body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   background-color: #FFFFFF;
   color: #1F2937;
-  padding-top: 80px;
+  margin: 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
