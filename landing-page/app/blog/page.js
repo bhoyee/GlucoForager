@@ -48,6 +48,8 @@ function PostCardMedia({ title, imageUrl }) {
   return <PostImagePlaceholder title={title} />;
 }
 
+const stripHtml = (value) => String(value || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+
 export default async function BlogIndexPage({ searchParams }) {
   const page = Math.max(1, Number(searchParams?.page || 1));
   const pageSize = 12;
@@ -107,7 +109,7 @@ export default async function BlogIndexPage({ searchParams }) {
                     {post.title}
                   </Link>
                 </h2>
-                {post.excerpt ? <p className="text-gray-700 mt-3">{post.excerpt}</p> : null}
+                {post.excerpt ? <p className="text-gray-700 mt-3">{stripHtml(post.excerpt)}</p> : null}
                 <div className="mt-4">
                   <Link href={`/blog/${post.slug}`} className="text-teal-700 font-semibold hover:text-teal-900">
                     Read more →

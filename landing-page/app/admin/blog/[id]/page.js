@@ -197,6 +197,7 @@ export default function AdminEditBlogPostPage() {
         </div>
       ) : initialValues ? (
         <BlogPostForm
+          adminToken={token}
           initialValues={initialValues}
           onSubmit={handleSubmit}
           isSubmitting={isSubmitting}

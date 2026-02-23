@@ -91,7 +91,13 @@ export default function AdminNewBlogPostPage() {
     <div className="admin-card">
       <h2 className="admin-title">Create blog post</h2>
       <p className="admin-subtitle">Draft first, then publish when ready.</p>
-      <BlogPostForm onSubmit={handleSubmit} isSubmitting={isSubmitting} message={message} submitLabel="Create" />
+      <BlogPostForm
+        adminToken={token}
+        onSubmit={handleSubmit}
+        isSubmitting={isSubmitting}
+        message={message}
+        submitLabel="Create"
+      />
     </div>
   );
 }
