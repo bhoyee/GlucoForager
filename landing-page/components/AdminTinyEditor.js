@@ -1,6 +1,8 @@
 'use client';
 
-import { Editor } from '@tinymce/tinymce-react';
+import dynamic from 'next/dynamic';
+
+const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
 
 export default function AdminTinyEditor({
   value,
@@ -9,26 +11,29 @@ export default function AdminTinyEditor({
   placeholder = '',
   compact = false,
 }) {
+  const toolbar = compact
+    ? [['bold', 'italic', 'underline'], [{ list: 'bullet' }, { list: 'ordered' }], ['link'], ['clean']]
+    : [
+        [{ header: [1, 2, 3, false] }],
+        ['bold', 'italic', 'underline'],
+        [{ list: 'bullet' }, { list: 'ordered' }],
+        [{ align: [] }],
+        ['link'],
+        ['clean'],
+      ];
+
   return (
-    <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-      <Editor
-        value={value}
-        onEditorChange={(next) => onChange?.(next)}
-        init={{
-          height,
-          menubar: false,
-          branding: false,
-          placeholder,
-          statusbar: !compact,
-          plugins: compact ? 'lists link' : 'lists link image table code autoresize',
-          toolbar: compact
-            ? 'bold italic underline | bullist numlist | link | removeformat'
-            : 'undo redo | blocks | bold italic underline | alignleft aligncenter alignright | bullist numlist | link image table | code',
-          content_style:
-            "body{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:14px;color:#111827;} a{color:#0D9488;}",
-        }}
+    <div
+      className="admin-quill rounded-xl border border-gray-200 bg-white overflow-hidden"
+      style={{ '--editor-height': `${height}px` }}
+    >
+      <ReactQuill
+        theme="snow"
+        value={value || ''}
+        onChange={(next) => onChange?.(next)}
+        placeholder={placeholder}
+        modules={{ toolbar }}
       />
     </div>
   );
 }
-
