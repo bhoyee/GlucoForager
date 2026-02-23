@@ -147,12 +147,12 @@ export default function AdminDashboard() {
         <div className="admin-card">
           <h3>Total recipes</h3>
           <p style={{ fontSize: '32px', fontWeight: 700 }}>{stats.totalRecipes}</p>
-          <p className="admin-subtitle" style={{ marginTop: 6 }}>
-            Blog posts: <strong>{stats.totalBlogPosts}</strong>
-          </p>
           <Link className="admin-link" href="/admin/recipes">
             Manage recipes
           </Link>
+          <p className="admin-subtitle" style={{ marginTop: 10 }}>
+            Blog posts: <strong>{stats.totalBlogPosts}</strong>
+          </p>
         </div>
         <div className="admin-card">
           <h3>Total users</h3>
