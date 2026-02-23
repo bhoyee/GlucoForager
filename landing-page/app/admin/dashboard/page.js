@@ -17,6 +17,7 @@ export default function AdminDashboard() {
     activePremiumUsers: 0,
     expiredPremiumUsers: 0,
     totalRecipes: 0,
+    totalBlogPosts: 0,
   });
   const token = typeof window !== 'undefined' ? localStorage.getItem('adminToken') : null;
 
@@ -41,6 +42,23 @@ export default function AdminDashboard() {
     [router, token]
   );
 
+  const fetchBlogPostCount = useCallback(async () => {
+    const params = new URLSearchParams();
+    params.set('page', '1');
+    params.set('page_size', String(PAGE_SIZE));
+
+    const response = await fetch(`${API_URL}/api/admin/blog/posts?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (response.status === 401) {
+      localStorage.removeItem('adminToken');
+      router.push('/admin');
+      return null;
+    }
+    const data = await response.json().catch(() => ({}));
+    return Number.isFinite(data?.total) ? data.total : 0;
+  }, [router, token]);
+
   const loadStats = useCallback(async () => {
     if (!token) {
       router.push('/admin');
@@ -54,6 +72,7 @@ export default function AdminDashboard() {
         activePremiumUsers,
         expiredPremiumUsers,
         totalRecipes,
+        totalBlogPosts,
       ] = await Promise.all([
         fetchCount(),
         fetchCount('free'),
@@ -73,6 +92,7 @@ export default function AdminDashboard() {
             return Array.isArray(data.items) ? data.items.length : 0;
           })
           .catch(() => 0),
+        fetchBlogPostCount().catch(() => 0),
       ]);
       if (
         totalUsers === null
@@ -81,6 +101,7 @@ export default function AdminDashboard() {
         || activePremiumUsers === null
         || expiredPremiumUsers === null
         || totalRecipes === null
+        || totalBlogPosts === null
       ) {
         return;
       }
@@ -91,6 +112,7 @@ export default function AdminDashboard() {
         activePremiumUsers,
         expiredPremiumUsers,
         totalRecipes,
+        totalBlogPosts,
       });
     } catch (error) {
       setStats({
@@ -100,9 +122,10 @@ export default function AdminDashboard() {
         activePremiumUsers: 0,
         expiredPremiumUsers: 0,
         totalRecipes: 0,
+        totalBlogPosts: 0,
       });
     }
-  }, [fetchCount, router, token]);
+  }, [fetchBlogPostCount, fetchCount, router, token]);
 
   useEffect(() => {
     loadStats();
@@ -124,6 +147,9 @@ export default function AdminDashboard() {
         <div className="admin-card">
           <h3>Total recipes</h3>
           <p style={{ fontSize: '32px', fontWeight: 700 }}>{stats.totalRecipes}</p>
+          <p className="admin-subtitle" style={{ marginTop: 6 }}>
+            Blog posts: <strong>{stats.totalBlogPosts}</strong>
+          </p>
           <Link className="admin-link" href="/admin/recipes">
             Manage recipes
           </Link>
