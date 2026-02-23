@@ -205,8 +205,23 @@ def send_blog_post_newsletter_email(
 ) -> None:
     site_url = (settings.site_url or "https://www.glucoforager.com").rstrip("/")
     logo_url = f"{site_url}/images/logo.png"
-    safe_title = (post_title or "New post").strip()
-    safe_excerpt = (post_excerpt or "").strip()
+    def _escape(value: str) -> str:
+        return (
+            (value or "")
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace('"', "&quot;")
+            .replace("'", "&#39;")
+        )
+
+    def _strip_tags(value: str) -> str:
+        import re
+
+        return re.sub(r"<[^>]*>", "", value or "").strip()
+
+    safe_title = _escape((post_title or "New post").strip())
+    safe_excerpt = _escape(_strip_tags((post_excerpt or "").strip()))
     safe_image = (image_url or "").strip()
 
     image_block = ""
@@ -223,7 +238,7 @@ def send_blog_post_newsletter_email(
           <p style="margin-top:12px; line-height:1.6; font-size:14px; color:#0C1824;">{safe_excerpt}</p>
         """
 
-    subject = f"New on GlucoForager: {safe_title}"[:160]
+    subject = f"New on GlucoForager: {_strip_tags(post_title or 'New post')}".strip()[:160]
     html_body = f"""
     <html>
       <body style="font-family: Arial, sans-serif; color: #0C1824;">
@@ -239,7 +254,7 @@ def send_blog_post_newsletter_email(
           {image_block}
 
           <div style="margin-top:18px;">
-            <a href="{post_url}" style="display:inline-block; background:#0D9488; color:white; text-decoration:none; padding:12px 16px; border-radius:999px; font-weight:700;">
+            <a href="{_escape(post_url)}" style="display:inline-block; background:#0D9488; color:white; text-decoration:none; padding:12px 16px; border-radius:999px; font-weight:700;">
               Read the post
             </a>
           </div>
@@ -248,7 +263,7 @@ def send_blog_post_newsletter_email(
             You received this email because you subscribed to GlucoForager updates.
             <br/>
             Unsubscribe anytime:
-            <a href="{unsubscribe_url}" style="color:#0FB7A5;">Unsubscribe</a>
+            <a href="{_escape(unsubscribe_url)}" style="color:#0FB7A5;">Unsubscribe</a>
           </p>
         </div>
       </body>
