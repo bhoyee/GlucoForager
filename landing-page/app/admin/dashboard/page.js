@@ -150,12 +150,12 @@ export default function AdminDashboard() {
           <Link className="admin-link" href="/admin/recipes">
             Manage recipes
           </Link>
-          <Link className="admin-link" href="/admin/blog">
-            Manage blog
-          </Link>
           <p className="admin-subtitle" style={{ marginTop: 10 }}>
             Blog posts: <strong>{stats.totalBlogPosts}</strong>
           </p>
+          <Link className="admin-link" href="/admin/blog">
+            Manage blog
+          </Link>
         </div>
         <div className="admin-card">
           <h3>Total users</h3>
