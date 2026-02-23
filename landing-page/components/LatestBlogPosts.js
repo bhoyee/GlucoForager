@@ -35,6 +35,10 @@ export default function LatestBlogPosts() {
   }, []);
 
   const placeholders = Array.from({ length: 4 }).map((_, idx) => ({ id: `placeholder-${idx}` }));
+  const getInitial = (title) => {
+    const safe = String(title || 'G').trim();
+    return safe ? safe[0].toUpperCase() : 'G';
+  };
 
   return (
     <section
@@ -64,17 +68,33 @@ export default function LatestBlogPosts() {
             >
               {isLoading ? (
                 <>
+                  <div className="h-40 bg-gray-100" />
+                  <div className="p-6">
                   <div className="h-4 w-24 bg-gray-100 rounded" />
                   <div className="mt-4 h-6 w-4/5 bg-gray-100 rounded" />
                   <div className="mt-3 h-4 w-full bg-gray-100 rounded" />
                   <div className="mt-2 h-4 w-3/4 bg-gray-100 rounded" />
                   <div className="mt-6 h-4 w-20 bg-gray-100 rounded" />
+                  </div>
                 </>
               ) : (
                 <>
                   <p className="text-sm text-gray-500">
                     {post.published_at ? new Date(post.published_at).toLocaleDateString() : 'Unpublished'}
                   </p>
+                  {post.image_url ? (
+                    <div className="mt-4 overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
+                      <div className="aspect-[16/9]">
+                        <img
+                          src={post.image_url}
+                          alt={post.title ? `${post.title} cover` : 'Post cover'}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+                    </div>
+                  ) : null}
                   <h3 className="text-xl font-bold text-gray-900 mt-2">
                     <Link href={`/blog/${post.slug}`} className="hover:text-teal-700">
                       {post.title}

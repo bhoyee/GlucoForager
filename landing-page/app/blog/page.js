@@ -1,7 +1,7 @@
 import Link from 'next/link';
-import Image from 'next/image';
 import Footer from '../../components/Footer';
 import ScrollControls from '../../components/ScrollControls';
+import BlogTopBar from '../../components/BlogTopBar';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -23,6 +23,29 @@ function PostImagePlaceholder({ title }) {
       </div>
     </div>
   );
+}
+
+function PostCardMedia({ title, imageUrl }) {
+  const url = typeof imageUrl === 'string' ? imageUrl.trim() : '';
+  if (url) {
+    return (
+      <div className="relative w-full overflow-hidden rounded-xl bg-gray-100">
+        <div className="aspect-[16/9]">
+          <img
+            src={url}
+            alt={title ? `${title} cover` : 'Post cover'}
+            className="h-full w-full object-cover"
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            onError={(event) => {
+              event.currentTarget.style.display = 'none';
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
+  return <PostImagePlaceholder title={title} />;
 }
 
 export default async function BlogIndexPage({ searchParams }) {
@@ -48,31 +71,8 @@ export default async function BlogIndexPage({ searchParams }) {
   return (
     <>
       <main className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
-        <div className="container mx-auto max-w-6xl px-4 pt-2 pb-12 space-y-8">
-          <header className="space-y-4">
-            <Link href="/" className="inline-flex items-center gap-3">
-              <div className="relative h-10 w-10">
-                <Image
-                  src="/images/logo.png"
-                  alt="GlucoForager Logo"
-                  width={40}
-                  height={40}
-                  className="object-contain"
-                  priority
-                />
-              </div>
-              <span className="text-lg font-extrabold text-gray-900 whitespace-nowrap">GlucoForager</span>
-            </Link>
-
-            <div className="flex justify-end">
-              <Link
-                href="/"
-                className="inline-flex items-center justify-center rounded-full bg-teal-600 px-5 py-2.5 text-white font-semibold shadow-sm hover:bg-teal-700 transition-colors"
-              >
-                Back to home
-              </Link>
-            </div>
-          </header>
+        <BlogTopBar rightHref="/" rightLabel="Back to home" />
+        <div className="container mx-auto max-w-6xl px-4 py-10 space-y-8">
 
         <div className="flex items-end justify-between gap-6 flex-wrap">
           <div>
@@ -97,7 +97,7 @@ export default async function BlogIndexPage({ searchParams }) {
               key={post.id}
               className="rounded-2xl border border-gray-200 bg-white overflow-hidden hover:shadow-lg transition-shadow"
             >
-              <PostImagePlaceholder title={post.title} />
+              <PostCardMedia title={post.title} imageUrl={post.image_url} />
               <div className="p-6">
                 <p className="text-sm text-gray-500">
                   {post.published_at ? new Date(post.published_at).toLocaleDateString() : 'Unpublished'}

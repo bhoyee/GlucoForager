@@ -138,19 +138,31 @@ export default function NewsletterPopup() {
     setBusy(true);
     setMessage('');
     try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 12000);
       const response = await fetch(`${API_URL}/api/newsletter/subscribe`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({ email: email.trim(), source: 'homepage_popup', website: '' }),
       });
+      clearTimeout(timer);
 
-      if (!response.ok) throw new Error('Request failed');
       const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const detail = typeof data?.detail === 'string' ? data.detail : '';
+        if (response.status === 429) {
+          setMessage(detail || 'Too many requests. Please wait a minute and try again.');
+          return;
+        }
+        setMessage(detail || 'Could not subscribe right now. Please try again later.');
+        return;
+      }
 
       writeState({ subscribedAt: nowMs() });
       setMessage(data?.already ? 'You’re already subscribed.' : 'Thanks! You’re subscribed for blog updates.');
       setEmail('');
-      setTimeout(() => setOpen(false), 900);
+      setTimeout(() => setOpen(false), 1500);
     } catch {
       setMessage('Could not subscribe right now. Please try again later.');
     } finally {

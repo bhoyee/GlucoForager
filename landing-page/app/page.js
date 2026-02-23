@@ -23,8 +23,8 @@ export default function HomePage() {
       <NewsletterPopup />
       <Header onDownloadClick={() => setShowDownloadModal(true)} />
       
-      {/* Add pt-20 to push content down (matches header height) */}
-      <div className="pt-5">
+      {/* Push content below the fixed header (h-20) */}
+      <div className="pt-20">
       {/* HERO SECTION with background pattern */}
       <section className="hero-background py-20" id="hero">
         <div className="container mx-auto px-4">

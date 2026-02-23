@@ -13,11 +13,20 @@ export default function BlogPostForm({
     title: initialValues?.title || '',
     slug: initialValues?.slug || '',
     excerpt: initialValues?.excerpt || '',
+    image_url: initialValues?.image_url || '',
     author_name: initialValues?.author_name || '',
     status: initialValues?.status || 'draft',
     published_at: initialValues?.published_at || '',
     content: initialValues?.content || '',
+    notify_newsletter: false,
   }));
+
+  const previewUrl = useMemo(() => {
+    const value = String(form.image_url || '').trim();
+    if (!value) return '';
+    if (value.startsWith('/') || value.startsWith('http://') || value.startsWith('https://')) return value;
+    return '';
+  }, [form.image_url]);
 
   const canSubmit = useMemo(() => {
     return (
@@ -68,6 +77,31 @@ export default function BlogPostForm({
       </div>
 
       <div className="admin-field">
+        <label>Cover image URL (optional)</label>
+        <input
+          value={form.image_url}
+          onChange={update('image_url')}
+          placeholder="https://... or /uploads/..."
+        />
+        <p className="admin-help">
+          This image shows on the blog list and at the top of the post. Recommended: 1200×630.
+        </p>
+        {previewUrl ? (
+          <div className="mt-3 overflow-hidden rounded-xl border border-gray-200 bg-white">
+            <img
+              src={previewUrl}
+              alt="Cover preview"
+              className="block w-full max-h-56 object-cover"
+              loading="lazy"
+              onError={(event) => {
+                event.currentTarget.style.display = 'none';
+              }}
+            />
+          </div>
+        ) : null}
+      </div>
+
+      <div className="admin-field">
         <label>Author name (optional)</label>
         <input value={form.author_name} onChange={update('author_name')} placeholder="GlucoForager Team" />
       </div>
@@ -78,6 +112,18 @@ export default function BlogPostForm({
           <option value="draft">Draft</option>
           <option value="published">Published</option>
         </select>
+      </div>
+
+      <div className="admin-field">
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={!!form.notify_newsletter}
+            onChange={(event) => setForm((prev) => ({ ...prev, notify_newsletter: event.target.checked }))}
+          />
+          <span>Send to newsletter subscribers</span>
+        </label>
+        <p className="admin-help">Only works when Status is set to Published. Sends at most once per post.</p>
       </div>
 
       <div className="admin-field">
@@ -115,4 +161,3 @@ export default function BlogPostForm({
     </form>
   );
 }
-
