@@ -49,3 +49,31 @@ class CacheService:
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Redis set failed: %s", exc)
         self.memory_cache[key] = (time.time() + ttl_seconds, value)
+
+    def incr(self, key: str, ttl_seconds: int = 300) -> int:
+        if self.client:
+            try:
+                pipeline = self.client.pipeline()
+                pipeline.incr(key)
+                pipeline.ttl(key)
+                value, ttl = pipeline.execute()
+                if ttl in (-1, -2):
+                    self.client.expire(key, ttl_seconds)
+                return int(value)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Redis incr failed: %s", exc)
+
+        current = 0
+        if key in self.memory_cache:
+            expires, stored = self.memory_cache[key]
+            if expires >= time.time():
+                try:
+                    current = int(stored)
+                except Exception:  # noqa: BLE001
+                    current = 0
+            else:
+                self.memory_cache.pop(key, None)
+
+        current += 1
+        self.memory_cache[key] = (time.time() + ttl_seconds, current)
+        return current

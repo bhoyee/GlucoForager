@@ -13,16 +13,18 @@ import Footer from "../components/Footer";
 import Contact from "../components/Contact";
 import ScrollToTop from "../components/ScrollToTop";
 import DownloadModal from "../components/DownloadModal";
+import NewsletterPopup from "../components/NewsletterPopup";
 
 
 export default function HomePage() {
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   return (
     <div className="min-h-screen bg-white text-gray-900">
+      <NewsletterPopup />
       <Header onDownloadClick={() => setShowDownloadModal(true)} />
       
-      {/* Add pt-20 to push content down (matches header height) */}
-      <div className="pt-5">
+      {/* Push content below the fixed header (h-20) */}
+      <div className="pt-20">
       {/* HERO SECTION with background pattern */}
       <section className="hero-background py-20" id="hero">
         <div className="container mx-auto px-4">

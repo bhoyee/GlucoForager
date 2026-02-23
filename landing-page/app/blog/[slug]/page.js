@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import BlogComments from '../../../components/BlogComments';
 import BlogShare from '../../../components/BlogShare';
+import BlogTopBar from '../../../components/BlogTopBar';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.glucoforager.com').replace(/\/+$/, '');
@@ -20,6 +21,29 @@ function PostHeroPlaceholder({ title }) {
   );
 }
 
+function PostHeroMedia({ title, imageUrl }) {
+  const url = typeof imageUrl === 'string' ? imageUrl.trim() : '';
+  if (url) {
+    return (
+      <div className="relative overflow-hidden rounded-2xl bg-gray-100 border border-gray-200">
+        <div className="aspect-[16/7]">
+          <img
+            src={url}
+            alt={title ? `${title} cover` : 'Post cover'}
+            className="h-full w-full object-cover"
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            onError={(event) => {
+              event.currentTarget.style.display = 'none';
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
+  return <PostHeroPlaceholder title={title} />;
+}
+
 const escapeHtml = (value) =>
   String(value || '')
     .replaceAll('&', '&amp;')
@@ -29,6 +53,17 @@ const escapeHtml = (value) =>
     .replaceAll("'", '&#39;');
 
 function renderContent(content) {
+  const looksLikeHtml = /<\/?[a-z][\s\S]*>/i.test(String(content || ''));
+  if (looksLikeHtml) {
+    return (
+      <div
+        className="text-gray-800 leading-7 [&_p]:mt-4 [&_h1]:text-3xl [&_h1]:font-extrabold [&_h1]:text-gray-900 [&_h2]:mt-8 [&_h2]:text-2xl [&_h2]:font-bold [&_h2]:text-gray-900 [&_h3]:mt-6 [&_h3]:text-xl [&_h3]:font-bold [&_h3]:text-gray-900 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:mt-4 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:mt-4 [&_li]:mt-1 [&_a]:text-teal-700 [&_a]:font-semibold hover:[&_a]:text-teal-900"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: String(content || '') }}
+      />
+    );
+  }
+
   const blocks = String(content || '').split(/\n{2,}/g).map((block) => block.trim()).filter(Boolean);
 
   return blocks.map((block, idx) => {
@@ -99,11 +134,14 @@ export default async function BlogPostPage({ params }) {
 
   if (!postRes.ok) {
     return (
-      <main className="container mx-auto max-w-4xl px-4 py-10 space-y-6">
-        <h1 className="text-3xl font-bold text-gray-900">Post not found</h1>
-        <Link href="/blog" className="text-teal-700 font-semibold hover:text-teal-900">
-          Back to blog
-        </Link>
+      <main className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
+        <BlogTopBar rightHref="/blog" rightLabel="Back to blog" />
+        <div className="container mx-auto max-w-4xl px-4 py-10 space-y-6">
+          <h1 className="text-3xl font-bold text-gray-900">Post not found</h1>
+          <Link href="/blog" className="text-teal-700 font-semibold hover:text-teal-900">
+            Back to blog
+          </Link>
+        </div>
       </main>
     );
   }
@@ -114,6 +152,7 @@ export default async function BlogPostPage({ params }) {
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
+      <BlogTopBar rightHref="/" rightLabel="Back to home" />
       <div className="container mx-auto max-w-4xl px-4 py-10 space-y-6">
         <div className="flex items-center justify-between gap-6 flex-wrap">
           <Link href="/blog" className="text-teal-700 font-semibold hover:text-teal-900">
@@ -122,7 +161,7 @@ export default async function BlogPostPage({ params }) {
           <BlogShare title={post.title} url={url} />
         </div>
 
-        <PostHeroPlaceholder title={post.title} />
+        <PostHeroMedia title={post.title} imageUrl={post.image_url} />
 
         <header className="space-y-3">
           <h1 className="text-4xl font-bold text-gray-900">{post.title}</h1>
