@@ -1,9 +1,12 @@
 import Link from 'next/link';
+import Footer from '../../components/Footer';
+import ScrollControls from '../../components/ScrollControls';
+import BlogTopBar from '../../components/BlogTopBar';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
 export const metadata = {
-  title: 'Blog',
+  title: 'GlucoForager Blog',
   description: 'Diabetes-friendly cooking tips, low-glycemic recipes, and product updates from GlucoForager.',
 };
 
@@ -22,9 +25,34 @@ function PostImagePlaceholder({ title }) {
   );
 }
 
+function PostCardMedia({ title, imageUrl }) {
+  const url = typeof imageUrl === 'string' ? imageUrl.trim() : '';
+  if (url) {
+    return (
+      <div className="relative w-full overflow-hidden rounded-xl bg-gray-100">
+        <div className="aspect-[16/9]">
+          <img
+            src={url}
+            alt={title ? `${title} cover` : 'Post cover'}
+            className="h-full w-full object-cover"
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            onError={(event) => {
+              event.currentTarget.style.display = 'none';
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
+  return <PostImagePlaceholder title={title} />;
+}
+
+const stripHtml = (value) => String(value || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+
 export default async function BlogIndexPage({ searchParams }) {
   const page = Math.max(1, Number(searchParams?.page || 1));
-  const pageSize = 10;
+  const pageSize = 12;
 
   let data = { items: [], total: 0 };
   let unavailable = false;
@@ -43,19 +71,19 @@ export default async function BlogIndexPage({ searchParams }) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
-      <div className="container mx-auto max-w-6xl px-4 py-12 space-y-10">
-      <div className="flex items-end justify-between gap-6 flex-wrap">
-        <div>
-          <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900">Blog</h1>
-          <p className="text-gray-600 mt-3 max-w-2xl">
-            Diabetes-friendly cooking tips, low-glycemic recipes, and product updates.
-          </p>
+    <>
+      <main className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
+        <BlogTopBar rightHref="/" rightLabel="Back to home" />
+        <div className="container mx-auto max-w-6xl px-4 py-10 space-y-8">
+
+        <div className="flex items-end justify-between gap-6 flex-wrap">
+          <div>
+            <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900">Blog</h1>
+            <p className="text-gray-600 mt-3 max-w-2xl">
+              Diabetes-friendly cooking tips, low-glycemic recipes, and product updates.
+            </p>
+          </div>
         </div>
-        <Link href="/" className="text-teal-700 font-semibold hover:text-teal-900">
-          Back to home
-        </Link>
-      </div>
 
       {items.length === 0 ? (
         <div className="rounded-2xl border border-gray-200 bg-white p-8">
@@ -71,7 +99,7 @@ export default async function BlogIndexPage({ searchParams }) {
               key={post.id}
               className="rounded-2xl border border-gray-200 bg-white overflow-hidden hover:shadow-lg transition-shadow"
             >
-              <PostImagePlaceholder title={post.title} />
+              <PostCardMedia title={post.title} imageUrl={post.image_url} />
               <div className="p-6">
                 <p className="text-sm text-gray-500">
                   {post.published_at ? new Date(post.published_at).toLocaleDateString() : 'Unpublished'}
@@ -81,7 +109,7 @@ export default async function BlogIndexPage({ searchParams }) {
                     {post.title}
                   </Link>
                 </h2>
-                {post.excerpt ? <p className="text-gray-700 mt-3">{post.excerpt}</p> : null}
+                {post.excerpt ? <p className="text-gray-700 mt-3">{stripHtml(post.excerpt)}</p> : null}
                 <div className="mt-4">
                   <Link href={`/blog/${post.slug}`} className="text-teal-700 font-semibold hover:text-teal-900">
                     Read more →
@@ -93,26 +121,35 @@ export default async function BlogIndexPage({ searchParams }) {
         </div>
       )}
 
-      {totalPages > 1 ? (
-        <div className="flex items-center justify-between gap-4 pt-2">
-          <Link
-            href={`/blog?page=${Math.max(1, page - 1)}`}
-            className={`font-semibold ${page === 1 ? 'text-gray-400 pointer-events-none' : 'text-teal-700 hover:text-teal-900'}`}
-          >
-            Prev
-          </Link>
-          <p className="text-sm text-gray-600">
-            Page {page} of {totalPages}
-          </p>
-          <Link
-            href={`/blog?page=${Math.min(totalPages, page + 1)}`}
-            className={`font-semibold ${page === totalPages ? 'text-gray-400 pointer-events-none' : 'text-teal-700 hover:text-teal-900'}`}
-          >
-            Next
-          </Link>
+        {totalPages > 1 ? (
+          <div className="flex items-center justify-between gap-4 pt-4">
+            <Link
+              href={`/blog?page=${Math.max(1, page - 1)}`}
+              className={`inline-flex items-center justify-center rounded-full border px-4 py-2 text-sm font-semibold ${
+                page === 1 ? 'text-gray-400 border-gray-200 pointer-events-none' : 'text-teal-700 border-teal-200 hover:bg-teal-50'
+              }`}
+            >
+              Prev
+            </Link>
+            <p className="text-sm text-gray-600">
+              Page {page} of {totalPages}
+            </p>
+            <Link
+              href={`/blog?page=${Math.min(totalPages, page + 1)}`}
+              className={`inline-flex items-center justify-center rounded-full border px-4 py-2 text-sm font-semibold ${
+                page === totalPages
+                  ? 'text-gray-400 border-gray-200 pointer-events-none'
+                  : 'text-teal-700 border-teal-200 hover:bg-teal-50'
+              }`}
+            >
+              Next
+            </Link>
+          </div>
+        ) : null}
         </div>
-      ) : null}
-      </div>
-    </main>
+      </main>
+      <ScrollControls />
+      <Footer />
+    </>
   );
 }
