@@ -98,6 +98,15 @@ app.add_middleware(
 
 abuse_detector = AbuseDetector()
 
+def _client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()[:64]
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()[:64]
+    return (request.client.host if request.client else "unknown")[:64]
+
 
 @app.on_event("startup")
 def on_startup():
@@ -106,7 +115,7 @@ def on_startup():
 
 @app.middleware("http")
 async def abuse_guard(request: Request, call_next):
-    identifier = request.client.host
+    identifier = _client_ip(request)
     if not abuse_detector.record_and_check(identifier):
         return JSONResponse(status_code=429, content={"detail": "Slow down"})
     start = time.time()

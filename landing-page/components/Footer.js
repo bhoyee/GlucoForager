@@ -21,13 +21,25 @@ export default function Footer() {
     setNewsletterBusy(true);
     setNewsletterMessage('');
     try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 12000);
       const response = await fetch(`${API_URL}/api/newsletter/subscribe`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({ email, source: 'footer', website: '' }),
       });
-      if (!response.ok) throw new Error('Request failed');
+      clearTimeout(timer);
       const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const detail = typeof data?.detail === 'string' ? data.detail : '';
+        if (response.status === 429) {
+          setNewsletterMessage(detail || 'Too many requests. Please wait a minute and try again.');
+          return;
+        }
+        setNewsletterMessage(detail || 'Could not subscribe right now. Please try again.');
+        return;
+      }
       setNewsletterEmail('');
       setNewsletterMessage(data?.already ? 'You’re already subscribed.' : 'Subscribed! Check your inbox for updates.');
     } catch {

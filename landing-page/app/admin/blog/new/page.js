@@ -33,10 +33,12 @@ const toApiPayload = (form) => {
     title: form.title,
     slug: form.slug || null,
     excerpt: form.excerpt || null,
+    image_url: form.image_url || null,
     content: form.content,
     status: form.status,
     author_name: form.author_name || null,
     published_at: publishedAt,
+    notify_newsletter: !!form.notify_newsletter,
   };
 };
 
@@ -93,4 +95,3 @@ export default function AdminNewBlogPostPage() {
     </div>
   );
 }
-
