@@ -1,7 +1,9 @@
 import re
 from datetime import datetime, timezone
+from pathlib import Path
+import uuid
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, status
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, or_
 from sqlalchemy.orm import Session
@@ -129,6 +131,35 @@ def _send_post_to_newsletter_task(post_id: int) -> None:
         db.commit()
     finally:
         db.close()
+
+
+@router.post("/upload", status_code=201, response_model=dict)
+async def upload_blog_image(
+    file: UploadFile = File(...),
+    current_admin: AdminUser = Depends(get_current_admin),  # noqa: ARG001
+):
+    content_type = (file.content_type or "").lower()
+    if not content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Only image uploads are allowed")
+
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty file")
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Image too large (max 5MB)")
+
+    original = (file.filename or "").strip()
+    suffix = Path(original).suffix.lower()
+    if suffix not in {".png", ".jpg", ".jpeg", ".webp", ".gif"}:
+        suffix = ".png" if content_type.endswith("png") else ".jpg"
+
+    folder = Path(settings.uploads_dir) / "blog"
+    folder.mkdir(parents=True, exist_ok=True)
+    name = f"blog_{uuid.uuid4().hex}{suffix}"
+    path = folder / name
+    path.write_bytes(data)
+
+    return {"ok": True, "url": f"/uploads/blog/{name}"}
 
 
 @router.get("/posts", response_model=BlogPostsAdminResponse)

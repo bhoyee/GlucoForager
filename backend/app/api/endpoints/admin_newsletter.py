@@ -43,6 +43,7 @@ class NewsletterSubscriberUpdatePayload(BaseModel):
 class NewsletterSendPayload(BaseModel):
     subject: str = Field(..., min_length=2, max_length=160)
     body: str = Field(..., min_length=2, max_length=50000)
+    body_html: bool = False
     test_email: EmailStr | None = None
 
 
@@ -152,9 +153,12 @@ def _escape_html(value: str) -> str:
     )
 
 
-def _render_newsletter_html(subject: str, body: str, unsubscribe_url: str | None = None) -> str:
+def _render_newsletter_html(subject: str, body: str, unsubscribe_url: str | None = None, body_html: bool = False) -> str:
     safe_subject = _escape_html(subject.strip())
-    safe_body = _escape_html(body.strip()).replace("\n", "<br />")
+    if body_html:
+        safe_body = (body or "").strip()
+    else:
+        safe_body = _escape_html(body.strip()).replace("\n", "<br />")
     logo_url = f"{settings.site_url.rstrip('/')}/images/logo.png"
     unsubscribe_block = ""
     if unsubscribe_url:
@@ -196,7 +200,12 @@ def send_broadcast(
         raise HTTPException(status_code=429, detail="Too many sends. Please try again later.")
 
     base_unsubscribe_url = f"{settings.site_url.rstrip('/')}/unsubscribe"
-    base_html = _render_newsletter_html(payload.subject, payload.body, unsubscribe_url=base_unsubscribe_url)
+    base_html = _render_newsletter_html(
+        payload.subject,
+        payload.body,
+        unsubscribe_url=base_unsubscribe_url,
+        body_html=bool(payload.body_html),
+    )
 
     if payload.test_email:
         send_newsletter_email(str(payload.test_email).strip().lower(), payload.subject.strip(), base_html)
@@ -215,7 +224,12 @@ def send_broadcast(
         try:
             token = make_unsubscribe_token(recipient.id, recipient.email)
             unsubscribe_url = f"{base_unsubscribe_url}?token={token}"
-            html_body = _render_newsletter_html(payload.subject, payload.body, unsubscribe_url=unsubscribe_url)
+            html_body = _render_newsletter_html(
+                payload.subject,
+                payload.body,
+                unsubscribe_url=unsubscribe_url,
+                body_html=bool(payload.body_html),
+            )
             send_newsletter_email(recipient.email, payload.subject.strip(), html_body)
             sent += 1
         except Exception:

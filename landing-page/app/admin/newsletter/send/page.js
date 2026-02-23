@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import AdminTinyEditor from '../../../../components/AdminTinyEditor';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -50,6 +51,7 @@ export default function AdminNewsletterSendPage() {
       const payload = {
         subject: subject.trim(),
         body: body.trim(),
+        body_html: true,
         test_email: mode === 'test' ? testEmail.trim() : null,
       };
       const response = await fetch(`${API_URL}/api/admin/newsletter/send`, {
@@ -97,10 +99,10 @@ export default function AdminNewsletterSendPage() {
 
       <div className="admin-field">
         <label>Message</label>
-        <textarea
-          rows={10}
+        <AdminTinyEditor
+          height={420}
           value={body}
-          onChange={(e) => setBody(e.target.value)}
+          onChange={(next) => setBody(next)}
           placeholder="Write your update..."
         />
       </div>
@@ -135,4 +137,3 @@ export default function AdminNewsletterSendPage() {
     </div>
   );
 }
-

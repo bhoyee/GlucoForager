@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
+const stripHtml = (value) => String(value || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
 
 export default function LatestBlogPosts() {
   const [items, setItems] = useState([]);
@@ -100,7 +101,7 @@ export default function LatestBlogPosts() {
                       {post.title}
                     </Link>
                   </h3>
-                  {post.excerpt ? <p className="text-gray-700 mt-3 line-clamp-3">{post.excerpt}</p> : null}
+                  {post.excerpt ? <p className="text-gray-700 mt-3 line-clamp-3">{stripHtml(post.excerpt)}</p> : null}
                   <div className="mt-4">
                     <Link
                       href={`/blog/${post.slug}`}
