@@ -74,6 +74,13 @@ def admin_health(
 
     # Queue snapshot (AI jobs table)
     try:
+        failed_items = (
+            db.query(AIJob)
+            .filter(AIJob.status == "failed")
+            .order_by(AIJob.updated_at.desc())
+            .limit(15)
+            .all()
+        )
         pending = (
             db.query(func.count(AIJob.id))
             .filter(AIJob.status.in_(["pending", "running"]))
@@ -89,7 +96,18 @@ def admin_health(
             "detail": f"Pending: {pending} | Failed: {failed}",
             "pending": int(pending),
             "failed": int(failed),
-            "note": "Ensure the API worker is running (BackgroundTasks are processed by the API process).",
+            "failed_items": [
+                {
+                    "id": job.id,
+                    "user_id": job.user_id,
+                    "source": job.source,
+                    "error": (job.error or "")[:300],
+                    "created_at": job.created_at.isoformat() if job.created_at else None,
+                    "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+                }
+                for job in failed_items
+            ],
+            "note": "AI jobs run inside the API container. If pending jobs keep increasing, check API CPU/memory and recent errors.",
         }
     except Exception as exc:  # noqa: BLE001
         services["queue"] = {"status": "error", "detail": f"Error: {str(exc)[:120]}"}
@@ -176,4 +194,3 @@ def admin_health(
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "services": services,
     }
-

@@ -8,8 +8,15 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 const statusMeta = (status) => {
   const normalized = (status || '').toLowerCase();
   if (normalized === 'error') return { label: 'ERROR', className: 'danger' };
-  if (normalized === 'warning') return { label: 'WARNING', className: 'secondary' };
-  return { label: 'OK', className: '' };
+  if (normalized === 'warning') return { label: 'WARNING', className: 'warning' };
+  return { label: 'OK', className: 'success' };
+};
+
+const statusDotClass = (status) => {
+  const normalized = (status || '').toLowerCase();
+  if (normalized === 'error') return 'is-danger';
+  if (normalized === 'warning') return 'is-warning';
+  return 'is-ok';
 };
 
 const serviceTitle = (key) => {
@@ -24,6 +31,27 @@ const serviceTitle = (key) => {
     cpu: 'CPU Load',
   };
   return mapping[key] || key;
+};
+
+const serviceIcon = (key) => {
+  const mapping = {
+    application: '🟢',
+    database: '🗄️',
+    cache: '⚡',
+    queue: '🧵',
+    mail: '✉️',
+    storage: '📁',
+    disk: '💽',
+    cpu: '🧠',
+  };
+  return mapping[key] || 'ℹ️';
+};
+
+const formatDateTime = (value) => {
+  if (!value) return '--';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString();
 };
 
 export default function AdminSystemHealthPage() {
@@ -87,23 +115,26 @@ export default function AdminSystemHealthPage() {
 
   const overallBadge = statusMeta(health?.status);
   const services = health?.services || {};
+  const failedJobs = services?.queue?.failed_items || [];
 
   return (
-    <div className="admin-card">
-      <div className="admin-toolbar" style={{ justifyContent: 'space-between' }}>
+    <div className="admin-card admin-health-page">
+      <div className="admin-health-header">
         <div>
-          <h2 className="admin-title" style={{ marginBottom: 6 }}>
-            System Health{' '}
+          <div className="admin-health-title-row">
+            <h2 className="admin-title" style={{ marginBottom: 0 }}>
+              System Health
+            </h2>
             {health?.status ? (
               <span className={`admin-badge ${overallBadge.className || ''}`}>{overallBadge.label}</span>
             ) : null}
-          </h2>
+          </div>
           <p className="admin-subtitle" style={{ marginBottom: 0 }}>
             Live status for core services and background jobs.
           </p>
         </div>
 
-        <div className="admin-toolbar" style={{ margin: 0 }}>
+        <div className="admin-health-actions">
           <label className="admin-inline-toggle">
             <input
               type="checkbox"
@@ -126,62 +157,96 @@ export default function AdminSystemHealthPage() {
         <p>No health data yet.</p>
       ) : (
         <>
-          <p className="admin-subtitle" style={{ marginTop: 12 }}>
-            Last updated: {health.generated_at ? new Date(health.generated_at).toLocaleString() : '--'}
-          </p>
+          <div className="admin-health-meta">
+            <span className="admin-health-meta-item">
+              <span className="admin-health-meta-label">Last updated</span>
+              <span className="admin-health-meta-value">
+                {health.generated_at ? new Date(health.generated_at).toLocaleString() : '--'}
+              </span>
+            </span>
+            <span className="admin-health-meta-item">
+              <span className="admin-health-meta-label">Queue</span>
+              <span className="admin-health-meta-value">
+                Pending: {services.queue?.pending ?? '--'} • Failed: {services.queue?.failed ?? '--'}
+              </span>
+            </span>
+          </div>
 
-          <div
-            className="admin-grid"
-            style={{
-              marginTop: 16,
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-              gap: 14,
-            }}
-          >
+          <div className="admin-health-grid">
             {Object.entries(services).map(([key, value]) => {
               const meta = statusMeta(value?.status);
               return (
-                <div key={key} className="admin-mini-card">
-                  <div className="admin-mini-card-header">
-                    <p className="admin-mini-card-label">{serviceTitle(key)}</p>
+                <div key={key} className="admin-health-card">
+                  <div className="admin-health-card-top">
+                    <div className="admin-health-card-title">
+                      <span className="admin-health-icon" aria-hidden="true">
+                        {serviceIcon(key)}
+                      </span>
+                      <div>
+                        <p className="admin-health-card-label">
+                          <span className={`admin-health-dot ${statusDotClass(value?.status)}`} aria-hidden="true" />
+                          {serviceTitle(key)}
+                        </p>
+                        <p className="admin-health-card-detail">{value?.detail || '--'}</p>
+                      </div>
+                    </div>
                     <span className={`admin-badge ${meta.className || ''}`}>{meta.label}</span>
                   </div>
-                  <p className="admin-mini-card-value" style={{ fontSize: 14 }}>
-                    {value?.detail || '--'}
-                  </p>
-                  {value?.note ? (
-                    <p className="admin-subtitle" style={{ marginTop: 10 }}>
-                      {value.note}
-                    </p>
-                  ) : null}
-                  {value?.path ? (
-                    <p className="admin-subtitle" style={{ marginTop: 10 }}>
-                      Path: {value.path}
-                    </p>
-                  ) : null}
-                  {value?.provider ? (
-                    <p className="admin-subtitle" style={{ marginTop: 10 }}>
-                      Provider: {value.provider}
-                    </p>
-                  ) : null}
+
+                  {value?.note ? <p className="admin-health-card-note">{value.note}</p> : null}
+
+                  <div className="admin-health-card-footer">
+                    {value?.path ? <span>Path: {value.path}</span> : null}
+                    {value?.provider ? <span>Provider: {value.provider}</span> : null}
+                    {typeof value?.used_percent === 'number' ? <span>Used: {value.used_percent}%</span> : null}
+                    {typeof value?.load1 === 'number' ? <span>Load1: {value.load1.toFixed(2)}</span> : null}
+                  </div>
                 </div>
               );
             })}
           </div>
 
-          <div className="admin-card" style={{ marginTop: 18 }}>
-            <h3 className="admin-title" style={{ fontSize: 16 }}>
-              Queue Snapshot
+          <div className="admin-card admin-health-secondary">
+            <h3 className="admin-title" style={{ fontSize: 18 }}>
+              Failed Jobs
             </h3>
             <p className="admin-subtitle">
-              Pending Jobs: {services.queue?.pending ?? '--'} | Failed Jobs: {services.queue?.failed ?? '--'}
+              Latest AI jobs that failed during processing. Resolve recurring errors before they pile up.
             </p>
-            <p className="admin-subtitle">Tip: Failed jobs should be reviewed and retried if needed.</p>
+
+            {failedJobs.length === 0 ? (
+              <p className="admin-subtitle" style={{ marginBottom: 0 }}>
+                No failed jobs found.
+              </p>
+            ) : (
+              <div className="admin-table-wrap">
+                <table className="admin-table admin-health-table">
+                  <thead>
+                    <tr>
+                      <th>Job</th>
+                      <th>Source</th>
+                      <th>User</th>
+                      <th>Updated</th>
+                      <th>Error</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {failedJobs.map((job) => (
+                      <tr key={job.id}>
+                        <td className="mono">{String(job.id).slice(0, 8)}</td>
+                        <td>{job.source || '--'}</td>
+                        <td>{job.user_id ?? '--'}</td>
+                        <td>{formatDateTime(job.updated_at)}</td>
+                        <td style={{ maxWidth: 520 }}>{job.error || '--'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </>
       )}
     </div>
   );
 }
-
