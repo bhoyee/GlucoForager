@@ -115,7 +115,12 @@ export default function AdminSystemHealthPage() {
 
   const overallBadge = statusMeta(health?.status);
   const services = health?.services || {};
-  const failedJobs = services?.queue?.failed_items || [];
+  const [failureView, setFailureView] = useState('operational');
+
+  const failedOperationalJobs = services?.queue?.failed_operational_items || [];
+  const failedInvalidInputJobs = services?.queue?.failed_invalid_input_items || [];
+  const failureBreakdown = services?.queue?.failed_breakdown || {};
+  const cleanupInfo = services?.queue?.cleanup || null;
 
   return (
     <div className="admin-card admin-health-page">
@@ -167,9 +172,18 @@ export default function AdminSystemHealthPage() {
             <span className="admin-health-meta-item">
               <span className="admin-health-meta-label">Queue</span>
               <span className="admin-health-meta-value">
-                Pending: {services.queue?.pending ?? '--'} • Failed: {services.queue?.failed ?? '--'}
+                Pending: {services.queue?.pending ?? '--'} • Failed: {services.queue?.failed ?? '--'} (
+                {services.queue?.failed_operational ?? '--'} system, {services.queue?.failed_invalid_input ?? '--'} input)
               </span>
             </span>
+            {cleanupInfo?.ran ? (
+              <span className="admin-health-meta-item">
+                <span className="admin-health-meta-label">Cleanup</span>
+                <span className="admin-health-meta-value">
+                  Deleted {cleanupInfo.deleted} old jobs (retention {cleanupInfo.retention_days}d)
+                </span>
+              </span>
+            ) : null}
           </div>
 
           <div className="admin-health-grid">
@@ -211,12 +225,69 @@ export default function AdminSystemHealthPage() {
               Failed Jobs
             </h3>
             <p className="admin-subtitle">
-              Latest AI jobs that failed during processing. Resolve recurring errors before they pile up.
+              Operational failures are issues to investigate (timeouts, provider errors, crashes). Invalid input failures
+              (e.g. “not food”) are normal user behaviour and should be tracked separately.
             </p>
 
-            {failedJobs.length === 0 ? (
+            <div className="admin-toolbar" style={{ marginBottom: 16 }}>
+              <button
+                type="button"
+                className={`admin-button ${failureView === 'operational' ? '' : 'secondary'}`}
+                onClick={() => setFailureView('operational')}
+              >
+                Operational ({services.queue?.failed_operational ?? 0})
+              </button>
+              <button
+                type="button"
+                className={`admin-button ${failureView === 'invalid_input' ? '' : 'secondary'}`}
+                onClick={() => setFailureView('invalid_input')}
+              >
+                Invalid input ({services.queue?.failed_invalid_input ?? 0})
+              </button>
+            </div>
+
+            <div className="admin-health-breakdown">
+              <div className="admin-health-breakdown-card">
+                <p className="admin-health-breakdown-title">Top operational reasons (sample)</p>
+                <div className="admin-health-breakdown-list">
+                  {Object.keys(failureBreakdown?.operational || {}).length === 0 ? (
+                    <span className="admin-subtitle" style={{ margin: 0 }}>
+                      --
+                    </span>
+                  ) : (
+                    Object.entries(failureBreakdown.operational).map(([code, count]) => (
+                      <span className="admin-health-breakdown-pill" key={code}>
+                        {code}: <strong>{count}</strong>
+                      </span>
+                    ))
+                  )}
+                </div>
+              </div>
+              <div className="admin-health-breakdown-card">
+                <p className="admin-health-breakdown-title">Top invalid-input reasons (sample)</p>
+                <div className="admin-health-breakdown-list">
+                  {Object.keys(failureBreakdown?.invalid_input || {}).length === 0 ? (
+                    <span className="admin-subtitle" style={{ margin: 0 }}>
+                      --
+                    </span>
+                  ) : (
+                    Object.entries(failureBreakdown.invalid_input).map(([code, count]) => (
+                      <span className="admin-health-breakdown-pill" key={code}>
+                        {code}: <strong>{count}</strong>
+                      </span>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {failureView === 'operational' && failedOperationalJobs.length === 0 ? (
               <p className="admin-subtitle" style={{ marginBottom: 0 }}>
                 No failed jobs found.
+              </p>
+            ) : failureView === 'invalid_input' && failedInvalidInputJobs.length === 0 ? (
+              <p className="admin-subtitle" style={{ marginBottom: 0 }}>
+                No invalid-input failures found.
               </p>
             ) : (
               <div className="admin-table-wrap">
@@ -227,16 +298,18 @@ export default function AdminSystemHealthPage() {
                       <th>Source</th>
                       <th>User</th>
                       <th>Updated</th>
+                      <th>Code</th>
                       <th>Error</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {failedJobs.map((job) => (
+                    {(failureView === 'operational' ? failedOperationalJobs : failedInvalidInputJobs).map((job) => (
                       <tr key={job.id}>
                         <td className="mono">{String(job.id).slice(0, 8)}</td>
                         <td>{job.source || '--'}</td>
                         <td>{job.user_id ?? '--'}</td>
                         <td>{formatDateTime(job.updated_at)}</td>
+                        <td className="mono">{job.error_code || '--'}</td>
                         <td style={{ maxWidth: 520 }}>{job.error || '--'}</td>
                       </tr>
                     ))}
