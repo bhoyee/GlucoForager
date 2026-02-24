@@ -101,8 +101,8 @@ def send_welcome_email(to_email: str, full_name: str | None = None) -> None:
           <p>Hi {greeting_name},</p>
           <p>Welcome to GlucoForager. Your account is ready, and you can now explore diabetes-friendly recipes tailored to the ingredients in your kitchen.</p>
           <ul>
-            <li>Free tier includes 3 recipe searches per day</li>
-            <li>Upgrade anytime for camera ingredient recognition and unlimited searches</li>
+            <li>Free tier includes 3 recipes per day (camera ingredient scan + ingredient search)</li>
+            <li>Upgrade anytime for unlimited recipes (camera ingredient scan + ingredient search)</li>
           </ul>
           <p style="margin-top:16px;">Open the app to start planning your next meal in just a few taps.</p>
           <p style="margin-top:24px; color:#6b7280;">Stay steady, eat well.<br/>The GlucoForager team</p>
