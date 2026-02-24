@@ -17,6 +17,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from .api.endpoints import (
     auth,
     admin,
+    admin_revenuecat,
     ingredients,
     recipes,
     subscriptions,
@@ -221,6 +222,7 @@ except Exception as exc:  # noqa: BLE001
 
 app.include_router(auth.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
+app.include_router(admin_revenuecat.router, prefix="/api")
 app.include_router(ingredients.router, prefix="/api")
 app.include_router(recipes.router, prefix="/api")
 app.include_router(subscriptions.router, prefix="/api")

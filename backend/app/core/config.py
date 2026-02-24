@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     deepseek_vision_model: str = Field("deepseek-chat", env="DEEPSEEK_VISION_MODEL")
     redis_url: str | None = Field(None, env="REDIS_URL")
     revenuecat_webhook_secret: str | None = Field(None, env="REVENUECAT_WEBHOOK_SECRET")
+    revenuecat_secret_api_key: str | None = Field(None, env="REVENUECAT_SECRET_API_KEY")
+    revenuecat_project_id: str | None = Field(None, env="REVENUECAT_PROJECT_ID")
+    revenuecat_currency: str = Field("USD", env="REVENUECAT_CURRENCY")
     admin_bootstrap_token: str | None = Field(None, env="ADMIN_BOOTSTRAP_TOKEN")
     site_url: str = Field("https://www.glucoforager.com", env="SITE_URL")
 
