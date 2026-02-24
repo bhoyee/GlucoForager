@@ -31,6 +31,7 @@ from .api.endpoints import (
     mobile_logs,
     system_logs,
     admin_health,
+    admin_backups,
     blog,
     admin_blog,
     newsletter,
@@ -52,6 +53,7 @@ from .models import (  # ensure models are registered with SQLAlchemy
 )
 from .services.abuse_detector import AbuseDetector
 from .services.system_log_service import log_system_event
+from .services.backup_scheduler import start_backup_scheduler
 
 logging.basicConfig(
     level=logging.INFO,
@@ -112,6 +114,10 @@ def _client_ip(request: Request) -> str:
 @app.on_event("startup")
 def on_startup():
     logger.info("Startup complete.")
+    try:
+        start_backup_scheduler()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Backup scheduler start failed: %s", exc)
 
 
 @app.middleware("http")
@@ -229,6 +235,7 @@ app.include_router(revenuecat.router, prefix="/api")
 app.include_router(mobile_logs.router, prefix="/api")
 app.include_router(system_logs.router, prefix="/api")
 app.include_router(admin_health.router, prefix="/api")
+app.include_router(admin_backups.router, prefix="/api")
 app.include_router(blog.router, prefix="/api")
 app.include_router(admin_blog.router, prefix="/api")
 app.include_router(newsletter.router, prefix="/api")
