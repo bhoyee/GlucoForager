@@ -6,7 +6,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Image,
   ActivityIndicator,
   Alert,
   RefreshControl,
@@ -20,7 +19,6 @@ import { Colors } from '../../constants/Colors';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
 import { useAuth } from '../../context/authContext';
-import RecipePlaceholder from '../../assets/images/recipe-placeholder.jpeg';
 
 export default function RecentRecipesScreen() {
   const navigation = useNavigation();
@@ -180,8 +178,6 @@ export default function RecentRecipesScreen() {
       >
         {recipes.map((recipe, index) => {
           const title = recipe.name || recipe.title || `Recipe ${index + 1}`;
-          const imageUrl = recipe.image_url || recipe.image || '';
-          const imageSource = recipe.image_source || 'unknown';
           return (
             <TouchableOpacity
               key={recipe.id || `${title}-${index}`}
@@ -189,13 +185,6 @@ export default function RecentRecipesScreen() {
               onPress={() => navigation.navigate('RecipeDetail', { recipe, source: 'admin' })}
               activeOpacity={0.7}
             >
-              <View style={styles.imageContainer}>
-                {imageUrl && imageSource !== 'placeholder' ? (
-                  <Image source={{ uri: imageUrl }} style={styles.recipeImage} />
-                ) : (
-                  <Image source={RecipePlaceholder} style={styles.recipeImage} />
-                )}
-              </View>
               <View style={styles.recipeInfo}>
                 <Text style={styles.recipeName} numberOfLines={1}>{title}</Text>
                 <Text style={styles.recipeDescription} numberOfLines={2}>
@@ -319,18 +308,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 2,
-  },
-  imageContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 14,
-    overflow: 'hidden',
-    marginRight: 14,
-  },
-  recipeImage: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
   },
   recipeInfo: {
     flex: 1,
