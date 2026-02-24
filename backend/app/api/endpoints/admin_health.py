@@ -3,7 +3,8 @@ from __future__ import annotations
 import os
 import shutil
 import tempfile
-from datetime import datetime, timezone
+import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends
@@ -17,6 +18,9 @@ from ...models.ai_job import AIJob
 from ...services.cache_service import CacheService
 
 router = APIRouter()
+
+_LAST_CLEANUP_TS: float = 0.0
+_CLEANUP_INTERVAL_SECONDS = 6 * 60 * 60
 
 
 def _severity(status: str) -> int:
@@ -33,6 +37,53 @@ def _disk_usage_path() -> str:
     uploads_dir = Path(settings.uploads_dir).resolve()
     anchor = uploads_dir.anchor
     return anchor or str(uploads_dir)
+
+
+def _classify_ai_job_error(job: AIJob) -> tuple[str, str]:
+    """Return (error_type, error_code)."""
+    result = job.result or {}
+    error_payload = result.get("error") if isinstance(result, dict) else None
+    if isinstance(error_payload, dict):
+        error_type = (error_payload.get("type") or "").strip().lower()
+        error_code = (error_payload.get("code") or "").strip().lower()
+        if error_type and error_code:
+            return error_type, error_code
+
+    raw = (job.error or "").strip().lower()
+    if "image not related to food" in raw:
+        return "invalid_input", "not_food"
+    if "content not related to food" in raw:
+        return "invalid_input", "not_food"
+    if "please enter real ingredients" in raw:
+        return "invalid_input", "not_food"
+    return "operational", "unknown"
+
+
+def _maybe_cleanup_old_jobs(db: Session) -> dict:
+    global _LAST_CLEANUP_TS  # noqa: PLW0603
+    now = time.time()
+    if now - _LAST_CLEANUP_TS < _CLEANUP_INTERVAL_SECONDS:
+        return {"ran": False}
+
+    retention_days = int(os.getenv("AI_JOB_RETENTION_DAYS", "30") or "30")
+    retention_days = max(7, min(retention_days, 365))
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=retention_days)).replace(tzinfo=None)
+
+    try:
+        deleted = (
+            db.query(AIJob)
+            .filter(AIJob.updated_at.is_not(None))
+            .filter(AIJob.updated_at < cutoff)
+            .filter(AIJob.status.in_(["completed", "failed"]))
+            .delete(synchronize_session=False)
+        )
+        db.commit()
+    except Exception:  # noqa: BLE001
+        db.rollback()
+        deleted = 0
+
+    _LAST_CLEANUP_TS = now
+    return {"ran": True, "retention_days": retention_days, "deleted": int(deleted)}
 
 
 @router.get("/admin/health")
@@ -74,11 +125,13 @@ def admin_health(
 
     # Queue snapshot (AI jobs table)
     try:
-        failed_items = (
+        cleanup = _maybe_cleanup_old_jobs(db)
+
+        recent_failed = (
             db.query(AIJob)
             .filter(AIJob.status == "failed")
             .order_by(AIJob.updated_at.desc())
-            .limit(15)
+            .limit(200)
             .all()
         )
         pending = (
@@ -87,26 +140,52 @@ def admin_health(
             .scalar()
             or 0
         )
-        failed = db.query(func.count(AIJob.id)).filter(AIJob.status == "failed").scalar() or 0
+        failed_total = db.query(func.count(AIJob.id)).filter(AIJob.status == "failed").scalar() or 0
+
+        invalid_input_items: list[dict] = []
+        operational_items: list[dict] = []
+        invalid_reason_counts: dict[str, int] = {}
+        operational_reason_counts: dict[str, int] = {}
+
+        for job in recent_failed:
+            error_type, error_code = _classify_ai_job_error(job)
+            payload = {
+                "id": job.id,
+                "user_id": job.user_id,
+                "source": job.source,
+                "error_type": error_type,
+                "error_code": error_code,
+                "error": (job.error or "")[:300],
+                "created_at": job.created_at.isoformat() if job.created_at else None,
+                "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+            }
+            if error_type == "invalid_input":
+                invalid_input_items.append(payload)
+                invalid_reason_counts[error_code] = invalid_reason_counts.get(error_code, 0) + 1
+            else:
+                operational_items.append(payload)
+                operational_reason_counts[error_code] = operational_reason_counts.get(error_code, 0) + 1
+
+        failed_invalid_input = len(invalid_input_items)
+        failed_operational = len(operational_items)
+
         status = "ok"
-        if failed > 0 or pending >= 25:
+        if failed_operational > 0 or pending >= 25:
             status = "warning"
         services["queue"] = {
             "status": status,
-            "detail": f"Pending: {pending} | Failed: {failed}",
+            "detail": f"Pending: {pending} | Failed: {failed_total}",
             "pending": int(pending),
-            "failed": int(failed),
-            "failed_items": [
-                {
-                    "id": job.id,
-                    "user_id": job.user_id,
-                    "source": job.source,
-                    "error": (job.error or "")[:300],
-                    "created_at": job.created_at.isoformat() if job.created_at else None,
-                    "updated_at": job.updated_at.isoformat() if job.updated_at else None,
-                }
-                for job in failed_items
-            ],
+            "failed": int(failed_total),
+            "failed_invalid_input": int(failed_invalid_input),
+            "failed_operational": int(failed_operational),
+            "failed_breakdown": {
+                "invalid_input": dict(sorted(invalid_reason_counts.items(), key=lambda item: item[1], reverse=True)[:8]),
+                "operational": dict(sorted(operational_reason_counts.items(), key=lambda item: item[1], reverse=True)[:8]),
+            },
+            "cleanup": cleanup,
+            "failed_operational_items": operational_items[:15],
+            "failed_invalid_input_items": invalid_input_items[:15],
             "note": "AI jobs run inside the API container. If pending jobs keep increasing, check API CPU/memory and recent errors.",
         }
     except Exception as exc:  # noqa: BLE001
