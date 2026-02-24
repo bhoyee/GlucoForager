@@ -17,6 +17,7 @@ from ...services.ai_recipe_generator import AIRecipeGenerator
 from ...services.cache_service import CacheService
 from ...services.cost_tracker import record_ai_request
 from ...services.ingredient_classifier import IngredientClassifier
+from ...services.subscription_service import get_effective_subscription_tier
 
 router = APIRouter(prefix="/ai/text", tags=["ai"])
 pipeline = AIPipeline()
@@ -118,7 +119,7 @@ def _run_text_job(job_id: str) -> None:
         recipes = pipeline.text_to_recipes(
             db,
             user.id,
-            user.subscription_tier or "free",
+            get_effective_subscription_tier(db, user) or "free",
             classified["food"],
             filters=filters,
             device_id=device_id,
@@ -169,7 +170,7 @@ def generate_from_text(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Daily limit reached. Scans left: {access['searches_left']}",
         )
-    tier = current_user.subscription_tier or "free"
+    tier = get_effective_subscription_tier(db, current_user) or "free"
     classified = classifier.classify(payload.ingredients)
     if not classified["food"]:
         raise HTTPException(

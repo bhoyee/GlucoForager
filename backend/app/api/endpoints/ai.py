@@ -8,6 +8,7 @@ from ...models.user import SearchLog, User
 from ...services.ai_recipe_generator import AIRecipeGenerator
 from ...services.ai_vision import AIVisionService
 from ...services.cost_tracker import record_ai_request
+from ...services.subscription_service import get_effective_subscription_tier
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 vision_service = AIVisionService()
@@ -39,7 +40,7 @@ def analyze_vision(
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Vision service not configured")
     try:
         result = vision_service.analyze_fridge(payload.image_base64)
-        tier = current_user.subscription_tier or "free"
+        tier = get_effective_subscription_tier(db, current_user) or "free"
         record_ai_request(db, current_user.id, tier, "vision", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
         return {"result": result, "access": access}
     except Exception as exc:

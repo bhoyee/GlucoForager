@@ -25,6 +25,9 @@ export default function AdminUserDetail() {
   const [message, setMessage] = useState('');
   const [pendingAction, setPendingAction] = useState(null);
   const [actionBusy, setActionBusy] = useState(false);
+  const [grantExpiresAt, setGrantExpiresAt] = useState('');
+  const [blockReason, setBlockReason] = useState('');
+  const [blockUntil, setBlockUntil] = useState('');
   const [txSearch, setTxSearch] = useState('');
   const [txStatusFilter, setTxStatusFilter] = useState('all');
   const [txSortKey, setTxSortKey] = useState('started_at');
@@ -97,14 +100,15 @@ export default function AdminUserDetail() {
     }
   };
 
-  const handleTierChange = async () => {
-    if (!user) return;
-    const nextTier = user.subscription_tier === 'premium' ? 'free' : 'premium';
+  const handleGrantPremium = async () => {
     try {
       const response = await fetch(`${API_URL}/api/admin/users/${userId}/tier`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tier: nextTier }),
+        body: JSON.stringify({
+          tier: 'premium',
+          expires_at: grantExpiresAt ? new Date(grantExpiresAt).toISOString() : null,
+        }),
       });
       if (response.status === 401) {
         localStorage.removeItem('adminToken');
@@ -118,6 +122,73 @@ export default function AdminUserDetail() {
       loadUser();
     } catch (error) {
       setMessage('Failed to update subscription.');
+    }
+  };
+
+  const handleRevokeComp = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/admin/users/${userId}/premium-comp-revoke`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      if (!response.ok) {
+        setMessage('Failed to revoke comp.');
+        return;
+      }
+      loadUser();
+    } catch (error) {
+      setMessage('Failed to revoke comp.');
+    }
+  };
+
+  const handleBlockPremium = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/admin/users/${userId}/premium-block`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reason: blockReason || null,
+          until: blockUntil ? new Date(blockUntil).toISOString() : null,
+        }),
+      });
+      if (response.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      if (!response.ok) {
+        setMessage('Failed to block premium access.');
+        return;
+      }
+      loadUser();
+    } catch (error) {
+      setMessage('Failed to block premium access.');
+    }
+  };
+
+  const handleUnblockPremium = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/admin/users/${userId}/premium-unblock`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      if (!response.ok) {
+        setMessage('Failed to unblock premium access.');
+        return;
+      }
+      loadUser();
+    } catch (error) {
+      setMessage('Failed to unblock premium access.');
     }
   };
 
@@ -197,18 +268,48 @@ export default function AdminUserDetail() {
   }
 
   const requestAction = (type) => {
+    if (type === 'grant_premium') {
+      setGrantExpiresAt('');
+    }
+    if (type === 'block_premium') {
+      setBlockReason('');
+      setBlockUntil('');
+    }
     setPendingAction({ type });
   };
 
   const getConfirmContent = (action) => {
     if (!action || !user) return null;
-    if (action.type === 'tier') {
-      const nextTier = user.subscription_tier === 'premium' ? 'free' : 'premium';
+    if (action.type === 'grant_premium') {
       return {
-        title: 'Change plan',
-        message: `Change ${user.email} to ${nextTier}?`,
-        confirmLabel: `Switch to ${nextTier}`,
+        title: 'Grant Premium (manual comp)',
+        message: `Grant Premium access for ${user.email}. Optional: set an expiry date/time.`,
+        confirmLabel: 'Grant Premium',
         tone: 'primary',
+      };
+    }
+    if (action.type === 'revoke_comp') {
+      return {
+        title: 'Revoke Premium comp',
+        message: `Remove any active admin Premium comps for ${user.email}.`,
+        confirmLabel: 'Revoke comp',
+        tone: 'danger',
+      };
+    }
+    if (action.type === 'block_premium') {
+      return {
+        title: 'Block Premium access',
+        message: `Block Premium features for ${user.email}. Use this only for fraud/abuse (billing may still be active).`,
+        confirmLabel: 'Block Premium',
+        tone: 'danger',
+      };
+    }
+    if (action.type === 'unblock_premium') {
+      return {
+        title: 'Unblock Premium access',
+        message: `Restore Premium access for ${user.email}.`,
+        confirmLabel: 'Unblock Premium',
+        tone: 'secondary',
       };
     }
     if (action.type === 'suspend') {
@@ -238,8 +339,14 @@ export default function AdminUserDetail() {
   const confirmAction = async () => {
     if (!pendingAction) return;
     setActionBusy(true);
-    if (pendingAction.type === 'tier') {
-      await handleTierChange();
+    if (pendingAction.type === 'grant_premium') {
+      await handleGrantPremium();
+    } else if (pendingAction.type === 'revoke_comp') {
+      await handleRevokeComp();
+    } else if (pendingAction.type === 'block_premium') {
+      await handleBlockPremium();
+    } else if (pendingAction.type === 'unblock_premium') {
+      await handleUnblockPremium();
     } else if (pendingAction.type === 'suspend') {
       await handleSuspend();
     } else if (pendingAction.type === 'unsuspend') {
@@ -289,6 +396,8 @@ export default function AdminUserDetail() {
   const txTotalPages = Math.max(1, Math.ceil(filteredTransactions.length / TX_PAGE_SIZE));
   const txStart = (txPage - 1) * TX_PAGE_SIZE;
   const txPageItems = filteredTransactions.slice(txStart, txStart + TX_PAGE_SIZE);
+  const billing = user.billing || null;
+  const adminComp = user.admin_comp || null;
 
   return (
     <div className="admin-card">
@@ -296,9 +405,23 @@ export default function AdminUserDetail() {
         <button className="admin-button secondary" type="button" onClick={() => router.push('/admin/users')}>
           Back to Users
         </button>
-        <button className="admin-button" type="button" onClick={() => requestAction('tier')}>
-          {user.subscription_tier === 'premium' ? 'Downgrade' : 'Upgrade'}
+        <button className="admin-button" type="button" onClick={() => requestAction('grant_premium')}>
+          Grant Premium
         </button>
+        {adminComp?.status === 'active' ? (
+          <button className="admin-button danger" type="button" onClick={() => requestAction('revoke_comp')}>
+            Revoke comp
+          </button>
+        ) : null}
+        {user.premium_access_blocked ? (
+          <button className="admin-button secondary" type="button" onClick={() => requestAction('unblock_premium')}>
+            Unblock Premium
+          </button>
+        ) : (
+          <button className="admin-button danger" type="button" onClick={() => requestAction('block_premium')}>
+            Block Premium
+          </button>
+        )}
         {user.suspended_at ? (
           <button className="admin-button secondary" type="button" onClick={() => requestAction('unsuspend')}>
             Unsuspend
@@ -367,11 +490,49 @@ export default function AdminUserDetail() {
               Plan: <strong>{user.subscription_tier}</strong>
             </p>
             <p className="admin-subtitle">
+              Source: <strong>{user.tier_source || '--'}</strong>
+            </p>
+            <p className="admin-subtitle">
               Status: <strong>{user.status}</strong>
             </p>
             <p className="admin-subtitle">
               Expires: <strong>{user.expires_at ? new Date(user.expires_at).toLocaleDateString() : '--'}</strong>
             </p>
+            <p className="admin-subtitle">
+              Billing store:{' '}
+              <strong>{billing?.store || '--'}</strong>
+            </p>
+            <p className="admin-subtitle">
+              Billing status:{' '}
+              <strong>{billing?.status || '--'}</strong>
+            </p>
+            <p className="admin-subtitle">
+              Billing last event:{' '}
+              <strong>{billing?.started_at ? new Date(billing.started_at).toLocaleString() : '--'}</strong>
+            </p>
+            <p className="admin-subtitle">
+              Billing expires:{' '}
+              <strong>{billing?.expires_at ? new Date(billing.expires_at).toLocaleString() : '--'}</strong>
+            </p>
+            <p className="admin-subtitle">
+              Admin comp expires:{' '}
+              <strong>{adminComp?.expires_at ? new Date(adminComp.expires_at).toLocaleString() : '--'}</strong>
+            </p>
+            <p className="admin-subtitle">
+              Premium blocked:{' '}
+              <strong>
+                {user.premium_access_blocked
+                  ? user.premium_access_blocked_until
+                    ? `Yes (until ${new Date(user.premium_access_blocked_until).toLocaleString()})`
+                    : 'Yes'
+                  : 'No'}
+              </strong>
+            </p>
+            {user.premium_access_blocked_reason ? (
+              <p className="admin-subtitle">
+                Block reason: <strong>{user.premium_access_blocked_reason}</strong>
+              </p>
+            ) : null}
             <p className="admin-subtitle">
               Suspended: <strong>{user.suspended_at ? new Date(user.suspended_at).toLocaleString() : "No"}</strong>
             </p>
@@ -474,6 +635,39 @@ export default function AdminUserDetail() {
           <div className="admin-modal" role="dialog" aria-modal="true">
             <h3>{confirmContent.title}</h3>
             <p>{confirmContent.message}</p>
+            {pendingAction.type === 'grant_premium' ? (
+              <div className="admin-field" style={{ marginTop: 12 }}>
+                <label>Expiry (optional)</label>
+                <input
+                  type="datetime-local"
+                  value={grantExpiresAt}
+                  onChange={(event) => setGrantExpiresAt(event.target.value)}
+                />
+                <p className="admin-help">Leave blank for no expiry. Times use your local timezone.</p>
+              </div>
+            ) : null}
+            {pendingAction.type === 'block_premium' ? (
+              <div style={{ marginTop: 12 }}>
+                <div className="admin-field">
+                  <label>Reason (optional)</label>
+                  <input
+                    type="text"
+                    value={blockReason}
+                    onChange={(event) => setBlockReason(event.target.value)}
+                    placeholder="e.g. chargeback / abuse / fraud"
+                  />
+                </div>
+                <div className="admin-field">
+                  <label>Block until (optional)</label>
+                  <input
+                    type="datetime-local"
+                    value={blockUntil}
+                    onChange={(event) => setBlockUntil(event.target.value)}
+                  />
+                  <p className="admin-help">Leave blank for indefinite block.</p>
+                </div>
+              </div>
+            ) : null}
             <div className="admin-actions">
               <button
                 className="admin-button secondary"

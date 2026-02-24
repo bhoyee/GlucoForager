@@ -9,6 +9,7 @@ from ..core.security import decode_access_token
 from ..database import get_db
 from ..models.ai_request import AIRequest
 from ..models.user import SearchLog, User
+from ..services.subscription_service import get_effective_subscription_tier
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 
@@ -37,10 +38,11 @@ def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_
 
 
 def check_user_access(user: User, db: Session, device_id: str | None = None) -> dict:
-    tier_cfg = TIER_CONFIG.get(user.subscription_tier, TIER_CONFIG["free"])
+    effective_tier = get_effective_subscription_tier(db, user)
+    tier_cfg = TIER_CONFIG.get(effective_tier, TIER_CONFIG["free"])
 
     # Premium: unlimited scans
-    if user.subscription_tier == "premium":
+    if effective_tier == "premium":
         return {
             "allowed": True,
             "searches_left": "unlimited",

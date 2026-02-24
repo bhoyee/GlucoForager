@@ -6,6 +6,7 @@ from ...database import get_db
 from ...models.subscription import Subscription
 from ...models.user import User
 from ...services.stripe_handler import StripeHandler
+from ...services.subscription_service import get_effective_subscription_tier
 
 router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
 stripe_handler = StripeHandler()
@@ -22,8 +23,9 @@ def get_my_subscription(
         .order_by(Subscription.started_at.desc())
         .first()
     )
-    plan = latest.plan if latest else current_user.subscription_tier
-    status = latest.status if latest else "active" if current_user.subscription_tier == "premium" else "inactive"
+    effective_tier = get_effective_subscription_tier(db, current_user)
+    plan = latest.plan if latest else effective_tier
+    status = latest.status if latest else "active" if effective_tier == "premium" else "inactive"
     return {"plan": plan, "status": status}
 
 
