@@ -19,6 +19,12 @@ export default function AdminDashboard() {
     totalRecipes: 0,
     totalBlogPosts: 0,
   });
+  const [sales, setSales] = useState({
+    available: false,
+    currency: 'USD',
+    metrics: {},
+    message: '',
+  });
   const token = typeof window !== 'undefined' ? localStorage.getItem('adminToken') : null;
 
   const fetchCount = useCallback(
@@ -59,6 +65,26 @@ export default function AdminDashboard() {
     return Number.isFinite(data?.total) ? data.total : 0;
   }, [router, token]);
 
+  const fetchSales = useCallback(async () => {
+    const response = await fetch(`${API_URL}/api/admin/revenuecat/overview`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (response.status === 401) {
+      localStorage.removeItem('adminToken');
+      router.push('/admin');
+      return null;
+    }
+    const data = await response.json().catch(() => ({}));
+    return data && typeof data === 'object'
+      ? {
+          available: Boolean(data.available),
+          currency: data.currency || 'USD',
+          metrics: data.metrics && typeof data.metrics === 'object' ? data.metrics : {},
+          message: data.message || '',
+        }
+      : { available: false, currency: 'USD', metrics: {}, message: '' };
+  }, [router, token]);
+
   const loadStats = useCallback(async () => {
     if (!token) {
       router.push('/admin');
@@ -73,6 +99,7 @@ export default function AdminDashboard() {
         expiredPremiumUsers,
         totalRecipes,
         totalBlogPosts,
+        salesData,
       ] = await Promise.all([
         fetchCount(),
         fetchCount('free'),
@@ -93,6 +120,7 @@ export default function AdminDashboard() {
           })
           .catch(() => 0),
         fetchBlogPostCount().catch(() => 0),
+        fetchSales().catch(() => ({ available: false, currency: 'USD', metrics: {}, message: '' })),
       ]);
       if (
         totalUsers === null
@@ -102,6 +130,7 @@ export default function AdminDashboard() {
         || expiredPremiumUsers === null
         || totalRecipes === null
         || totalBlogPosts === null
+        || salesData === null
       ) {
         return;
       }
@@ -114,6 +143,7 @@ export default function AdminDashboard() {
         totalRecipes,
         totalBlogPosts,
       });
+      setSales(salesData);
     } catch (error) {
       setStats({
         totalUsers: 0,
@@ -124,8 +154,23 @@ export default function AdminDashboard() {
         totalRecipes: 0,
         totalBlogPosts: 0,
       });
+      setSales({ available: false, currency: 'USD', metrics: {}, message: '' });
     }
-  }, [fetchBlogPostCount, fetchCount, router, token]);
+  }, [fetchBlogPostCount, fetchCount, fetchSales, router, token]);
+
+  const formatMoney = useCallback((value, currency) => {
+    const numeric = typeof value === 'number' ? value : Number(value);
+    if (!Number.isFinite(numeric)) return '—';
+    try {
+      return new Intl.NumberFormat(undefined, {
+        style: 'currency',
+        currency: currency || 'USD',
+        maximumFractionDigits: 2,
+      }).format(numeric);
+    } catch (error) {
+      return `${numeric}`;
+    }
+  }, []);
 
   useEffect(() => {
     loadStats();
@@ -181,6 +226,31 @@ export default function AdminDashboard() {
           <Link className="admin-link" href="/admin/users">
             Manage users
           </Link>
+        </div>
+        <div className="admin-card">
+          <h3>Sales</h3>
+          <p className="admin-subtitle">Live RevenueCat overview metrics.</p>
+          <div className="admin-inline admin-subcards" style={{ marginTop: 0 }}>
+            <div className="admin-subcard">
+              <span>This month</span>
+              <strong>{sales.available ? formatMoney(sales.metrics?.revenue, sales.currency) : '—'}</strong>
+            </div>
+            <div className="admin-subcard">
+              <span>Total sales</span>
+              <strong>{sales.available ? formatMoney(sales.metrics?.revenue_total, sales.currency) : '—'}</strong>
+            </div>
+          </div>
+          {!sales.available && (
+            <p className="admin-help" style={{ marginTop: 10 }}>
+              {sales.message || 'RevenueCat metrics not configured.'}
+            </p>
+          )}
+          {sales.available && (
+            <p className="admin-help" style={{ marginTop: 10 }}>
+              Note: RevenueCat “overview” revenue is typically the last 28 days (not calendar-month). All-time totals
+              may require data export.
+            </p>
+          )}
         </div>
       </div>
     </div>

@@ -378,6 +378,56 @@
   background: #e53935;
 }
 
+.admin-icon-button {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid #e5eee9;
+  background: #ffffff;
+  color: #2f4f3f;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 150ms ease, border-color 150ms ease, transform 120ms ease;
+}
+
+.admin-icon-button:hover {
+  background: #f3faf6;
+  border-color: #cfe0d8;
+}
+
+.admin-icon-button:active {
+  transform: translateY(1px);
+}
+
+.admin-icon-button:focus-visible {
+  outline: 2px solid rgba(46, 125, 50, 0.35);
+  outline-offset: 2px;
+}
+
+.admin-icon-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.admin-icon-button.danger {
+  background: rgba(229, 57, 53, 0.1);
+  border-color: rgba(229, 57, 53, 0.25);
+  color: #b71c1c;
+}
+
+.admin-icon-button.danger:hover {
+  background: rgba(229, 57, 53, 0.16);
+  border-color: rgba(229, 57, 53, 0.35);
+}
+
+.admin-icon-button.danger:focus-visible {
+  outline: 2px solid rgba(229, 57, 53, 0.35);
+  outline-offset: 2px;
+}
+
 .admin-table {
   width: 100%;
   border-collapse: collapse;
@@ -739,6 +789,47 @@
   flex-direction: column;
   gap: 4px;
   min-width: 150px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 10px 22px rgba(18, 47, 34, 0.06);
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+}
+
+.admin-subcard::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: linear-gradient(180deg, #2e7d32, #0fb7a5);
+  opacity: 0.9;
+}
+
+.admin-subcard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 34px rgba(18, 47, 34, 0.1);
+  border-color: #cfe0d8;
+}
+
+.admin-subcard:active {
+  transform: translateY(-1px);
+}
+
+.admin-subcard--breakfast::before {
+  background: linear-gradient(180deg, #f59e0b, #f97316);
+}
+
+.admin-subcard--lunch::before {
+  background: linear-gradient(180deg, #0fb7a5, #10b981);
+}
+
+.admin-subcard--dinner::before {
+  background: linear-gradient(180deg, #2e7d32, #0fb7a5);
+}
+
+.admin-subcard--snack::before {
+  background: linear-gradient(180deg, #6366f1, #0ea5e9);
 }
 
 .admin-subcard span {

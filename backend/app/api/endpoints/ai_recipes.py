@@ -14,6 +14,7 @@ from ...services.ai_pipeline import AIPipeline, IngredientValidationError
 from ...services.ai_recipe_generator import AIRecipeGenerator
 from ...services.cache_service import CacheService
 from ...services.cost_tracker import record_ai_request
+from ...services.subscription_service import get_effective_subscription_tier
 
 router = APIRouter(prefix="/ai/recipes", tags=["ai"])
 pipeline = AIPipeline()
@@ -85,12 +86,13 @@ def _run_vision_job(job_id: str) -> None:
             db.commit()
             return
 
+        tier = get_effective_subscription_tier(db, user) or "free"
         try:
             if mode == "batch":
                 result = pipeline.fridge_to_recipes_batch(
                     db,
                     user.id,
-                    user.subscription_tier or "free",
+                    tier,
                     images_base64,
                     filters=filters,
                     device_id=device_id,
@@ -100,7 +102,7 @@ def _run_vision_job(job_id: str) -> None:
                 result = pipeline.fridge_to_recipes(
                     db,
                     user.id,
-                    user.subscription_tier or "free",
+                    tier,
                     image_b64,
                     filters=filters,
                     device_id=device_id,
@@ -157,7 +159,7 @@ def generate_from_vision(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Daily limit reached. Scans left: {access['searches_left']}",
         )
-    tier = current_user.subscription_tier or "free"
+    tier = get_effective_subscription_tier(db, current_user) or "free"
     cache_key = _vision_cache_key(
         current_user.id, tier, _image_fingerprint(payload.image_base64), payload.filters or []
     )
@@ -241,7 +243,7 @@ def generate_from_vision_batch(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Daily limit reached. Scans left: {access['searches_left']}",
         )
-    tier = current_user.subscription_tier or "free"
+    tier = get_effective_subscription_tier(db, current_user) or "free"
     cache_key = _vision_cache_key(
         current_user.id, tier, _batch_fingerprint(payload.images_base64), payload.filters or []
     )
@@ -413,7 +415,7 @@ def generate_recipe_image(
     payload: RecipeImageRequest,
     current_user: User = Depends(get_current_user),
 ):
-    tier = current_user.subscription_tier or "free"
+    tier = get_effective_subscription_tier(db, current_user) or "free"
     recipe_payload = {
         "title": payload.title or "Diabetes-friendly meal",
         "description": payload.description or "",
