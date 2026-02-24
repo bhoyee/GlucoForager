@@ -249,10 +249,12 @@ def list_users(
 
     now = datetime.utcnow()
     billing_active = and_(
+        billing_sub_join.c.status.is_not(None),
         billing_sub_join.c.status == "active",
         or_(billing_sub_join.c.expires_at.is_(None), billing_sub_join.c.expires_at > now),
     )
     comp_active = and_(
+        comp_sub_join.c.status.is_not(None),
         comp_sub_join.c.status == "active",
         or_(comp_sub_join.c.expires_at.is_(None), comp_sub_join.c.expires_at > now),
     )
