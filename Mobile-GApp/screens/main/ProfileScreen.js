@@ -20,6 +20,7 @@ export default function ProfileScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const headerPaddingTop = Math.max(insets.top, 16);
   const contentBottomPadding = Math.max(insets.bottom + 4, 4);
+  const premiumModalBottomPadding = Math.max(insets.bottom, 14) + 14;
   const appStoreUrl = 'itms-apps://itunes.apple.com/app/id0000000000';
   const playStoreUrl = 'market://details?id=com.glucoforager.app';
   const shareUrl = 'https://glucoforager.com/app';
@@ -376,7 +377,7 @@ export default function ProfileScreen() {
         onRequestClose={() => setPremiumModalVisible(false)}
       >
         <View style={styles.premiumModalBackdrop}>
-          <View style={styles.premiumModalCard}>
+          <View style={[styles.premiumModalCard, { paddingBottom: premiumModalBottomPadding }]}>
             <View style={styles.premiumModalHeader}>
               <Text style={styles.premiumModalTitle}>GlucoForager Premium</Text>
               <Pressable onPress={() => setPremiumModalVisible(false)} accessibilityLabel="Close">
