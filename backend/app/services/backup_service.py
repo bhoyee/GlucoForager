@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import json
 import shutil
 import subprocess
 import tempfile
@@ -26,6 +27,10 @@ class BackupFile:
     created_at: datetime
 
 
+class BackupError(RuntimeError):
+    pass
+
+
 def backup_dir() -> Path:
     directory = os.getenv("BACKUP_DIR", "backups")
     path = Path(directory)
@@ -35,6 +40,34 @@ def backup_dir() -> Path:
 
 def _lock_path() -> Path:
     return backup_dir() / ".backup.lock"
+
+
+def _status_path() -> Path:
+    return backup_dir() / ".backup.status.json"
+
+
+def read_backup_status() -> dict | None:
+    path = _status_path()
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def write_backup_status(payload: dict) -> None:
+    directory = backup_dir()
+    path = _status_path()
+    tmp_path = directory / f"{path.name}.tmp"
+    try:
+        tmp_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        tmp_path.replace(path)
+    except OSError:
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def acquire_lock(ttl_seconds: int = 60 * 60) -> bool:
@@ -63,6 +96,30 @@ def release_lock() -> None:
         return
 
 
+def pg_dump_executable() -> str:
+    configured = (os.getenv("PG_DUMP_PATH") or "").strip()
+    if configured:
+        if Path(configured).exists():
+            return configured
+        resolved_config = shutil.which(configured)
+        if resolved_config:
+            return resolved_config
+        raise BackupError(
+            f"PG_DUMP_PATH is set but was not found: {configured}. "
+            "Point it to the pg_dump executable (PostgreSQL client tools)."
+        )
+
+    resolved = shutil.which("pg_dump")
+    if resolved:
+        return resolved
+
+    raise BackupError(
+        "pg_dump was not found on this server. "
+        "Install PostgreSQL client tools and ensure pg_dump is on PATH, "
+        "or set PG_DUMP_PATH to the full path of the pg_dump executable."
+    )
+
+
 def _pg_dump_args(output_path: Path) -> tuple[list[str], dict]:
     url = make_url(settings.database_url)
 
@@ -77,7 +134,7 @@ def _pg_dump_args(output_path: Path) -> tuple[list[str], dict]:
         env["PGPASSWORD"] = password
 
     args = [
-        "pg_dump",
+        pg_dump_executable(),
         "--format=custom",
         "--no-owner",
         "--no-privileges",
@@ -167,4 +224,3 @@ def prune_old_backups(retention_days: int | None = None) -> dict:
             except OSError:
                 continue
     return {"retention_days": retention_days, "deleted": deleted}
-
