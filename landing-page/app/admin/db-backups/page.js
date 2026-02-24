@@ -107,8 +107,22 @@ export default function AdminDbBackupsPage() {
         setMessage('A backup is already running. Please wait and refresh.');
         return;
       }
-      if (!response.ok) throw new Error('Failed to start backup');
-      setMessage('Backup started. Refresh in a minute to see the new file.');
+      if (!response.ok) {
+        let detail = 'Failed to start backup.';
+        try {
+          const payload = await response.json();
+          if (payload?.detail) detail = String(payload.detail);
+        } catch (error) {
+          // ignore
+        }
+        setMessage(detail);
+        return;
+      }
+
+      setMessage('Backup started. This may take a minute. Refreshing...');
+      setTimeout(() => {
+        loadBackups();
+      }, 2500);
     } catch (error) {
       setMessage('Failed to start backup.');
     } finally {
@@ -157,6 +171,15 @@ export default function AdminDbBackupsPage() {
   const slice = sorted.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const latest = data?.latest || null;
+  const lastStatus = data?.status || null;
+  const statusLabel =
+    lastStatus?.state === 'success'
+      ? 'OK'
+      : lastStatus?.state === 'error'
+        ? 'Error'
+        : lastStatus?.state === 'running'
+          ? 'Running'
+          : '--';
 
   return (
     <div className="admin-card">
@@ -174,15 +197,20 @@ export default function AdminDbBackupsPage() {
             Refresh
           </button>
           <button type="button" className="admin-button" onClick={handleRunBackup} disabled={isRunningBackup}>
-            {isRunningBackup ? 'Running…' : 'Run backup now'}
+            {isRunningBackup ? 'Running...' : 'Run backup now'}
           </button>
         </div>
       </div>
 
       {message ? <p className="admin-subtitle" style={{ marginTop: 12 }}>{message}</p> : null}
+      {lastStatus?.state === 'error' && lastStatus?.error ? (
+        <p className="admin-subtitle" style={{ marginTop: 8, color: '#b91c1c' }}>
+          Last backup error: {String(lastStatus.error)}
+        </p>
+      ) : null}
 
       {isLoading ? (
-        <p>Loading backups…</p>
+        <p>Loading backups...</p>
       ) : (
         <>
           <div className="admin-health-meta" style={{ marginTop: 16 }}>
@@ -197,6 +225,10 @@ export default function AdminDbBackupsPage() {
               <span className="admin-health-meta-value">{data?.total ?? 0}</span>
             </span>
             <span className="admin-health-meta-item">
+              <span className="admin-health-meta-label">Last run</span>
+              <span className="admin-health-meta-value">{statusLabel}</span>
+            </span>
+            <span className="admin-health-meta-item">
               <span className="admin-health-meta-label">Retention</span>
               <span className="admin-health-meta-value">
                 {data?.prune?.retention_days ?? 7} days (auto-delete old backups)
@@ -207,7 +239,7 @@ export default function AdminDbBackupsPage() {
           <div className="admin-toolbar" style={{ marginTop: 10 }}>
             <input
               className="admin-input"
-              placeholder="Search by filename…"
+              placeholder="Search by filename..."
               value={search}
               onChange={(event) => {
                 setSearch(event.target.value);
@@ -262,7 +294,7 @@ export default function AdminDbBackupsPage() {
                             onClick={() => setConfirmDelete(item.filename)}
                             disabled={busyFilename === item.filename}
                           >
-                            {busyFilename === item.filename ? 'Deleting…' : 'Delete'}
+                            {busyFilename === item.filename ? 'Deleting...' : 'Delete'}
                           </button>
                         </div>
                       </td>
@@ -316,7 +348,7 @@ export default function AdminDbBackupsPage() {
                 onClick={() => handleDelete(confirmDelete)}
                 disabled={busyFilename === confirmDelete}
               >
-                {busyFilename === confirmDelete ? 'Deleting…' : 'Delete'}
+                {busyFilename === confirmDelete ? 'Deleting...' : 'Delete'}
               </button>
             </div>
           </div>
@@ -325,4 +357,3 @@ export default function AdminDbBackupsPage() {
     </div>
   );
 }
-
