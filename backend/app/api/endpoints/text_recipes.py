@@ -105,6 +105,13 @@ def _run_text_job(job_id: str) -> None:
         if not classified["food"]:
             job.status = "failed"
             job.error = "Content not related to food. Please enter real ingredients."
+            job.result = {
+                "error": {
+                    "type": "invalid_input",
+                    "code": "not_food",
+                    "message": job.error,
+                }
+            }
             db.commit()
             return
 
@@ -137,6 +144,13 @@ def _run_text_job(job_id: str) -> None:
         if "job" in locals() and job:
             job.status = "failed"
             job.error = str(exc)
+            job.result = {
+                "error": {
+                    "type": "operational",
+                    "code": "exception",
+                    "message": str(exc),
+                }
+            }
             db.commit()
     finally:
         db.close()
