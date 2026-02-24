@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 const PAGE_SIZE = 8;
+const REFRESH_MS = 20000;
 
 export default function AdminRecipesList() {
   const router = useRouter();
@@ -52,6 +53,14 @@ export default function AdminRecipesList() {
     }
   };
 
+  useEffect(() => {
+    if (!token) return undefined;
+    const timer = setInterval(() => {
+      loadRecipes();
+    }, REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [token]);
+
   const handleDelete = async (recipeId) => {
     try {
       const response = await fetch(`${API_URL}/api/admin/recipes/${recipeId}`, {
@@ -82,6 +91,24 @@ export default function AdminRecipesList() {
     setPendingAction(null);
   };
 
+  const mealCounts = useMemo(() => {
+    const counts = {
+      breakfast: 0,
+      lunch: 0,
+      dinner: 0,
+      snack: 0,
+      total: 0,
+    };
+    for (const recipe of recipes) {
+      counts.total += 1;
+      const key = String(recipe?.meal_type || '').toLowerCase();
+      if (Object.prototype.hasOwnProperty.call(counts, key)) {
+        counts[key] += 1;
+      }
+    }
+    return counts;
+  }, [recipes]);
+
   const filtered = recipes
     .filter((recipe) => recipe.name.toLowerCase().includes(search.toLowerCase()))
     .filter((recipe) => (mealType === 'all' ? true : recipe.meal_type === mealType))
@@ -100,6 +127,25 @@ export default function AdminRecipesList() {
       <div className="admin-recipes-header">
         <h2 className="admin-title">Recipes</h2>
         <p className="admin-subtitle">Search, filter, and manage your recipes.</p>
+      </div>
+
+      <div className="admin-inline admin-subcards" style={{ marginTop: 0 }}>
+        <div className="admin-subcard admin-subcard--breakfast">
+          <span>Breakfast</span>
+          <strong>{mealCounts.breakfast}</strong>
+        </div>
+        <div className="admin-subcard admin-subcard--lunch">
+          <span>Lunch</span>
+          <strong>{mealCounts.lunch}</strong>
+        </div>
+        <div className="admin-subcard admin-subcard--dinner">
+          <span>Dinner</span>
+          <strong>{mealCounts.dinner}</strong>
+        </div>
+        <div className="admin-subcard admin-subcard--snack">
+          <span>Snack</span>
+          <strong>{mealCounts.snack}</strong>
+        </div>
       </div>
 
       {message && (
