@@ -91,7 +91,7 @@ export default function PremiumDetailsScreen() {
 
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Price (per month)</Text>
-          <Text style={styles.infoValue}>
+          <Text style={[styles.infoValue, !priceLine && styles.infoValuePlaceholder]}>
             {priceLine
               ? `${priceLine} / month`
               : Platform.OS === 'ios'
@@ -220,6 +220,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.text,
     fontWeight: '800',
+  },
+  infoValuePlaceholder: {
+    fontSize: 12,
+    color: Colors.textLight,
+    fontWeight: '700',
   },
   legal: {
     marginTop: 10,

@@ -388,7 +388,12 @@ export default function ProfileScreen() {
 
             <View style={styles.premiumInfoRow}>
               <Text style={styles.premiumInfoLabel}>Price (per month)</Text>
-              <Text style={styles.premiumInfoValue}>
+              <Text
+                style={[
+                  styles.premiumInfoValue,
+                  !premiumPriceLine && styles.premiumInfoValuePlaceholder,
+                ]}
+              >
                 {premiumPriceLine
                   ? `${premiumPriceLine} per month`
                   : Platform.OS === 'ios'
@@ -758,6 +763,11 @@ const styles = StyleSheet.create({
   premiumInfoValue: {
     fontSize: 14,
     color: Colors.text,
+    fontWeight: '700',
+  },
+  premiumInfoValuePlaceholder: {
+    fontSize: 12,
+    color: Colors.textLight,
     fontWeight: '700',
   },
   premiumMetaText: {
