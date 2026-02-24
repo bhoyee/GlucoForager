@@ -12,12 +12,17 @@ from ...models.recipe_history import RecipeHistory
 from ...models.subscription import Subscription
 from ...models.user import SearchLog, User
 from ..dependencies import check_user_access, get_current_user
+from ...services.subscription_service import get_effective_subscription_tier
 
 router = APIRouter(prefix="/user", tags=["user"])
 
 
 @router.get("/profile")
-def profile(current_user: User = Depends(get_current_user)):
+def profile(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    effective_tier = get_effective_subscription_tier(db, current_user)
     return {
         "id": current_user.id,
         "public_id": current_user.public_id,
@@ -25,7 +30,10 @@ def profile(current_user: User = Depends(get_current_user)):
         "full_name": current_user.full_name,
         "gender": current_user.gender,
         "country": current_user.country,
-        "subscription_tier": current_user.subscription_tier,
+        "subscription_tier": effective_tier,
+        "is_premium": effective_tier == "premium",
+        "premium_access_blocked": bool(getattr(current_user, "premium_access_blocked_at", None)),
+        "premium_access_blocked_until": getattr(current_user, "premium_access_blocked_until", None),
     }
 
 
@@ -72,6 +80,7 @@ def update_profile(
     db.add(current_user)
     db.commit()
     db.refresh(current_user)
+    effective_tier = get_effective_subscription_tier(db, current_user)
     return {
         "id": current_user.id,
         "public_id": current_user.public_id,
@@ -79,7 +88,10 @@ def update_profile(
         "full_name": current_user.full_name,
         "gender": current_user.gender,
         "country": current_user.country,
-        "subscription_tier": current_user.subscription_tier,
+        "subscription_tier": effective_tier,
+        "is_premium": effective_tier == "premium",
+        "premium_access_blocked": bool(getattr(current_user, "premium_access_blocked_at", None)),
+        "premium_access_blocked_until": getattr(current_user, "premium_access_blocked_until", None),
     }
 
 
@@ -107,6 +119,7 @@ def scans_today(
         .count()
     )
     access = check_user_access(current_user, db, device_id)
+    effective_tier = get_effective_subscription_tier(db, current_user)
     response = {
         "ai_scans": ai_count,
         "text_searches": text_count,
@@ -114,8 +127,10 @@ def scans_today(
         "searches_left": access["searches_left"],
         "device_searches_left": access.get("device_searches_left"),
         "daily_limit": access.get("daily_limit"),
-        "subscription_tier": current_user.subscription_tier or "free",
-        "is_premium": current_user.subscription_tier == "premium",
+        "subscription_tier": effective_tier or "free",
+        "is_premium": effective_tier == "premium",
+        "premium_access_blocked": bool(getattr(current_user, "premium_access_blocked_at", None)),
+        "premium_access_blocked_until": getattr(current_user, "premium_access_blocked_until", None),
     }
     if device_id:
         device_ai = (

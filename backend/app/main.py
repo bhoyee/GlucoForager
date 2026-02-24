@@ -17,6 +17,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from .api.endpoints import (
     auth,
     admin,
+    admin_revenuecat,
     ingredients,
     recipes,
     subscriptions,
@@ -111,6 +112,26 @@ def _client_ip(request: Request) -> str:
     return (request.client.host if request.client else "unknown")[:64]
 
 
+def _skip_rate_limit(request: Request) -> bool:
+    # Avoid counting CORS preflight and internal/admin polling requests.
+    if request.method == "OPTIONS":
+        return True
+
+    path = request.url.path or ""
+    if path.startswith("/api/admin"):
+        return True
+
+    # RevenueCat webhook should not be throttled by per-IP limits.
+    if path.startswith("/api/revenuecat/webhook"):
+        return True
+
+    # Health checks.
+    if path in {"/health", "/"}:
+        return True
+
+    return False
+
+
 @app.on_event("startup")
 def on_startup():
     logger.info("Startup complete.")
@@ -122,6 +143,8 @@ def on_startup():
 
 @app.middleware("http")
 async def abuse_guard(request: Request, call_next):
+    if _skip_rate_limit(request):
+        return await call_next(request)
     identifier = _client_ip(request)
     if not abuse_detector.record_and_check(identifier):
         return JSONResponse(status_code=429, content={"detail": "Slow down"})
@@ -221,6 +244,7 @@ except Exception as exc:  # noqa: BLE001
 
 app.include_router(auth.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
+app.include_router(admin_revenuecat.router, prefix="/api")
 app.include_router(ingredients.router, prefix="/api")
 app.include_router(recipes.router, prefix="/api")
 app.include_router(subscriptions.router, prefix="/api")

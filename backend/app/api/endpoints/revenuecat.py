@@ -9,6 +9,7 @@ from ...database import get_db
 from ...models.subscription import Subscription
 from ...models.user import User
 from ...services.email_service import send_premium_activated_email
+from ...services.subscription_service import refresh_user_tier
 
 router = APIRouter(prefix="/revenuecat", tags=["revenuecat"])
 logger = logging.getLogger("glucoforager.revenuecat")
@@ -103,38 +104,37 @@ async def revenuecat_webhook(
         plan = "free"
         status_value = "inactive"
 
-    user.subscription_tier = plan
+    sub_query = db.query(Subscription).filter(Subscription.user_id == user.id)
+    if store:
+        sub_query = sub_query.filter(Subscription.store == store)
+    if original_transaction_id:
+        sub_query = sub_query.filter(Subscription.original_transaction_id == original_transaction_id)
+    elif transaction_id:
+        sub_query = sub_query.filter(Subscription.transaction_id == transaction_id)
 
-    latest = (
-        db.query(Subscription)
-        .filter(Subscription.user_id == user.id)
-        .order_by(Subscription.started_at.desc())
-        .first()
-    )
-    if not latest:
-        latest = Subscription(
+    subscription = sub_query.order_by(Subscription.started_at.desc()).first()
+    if not subscription:
+        subscription = Subscription(
             user_id=user.id,
-            plan=plan,
-            status=status_value,
-            expires_at=expiry,
+            started_at=datetime.utcnow(),
             transaction_id=transaction_id,
             original_transaction_id=original_transaction_id,
             product_id=product_id,
             store=store,
             environment=environment,
         )
-    else:
-        latest.plan = plan
-        latest.status = status_value
-        latest.expires_at = expiry
-        latest.transaction_id = transaction_id or latest.transaction_id
-        latest.original_transaction_id = original_transaction_id or latest.original_transaction_id
-        latest.product_id = product_id or latest.product_id
-        latest.store = store or latest.store
-        latest.environment = environment or latest.environment
 
-    db.add(latest)
-    db.add(user)
+    subscription.plan = plan
+    subscription.status = status_value
+    subscription.expires_at = expiry
+    subscription.transaction_id = transaction_id or subscription.transaction_id
+    subscription.original_transaction_id = original_transaction_id or subscription.original_transaction_id
+    subscription.product_id = product_id or subscription.product_id
+    subscription.store = store or subscription.store
+    subscription.environment = environment or subscription.environment
+
+    db.add(subscription)
+    refresh_user_tier(db, user)
     db.commit()
 
     if event_type == "INITIAL_PURCHASE":

@@ -144,28 +144,6 @@ export default function AdminUsersPage() {
     }
   };
 
-  const handleTierChange = async (user) => {
-    const nextTier = user.subscription_tier === 'premium' ? 'free' : 'premium';
-    try {
-      const response = await fetch(`${API_URL}/api/admin/users/${user.id}/tier`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tier: nextTier }),
-      });
-      if (response.status === 401) {
-        localStorage.removeItem('adminToken');
-        router.push('/admin');
-        return;
-      }
-      if (!response.ok) throw new Error();
-      loadUsers({ silent: true });
-      return true;
-    } catch (error) {
-      setMessage('Failed to update subscription tier.');
-      return false;
-    }
-  };
-
   const handleDelete = async (user) => {
     try {
       const response = await fetch(`${API_URL}/api/admin/users/${user.id}`, {
@@ -209,15 +187,6 @@ export default function AdminUsersPage() {
         tone: 'secondary',
       };
     }
-    if (type === 'tier') {
-      const nextTier = user.subscription_tier === 'premium' ? 'free' : 'premium';
-      return {
-        title: 'Change plan',
-        message: `Change ${user.email} to ${nextTier}?`,
-        confirmLabel: `Switch to ${nextTier}`,
-        tone: 'primary',
-      };
-    }
     return {
       title: 'Delete user',
       message: `Delete ${user.email} permanently? This cannot be undone.`,
@@ -234,8 +203,6 @@ export default function AdminUsersPage() {
       ok = await handleSuspend(pendingAction.user);
     } else if (pendingAction.type === 'unsuspend') {
       ok = await handleUnsuspend(pendingAction.user);
-    } else if (pendingAction.type === 'tier') {
-      ok = await handleTierChange(pendingAction.user);
     } else if (pendingAction.type === 'delete') {
       ok = await handleDelete(pendingAction.user);
     }
@@ -337,8 +304,15 @@ export default function AdminUsersPage() {
                         </div>
                         <div className="admin-mobile-user-badges">
                           <span className={`admin-badge ${user.subscription_tier === 'premium' ? '' : 'secondary'}`}>
-                            {user.subscription_tier}
+                            <span title={user.tier_source ? `Source: ${user.tier_source}` : ''}>
+                              {user.subscription_tier}
+                            </span>
                           </span>
+                          {user.premium_access_blocked ? (
+                            <span className="admin-badge danger" title={user.premium_access_blocked_reason || 'Premium access blocked'}>
+                              blocked
+                            </span>
+                          ) : null}
                           <span
                             className={`admin-badge ${
                               isSuspended ? 'danger' : user.status === 'active' ? 'success' : 'warning'
@@ -387,13 +361,6 @@ export default function AdminUsersPage() {
                         )}
                         <button
                           type="button"
-                          className="admin-button admin-mobile-action-button"
-                          onClick={() => requestAction('tier', user)}
-                        >
-                          {user.subscription_tier === 'premium' ? 'Downgrade' : 'Upgrade'}
-                        </button>
-                        <button
-                          type="button"
                           className="admin-button danger admin-mobile-action-button"
                           onClick={() => requestAction('delete', user)}
                         >
@@ -429,8 +396,15 @@ export default function AdminUsersPage() {
                           <td>{user.email}</td>
                           <td>
                             <span className={`admin-badge ${user.subscription_tier === 'premium' ? '' : 'secondary'}`}>
-                              {user.subscription_tier}
+                              <span title={user.tier_source ? `Source: ${user.tier_source}` : ''}>
+                                {user.subscription_tier}
+                              </span>
                             </span>
+                            {user.premium_access_blocked ? (
+                              <span className="admin-badge danger" style={{ marginLeft: 8 }} title={user.premium_access_blocked_reason || 'Premium access blocked'}>
+                                blocked
+                              </span>
+                            ) : null}
                           </td>
                           <td>
                             <span
@@ -469,9 +443,6 @@ export default function AdminUsersPage() {
                                   Suspend
                                 </button>
                               )}
-                              <button type="button" className="admin-button" onClick={() => requestAction('tier', user)}>
-                                {user.subscription_tier === 'premium' ? 'Downgrade' : 'Upgrade'}
-                              </button>
                               <button type="button" className="admin-button danger" onClick={() => requestAction('delete', user)}>
                                 Delete
                               </button>

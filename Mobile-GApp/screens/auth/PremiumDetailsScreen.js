@@ -1,6 +1,6 @@
 // screens/auth/PremiumDetailsScreen.js
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, Alert, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
@@ -10,7 +10,10 @@ export default function PremiumDetailsScreen() {
   const navigation = useNavigation();
 
   const privacyPolicyUrl = 'https://www.glucoforager.com/privacy-policy';
-  const eulaUrl = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
+  const eulaUrl =
+    Platform.OS === 'ios'
+      ? 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/'
+      : 'https://play.google.com/about/play-terms/';
   const [priceLine, setPriceLine] = useState('');
 
   const openExternalLink = async (url) => {
@@ -88,17 +91,27 @@ export default function PremiumDetailsScreen() {
 
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Price (per month)</Text>
-          <Text style={styles.infoValue}>
-            {priceLine ? `${priceLine} / month` : 'Price shown on Apple purchase confirmation'}
+          <Text style={[styles.infoValue, !priceLine && styles.infoValuePlaceholder]}>
+            {priceLine
+              ? `${priceLine} / month`
+              : Platform.OS === 'ios'
+                ? 'Price shown on Apple purchase confirmation'
+                : 'Price shown on Google Play purchase confirmation'}
           </Text>
         </View>
 
         <Text style={styles.legal}>
-          Payment will be charged to your Apple ID account at confirmation of purchase. Subscription
-          automatically renews unless canceled at least 24 hours before the end of the current period. Your
-          account will be charged for renewal within 24 hours prior to the end of the current period.
+          {Platform.OS === 'ios'
+            ? 'Payment will be charged to your Apple ID account at confirmation of purchase.'
+            : 'Payment will be charged to your Google Play account at confirmation of purchase.'}{' '}
+          Subscription automatically renews unless canceled at least 24 hours before the end of the current period.
+          Your account will be charged for renewal within 24 hours prior to the end of the current period.
         </Text>
-        <Text style={styles.legal}>Manage or cancel your subscription in Apple ID settings at any time.</Text>
+        <Text style={styles.legal}>
+          {Platform.OS === 'ios'
+            ? 'Manage or cancel your subscription in Apple ID settings at any time.'
+            : 'Manage or cancel your subscription in Google Play subscriptions at any time.'}
+        </Text>
 
         <View style={styles.linksRow}>
           <TouchableOpacity onPress={() => openExternalLink(privacyPolicyUrl)}>
@@ -207,6 +220,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.text,
     fontWeight: '800',
+  },
+  infoValuePlaceholder: {
+    fontSize: 12,
+    color: Colors.textLight,
+    fontWeight: '700',
   },
   legal: {
     marginTop: 10,
