@@ -4,7 +4,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from pydantic import BaseModel, EmailStr, Field, HttpUrl, validator
-from sqlalchemy import func, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from ..admin_dependencies import get_current_admin
@@ -23,6 +23,7 @@ from ...models.shopping_item import ShoppingItem
 from ...models.refresh_token import RefreshToken
 from ...models.subscription import Subscription
 from ...models.user import SearchLog, User
+from ...services.subscription_service import is_subscription_active, is_premium_blocked, refresh_user_tier
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -104,6 +105,11 @@ class AdminTierPayload(BaseModel):
         return normalized
 
 
+class AdminPremiumBlockPayload(BaseModel):
+    reason: str | None = Field(None, max_length=200)
+    until: datetime | None = None
+
+
 @router.post("/login", response_model=AdminToken)
 def admin_login(payload: AdminLoginPayload, db: Session = Depends(get_db)):
     admin = db.query(AdminUser).filter(AdminUser.email == payload.email.lower()).first()
@@ -180,20 +186,40 @@ def list_users(
     sort_key = sort or "created_at"
     sort_order = (order or "desc").lower()
 
-    latest_sub = (
+    billing_latest_sub = (
         db.query(
             Subscription.user_id.label("user_id"),
             func.max(Subscription.started_at).label("max_started_at"),
         )
+        .filter(or_(Subscription.store.is_(None), Subscription.store != "admin"))
         .group_by(Subscription.user_id)
         .subquery()
     )
-    latest_sub_join = (
+    billing_sub_join = (
         db.query(Subscription)
         .join(
-            latest_sub,
-            (Subscription.user_id == latest_sub.c.user_id)
-            & (Subscription.started_at == latest_sub.c.max_started_at),
+            billing_latest_sub,
+            (Subscription.user_id == billing_latest_sub.c.user_id)
+            & (Subscription.started_at == billing_latest_sub.c.max_started_at),
+        )
+        .subquery()
+    )
+
+    comp_latest_sub = (
+        db.query(
+            Subscription.user_id.label("user_id"),
+            func.max(Subscription.started_at).label("max_started_at"),
+        )
+        .filter(Subscription.store == "admin", Subscription.plan == "premium")
+        .group_by(Subscription.user_id)
+        .subquery()
+    )
+    comp_sub_join = (
+        db.query(Subscription)
+        .join(
+            comp_latest_sub,
+            (Subscription.user_id == comp_latest_sub.c.user_id)
+            & (Subscription.started_at == comp_latest_sub.c.max_started_at),
         )
         .subquery()
     )
@@ -201,10 +227,17 @@ def list_users(
     query = (
         db.query(
             User,
-            latest_sub_join.c.status.label("sub_status"),
-            latest_sub_join.c.expires_at.label("sub_expires_at"),
+            billing_sub_join.c.status.label("billing_status"),
+            billing_sub_join.c.expires_at.label("billing_expires_at"),
+            billing_sub_join.c.store.label("billing_store"),
+            billing_sub_join.c.product_id.label("billing_product_id"),
+            billing_sub_join.c.started_at.label("billing_started_at"),
+            comp_sub_join.c.status.label("comp_status"),
+            comp_sub_join.c.expires_at.label("comp_expires_at"),
+            comp_sub_join.c.started_at.label("comp_started_at"),
         )
-        .outerjoin(latest_sub_join, User.id == latest_sub_join.c.user_id)
+        .outerjoin(billing_sub_join, User.id == billing_sub_join.c.user_id)
+        .outerjoin(comp_sub_join, User.id == comp_sub_join.c.user_id)
     )
 
     if q:
@@ -214,32 +247,32 @@ def list_users(
             | func.lower(func.coalesce(User.full_name, "")).like(search)
         )
 
-    if tier in {"free", "premium"}:
-        query = query.filter(User.subscription_tier == tier)
-
     now = datetime.utcnow()
+    billing_active = and_(
+        billing_sub_join.c.status == "active",
+        or_(billing_sub_join.c.expires_at.is_(None), billing_sub_join.c.expires_at > now),
+    )
+    comp_active = and_(
+        comp_sub_join.c.status == "active",
+        or_(comp_sub_join.c.expires_at.is_(None), comp_sub_join.c.expires_at > now),
+    )
+    not_blocked = or_(
+        User.premium_access_blocked_at.is_(None),
+        and_(User.premium_access_blocked_until.is_not(None), User.premium_access_blocked_until <= now),
+    )
+    effective_premium = and_(not_blocked, or_(billing_active, comp_active))
+
+    if tier in {"free", "premium"}:
+        if tier == "premium":
+            query = query.filter(effective_premium)
+        else:
+            query = query.filter(~effective_premium)
+
     if status_filter in {"active", "inactive"}:
         if status_filter == "active":
-            query = query.filter(
-                User.subscription_tier == "premium",
-                (latest_sub_join.c.status == "active"),
-                (
-                    (latest_sub_join.c.expires_at.is_(None))
-                    | (latest_sub_join.c.expires_at > now)
-                ),
-            )
+            query = query.filter(effective_premium)
         else:
-            query = query.filter(
-                or_(
-                    User.subscription_tier != "premium",
-                    latest_sub_join.c.status.is_(None),
-                    latest_sub_join.c.status != "active",
-                    (
-                        latest_sub_join.c.expires_at.is_not(None)
-                        & (latest_sub_join.c.expires_at <= now)
-                    ),
-                ),
-            )
+            query = query.filter(~effective_premium)
 
     if sort_key == "email":
         order_column = User.email
@@ -257,23 +290,54 @@ def list_users(
     rows = query.offset((page - 1) * page_size).limit(page_size).all()
 
     items = []
-    for user, sub_status, sub_expires in rows:
-        is_premium = user.subscription_tier == "premium"
-        is_active = (
-            is_premium
-            and (sub_status == "active")
-            and (sub_expires is None or sub_expires > now)
+    for (
+        user,
+        billing_status_value,
+        billing_expires_value,
+        billing_store_value,
+        billing_product_id_value,
+        billing_started_value,
+        comp_status_value,
+        comp_expires_value,
+        comp_started_value,
+    ) in rows:
+        blocked = is_premium_blocked(user, now=now)
+        billing_is_active = (
+            billing_status_value == "active"
+            and (billing_expires_value is None or billing_expires_value > now)
         )
-        status_label = "active" if is_active else "inactive"
+        comp_is_active = (
+            comp_status_value == "active"
+            and (comp_expires_value is None or comp_expires_value > now)
+        )
+        is_premium = (not blocked) and (billing_is_active or comp_is_active)
+        status_label = "active" if is_premium else "inactive"
+        expires_at = billing_expires_value if billing_is_active else comp_expires_value if comp_is_active else None
+        tier_source = "blocked" if blocked else "store" if billing_is_active else "admin_comp" if comp_is_active else "free"
         items.append(
             {
                 "id": user.id,
                 "email": user.email,
                 "full_name": user.full_name,
-                "subscription_tier": user.subscription_tier or "free",
-                "subscription_status": sub_status,
-                "expires_at": sub_expires,
+                "subscription_tier": "premium" if is_premium else "free",
+                "tier_source": tier_source,
+                "expires_at": expires_at,
                 "status": status_label,
+                "billing": {
+                    "store": billing_store_value,
+                    "status": billing_status_value,
+                    "expires_at": billing_expires_value,
+                    "product_id": billing_product_id_value,
+                    "started_at": billing_started_value,
+                },
+                "admin_comp": {
+                    "status": comp_status_value,
+                    "expires_at": comp_expires_value,
+                    "started_at": comp_started_value,
+                },
+                "premium_access_blocked": blocked,
+                "premium_access_blocked_until": user.premium_access_blocked_until,
+                "premium_access_blocked_reason": user.premium_access_blocked_reason,
                 "suspended_at": user.suspended_at,
                 "suspended_reason": user.suspended_reason,
                 "created_at": user.created_at,
@@ -304,13 +368,16 @@ def get_user_detail(
         .order_by(Subscription.started_at.desc())
         .all()
     )
-    latest = subs[0] if subs else None
     now = datetime.utcnow()
-    status_label = "inactive"
-    expires_at = latest.expires_at if latest else None
-    if user.subscription_tier == "premium" and latest:
-        if latest.status == "active" and (latest.expires_at is None or latest.expires_at > now):
-            status_label = "active"
+    billing = next((sub for sub in subs if sub.store != "admin"), None)
+    comp = next((sub for sub in subs if sub.store == "admin" and sub.plan == "premium"), None)
+    blocked = is_premium_blocked(user, now=now)
+    billing_is_active = is_subscription_active(billing, now=now)
+    comp_is_active = is_subscription_active(comp, now=now)
+    effective_premium = (not blocked) and (billing_is_active or comp_is_active)
+    status_label = "active" if effective_premium else "inactive"
+    expires_at = billing.expires_at if billing_is_active and billing else comp.expires_at if comp_is_active and comp else None
+    tier_source = "blocked" if blocked else "store" if billing_is_active else "admin_comp" if comp_is_active else "free"
     return {
         "id": user.id,
         "public_id": user.public_id,
@@ -318,9 +385,36 @@ def get_user_detail(
         "full_name": user.full_name,
         "gender": user.gender,
         "country": user.country,
-        "subscription_tier": user.subscription_tier or "free",
+        "subscription_tier": "premium" if effective_premium else "free",
+        "tier_source": tier_source,
         "status": status_label,
         "expires_at": expires_at,
+        "billing": None
+        if not billing
+        else {
+            "plan": billing.plan,
+            "status": billing.status,
+            "started_at": billing.started_at,
+            "expires_at": billing.expires_at,
+            "transaction_id": billing.transaction_id,
+            "original_transaction_id": billing.original_transaction_id,
+            "product_id": billing.product_id,
+            "store": billing.store,
+            "environment": billing.environment,
+        },
+        "admin_comp": None
+        if not comp
+        else {
+            "plan": comp.plan,
+            "status": comp.status,
+            "started_at": comp.started_at,
+            "expires_at": comp.expires_at,
+            "product_id": comp.product_id,
+        },
+        "premium_access_blocked": blocked,
+        "premium_access_blocked_at": user.premium_access_blocked_at,
+        "premium_access_blocked_until": user.premium_access_blocked_until,
+        "premium_access_blocked_reason": user.premium_access_blocked_reason,
         "suspended_at": user.suspended_at,
         "suspended_reason": user.suspended_reason,
         "created_at": user.created_at,
@@ -415,7 +509,8 @@ def update_user_tier(
     now = datetime.utcnow()
     tier = payload.tier
     if tier == "premium":
-        user.subscription_tier = "premium"
+        if user.premium_access_blocked_at and (user.premium_access_blocked_until is None or user.premium_access_blocked_until > now):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User is premium-blocked. Unblock first.")
         sub = Subscription(
             user_id=user.id,
             plan="premium",
@@ -427,15 +522,75 @@ def update_user_tier(
             environment="manual",
         )
         db.add(sub)
-    else:
-        user.subscription_tier = "free"
-        db.query(Subscription).filter(
-            Subscription.user_id == user.id,
-            Subscription.status == "active",
-        ).update({Subscription.status: "inactive", Subscription.expires_at: now})
+        refresh_user_tier(db, user, now=now)
+        db.commit()
+        return {"status": "updated", "tier": "premium"}
 
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Downgrading from admin is disabled. Users must cancel in the App Store / Google Play.",
+    )
+
+
+@router.post("/users/{user_id}/premium-block")
+def premium_block_user(
+    user_id: int,
+    payload: AdminPremiumBlockPayload,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    now = datetime.utcnow()
+    user.premium_access_blocked_at = now
+    user.premium_access_blocked_until = payload.until
+    user.premium_access_blocked_reason = payload.reason.strip() if payload.reason else None
+    refresh_user_tier(db, user, now=now)
     db.commit()
-    return {"status": "updated", "tier": user.subscription_tier}
+    return {"status": "blocked"}
+
+
+@router.post("/users/{user_id}/premium-unblock")
+def premium_unblock_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    now = datetime.utcnow()
+    user.premium_access_blocked_at = None
+    user.premium_access_blocked_until = None
+    user.premium_access_blocked_reason = None
+    refresh_user_tier(db, user, now=now)
+    db.commit()
+    return {"status": "unblocked"}
+
+
+@router.post("/users/{user_id}/premium-comp-revoke")
+def revoke_premium_comp(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    now = datetime.utcnow()
+    db.query(Subscription).filter(
+        Subscription.user_id == user.id,
+        Subscription.store == "admin",
+        Subscription.plan == "premium",
+        Subscription.status == "active",
+    ).update({Subscription.status: "inactive", Subscription.expires_at: now})
+    refresh_user_tier(db, user, now=now)
+    db.commit()
+    return {"status": "revoked"}
 
 
 @router.delete("/users/{user_id}")
