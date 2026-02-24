@@ -30,6 +30,7 @@ from .api.endpoints import (
     revenuecat,
     mobile_logs,
     system_logs,
+    admin_health,
     blog,
     admin_blog,
     newsletter,
@@ -227,6 +228,7 @@ app.include_router(shopping_list.router, prefix="/api")
 app.include_router(revenuecat.router, prefix="/api")
 app.include_router(mobile_logs.router, prefix="/api")
 app.include_router(system_logs.router, prefix="/api")
+app.include_router(admin_health.router, prefix="/api")
 app.include_router(blog.router, prefix="/api")
 app.include_router(admin_blog.router, prefix="/api")
 app.include_router(newsletter.router, prefix="/api")
