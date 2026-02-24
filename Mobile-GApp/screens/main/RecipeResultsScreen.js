@@ -15,7 +15,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { LinearGradient } from 'expo-linear-gradient';
-import RecipePlaceholder from '../../assets/images/recipe-placeholder.jpeg';
 
 export default function RecipeResultsScreen() {
   const navigation = useNavigation();
@@ -37,7 +36,6 @@ export default function RecipeResultsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [detectedIngredients, setDetectedIngredients] = useState([]);
   const [recipes, setRecipes] = useState([]);
-  const [failedImages, setFailedImages] = useState({});
 
   useEffect(() => {
     const ingredientSource = source === 'text' ? 'Input' : 'Detected';
@@ -209,12 +207,8 @@ export default function RecipeResultsScreen() {
             const calories = nutrition.calories ?? recipe?.calories ?? 'N/A';
             const carbs = nutrition.carbs ?? recipe?.carbs ?? 'N/A';
             const title = recipe?.title || recipe?.name || `Recipe ${index + 1}`;
-            const imageUrl = recipe?.image_url;
-            const usePlaceholder =
-              recipe?.image_source === 'placeholder' || !imageUrl;
             const matchText = getMatchText(recipe);
             const imageKey = recipe.id || `${title}-${index}`;
-            const imageFailed = Boolean(failedImages[imageKey]);
             return (
               <TouchableOpacity
                 key={imageKey}
@@ -227,18 +221,6 @@ export default function RecipeResultsScreen() {
                   })
                 }
               >
-                {imageUrl && !usePlaceholder && !imageFailed ? (
-                  <Image
-                    source={{ uri: imageUrl }}
-                    style={styles.recipeImage}
-                    onError={() =>
-                      setFailedImages((prev) => ({ ...prev, [imageKey]: true }))
-                    }
-                  />
-                ) : (
-                  <Image source={RecipePlaceholder} style={styles.recipeImage} />
-                )}
-
                 <View style={styles.recipeInfo}>
                   <View style={styles.recipeHeader}>
                     <Text style={styles.recipeName} numberOfLines={2}>{title}</Text>
@@ -499,20 +481,6 @@ const styles = StyleSheet.create({
     padding: 16,
     marginHorizontal: 20,
     marginBottom: 12,
-  },
-  recipeIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  recipeImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 16,
-    marginRight: 16,
   },
   recipeInfo: {
     flex: 1,
