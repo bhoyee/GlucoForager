@@ -108,6 +108,13 @@ def _run_vision_job(job_id: str) -> None:
         except IngredientValidationError as exc:
             job.status = "failed"
             job.error = exc.message
+            job.result = {
+                "error": {
+                    "type": "invalid_input",
+                    "code": exc.code,
+                    "message": exc.message,
+                }
+            }
             db.commit()
             return
 
@@ -125,6 +132,13 @@ def _run_vision_job(job_id: str) -> None:
         if "job" in locals() and job:
             job.status = "failed"
             job.error = str(exc)
+            job.result = {
+                "error": {
+                    "type": "operational",
+                    "code": "exception",
+                    "message": str(exc),
+                }
+            }
             db.commit()
     finally:
         db.close()
