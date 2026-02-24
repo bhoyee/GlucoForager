@@ -24,7 +24,10 @@ export default function ProfileScreen() {
   const playStoreUrl = 'market://details?id=com.glucoforager.app';
   const shareUrl = 'https://glucoforager.com/app';
   const privacyPolicyUrl = 'https://www.glucoforager.com/privacy-policy';
-  const eulaUrl = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
+  const eulaUrl =
+    Platform.OS === 'ios'
+      ? 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/'
+      : 'https://play.google.com/about/play-terms/';
   const [profile, setProfile] = useState({
     fullName: '',
     email: '',
@@ -260,7 +263,12 @@ export default function ProfileScreen() {
         return;
       }
 
-      Alert.alert('No purchases found', 'No active Premium subscription was found for this Apple ID.');
+      Alert.alert(
+        'No purchases found',
+        Platform.OS === 'ios'
+          ? 'No active Premium subscription was found for this Apple ID.'
+          : 'No active Premium subscription was found for this Google Play account.'
+      );
     } catch (error) {
       setPremiumModalError('Unable to restore purchases right now. Please try again later.');
     } finally {
@@ -381,7 +389,11 @@ export default function ProfileScreen() {
             <View style={styles.premiumInfoRow}>
               <Text style={styles.premiumInfoLabel}>Price (per month)</Text>
               <Text style={styles.premiumInfoValue}>
-                {premiumPriceLine ? `${premiumPriceLine} per month` : 'Price shown in App Store during purchase'}
+                {premiumPriceLine
+                  ? `${premiumPriceLine} per month`
+                  : Platform.OS === 'ios'
+                    ? 'Price shown in App Store during purchase'
+                    : 'Price shown in Google Play during purchase'}
               </Text>
             </View>
             <View style={styles.premiumInfoRow}>
@@ -398,12 +410,16 @@ export default function ProfileScreen() {
             </View>
 
             <Text style={styles.premiumLegalText}>
-              Payment will be charged to your Apple ID account at confirmation of purchase. Subscription
-              automatically renews unless canceled at least 24 hours before the end of the current period.
+              {Platform.OS === 'ios'
+                ? 'Payment will be charged to your Apple ID account at confirmation of purchase.'
+                : 'Payment will be charged to your Google Play account at confirmation of purchase.'}{' '}
+              Subscription automatically renews unless canceled at least 24 hours before the end of the current period.
               Your account will be charged for renewal within 24 hours prior to the end of the current period.
             </Text>
             <Text style={styles.premiumLegalText}>
-              Manage or cancel your subscription in Apple ID settings at any time.
+              {Platform.OS === 'ios'
+                ? 'Manage or cancel your subscription in Apple ID settings at any time.'
+                : 'Manage or cancel your subscription in Google Play subscriptions at any time.'}
             </Text>
 
             <View style={styles.premiumLinksRow}>
