@@ -10,7 +10,16 @@ export const metadata = {
   description:
     "Snap a photo of your fridge, get 3 diabetes-friendly recipes instantly. AI-powered meal planning for Type 2 Diabetes.",
   applicationName: "GlucoForager",
-  keywords: ["diabetes recipes", "AI cooking", "diabetes meal planner", "Type 2 Diabetes app"],
+  keywords: [
+    "diabetes recipes",
+    "diabetes-friendly meals",
+    "low glycemic recipes",
+    "Type 2 Diabetes app",
+    "AI meal planner",
+    "AI cooking",
+    "ingredient scanner",
+    "healthy meal planning",
+  ],
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://www.glucoforager.com"),
   openGraph: {
     title: "GlucoForager - Diabetes-Friendly Recipes in 60 Seconds",
@@ -19,13 +28,13 @@ export const metadata = {
     siteName: "GlucoForager",
     locale: "en_GB",
     type: "website",
-    images: [{ url: "/images/logo.png", width: 512, height: 512, alt: "GlucoForager" }],
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "GlucoForager" }],
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
     title: "GlucoForager - Diabetes-Friendly Recipes in 60 Seconds",
     description: "AI-powered meal planning for Type 2 Diabetes. Snap your fridge, get safe recipes.",
-    images: ["/images/logo.png"],
+    images: ["/twitter-image"],
   },
   robots: {
     index: true,
