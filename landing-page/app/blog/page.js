@@ -8,6 +8,20 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 export const metadata = {
   title: 'GlucoForager Blog',
   description: 'Diabetes-friendly cooking tips, low-glycemic recipes, and product updates from GlucoForager.',
+  alternates: { canonical: '/blog' },
+  openGraph: {
+    title: 'GlucoForager Blog',
+    description: 'Diabetes-friendly cooking tips, low-glycemic recipes, and product updates from GlucoForager.',
+    url: '/blog',
+    type: 'website',
+    images: [{ url: '/blog/opengraph-image', width: 1200, height: 630, alt: 'GlucoForager Blog' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'GlucoForager Blog',
+    description: 'Diabetes-friendly cooking tips, low-glycemic recipes, and product updates from GlucoForager.',
+    images: ['/blog/twitter-image'],
+  },
 };
 
 function PostImagePlaceholder({ title }) {
