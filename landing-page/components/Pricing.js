@@ -1,10 +1,13 @@
 "use client";
 
 import { useState } from 'react';
+import { QRCodeSVG } from "qrcode.react";
 
 export default function Pricing() {
   const [showModal, setShowModal] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState(null);
+  const appleAppStoreUrl = "https://apps.apple.com/us/app/glucoforager/id6758808427";
+  const googlePlayUrl = "https://play.google.com/store/apps/details?id=com.glucoforager.app";
 
   const plans = [
     {
@@ -131,7 +134,9 @@ export default function Pricing() {
               <div className="space-y-4 mb-8">
                 {/* iOS App Store */}
                 <a 
-                  href="#" 
+                  href={appleAppStoreUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="flex items-center justify-center gap-3 w-full bg-black text-white rounded-xl px-6 py-4 hover:bg-gray-800 transition-all duration-300 hover:scale-[1.02]"
                 >
                   <svg className="w-7 h-7" fill="currentColor" viewBox="0 0 384 512">
@@ -145,7 +150,9 @@ export default function Pricing() {
 
                 {/* Google Play Store */}
                 <a 
-                  href="#" 
+                  href={googlePlayUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="flex items-center justify-center gap-3 w-full bg-black text-white rounded-xl px-6 py-4 hover:bg-gray-800 transition-all duration-300 hover:scale-[1.02]"
                 >
                   <svg className="w-7 h-7" fill="currentColor" viewBox="0 0 512 512">
@@ -170,7 +177,18 @@ export default function Pricing() {
                 <div className="flex justify-center gap-8">
                   {/* iOS QR Code */}
                   <div className="text-center">
-                    <div className="w-32 h-32 mx-auto bg-gray-100 rounded-lg flex items-center justify-center mb-2 border border-gray-200">
+                    <a
+                      href={appleAppStoreUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block w-32 h-32 mx-auto bg-white rounded-lg overflow-hidden mb-2 border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
+                      aria-label="Open Apple App Store listing"
+                    >
+                      <div className="w-full h-full flex items-center justify-center">
+                        <QRCodeSVG value={appleAppStoreUrl} size={112} includeMargin />
+                      </div>
+                    </a>
+                    <div className="hidden w-32 h-32 mx-auto bg-gray-100 rounded-lg items-center justify-center mb-2 border border-gray-200">
                       <div className="text-center">
                         <div className="text-xs font-semibold text-gray-600">iOS</div>
                         <div className="text-3xl">📱</div>
@@ -181,7 +199,18 @@ export default function Pricing() {
 
                   {/* Android QR Code */}
                   <div className="text-center">
-                    <div className="w-32 h-32 mx-auto bg-gray-100 rounded-lg flex items-center justify-center mb-2 border border-gray-200">
+                    <a
+                      href={googlePlayUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block w-32 h-32 mx-auto bg-white rounded-lg overflow-hidden mb-2 border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
+                      aria-label="Open Google Play Store listing"
+                    >
+                      <div className="w-full h-full flex items-center justify-center">
+                        <QRCodeSVG value={googlePlayUrl} size={112} includeMargin />
+                      </div>
+                    </a>
+                    <div className="hidden w-32 h-32 mx-auto bg-gray-100 rounded-lg items-center justify-center mb-2 border border-gray-200">
                       <div className="text-center">
                         <div className="text-xs font-semibold text-gray-600">Android</div>
                         <div className="text-3xl">🤖</div>
