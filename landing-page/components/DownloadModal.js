@@ -1,15 +1,10 @@
 ﻿"use client";
 
-import { useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 
 export default function DownloadModal({ open, onClose }) {
-  const [notice, setNotice] = useState("");
+  const appleAppStoreUrl = "https://apps.apple.com/us/app/glucoforager/id6758808427";
   const googlePlayUrl = "https://play.google.com/store/apps/details?id=com.glucoforager.app";
-  const handleStoreClick = (store) => {
-    setNotice(`${store} is coming soon and currently under review.`);
-    setTimeout(() => setNotice(""), 3000);
-  };
 
   if (!open) return null;
 
@@ -35,9 +30,10 @@ export default function DownloadModal({ open, onClose }) {
           </div>
 
           <div className="space-y-4 mb-6">
-            <button
-              type="button"
-              onClick={() => handleStoreClick("App Store")}
+            <a
+              href={appleAppStoreUrl}
+              target="_blank"
+              rel="noopener noreferrer"
               className="flex items-center justify-center gap-3 w-full bg-black text-white rounded-xl px-6 py-4 hover:bg-gray-800 transition-all duration-300 hover:scale-[1.02]"
             >
               <svg className="w-7 h-7" fill="currentColor" viewBox="0 0 384 512">
@@ -47,7 +43,7 @@ export default function DownloadModal({ open, onClose }) {
                 <div className="text-xs opacity-80">Download on the</div>
                 <div className="font-semibold text-lg">App Store</div>
               </div>
-            </button>
+            </a>
 
             <a
               href={googlePlayUrl}
@@ -65,12 +61,6 @@ export default function DownloadModal({ open, onClose }) {
             </a>
           </div>
 
-          {notice && (
-            <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700 text-center">
-              {notice}
-            </div>
-          )}
-
           <div className="border-t pt-6">
             <div className="text-center mb-4">
               <h4 className="font-semibold text-gray-900 mb-2">Scan QR Code to Download</h4>
@@ -81,12 +71,17 @@ export default function DownloadModal({ open, onClose }) {
 
             <div className="flex justify-center gap-8">
               <div className="text-center">
-                <div className="w-32 h-32 mx-auto bg-gray-100 rounded-lg flex items-center justify-center mb-2 border border-gray-200">
-                  <div className="text-center">
-                    <div className="text-xs font-semibold text-gray-600">iOS</div>
-                    <div className="text-xs text-gray-500 mt-1">Under review</div>
+                <a
+                  href={appleAppStoreUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block w-32 h-32 mx-auto bg-white rounded-lg overflow-hidden mb-2 border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
+                  aria-label="Open Apple App Store listing"
+                >
+                  <div className="w-full h-full flex items-center justify-center">
+                    <QRCodeSVG value={appleAppStoreUrl} size={112} includeMargin />
                   </div>
-                </div>
+                </a>
                 <div className="text-xs text-gray-600">For iPhone</div>
               </div>
 
