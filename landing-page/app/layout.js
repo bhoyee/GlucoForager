@@ -37,7 +37,7 @@ export const metadata = {
     card: "summary_large_image",
     title: "GlucoForager - Diabetes-Friendly Recipes in 60 Seconds",
     description: "AI-powered meal planning for Type 2 Diabetes. Snap your fridge, get safe recipes.",
-    images: ["/twitter-image.png", "/images/logo.png"],
+    images: ["/twitter-image.png"],
   },
   robots: {
     index: true,
