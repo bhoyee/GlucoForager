@@ -29,15 +29,15 @@ export const metadata = {
     locale: "en_GB",
     type: "website",
     images: [
+      { url: "/opengraph-image.png", width: 1200, height: 630, alt: "GlucoForager" },
       { url: "/images/logo.png", width: 512, height: 512, alt: "GlucoForager Logo" },
-      { url: "/opengraph-image", width: 1200, height: 630, alt: "GlucoForager" },
     ],
   },
   twitter: {
     card: "summary_large_image",
     title: "GlucoForager - Diabetes-Friendly Recipes in 60 Seconds",
     description: "AI-powered meal planning for Type 2 Diabetes. Snap your fridge, get safe recipes.",
-    images: ["/twitter-image", "/images/logo.png"],
+    images: ["/twitter-image.png", "/images/logo.png"],
   },
   robots: {
     index: true,
