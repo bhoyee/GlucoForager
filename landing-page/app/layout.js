@@ -24,17 +24,20 @@ export const metadata = {
   openGraph: {
     title: "GlucoForager - Diabetes-Friendly Recipes in 60 Seconds",
     description: "AI-powered meal planning for Type 2 Diabetes. Snap your fridge, get safe recipes.",
-    url: "/",
+    url: process.env.NEXT_PUBLIC_SITE_URL || "https://www.glucoforager.com",
     siteName: "GlucoForager",
     locale: "en_GB",
     type: "website",
-    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "GlucoForager" }],
+    images: [
+      { url: "/images/logo.png", width: 512, height: 512, alt: "GlucoForager Logo" },
+      { url: "/opengraph-image", width: 1200, height: 630, alt: "GlucoForager" },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "GlucoForager - Diabetes-Friendly Recipes in 60 Seconds",
     description: "AI-powered meal planning for Type 2 Diabetes. Snap your fridge, get safe recipes.",
-    images: ["/twitter-image"],
+    images: ["/twitter-image", "/images/logo.png"],
   },
   robots: {
     index: true,
