@@ -4,7 +4,7 @@ export const runtime = "edge";
 
 const size = { width: 1200, height: 630 };
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.glucoforager.com";
-const logoUrl = `${siteUrl.replace(/\\/+$/, "")}/images/logo.png`;
+const logoUrl = `${siteUrl.replace(/\/+$/, "")}/images/logo.png`;
 
 export async function GET() {
   return new ImageResponse(
