@@ -184,10 +184,21 @@ export default function ProfileScreen() {
       try {
         offering = await getPaywallOffering();
       } catch (error) {
+        const details = `${error?.message || error}`;
+        const looksLikeStoreProductConfigIssue =
+          details.includes('None of the products registered') ||
+          details.includes('offerings-empty') ||
+          details.includes('offerings are empty') ||
+          details.includes('ConfigurationError');
+
         setPremiumModalError(
           Platform.OS === 'ios'
-            ? 'Subscriptions are temporarily unavailable (Apple sandbox may still be processing billing info). Please try again later.'
-            : 'Subscriptions are temporarily unavailable. Please try again later.'
+            ? looksLikeStoreProductConfigIssue
+              ? 'Subscriptions are temporarily unavailable on iOS while our App Store subscription is being reviewed/updated. Please try again later.'
+              : 'Subscriptions are temporarily unavailable on iOS right now. Please try again later.'
+            : looksLikeStoreProductConfigIssue
+              ? 'Subscriptions are temporarily unavailable while our store products are being configured. Please try again later.'
+              : 'Subscriptions are temporarily unavailable. Please try again later.'
         );
       }
 
@@ -242,6 +253,15 @@ export default function ProfileScreen() {
       }
 
       await ensureRevenueCatUser();
+
+      if (!premiumOfferingId) {
+        setPremiumModalError(
+          Platform.OS === 'ios'
+            ? 'Subscriptions are temporarily unavailable on iOS right now. Please try again later.'
+            : 'Subscriptions are temporarily unavailable right now. Please try again later.'
+        );
+        return;
+      }
 
       const result = await presentPaywall();
       const info = result?.customerInfo ? result.customerInfo : await getCustomerInfo();
@@ -470,7 +490,7 @@ export default function ProfileScreen() {
               <TouchableOpacity
                 style={[styles.premiumButton, styles.premiumButtonPrimary]}
                 onPress={handleStartPurchase}
-                disabled={premiumModalBusy || !revenueCatReady}
+                disabled={premiumModalBusy || !revenueCatReady || !premiumOfferingId}
               >
                 {premiumModalBusy ? (
                   <ActivityIndicator size="small" color={Colors.white} />
