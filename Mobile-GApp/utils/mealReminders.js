@@ -35,18 +35,34 @@ async function writeJson(key, value) {
   }
 }
 
+function normalizeTime(value, fallback) {
+  const fallbackTime = fallback || { hour: 8, minute: 0 };
+  const hourRaw = value?.hour;
+  const minuteRaw = value?.minute;
+  const hour = Number.isFinite(Number(hourRaw)) ? Number(hourRaw) : fallbackTime.hour;
+  const minute = Number.isFinite(Number(minuteRaw)) ? Number(minuteRaw) : fallbackTime.minute;
+  const safeHour = Math.min(23, Math.max(0, Math.floor(hour)));
+  const safeMinute = Math.min(59, Math.max(0, Math.floor(minute)));
+  return { hour: safeHour, minute: safeMinute };
+}
+
 export async function getMealReminderTimes() {
   const stored = await readJson(STORAGE_KEYS.times, null);
   if (!stored || typeof stored !== 'object') return DEFAULT_TIMES;
   return {
-    breakfast: stored.breakfast || DEFAULT_TIMES.breakfast,
-    lunch: stored.lunch || DEFAULT_TIMES.lunch,
-    dinner: stored.dinner || DEFAULT_TIMES.dinner,
+    breakfast: normalizeTime(stored.breakfast, DEFAULT_TIMES.breakfast),
+    lunch: normalizeTime(stored.lunch, DEFAULT_TIMES.lunch),
+    dinner: normalizeTime(stored.dinner, DEFAULT_TIMES.dinner),
   };
 }
 
 export async function setMealReminderTimes(times) {
-  await writeJson(STORAGE_KEYS.times, times);
+  const safeTimes = {
+    breakfast: normalizeTime(times?.breakfast, DEFAULT_TIMES.breakfast),
+    lunch: normalizeTime(times?.lunch, DEFAULT_TIMES.lunch),
+    dinner: normalizeTime(times?.dinner, DEFAULT_TIMES.dinner),
+  };
+  await writeJson(STORAGE_KEYS.times, safeTimes);
 }
 
 export async function getMealRemindersEnabled() {
@@ -132,6 +148,27 @@ async function cancelScheduledMealReminders() {
   await writeJson(STORAGE_KEYS.scheduledIds, []);
 }
 
+async function cancelOrphanedMealReminders() {
+  try {
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    if (!Array.isArray(scheduled) || scheduled.length === 0) return;
+
+    const mealReminderIds = scheduled
+      .filter((item) => {
+        const title = item?.content?.title || '';
+        return typeof title === 'string' && title.toLowerCase().startsWith('time to scan for ');
+      })
+      .map((item) => item?.identifier)
+      .filter(Boolean);
+
+    await Promise.allSettled(
+      mealReminderIds.map((id) => Notifications.cancelScheduledNotificationAsync(id))
+    );
+  } catch {
+    // Ignore.
+  }
+}
+
 export async function scheduleMealReminders(times = null) {
   const enabled = await getMealRemindersEnabled();
   if (!enabled) return { scheduled: false, reason: 'disabled' };
@@ -141,6 +178,7 @@ export async function scheduleMealReminders(times = null) {
 
   await ensureAndroidChannel();
   await cancelScheduledMealReminders();
+  await cancelOrphanedMealReminders();
 
   const scheduleTimes = times || (await getMealReminderTimes());
   const pairs = [
@@ -181,6 +219,7 @@ export async function scheduleMealReminders(times = null) {
 export async function disableMealReminders() {
   await setMealRemindersEnabled(false);
   await cancelScheduledMealReminders();
+  await cancelOrphanedMealReminders();
 }
 
 export async function enableMealRemindersAndSchedule() {
@@ -203,5 +242,6 @@ export async function syncMealRemindersOnAppStart() {
   const times = await getMealReminderTimes();
   await ensureAndroidChannel();
   await cancelScheduledMealReminders();
+  await cancelOrphanedMealReminders();
   await scheduleMealReminders(times);
 }
