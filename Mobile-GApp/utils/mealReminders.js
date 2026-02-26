@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
+import { addDebugLog } from './debugLogger';
 
 const STORAGE_KEYS = {
   enabled: 'meal_reminders_enabled_v1',
@@ -16,6 +17,26 @@ const DEFAULT_TIMES = {
 };
 
 const ANDROID_CHANNEL_ID = 'meal-reminders';
+
+function debugLog(message, details) {
+  if (!__DEV__) return;
+  try {
+    // eslint-disable-next-line no-console
+    console.log(`[MealReminders] ${message}`, details || '');
+  } catch {
+    // Ignore console errors.
+  }
+  try {
+    addDebugLog({
+      source: 'MealReminders',
+      level: 'info',
+      message,
+      details: details ? JSON.stringify(details) : undefined,
+    });
+  } catch {
+    // Ignore logger errors.
+  }
+}
 
 async function readJson(key, fallback) {
   try {
@@ -49,11 +70,13 @@ function normalizeTime(value, fallback) {
 export async function getMealReminderTimes() {
   const stored = await readJson(STORAGE_KEYS.times, null);
   if (!stored || typeof stored !== 'object') return DEFAULT_TIMES;
-  return {
+  const times = {
     breakfast: normalizeTime(stored.breakfast, DEFAULT_TIMES.breakfast),
     lunch: normalizeTime(stored.lunch, DEFAULT_TIMES.lunch),
     dinner: normalizeTime(stored.dinner, DEFAULT_TIMES.dinner),
   };
+  debugLog('Loaded reminder times', times);
+  return times;
 }
 
 export async function setMealReminderTimes(times) {
@@ -62,6 +85,7 @@ export async function setMealReminderTimes(times) {
     lunch: normalizeTime(times?.lunch, DEFAULT_TIMES.lunch),
     dinner: normalizeTime(times?.dinner, DEFAULT_TIMES.dinner),
   };
+  debugLog('Saving reminder times', safeTimes);
   await writeJson(STORAGE_KEYS.times, safeTimes);
 }
 
@@ -76,6 +100,7 @@ export async function getMealRemindersEnabled() {
 export async function setMealRemindersEnabled(enabled) {
   try {
     await AsyncStorage.setItem(STORAGE_KEYS.enabled, enabled ? '1' : '0');
+    debugLog('Set enabled', { enabled });
   } catch {
     // Ignore.
   }
@@ -92,6 +117,7 @@ export async function getMealRemindersPrompted() {
 export async function setMealRemindersPrompted() {
   try {
     await AsyncStorage.setItem(STORAGE_KEYS.prompted, '1');
+    debugLog('Marked prompted');
   } catch {
     // Ignore.
   }
@@ -118,6 +144,7 @@ async function ensureAndroidChannel() {
       enableVibrate: false,
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
     });
+    debugLog('Ensured Android channel', { id: ANDROID_CHANNEL_ID });
   } catch {
     // Ignore.
   }
@@ -133,6 +160,7 @@ export async function requestMealReminderPermissions() {
         ? { ios: { allowAlert: true, allowBadge: false, allowSound: false } }
         : undefined
     );
+    debugLog('Requested notification permissions', { granted: requested?.granted });
     return Boolean(requested?.granted);
   } catch {
     return false;
@@ -142,6 +170,7 @@ export async function requestMealReminderPermissions() {
 async function cancelScheduledMealReminders() {
   const ids = await readJson(STORAGE_KEYS.scheduledIds, []);
   if (!Array.isArray(ids) || ids.length === 0) return;
+  debugLog('Cancelling scheduled reminders by IDs', { count: ids.length, ids });
   await Promise.allSettled(
     ids.map((id) => Notifications.cancelScheduledNotificationAsync(id))
   );
@@ -164,6 +193,29 @@ async function cancelOrphanedMealReminders() {
     await Promise.allSettled(
       mealReminderIds.map((id) => Notifications.cancelScheduledNotificationAsync(id))
     );
+    if (mealReminderIds.length) {
+      debugLog('Cancelled orphaned scheduled reminders', { count: mealReminderIds.length });
+    }
+  } catch {
+    // Ignore.
+  }
+}
+
+async function dismissPresentedMealReminders() {
+  try {
+    const presented = await Notifications.getPresentedNotificationsAsync();
+    if (!Array.isArray(presented) || presented.length === 0) return;
+    const ids = presented
+      .filter((item) => {
+        const title = item?.request?.content?.title || item?.content?.title || '';
+        return typeof title === 'string' && title.toLowerCase().startsWith('time to scan for ');
+      })
+      .map((item) => item?.identifier)
+      .filter(Boolean);
+    await Promise.allSettled(ids.map((id) => Notifications.dismissNotificationAsync(id)));
+    if (ids.length) {
+      debugLog('Dismissed presented reminders', { count: ids.length });
+    }
   } catch {
     // Ignore.
   }
@@ -171,16 +223,24 @@ async function cancelOrphanedMealReminders() {
 
 export async function scheduleMealReminders(times = null) {
   const enabled = await getMealRemindersEnabled();
-  if (!enabled) return { scheduled: false, reason: 'disabled' };
+  if (!enabled) {
+    debugLog('Schedule skipped (disabled)');
+    return { scheduled: false, reason: 'disabled' };
+  }
 
   const hasPermission = await requestMealReminderPermissions();
-  if (!hasPermission) return { scheduled: false, reason: 'no_permission' };
+  if (!hasPermission) {
+    debugLog('Schedule skipped (no permission)');
+    return { scheduled: false, reason: 'no_permission' };
+  }
 
   await ensureAndroidChannel();
   await cancelScheduledMealReminders();
   await cancelOrphanedMealReminders();
+  await dismissPresentedMealReminders();
 
   const scheduleTimes = times || (await getMealReminderTimes());
+  debugLog('Scheduling reminders', scheduleTimes);
   const pairs = [
     { key: 'breakfast', label: 'breakfast' },
     { key: 'lunch', label: 'lunch' },
@@ -213,16 +273,20 @@ export async function scheduleMealReminders(times = null) {
   }
 
   await writeJson(STORAGE_KEYS.scheduledIds, ids);
+  debugLog('Scheduled reminders', { count: ids.length, ids });
   return { scheduled: true };
 }
 
 export async function disableMealReminders() {
+  debugLog('Disabling reminders');
   await setMealRemindersEnabled(false);
   await cancelScheduledMealReminders();
   await cancelOrphanedMealReminders();
+  await dismissPresentedMealReminders();
 }
 
 export async function enableMealRemindersAndSchedule() {
+  debugLog('Enabling reminders');
   await setMealRemindersEnabled(true);
   const times = await getMealReminderTimes();
   return scheduleMealReminders(times);
