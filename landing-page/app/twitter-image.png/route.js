@@ -3,9 +3,11 @@ import { ImageResponse } from "next/og";
 export const runtime = "edge";
 
 const size = { width: 1200, height: 600 };
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.glucoforager.com";
+const logoUrl = `${siteUrl.replace(/\\/+$/, "")}/images/logo.png`;
 
 export async function GET() {
-  const image = new ImageResponse(
+  return new ImageResponse(
     (
       <div
         style={{
@@ -13,7 +15,7 @@ export async function GET() {
           height: "100%",
           display: "flex",
           flexDirection: "column",
-          justifyContent: "center",
+          justifyContent: "space-between",
           padding: 68,
           background:
             "linear-gradient(135deg, rgba(13,148,136,1) 0%, rgba(16,185,129,1) 50%, rgba(6,182,212,1) 100%)",
@@ -28,57 +30,53 @@ export async function GET() {
             position: "absolute",
             inset: 0,
             background:
-              "radial-gradient(circle at 25% 25%, rgba(255,255,255,0.55), rgba(255,255,255,0) 58%)",
-            opacity: 0.65,
+              "radial-gradient(circle at 25% 25%, rgba(255,255,255,0.62), rgba(255,255,255,0) 58%)",
+            opacity: 0.7,
           }}
         />
 
         <div style={{ position: "relative", display: "flex", gap: 18, alignItems: "center" }}>
           <div
             style={{
-              width: 64,
-              height: 64,
+              width: 66,
+              height: 66,
               borderRadius: 16,
-              backgroundColor: "rgba(255,255,255,0.16)",
-              border: "1px solid rgba(255,255,255,0.22)",
+              backgroundColor: "rgba(255,255,255,0.25)",
+              border: "1px solid rgba(255,255,255,0.35)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: "white",
-              fontWeight: 900,
-              fontSize: 28,
+              overflow: "hidden",
             }}
           >
-            GF
+            <img alt="GlucoForager" src={logoUrl} width={52} height={52} style={{ display: "block" }} />
           </div>
           <div style={{ display: "flex", flexDirection: "column" }}>
             <div style={{ fontSize: 52, fontWeight: 900, color: "#062018", lineHeight: 1.05 }}>
               GlucoForager
             </div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: "rgba(6, 32, 24, 0.85)" }}>
+            <div style={{ fontSize: 24, fontWeight: 800, color: "rgba(6, 32, 24, 0.86)" }}>
               Diabetes-friendly recipes in 60 seconds
             </div>
           </div>
         </div>
 
-        <div style={{ position: "relative", marginTop: 26, maxWidth: 960 }}>
-          <div style={{ fontSize: 26, lineHeight: 1.35, color: "rgba(6, 32, 24, 0.9)" }}>
+        <div style={{ position: "relative", marginTop: 22, maxWidth: 960 }}>
+          <div style={{ fontSize: 26, lineHeight: 1.35, color: "rgba(6, 32, 24, 0.92)", fontWeight: 700 }}>
             Scan ingredients, get safe meal ideas, and learn from our blog.
           </div>
         </div>
 
         <div
           style={{
-            position: "absolute",
-            bottom: 38,
-            left: 68,
-            right: 68,
+            position: "relative",
+            marginTop: 42,
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            color: "rgba(6, 32, 24, 0.75)",
+            color: "rgba(6, 32, 24, 0.78)",
             fontSize: 20,
-            fontWeight: 700,
+            fontWeight: 800,
           }}
         >
           <div>glucoforager.com</div>
@@ -86,15 +84,11 @@ export async function GET() {
         </div>
       </div>
     ),
-    size
+    {
+      ...size,
+      headers: {
+        "Cache-Control": "public, immutable, no-transform, max-age=31536000",
+      },
+    }
   );
-
-  const buffer = await image.arrayBuffer();
-  return new Response(buffer, {
-    headers: {
-      "Content-Type": "image/png",
-      "Content-Length": String(buffer.byteLength),
-      "Cache-Control": "public, immutable, no-transform, max-age=31536000",
-    },
-  });
 }
