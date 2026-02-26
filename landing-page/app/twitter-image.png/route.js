@@ -5,7 +5,7 @@ export const runtime = "edge";
 const size = { width: 1200, height: 600 };
 
 export async function GET() {
-  return new ImageResponse(
+  const image = new ImageResponse(
     (
       <div
         style={{
@@ -82,11 +82,16 @@ export async function GET() {
         </div>
       </div>
     ),
-    {
-      ...size,
-      headers: {
-        "Cache-Control": "public, immutable, no-transform, max-age=31536000",
-      },
-    }
+    size
   );
+
+  const buffer = await image.arrayBuffer();
+  return new Response(buffer, {
+    headers: {
+      "Content-Type": "image/png",
+      "Content-Length": String(buffer.byteLength),
+      "Cache-Control": "public, immutable, no-transform, max-age=31536000",
+    },
+  });
 }
+
