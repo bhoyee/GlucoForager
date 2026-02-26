@@ -5,7 +5,7 @@ export const runtime = "edge";
 const size = { width: 1200, height: 630 };
 
 export async function GET() {
-  return new ImageResponse(
+  const image = new ImageResponse(
     (
       <div
         style={{
@@ -49,6 +49,7 @@ export async function GET() {
           >
             <div style={{ fontWeight: 900, fontSize: 30, color: "white" }}>GF</div>
           </div>
+
           <div style={{ display: "flex", flexDirection: "column" }}>
             <div style={{ fontSize: 56, fontWeight: 900, color: "#062018", lineHeight: 1.05 }}>
               GlucoForager
@@ -60,7 +61,14 @@ export async function GET() {
         </div>
 
         <div style={{ position: "relative", marginTop: 18, maxWidth: 940 }}>
-          <div style={{ fontSize: 30, lineHeight: 1.35, color: "rgba(6, 32, 24, 0.92)", fontWeight: 700 }}>
+          <div
+            style={{
+              fontSize: 30,
+              lineHeight: 1.35,
+              color: "rgba(6, 32, 24, 0.92)",
+              fontWeight: 700,
+            }}
+          >
             Scan ingredients, get low-glycemic meal ideas, and learn smarter habits — built for Type 2 Diabetes.
           </div>
         </div>
@@ -101,11 +109,16 @@ export async function GET() {
         </div>
       </div>
     ),
-    {
-      ...size,
-      headers: {
-        "Cache-Control": "public, immutable, no-transform, max-age=31536000",
-      },
-    }
+    size
   );
+
+  const buffer = await image.arrayBuffer();
+  return new Response(buffer, {
+    headers: {
+      "Content-Type": "image/png",
+      "Content-Length": String(buffer.byteLength),
+      "Cache-Control": "public, immutable, no-transform, max-age=31536000",
+    },
+  });
 }
+
