@@ -27,6 +27,7 @@ export async function GET() {
           style={{
             position: "absolute",
             inset: 0,
+            display: "flex",
             background:
               "radial-gradient(circle at 25% 25%, rgba(255,255,255,0.62), rgba(255,255,255,0) 58%)",
             opacity: 0.7,
@@ -47,20 +48,20 @@ export async function GET() {
               overflow: "hidden",
             }}
           >
-            <div style={{ fontWeight: 900, fontSize: 28, color: "white" }}>GF</div>
+            <div style={{ display: "flex", fontWeight: 900, fontSize: 28, color: "white" }}>GF</div>
           </div>
           <div style={{ display: "flex", flexDirection: "column" }}>
-            <div style={{ fontSize: 52, fontWeight: 900, color: "#062018", lineHeight: 1.05 }}>
+            <div style={{ display: "flex", fontSize: 52, fontWeight: 900, color: "#062018", lineHeight: 1.05 }}>
               GlucoForager
             </div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: "rgba(6, 32, 24, 0.86)" }}>
+            <div style={{ display: "flex", fontSize: 24, fontWeight: 800, color: "rgba(6, 32, 24, 0.86)" }}>
               Diabetes-friendly recipes in 60 seconds
             </div>
           </div>
         </div>
 
-        <div style={{ position: "relative", marginTop: 22, maxWidth: 960 }}>
-          <div style={{ fontSize: 26, lineHeight: 1.35, color: "rgba(6, 32, 24, 0.92)", fontWeight: 700 }}>
+        <div style={{ position: "relative", marginTop: 22, maxWidth: 960, display: "flex", flexDirection: "column" }}>
+          <div style={{ display: "flex", fontSize: 26, lineHeight: 1.35, color: "rgba(6, 32, 24, 0.92)", fontWeight: 700 }}>
             Scan ingredients, get safe meal ideas, and learn from our blog.
           </div>
         </div>
@@ -77,8 +78,8 @@ export async function GET() {
             fontWeight: 800,
           }}
         >
-          <div>glucoforager.com</div>
-          <div>iOS • Android</div>
+          <div style={{ display: "flex" }}>glucoforager.com</div>
+          <div style={{ display: "flex" }}>iOS • Android</div>
         </div>
       </div>
     ),
