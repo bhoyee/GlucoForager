@@ -37,7 +37,7 @@ export default function Testimonials() {
       content: "The portion control suggestions are spot on. My A1C improved by 1.2 points since using GlucoForager daily. Game changer!",
       location: "Edinburgh, UK",
       rating: 5,
-      image: "/images/testimonials/james.jpg" // Add this image later
+      image: "" // No image yet; fall back to initials
     },
     {
       name: "Priya S.",
@@ -45,7 +45,7 @@ export default function Testimonials() {
       content: "Prevented me from developing full diabetes. The app taught me how to eat right with foods I already had. 6 months later, I'm off medication!",
       location: "Leeds, UK",
       rating: 5,
-      image: "/images/testimonials/priya.jpg" // Add this image later
+      image: "" // No image yet; fall back to initials
     }
   ];
 
@@ -67,7 +67,7 @@ export default function Testimonials() {
 
   // Check if image exists, fallback to initials
   const Avatar = ({ testimonial }) => {
-    if (testimonial.image) {
+    if (typeof testimonial.image === "string" && testimonial.image.trim()) {
       return (
         <Image
           src={testimonial.image}
