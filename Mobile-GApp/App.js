@@ -9,6 +9,7 @@ import { LogBox, View, Text } from 'react-native';
 import { AuthProvider, useAuth } from './context/authContext';
 import { configureRevenueCat } from './utils/revenuecat';
 import { startMobileLogUploader } from './utils/mobileLogUploader';
+import { configureMealReminderNotificationHandler, syncMealRemindersOnAppStart } from './utils/mealReminders';
 
 // Import screens
 import SplashScreen from './screens/SplashScreen';
@@ -113,6 +114,22 @@ function RevenueCatBootstrap() {
   return null;
 }
 
+function MealRemindersBootstrap() {
+  useEffect(() => {
+    configureMealReminderNotificationHandler();
+    const boot = async () => {
+      try {
+        await syncMealRemindersOnAppStart();
+      } catch {
+        // Never crash the app if scheduling fails.
+      }
+    };
+    boot();
+  }, []);
+
+  return null;
+}
+
 export default function App() {
   console.log('App component rendering');
 
@@ -133,6 +150,7 @@ export default function App() {
     <SafeAreaProvider>
       <AuthProvider>
         <RevenueCatBootstrap />
+        <MealRemindersBootstrap />
         <AppNavigator />
       </AuthProvider>
     </SafeAreaProvider>

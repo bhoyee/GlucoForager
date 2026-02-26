@@ -50,7 +50,8 @@
           "cameraPermission": "GlucoForager uses your camera to scan ingredients and identify items for diabetes-friendly recipe suggestions (e.g., take a photo of your fridge or pantry).",
           "photosPermission": "Allow GlucoForager to access your photo library to select ingredient images"
         }
-      ]
+      ],
+      "expo-notifications"
     ],
     "updates": {
       "url": "https://u.expo.dev/3a807650-6f05-4001-b6e4-703f2c21aef3"
