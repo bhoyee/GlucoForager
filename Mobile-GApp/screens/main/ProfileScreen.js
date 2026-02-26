@@ -1,6 +1,6 @@
 // screens/main/ProfileScreen.js
 import React, { useCallback, useContext, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Linking, Share, Platform, ActivityIndicator, Modal, Pressable } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Linking, Share, Platform, ActivityIndicator, Modal, Pressable, Switch } from 'react-native';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
 import { configureRevenueCat, getCustomerInfo, getOfferings, getPaywallOffering, isPremiumEntitled, isRevenueCatConfigured, presentCustomerCenter, presentPaywall, restorePurchases } from '../../utils/revenuecat';
+import { disableMealReminders, enableMealRemindersAndSchedule, getMealRemindersEnabled, setMealRemindersPrompted } from '../../utils/mealReminders';
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
@@ -44,6 +45,8 @@ export default function ProfileScreen() {
   const [premiumPriceLine, setPremiumPriceLine] = useState('');
   const [premiumOfferingId, setPremiumOfferingId] = useState('');
   const [premiumProductId, setPremiumProductId] = useState('');
+  const [mealRemindersEnabled, setMealRemindersEnabled] = useState(false);
+  const [mealRemindersBusy, setMealRemindersBusy] = useState(false);
   const [debugTapCount, setDebugTapCount] = useState(0);
   const [debugTapTimer, setDebugTapTimer] = useState(null);
   const debugTapThreshold = 7;
@@ -154,6 +157,42 @@ export default function ProfileScreen() {
       fullName: profileData?.full_name || null,
     });
   }, [signOut]);
+
+  const loadMealReminders = useCallback(async () => {
+    const enabled = await getMealRemindersEnabled();
+    setMealRemindersEnabled(enabled);
+  }, []);
+
+  const toggleMealReminders = useCallback(
+    async (nextEnabled) => {
+      if (mealRemindersBusy) return;
+      setMealRemindersBusy(true);
+      try {
+        if (nextEnabled) {
+          await setMealRemindersPrompted();
+          const result = await enableMealRemindersAndSchedule();
+          if (!result?.scheduled) {
+            setMealRemindersEnabled(false);
+            Alert.alert(
+              'Notifications disabled',
+              'Please allow notifications in your device Settings to enable meal reminders.'
+            );
+            return;
+          }
+          setMealRemindersEnabled(true);
+          return;
+        }
+
+        await disableMealReminders();
+        setMealRemindersEnabled(false);
+      } catch (error) {
+        Alert.alert('Error', 'Unable to update reminders right now.');
+      } finally {
+        setMealRemindersBusy(false);
+      }
+    },
+    [mealRemindersBusy]
+  );
 
   const openPremiumModal = useCallback(async () => {
     try {
@@ -353,11 +392,12 @@ export default function ProfileScreen() {
   useFocusEffect(
     useCallback(() => {
       loadProfile();
+      loadMealReminders();
       if (route?.params?.openPremium && !premiumModalVisible) {
         openPremiumModal();
         navigation.setParams({ openPremium: undefined });
       }
-    }, [loadProfile, navigation, openPremiumModal, premiumModalVisible, route?.params?.openPremium])
+    }, [loadMealReminders, loadProfile, navigation, openPremiumModal, premiumModalVisible, route?.params?.openPremium])
   );
 
   const handleRateUs = async () => {
@@ -578,6 +618,27 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
         </TouchableOpacity>
 
+      </View>
+
+      <View style={styles.menuSection}>
+        <Text style={styles.sectionTitle}>Reminders</Text>
+
+        <View style={styles.menuItem}>
+          <View style={styles.menuItemLeft}>
+            <Ionicons name="alarm-outline" size={22} color={Colors.text} />
+            <View style={styles.menuTextStack}>
+              <Text style={[styles.menuText, { marginLeft: 0, flex: 0 }]}>Meal reminders</Text>
+              <Text style={styles.menuSubtext}>Breakfast, lunch & dinner</Text>
+            </View>
+          </View>
+          <Switch
+            value={mealRemindersEnabled}
+            onValueChange={toggleMealReminders}
+            disabled={mealRemindersBusy}
+            trackColor={{ false: '#C7CBD1', true: `${Colors.primary}88` }}
+            thumbColor={mealRemindersEnabled ? Colors.primary : '#FFFFFF'}
+          />
+        </View>
       </View>
 
       <View style={styles.menuSection}>
@@ -947,12 +1008,22 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 12,
   },
+  menuTextStack: {
+    marginLeft: 12,
+    flex: 1,
+  },
   menuText: {
     fontSize: 16,
     color: Colors.text,
     marginLeft: 12,
     flex: 1,
     flexWrap: 'wrap',
+  },
+  menuSubtext: {
+    marginTop: 2,
+    fontSize: 12,
+    color: Colors.textLight,
+    fontWeight: '500',
   },
   versionContainer: {
     alignItems: 'center',
