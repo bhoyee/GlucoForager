@@ -21,8 +21,9 @@ export default function ProfileScreen() {
   const headerPaddingTop = Math.max(insets.top, 16);
   const contentBottomPadding = Math.max(insets.bottom + 4, 4);
   const premiumModalBottomPadding = Math.max(insets.bottom, 14) + 14;
-  const appStoreUrl = 'itms-apps://itunes.apple.com/app/id0000000000';
+  const appStoreUrl = 'https://apps.apple.com/us/app/glucoforager/id6758808427?action=write-review';
   const playStoreUrl = 'market://details?id=com.glucoforager.app';
+  const playStoreWebUrl = 'https://play.google.com/store/apps/details?id=com.glucoforager.app';
   const shareUrl = 'https://glucoforager.com/app';
   const privacyPolicyUrl = 'https://www.glucoforager.com/privacy-policy';
   const eulaUrl =
@@ -47,6 +48,7 @@ export default function ProfileScreen() {
   const [debugTapTimer, setDebugTapTimer] = useState(null);
   const debugTapThreshold = 7;
   const revenueCatReady = isRevenueCatConfigured();
+  const premiumPriceCacheKey = 'premium_price_line_cache_v1';
 
   const openExternalLink = async (url) => {
     try {
@@ -169,11 +171,24 @@ export default function ProfileScreen() {
         return;
       }
 
+      // Ensure RevenueCat is configured/logged in before fetching offerings.
+      // Without this, `getOfferings()` can fail and the price line won't show.
+      try {
+        await configureRevenueCat();
+        await ensureRevenueCatUser();
+      } catch (error) {
+        // Ignore and fall back to anonymous offerings fetch.
+      }
+
       let offering = null;
       try {
         offering = await getPaywallOffering();
       } catch (error) {
-        // Ignore and fall back to empty UI.
+        setPremiumModalError(
+          Platform.OS === 'ios'
+            ? 'Subscriptions are temporarily unavailable (Apple sandbox may still be processing billing info). Please try again later.'
+            : 'Subscriptions are temporarily unavailable. Please try again later.'
+        );
       }
 
       if (offering) {
@@ -188,23 +203,29 @@ export default function ProfileScreen() {
           setPremiumProductId(product?.identifier || product?.productIdentifier || '');
           if (priceString) {
             setPremiumPriceLine(priceString);
+            try {
+              await AsyncStorage.setItem(premiumPriceCacheKey, priceString);
+            } catch (error) {
+              // Ignore cache write errors.
+            }
           }
+        }
+      } else {
+        try {
+          const cachedPrice = await AsyncStorage.getItem(premiumPriceCacheKey);
+          if (cachedPrice) setPremiumPriceLine(cachedPrice);
+        } catch (error) {
+          // Ignore cache read errors.
         }
       }
 
-      try {
-        await getOfferings();
-      } catch (error) {
-        setPremiumModalError(
-          'Subscriptions are temporarily unavailable (Apple sandbox is still processing billing info). Please try again later.'
-        );
-      }
+      // Avoid a second offerings fetch: it can fail transiently and overwrite a successfully loaded price.
     } catch (error) {
       setPremiumModalError('Unable to load subscriptions right now. Please try again later.');
     } finally {
       setIsUpgrading(false);
     }
-  }, [revenueCatReady]);
+  }, [ensureRevenueCatUser, revenueCatReady]);
 
   const handleUpgrade = useCallback(async () => {
     await openPremiumModal();
@@ -320,13 +341,18 @@ export default function ProfileScreen() {
   );
 
   const handleRateUs = async () => {
-    const url = Platform.OS === 'ios' ? appStoreUrl : playStoreUrl;
-    const canOpen = await Linking.canOpenURL(url);
-    if (canOpen) {
-      Linking.openURL(url);
-      return;
+    const primaryUrl = Platform.OS === 'ios' ? appStoreUrl : playStoreUrl;
+    const fallbackUrl = Platform.OS === 'ios' ? appStoreUrl : playStoreWebUrl;
+
+    try {
+      await Linking.openURL(primaryUrl);
+    } catch (error) {
+      try {
+        await Linking.openURL(fallbackUrl);
+      } catch (fallbackError) {
+        Alert.alert('Unavailable', 'Store link not available right now.');
+      }
     }
-    Alert.alert('Unavailable', 'Store link not available yet.');
   };
 
   const handleShare = async () => {
