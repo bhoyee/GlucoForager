@@ -3,8 +3,6 @@ import { ImageResponse } from "next/og";
 export const runtime = "edge";
 
 const size = { width: 1200, height: 630 };
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.glucoforager.com";
-const logoUrl = `${siteUrl.replace(/\/+$/, "")}/images/logo.png`;
 
 export async function GET() {
   return new ImageResponse(
@@ -49,13 +47,7 @@ export async function GET() {
               overflow: "hidden",
             }}
           >
-            <img
-              alt="GlucoForager"
-              src={logoUrl}
-              width={56}
-              height={56}
-              style={{ display: "block" }}
-            />
+            <div style={{ fontWeight: 900, fontSize: 30, color: "white" }}>GF</div>
           </div>
           <div style={{ display: "flex", flexDirection: "column" }}>
             <div style={{ fontSize: 56, fontWeight: 900, color: "#062018", lineHeight: 1.05 }}>
