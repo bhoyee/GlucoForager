@@ -254,6 +254,7 @@ export async function scheduleMealReminders(times = null) {
       content: {
         title: `Time to scan for ${item.label}`,
         body: 'Scan ingredients to get diabetes-friendly recipes.',
+        ...(Platform.OS === 'android' ? { channelId: ANDROID_CHANNEL_ID } : {}),
       },
       trigger:
         Platform.OS === 'android'
@@ -261,7 +262,6 @@ export async function scheduleMealReminders(times = null) {
               hour: triggerTime.hour,
               minute: triggerTime.minute,
               repeats: true,
-              channelId: ANDROID_CHANNEL_ID,
             }
           : {
               hour: triggerTime.hour,
