@@ -329,21 +329,26 @@ export async function devInspectScheduledNotifications() {
       return typeof title === 'string' && title.toLowerCase().startsWith('time to scan for ');
     });
 
+    const now = new Date();
+    const tzOffsetMinutes = now.getTimezoneOffset();
     const mealNext = await Promise.all(
       meal.map(async (item) => {
         try {
           const next = await Notifications.getNextTriggerDateAsync(item?.trigger);
+          const nextDate = next ? new Date(next) : null;
           return {
             id: item?.identifier,
             title: item?.content?.title,
-            next: next ? new Date(next).toISOString() : null,
+            next_iso: nextDate ? nextDate.toISOString() : null,
+            next_local: nextDate ? nextDate.toLocaleString() : null,
             trigger: item?.trigger,
           };
         } catch (error) {
           return {
             id: item?.identifier,
             title: item?.content?.title,
-            next: null,
+            next_iso: null,
+            next_local: null,
             error: `${error?.message || error}`,
             trigger: item?.trigger,
           };
@@ -351,6 +356,9 @@ export async function devInspectScheduledNotifications() {
       })
     );
     debugLog('Inspect scheduled notifications', {
+      now_iso: now.toISOString(),
+      now_local: now.toLocaleString(),
+      tz_offset_minutes: tzOffsetMinutes,
       total: Array.isArray(scheduled) ? scheduled.length : 0,
       meal_count: meal.length,
       meal_titles: meal.map((m) => m?.content?.title).filter(Boolean),
