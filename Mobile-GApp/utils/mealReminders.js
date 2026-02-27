@@ -352,15 +352,30 @@ export async function devInspectScheduledNotifications() {
     const tzOffsetMinutes = now.getTimezoneOffset();
     const mealNext = await Promise.all(
       meal.map(async (item) => {
+        const contentData = item?.content?.data || {};
+        const scheduledFor = typeof contentData?.scheduledFor === 'string' ? contentData.scheduledFor : null;
+        const trigger = item?.trigger;
+        const triggerType = trigger?.type != null ? String(trigger.type) : null;
+
         try {
-          const next = await Notifications.getNextTriggerDateAsync(item?.trigger);
-          const nextDate = next ? new Date(next) : null;
+          let nextDate = null;
+
+          if (triggerType && triggerType.toLowerCase() === 'date') {
+            const raw = trigger?.date || scheduledFor;
+            nextDate = raw ? new Date(raw) : null;
+          } else {
+            const next = await Notifications.getNextTriggerDateAsync(trigger);
+            nextDate = next ? new Date(next) : null;
+          }
+
           return {
             id: item?.identifier,
             title: item?.content?.title,
             next_iso: nextDate ? nextDate.toISOString() : null,
             next_local: nextDate ? nextDate.toLocaleString() : null,
-            trigger: item?.trigger,
+            scheduled_for: scheduledFor,
+            trigger_type: triggerType,
+            trigger_date: trigger?.date ? String(trigger.date) : null,
           };
         } catch (error) {
           return {
@@ -368,8 +383,10 @@ export async function devInspectScheduledNotifications() {
             title: item?.content?.title,
             next_iso: null,
             next_local: null,
+            scheduled_for: scheduledFor,
+            trigger_type: triggerType,
+            trigger_date: trigger?.date ? String(trigger.date) : null,
             error: `${error?.message || error}`,
-            trigger: item?.trigger,
           };
         }
       })
