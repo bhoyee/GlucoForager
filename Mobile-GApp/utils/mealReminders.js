@@ -17,6 +17,8 @@ const DEFAULT_TIMES = {
 };
 
 const ANDROID_CHANNEL_ID = 'meal-reminders';
+const SCHEDULE_DAYS_AHEAD = 7;
+const PAST_TRIGGER_GRACE_MS = 60 * 1000;
 
 function debugLog(message, details) {
   if (!__DEV__) return;
@@ -241,7 +243,7 @@ export async function scheduleMealReminders(times = null) {
   await dismissPresentedMealReminders();
 
   const scheduleTimes = times || (await getMealReminderTimes());
-  debugLog('Scheduling reminders', scheduleTimes);
+  debugLog('Scheduling reminders', { scheduleTimes, daysAhead: SCHEDULE_DAYS_AHEAD });
   const pairs = [
     { key: 'breakfast', label: 'breakfast' },
     { key: 'lunch', label: 'lunch' },
@@ -249,36 +251,53 @@ export async function scheduleMealReminders(times = null) {
   ];
 
   const ids = [];
-  for (const item of pairs) {
-    const triggerTime = scheduleTimes[item.key] || DEFAULT_TIMES[item.key];
-    try {
-      const id = await Notifications.scheduleNotificationAsync({
-        content: {
-          title: `Time to scan for ${item.label}`,
-          body: 'Scan ingredients to get diabetes-friendly recipes.',
-          ...(Platform.OS === 'android' ? { channelId: ANDROID_CHANNEL_ID } : {}),
-        },
-        trigger:
-          Platform.OS === 'android'
-            ? {
-                type: Notifications.SchedulableTriggerInputTypes.DAILY,
-                hour: triggerTime.hour,
-                minute: triggerTime.minute,
-                channelId: ANDROID_CHANNEL_ID,
-              }
-            : {
-                type: Notifications.SchedulableTriggerInputTypes.DAILY,
-                hour: triggerTime.hour,
-                minute: triggerTime.minute,
-              },
-      });
-      ids.push(id);
-    } catch (error) {
-      debugLog('Failed to schedule reminder', {
-        label: item.label,
-        triggerTime,
-        error: `${error?.message || error}`,
-      });
+
+  const now = Date.now();
+  for (let dayOffset = 0; dayOffset < SCHEDULE_DAYS_AHEAD; dayOffset += 1) {
+    for (const item of pairs) {
+      const triggerTime = scheduleTimes[item.key] || DEFAULT_TIMES[item.key];
+      const target = new Date();
+      target.setHours(triggerTime.hour, triggerTime.minute, 0, 0);
+      target.setDate(target.getDate() + dayOffset);
+
+      if (target.getTime() <= now + PAST_TRIGGER_GRACE_MS) {
+        continue;
+      }
+
+      try {
+        const id = await Notifications.scheduleNotificationAsync({
+          content: {
+            title: `Time to scan for ${item.label}`,
+            body: 'Scan ingredients to get diabetes-friendly recipes.',
+            ...(Platform.OS === 'android' ? { channelId: ANDROID_CHANNEL_ID } : {}),
+            data: {
+              kind: 'meal_reminder',
+              meal: item.key,
+              scheduledFor: target.toISOString(),
+            },
+          },
+          trigger:
+            Platform.OS === 'android'
+              ? {
+                  type: Notifications.SchedulableTriggerInputTypes.DATE,
+                  date: target,
+                  channelId: ANDROID_CHANNEL_ID,
+                }
+              : {
+                  type: Notifications.SchedulableTriggerInputTypes.DATE,
+                  date: target,
+                },
+        });
+        ids.push(id);
+      } catch (error) {
+        debugLog('Failed to schedule reminder', {
+          label: item.label,
+          triggerTime,
+          dayOffset,
+          target: target.toISOString(),
+          error: `${error?.message || error}`,
+        });
+      }
     }
   }
 
