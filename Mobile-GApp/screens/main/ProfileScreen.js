@@ -11,7 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
 import { configureRevenueCat, getCustomerInfo, getOfferings, getPaywallOffering, isPremiumEntitled, isRevenueCatConfigured, presentCustomerCenter, presentPaywall, restorePurchases } from '../../utils/revenuecat';
-import { disableMealReminders, enableMealRemindersAndSchedule, getMealRemindersEnabled, setMealRemindersPrompted } from '../../utils/mealReminders';
+import { disableMealReminders, enableMealRemindersAndSchedule, getMealRemindersEnabled, setMealRemindersPrompted, devInspectScheduledNotifications, devSendTestMealNotification } from '../../utils/mealReminders';
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
@@ -639,6 +639,25 @@ export default function ProfileScreen() {
             thumbColor={mealRemindersEnabled ? Colors.primary : '#FFFFFF'}
           />
         </View>
+
+        {__DEV__ ? (
+          <>
+            <TouchableOpacity
+              style={styles.devReminderButton}
+              onPress={() => void devSendTestMealNotification()}
+            >
+              <Ionicons name="notifications-outline" size={18} color={Colors.primary} />
+              <Text style={styles.devReminderButtonText}>Send test notification</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.devReminderButton}
+              onPress={() => void devInspectScheduledNotifications()}
+            >
+              <Ionicons name="list-outline" size={18} color={Colors.primary} />
+              <Text style={styles.devReminderButtonText}>Inspect scheduled notifications</Text>
+            </TouchableOpacity>
+          </>
+        ) : null}
       </View>
 
       <View style={styles.menuSection}>
@@ -1024,6 +1043,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textLight,
     fontWeight: '500',
+  },
+  devReminderButton: {
+    marginTop: 10,
+    marginHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: `${Colors.primary}10`,
+    borderWidth: 1,
+    borderColor: `${Colors.primary}22`,
+  },
+  devReminderButtonText: {
+    fontSize: 13,
+    color: Colors.primary,
+    fontWeight: '600',
   },
   versionContainer: {
     alignItems: 'center',

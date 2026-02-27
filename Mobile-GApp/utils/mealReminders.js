@@ -309,3 +309,41 @@ export async function syncMealRemindersOnAppStart() {
   await cancelOrphanedMealReminders();
   await scheduleMealReminders(times);
 }
+
+export async function devInspectScheduledNotifications() {
+  if (!__DEV__) return null;
+  try {
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    const meal = (scheduled || []).filter((item) => {
+      const title = item?.content?.title || '';
+      return typeof title === 'string' && title.toLowerCase().startsWith('time to scan for ');
+    });
+    debugLog('Inspect scheduled notifications', {
+      total: Array.isArray(scheduled) ? scheduled.length : 0,
+      meal_count: meal.length,
+      meal_titles: meal.map((m) => m?.content?.title).filter(Boolean),
+    });
+    return { total: scheduled?.length || 0, mealCount: meal.length };
+  } catch (error) {
+    debugLog('Inspect scheduled notifications failed', { error: `${error?.message || error}` });
+    return null;
+  }
+}
+
+export async function devSendTestMealNotification() {
+  if (!__DEV__) return;
+  try {
+    await ensureAndroidChannel();
+    const id = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'Test: Time to scan',
+        body: 'This is a dev test notification.',
+        ...(Platform.OS === 'android' ? { channelId: ANDROID_CHANNEL_ID } : {}),
+      },
+      trigger: { seconds: 2 },
+    });
+    debugLog('Scheduled test notification', { id });
+  } catch (error) {
+    debugLog('Test notification failed', { error: `${error?.message || error}` });
+  }
+}
