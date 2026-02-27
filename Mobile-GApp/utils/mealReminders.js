@@ -126,7 +126,8 @@ export async function setMealRemindersPrompted() {
 export function configureMealReminderNotificationHandler() {
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
-      shouldShowAlert: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
       shouldPlaySound: false,
       shouldSetBadge: false,
     }),
@@ -327,10 +328,33 @@ export async function devInspectScheduledNotifications() {
       const title = item?.content?.title || '';
       return typeof title === 'string' && title.toLowerCase().startsWith('time to scan for ');
     });
+
+    const mealNext = await Promise.all(
+      meal.map(async (item) => {
+        try {
+          const next = await Notifications.getNextTriggerDateAsync(item?.trigger);
+          return {
+            id: item?.identifier,
+            title: item?.content?.title,
+            next: next ? new Date(next).toISOString() : null,
+            trigger: item?.trigger,
+          };
+        } catch (error) {
+          return {
+            id: item?.identifier,
+            title: item?.content?.title,
+            next: null,
+            error: `${error?.message || error}`,
+            trigger: item?.trigger,
+          };
+        }
+      })
+    );
     debugLog('Inspect scheduled notifications', {
       total: Array.isArray(scheduled) ? scheduled.length : 0,
       meal_count: meal.length,
       meal_titles: meal.map((m) => m?.content?.title).filter(Boolean),
+      meal_next: mealNext,
     });
     return { total: scheduled?.length || 0, mealCount: meal.length };
   } catch (error) {
