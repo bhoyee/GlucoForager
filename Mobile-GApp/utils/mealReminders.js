@@ -250,26 +250,35 @@ export async function scheduleMealReminders(times = null) {
   const ids = [];
   for (const item of pairs) {
     const triggerTime = scheduleTimes[item.key] || DEFAULT_TIMES[item.key];
-    const id = await Notifications.scheduleNotificationAsync({
-      content: {
-        title: `Time to scan for ${item.label}`,
-        body: 'Scan ingredients to get diabetes-friendly recipes.',
-        ...(Platform.OS === 'android' ? { channelId: ANDROID_CHANNEL_ID } : {}),
-      },
-      trigger:
-        Platform.OS === 'android'
-          ? {
-              hour: triggerTime.hour,
-              minute: triggerTime.minute,
-              repeats: true,
-            }
-          : {
-              hour: triggerTime.hour,
-              minute: triggerTime.minute,
-              repeats: true,
-            },
-    });
-    ids.push(id);
+    try {
+      const id = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: `Time to scan for ${item.label}`,
+          body: 'Scan ingredients to get diabetes-friendly recipes.',
+          ...(Platform.OS === 'android' ? { channelId: ANDROID_CHANNEL_ID } : {}),
+        },
+        trigger:
+          Platform.OS === 'android'
+            ? {
+                type: Notifications.SchedulableTriggerInputTypes.DAILY,
+                hour: triggerTime.hour,
+                minute: triggerTime.minute,
+                channelId: ANDROID_CHANNEL_ID,
+              }
+            : {
+                type: Notifications.SchedulableTriggerInputTypes.DAILY,
+                hour: triggerTime.hour,
+                minute: triggerTime.minute,
+              },
+      });
+      ids.push(id);
+    } catch (error) {
+      debugLog('Failed to schedule reminder', {
+        label: item.label,
+        triggerTime,
+        error: `${error?.message || error}`,
+      });
+    }
   }
 
   await writeJson(STORAGE_KEYS.scheduledIds, ids);
@@ -340,7 +349,19 @@ export async function devSendTestMealNotification() {
         body: 'This is a dev test notification.',
         ...(Platform.OS === 'android' ? { channelId: ANDROID_CHANNEL_ID } : {}),
       },
-      trigger: { seconds: 2 },
+      trigger:
+        Platform.OS === 'android'
+          ? {
+              type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+              seconds: 2,
+              repeats: false,
+              channelId: ANDROID_CHANNEL_ID,
+            }
+          : {
+              type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+              seconds: 2,
+              repeats: false,
+            },
     });
     debugLog('Scheduled test notification', { id });
   } catch (error) {
