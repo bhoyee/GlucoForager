@@ -213,6 +213,12 @@ export default function AdminUsersPage() {
   };
 
   const confirmContent = getConfirmContent(pendingAction);
+  const getPlatformLabel = (value) => {
+    const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+    if (normalized === 'ios') return 'iOS';
+    if (normalized === 'android') return 'Android';
+    return value || '--';
+  };
 
   return (
     <div className="admin-card">
@@ -294,6 +300,7 @@ export default function AdminUsersPage() {
               <div className="admin-mobile-user-list">
                 {users.map((user) => {
                   const isSuspended = Boolean(user.suspended_at);
+                  const platformLabel = getPlatformLabel(user.registered_platform);
                   
                   return (
                     <div key={user.id} className={`admin-mobile-user-card ${isSuspended ? 'suspended' : ''}`}>
@@ -327,6 +334,10 @@ export default function AdminUsersPage() {
                         <div className="admin-mobile-user-detail">
                           <span className="admin-mobile-detail-label">Joined:</span>
                           <span>{user.created_at ? new Date(user.created_at).toLocaleDateString() : '--'}</span>
+                        </div>
+                        <div className="admin-mobile-user-detail">
+                          <span className="admin-mobile-detail-label">Platform:</span>
+                          <span>{platformLabel}</span>
                         </div>
                         <div className="admin-mobile-user-detail">
                           <span className="admin-mobile-detail-label">Expires:</span>
@@ -379,6 +390,7 @@ export default function AdminUsersPage() {
                     <tr>
                       <th>User</th>
                       <th>Email</th>
+                      <th>Platform</th>
                       <th>Subscription</th>
                       <th>Status</th>
                       <th>Expires</th>
@@ -389,11 +401,13 @@ export default function AdminUsersPage() {
                   <tbody>
                     {users.map((user) => {
                       const isSuspended = Boolean(user.suspended_at);
+                      const platformLabel = getPlatformLabel(user.registered_platform);
 
                       return (
                         <tr key={user.id} className={isSuspended ? 'admin-row-suspended' : undefined}>
                           <td>{user.full_name || '--'}</td>
                           <td>{user.email}</td>
+                          <td>{platformLabel}</td>
                           <td>
                             <span className={`admin-badge ${user.subscription_tier === 'premium' ? '' : 'secondary'}`}>
                               <span title={user.tier_source ? `Source: ${user.tier_source}` : ''}>

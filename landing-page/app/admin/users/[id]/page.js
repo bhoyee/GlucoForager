@@ -537,6 +537,32 @@ export default function AdminUserDetail() {
               Suspended: <strong>{user.suspended_at ? new Date(user.suspended_at).toLocaleString() : "No"}</strong>
             </p>
           </div>
+
+          <div className="admin-card" style={{ marginTop: '16px' }}>
+            <h3 className="admin-title">App & Device</h3>
+            <p className="admin-subtitle">
+              Platform:{' '}
+              <strong>
+                {user.registered_platform === 'ios'
+                  ? 'iOS'
+                  : user.registered_platform === 'android'
+                    ? 'Android'
+                    : user.registered_platform || '--'}
+              </strong>
+            </p>
+            <p className="admin-subtitle">
+              App version: <strong>{user.registered_app_version || '--'}</strong>
+            </p>
+            <p className="admin-subtitle">
+              Build: <strong>{user.registered_build_number || '--'}</strong>
+            </p>
+            <p className="admin-subtitle">
+              OS: <strong>{user.registered_os_version || '--'}</strong>
+            </p>
+            <p className="admin-subtitle">
+              Device: <strong>{user.registered_device_model || '--'}</strong>
+            </p>
+          </div>
         </div>
       </div>
 

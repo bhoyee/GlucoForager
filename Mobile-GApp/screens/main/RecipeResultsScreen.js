@@ -8,6 +8,7 @@ import {
   Image,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
@@ -15,6 +16,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { LinearGradient } from 'expo-linear-gradient';
+import {
+  enableMealRemindersAndSchedule,
+  getMealRemindersEnabled,
+  getMealRemindersPrompted,
+  setMealRemindersPrompted,
+} from '../../utils/mealReminders';
 
 export default function RecipeResultsScreen() {
   const navigation = useNavigation();
@@ -36,6 +43,7 @@ export default function RecipeResultsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [detectedIngredients, setDetectedIngredients] = useState([]);
   const [recipes, setRecipes] = useState([]);
+  const [remindersPromptHandled, setRemindersPromptHandled] = useState(false);
 
   useEffect(() => {
     const ingredientSource = source === 'text' ? 'Input' : 'Detected';
@@ -59,6 +67,54 @@ export default function RecipeResultsScreen() {
     setRecipes(recipesFromParams || []);
     setIsLoading(false);
   }, [detectedFromParams, recipesFromParams, selectedIngredients, source]);
+
+  useEffect(() => {
+    const maybePrompt = async () => {
+      if (isLoading || remindersPromptHandled) return;
+      if (!Array.isArray(recipes) || recipes.length === 0) return;
+
+      const [enabled, prompted] = await Promise.all([
+        getMealRemindersEnabled(),
+        getMealRemindersPrompted(),
+      ]);
+
+      if (enabled || prompted) {
+        setRemindersPromptHandled(true);
+        return;
+      }
+
+      setRemindersPromptHandled(true);
+
+      Alert.alert(
+        'Meal reminders',
+        'Want a gentle reminder at breakfast, lunch, and dinner to scan ingredients?',
+        [
+          {
+            text: 'Not now',
+            style: 'cancel',
+            onPress: () => {
+              setMealRemindersPrompted();
+            },
+          },
+          {
+            text: 'Enable',
+            onPress: async () => {
+              await setMealRemindersPrompted();
+              const result = await enableMealRemindersAndSchedule();
+              if (!result?.scheduled) {
+                Alert.alert(
+                  'Notifications disabled',
+                  'Please allow notifications in your device Settings to enable meal reminders.'
+                );
+              }
+            },
+          },
+        ]
+      );
+    };
+
+    maybePrompt();
+  }, [isLoading, recipes, remindersPromptHandled]);
 
   if (isLoading) {
     return (
