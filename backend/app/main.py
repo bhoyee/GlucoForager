@@ -19,6 +19,7 @@ from .api.endpoints import (
     admin,
     admin_settings,
     admin_revenuecat,
+    admin_user_email,
     ingredients,
     recipes,
     subscriptions,
@@ -248,6 +249,7 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 app.include_router(admin_settings.router, prefix="/api")
 app.include_router(admin_revenuecat.router, prefix="/api")
+app.include_router(admin_user_email.router, prefix="/api")
 app.include_router(ingredients.router, prefix="/api")
 app.include_router(recipes.router, prefix="/api")
 app.include_router(subscriptions.router, prefix="/api")
