@@ -87,9 +87,14 @@ export default function AdminNewsletterSendPage() {
           <h2 className="admin-title">Send newsletter</h2>
           <p className="admin-subtitle">Send an email update to subscribers.</p>
         </div>
-        <Link className="admin-link" href="/admin/newsletter">
-          Back to subscribers
-        </Link>
+        <div className="flex items-center gap-3 flex-wrap">
+          <Link className="admin-link" href="/admin/newsletter">
+            Back to subscribers
+          </Link>
+          <Link className="admin-link" href="/admin/newsletter/history">
+            View history
+          </Link>
+        </div>
       </div>
 
       <div className="admin-field">

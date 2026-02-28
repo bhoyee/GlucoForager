@@ -17,7 +17,11 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from .api.endpoints import (
     auth,
     admin,
+    admin_settings,
     admin_revenuecat,
+    admin_user_email,
+    admin_email_campaigns,
+    app_public,
     ingredients,
     recipes,
     subscriptions,
@@ -46,11 +50,13 @@ from .models import (  # ensure models are registered with SQLAlchemy
     ai_request,
     password_reset,
     admin_user,
+    admin_email_campaign,
     recipe,
     recipe_history,
     blog_post,
     blog_comment,
     newsletter_signup,
+    app_setting,
 )
 from .services.abuse_detector import AbuseDetector
 from .services.system_log_service import log_system_event
@@ -244,7 +250,11 @@ except Exception as exc:  # noqa: BLE001
 
 app.include_router(auth.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
+app.include_router(admin_settings.router, prefix="/api")
 app.include_router(admin_revenuecat.router, prefix="/api")
+app.include_router(admin_user_email.router, prefix="/api")
+app.include_router(admin_email_campaigns.router, prefix="/api")
+app.include_router(app_public.router, prefix="/api")
 app.include_router(ingredients.router, prefix="/api")
 app.include_router(recipes.router, prefix="/api")
 app.include_router(subscriptions.router, prefix="/api")

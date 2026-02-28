@@ -18,6 +18,7 @@ import { Colors } from "../../constants/Colors";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "../../context/authContext"; // Use the hook instead of useContext directly
 import { API_ENDPOINTS, API_URL } from "../../config/api";
+import { getClientInfo } from "../../utils/clientInfo";
 
 export default function LoginScreen() {
   const navigation = useNavigation();
@@ -46,7 +47,7 @@ export default function LoginScreen() {
       const response = await fetch(`${API_URL}${API_ENDPOINTS.LOGIN}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, client: getClientInfo() }),
       });
 
       const data = await response.json();

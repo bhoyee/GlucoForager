@@ -11,6 +11,7 @@ from ...core.config import settings
 from ...database import get_db
 from ...models.admin_user import AdminUser
 from ...models.newsletter_signup import NewsletterSignup
+from ...models.admin_email_campaign import AdminEmailCampaign
 from ...services.cache_service import CacheService
 from ...services.email_service import send_newsletter_email
 from ...services.newsletter_tokens import make_unsubscribe_token
@@ -208,7 +209,22 @@ def send_broadcast(
     )
 
     if payload.test_email:
-        send_newsletter_email(str(payload.test_email).strip().lower(), payload.subject.strip(), base_html)
+        test_email = str(payload.test_email).strip().lower()
+        send_newsletter_email(test_email, payload.subject.strip(), base_html)
+        db.add(
+            AdminEmailCampaign(
+                kind="newsletter",
+                mode="test",
+                subject=payload.subject.strip(),
+                body=payload.body,
+                body_html=bool(payload.body_html),
+                test_email=test_email,
+                sent_count=1,
+                total_count=1,
+                created_by_admin_id=current_admin.id,
+            )
+        )
+        db.commit()
         return {"ok": True, "sent": 1, "mode": "test"}
 
     recipients = (
@@ -235,5 +251,19 @@ def send_broadcast(
         except Exception:
             # Do not fail the whole send because of one address/provider error.
             continue
+
+    db.add(
+        AdminEmailCampaign(
+            kind="newsletter",
+            mode="broadcast",
+            subject=payload.subject.strip(),
+            body=payload.body,
+            body_html=bool(payload.body_html),
+            sent_count=sent,
+            total_count=len(recipients),
+            created_by_admin_id=current_admin.id,
+        )
+    )
+    db.commit()
 
     return {"ok": True, "sent": sent, "mode": "broadcast"}
