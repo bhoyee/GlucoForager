@@ -4,7 +4,7 @@ import secrets
 import uuid
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr, Field, validator
 from sqlalchemy.orm import Session
@@ -21,8 +21,9 @@ from ...database import get_db
 from ...models.password_reset import PasswordResetToken
 from ...models.refresh_token import RefreshToken
 from ...models.user import User
-from ...services.email_service import send_password_reset_code, send_welcome_email
+from ...services.email_service import send_admin_signup_alert, send_password_reset_code, send_welcome_email
 from ...services.login_throttler import LoginThrottler
+from ...services.settings_service import get_signup_notification_settings
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
@@ -135,7 +136,7 @@ def _generate_reset_code() -> str:
 
 
 @router.post("/signup", response_model=Token)
-def signup(payload: UserCreate, db: Session = Depends(get_db)):
+def signup(payload: UserCreate, background_tasks: BackgroundTasks, request: Request, db: Session = Depends(get_db)):
     try:
         existing = db.query(User).filter(User.email == payload.email).first()
         if existing:
@@ -160,7 +161,24 @@ def signup(payload: UserCreate, db: Session = Depends(get_db)):
         access_token = create_access_token({"sub": str(user.id)})
         refresh_token = _issue_refresh_token(db, user.id)
         try:
-            send_welcome_email(payload.email, payload.full_name)
+            background_tasks.add_task(send_welcome_email, payload.email, payload.full_name)
+            notif = get_signup_notification_settings(db)
+            if notif.enabled and notif.recipients:
+                ip = request.client.host if request.client else None
+                for recipient in notif.recipients:
+                    background_tasks.add_task(
+                        send_admin_signup_alert,
+                        to_email=recipient,
+                        user_email=user.email,
+                        full_name=user.full_name,
+                        country=user.country,
+                        platform=user.registered_platform,
+                        app_version=user.registered_app_version,
+                        build_number=user.registered_build_number,
+                        os_version=user.registered_os_version,
+                        device_model=user.registered_device_model,
+                        ip_address=ip,
+                    )
         except Exception:
             logger.exception("Welcome email failed for email=%s", payload.email)
         return Token(
