@@ -54,12 +54,12 @@ def _render_user_email_html(subject: str, body: str, body_html: bool = False) ->
             <div style="font-weight:800; font-size:18px; color:#0C1824;">GlucoForager</div>
           </div>
           <p style="margin:0 0 10px 0; color:#6b7280; font-size:12px;">
-            Official update â€¢ {timestamp}
+            Official update - {timestamp}
           </p>
           <h2 style="color:#0FB7A5; margin-top:0;">{safe_subject}</h2>
           <div style="line-height:1.6; font-size:14px; color:#0C1824;">{safe_body}</div>
           <p style="margin-top:24px; color:#6b7280; font-size:12px;">
-            If you didnâ€™t expect this email, contact support at
+            If you didn't expect this email, contact support at
             <a href="mailto:hello@glucoforager.com" style="color:#0FB7A5;">hello@glucoforager.com</a>.
           </p>
         </div>
@@ -121,4 +121,3 @@ def send_user_email(
             continue
 
     return {"ok": True, "sent": sent, "mode": "broadcast", "total": len(emails)}
-
