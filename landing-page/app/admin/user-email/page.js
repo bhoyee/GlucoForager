@@ -95,8 +95,15 @@ export default function AdminUserEmailPage() {
 
   return (
     <div className="admin-card">
-      <h2 className="admin-title">User email</h2>
-      <p className="admin-subtitle">Send an email to app users (test, single recipient, or broadcast).</p>
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="admin-title">User email</h2>
+          <p className="admin-subtitle">Send an email to app users (test, single recipient, or broadcast).</p>
+        </div>
+        <a className="admin-link" href="/admin/user-email/history">
+          View history
+        </a>
+      </div>
 
       <div className="admin-grid" style={{ alignItems: 'start' }}>
         <div>
