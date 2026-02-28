@@ -114,6 +114,56 @@ def send_welcome_email(to_email: str, full_name: str | None = None) -> None:
     logger.info("Sent welcome email to %s", to_email)
 
 
+def send_admin_signup_alert(
+    *,
+    to_email: str,
+    user_email: str,
+    full_name: str | None = None,
+    country: str | None = None,
+    platform: str | None = None,
+    app_version: str | None = None,
+    build_number: str | None = None,
+    os_version: str | None = None,
+    device_model: str | None = None,
+    ip_address: str | None = None,
+) -> None:
+    subject = f"New GlucoForager signup: {user_email}".strip()[:160]
+    safe_name = (full_name or "").strip() or "--"
+    safe_country = (country or "").strip() or "--"
+    safe_platform = (platform or "").strip() or "--"
+    safe_app = (app_version or "").strip() or "--"
+    safe_build = (build_number or "").strip() or "--"
+    safe_os = (os_version or "").strip() or "--"
+    safe_device = (device_model or "").strip() or "--"
+    safe_ip = (ip_address or "").strip() or "--"
+
+    html_body = f"""
+    <html>
+      <body style="font-family: Arial, sans-serif; color: #0C1824;">
+        <div style="max-width:640px; margin:0 auto; border:1px solid #e5e7eb; border-radius:14px; padding:22px;">
+          <h2 style="color:#0FB7A5; margin-top:0;">New user signup</h2>
+          <p style="margin:0 0 14px 0; color:#6b7280; font-size:12px;">
+            This is an admin notification from GlucoForager.
+          </p>
+          <table style="width:100%; border-collapse:collapse; font-size:14px;">
+            <tr><td style="padding:6px 0; color:#6b7280; width:160px;">Email</td><td style="padding:6px 0;"><strong>{user_email}</strong></td></tr>
+            <tr><td style="padding:6px 0; color:#6b7280;">Name</td><td style="padding:6px 0;">{safe_name}</td></tr>
+            <tr><td style="padding:6px 0; color:#6b7280;">Country</td><td style="padding:6px 0;">{safe_country}</td></tr>
+            <tr><td style="padding:6px 0; color:#6b7280;">Platform</td><td style="padding:6px 0;">{safe_platform}</td></tr>
+            <tr><td style="padding:6px 0; color:#6b7280;">App version</td><td style="padding:6px 0;">{safe_app}</td></tr>
+            <tr><td style="padding:6px 0; color:#6b7280;">Build</td><td style="padding:6px 0;">{safe_build}</td></tr>
+            <tr><td style="padding:6px 0; color:#6b7280;">OS</td><td style="padding:6px 0;">{safe_os}</td></tr>
+            <tr><td style="padding:6px 0; color:#6b7280;">Device</td><td style="padding:6px 0;">{safe_device}</td></tr>
+            <tr><td style="padding:6px 0; color:#6b7280;">IP</td><td style="padding:6px 0;">{safe_ip}</td></tr>
+          </table>
+        </div>
+      </body>
+    </html>
+    """
+    _send_email(to_email, subject, html_body)
+    logger.info("Sent admin signup alert to %s for user=%s", to_email, user_email)
+
+
 def send_password_reset_code(to_email: str, code: str) -> None:
 
     subject = "Your GlucoForager password reset code"
