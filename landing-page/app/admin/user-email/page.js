@@ -151,7 +151,7 @@ export default function AdminUserEmailPage() {
 
             <div className="admin-actions">
               <button type="button" className="admin-button" disabled={busy} onClick={send}>
-                {busy ? 'Sendingâ€¦' : 'Send'}
+                {busy ? 'Sending...' : 'Send'}
               </button>
             </div>
 
@@ -164,4 +164,3 @@ export default function AdminUserEmailPage() {
     </div>
   );
 }
-
