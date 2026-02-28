@@ -38,12 +38,28 @@ class Token(BaseModel):
     refresh_token: str | None = None
 
 
+class ClientInfo(BaseModel):
+    platform: str | None = Field(None, max_length=32)
+    app_version: str | None = Field(None, max_length=32)
+    build_number: str | None = Field(None, max_length=32)
+    os_version: str | None = Field(None, max_length=64)
+    device_model: str | None = Field(None, max_length=120)
+
+    @validator("platform", "app_version", "build_number", "os_version", "device_model", pre=True)
+    def normalize_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = str(value).strip()
+        return cleaned or None
+
+
 class UserCreate(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=6)
     full_name: str = Field(..., min_length=2, max_length=120)
     gender: str | None = Field(None, max_length=32)
     country: str | None = Field(None, max_length=120)
+    client: ClientInfo | None = None
 
     @validator("full_name")
     def validate_full_name(cls, value: str) -> str:
@@ -76,6 +92,7 @@ class LoginPayload(BaseModel):
     email: EmailStr | None = None
     username: str | None = None
     password: str
+    client: ClientInfo | None = None
 
 
 class ForgotPasswordPayload(BaseModel):
@@ -123,6 +140,7 @@ def signup(payload: UserCreate, db: Session = Depends(get_db)):
         existing = db.query(User).filter(User.email == payload.email).first()
         if existing:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User already exists")
+        client = payload.client
         user = User(
             email=payload.email,
             hashed_password=get_password_hash(payload.password),
@@ -130,6 +148,11 @@ def signup(payload: UserCreate, db: Session = Depends(get_db)):
             gender=payload.gender,
             country=payload.country,
             public_id=str(uuid.uuid4()),
+            registered_platform=client.platform if client else None,
+            registered_app_version=client.app_version if client else None,
+            registered_build_number=client.build_number if client else None,
+            registered_os_version=client.os_version if client else None,
+            registered_device_model=client.device_model if client else None,
         )
         db.add(user)
         db.commit()
@@ -242,6 +265,14 @@ def login_alias(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account locked. Contact support: hello@glucoforager.com",
         )
+
+    if payload.client and not user.registered_platform:
+        user.registered_platform = payload.client.platform
+        user.registered_app_version = payload.client.app_version
+        user.registered_build_number = payload.client.build_number
+        user.registered_os_version = payload.client.os_version
+        user.registered_device_model = payload.client.device_model
+        db.commit()
 
     login_throttler.record_success(identifier)
     access_token = create_access_token({"sub": str(user.id)})
