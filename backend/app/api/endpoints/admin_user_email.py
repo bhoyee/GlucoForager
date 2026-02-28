@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from ..admin_dependencies import get_current_admin
 from ...core.config import settings
 from ...database import get_db
+from ...models.admin_email_campaign import AdminEmailCampaign
 from ...models.admin_user import AdminUser
 from ...models.user import User
 from ...services.cache_service import CacheService
@@ -88,13 +89,43 @@ def send_user_email(
     if mode == "test":
         if not payload.test_email:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="test_email is required")
-        send_newsletter_email(str(payload.test_email).strip().lower(), payload.subject.strip(), html_body)
+        test_email = str(payload.test_email).strip().lower()
+        send_newsletter_email(test_email, payload.subject.strip(), html_body)
+        db.add(
+            AdminEmailCampaign(
+                kind="user_email",
+                mode="test",
+                subject=payload.subject.strip(),
+                body=payload.body,
+                body_html=bool(payload.body_html),
+                test_email=test_email,
+                sent_count=1,
+                total_count=1,
+                created_by_admin_id=current_admin.id,
+            )
+        )
+        db.commit()
         return {"ok": True, "sent": 1, "mode": "test"}
 
     if mode == "single":
         if not payload.recipient_email:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="recipient_email is required")
-        send_newsletter_email(str(payload.recipient_email).strip().lower(), payload.subject.strip(), html_body)
+        recipient_email = str(payload.recipient_email).strip().lower()
+        send_newsletter_email(recipient_email, payload.subject.strip(), html_body)
+        db.add(
+            AdminEmailCampaign(
+                kind="user_email",
+                mode="single",
+                subject=payload.subject.strip(),
+                body=payload.body,
+                body_html=bool(payload.body_html),
+                recipient_email=recipient_email,
+                sent_count=1,
+                total_count=1,
+                created_by_admin_id=current_admin.id,
+            )
+        )
+        db.commit()
         return {"ok": True, "sent": 1, "mode": "single"}
 
     recipients = (
@@ -119,5 +150,19 @@ def send_user_email(
             sent += 1
         except Exception:
             continue
+
+    db.add(
+        AdminEmailCampaign(
+            kind="user_email",
+            mode="broadcast",
+            subject=payload.subject.strip(),
+            body=payload.body,
+            body_html=bool(payload.body_html),
+            sent_count=sent,
+            total_count=len(emails),
+            created_by_admin_id=current_admin.id,
+        )
+    )
+    db.commit()
 
     return {"ok": True, "sent": sent, "mode": "broadcast", "total": len(emails)}
