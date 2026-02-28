@@ -9,6 +9,26 @@ const STORAGE_KEYS = {
   dismissedVersion: 'app_update_dismissed_version_v1',
 };
 
+const debugLog = (message, details) => {
+  if (!__DEV__) return;
+  try {
+    // eslint-disable-next-line no-console
+    console.log(`[AppUpdate] ${message}`, details || '');
+  } catch {
+    // Ignore.
+  }
+  try {
+    addDebugLog({
+      source: 'AppUpdate',
+      level: 'info',
+      message,
+      details: details ? JSON.stringify(details) : undefined,
+    });
+  } catch {
+    // Ignore.
+  }
+};
+
 const getCurrentAppVersion = () =>
   Constants?.expoConfig?.version ||
   Constants?.manifest?.version ||
@@ -54,9 +74,16 @@ export const dismissUpdateForVersion = async (version) => {
 export const fetchUpdateConfig = async () => {
   if (!API_URL) return null;
   try {
+    debugLog('Fetching update config', { url: `${API_URL}/api/app/update` });
     const res = await apiFetch(`${API_URL}/api/app/update`, {}, { timeoutMs: 8000 });
-    if (!res.ok) return null;
-    return await res.json();
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      debugLog('Update config request failed', { status: res.status, detail: data?.detail });
+      return null;
+    }
+    const data = await res.json();
+    debugLog('Update config loaded', data);
+    return data;
   } catch (error) {
     addDebugLog({
       source: 'Update',
@@ -64,13 +91,21 @@ export const fetchUpdateConfig = async () => {
       message: 'Failed to fetch update config.',
       details: `${error?.message || error}`,
     });
+    debugLog('Update config fetch threw', { error: `${error?.message || error}` });
     return null;
   }
 };
 
 export const checkForAppUpdate = async () => {
   const config = await fetchUpdateConfig();
-  if (!config || !config.enabled) return { available: false };
+  if (!config) {
+    debugLog('No update config, skipping');
+    return { available: false };
+  }
+  if (!config.enabled) {
+    debugLog('Update prompt disabled, skipping');
+    return { available: false };
+  }
 
   const currentVersion = String(getCurrentAppVersion());
   const platformKey = Platform.OS === 'ios' ? 'ios' : 'android';
@@ -78,21 +113,29 @@ export const checkForAppUpdate = async () => {
   const latestVersion = platformConfig?.latest_version ? String(platformConfig.latest_version) : null;
   const storeUrl = platformConfig?.store_url ? String(platformConfig.store_url) : null;
 
+  debugLog('Version check', { platform: platformKey, currentVersion, latestVersion, storeUrl });
+
   if (!latestVersion || compareVersions(currentVersion, latestVersion) >= 0) {
+    debugLog('No update available', { currentVersion, latestVersion });
     return { available: false, currentVersion, latestVersion };
   }
 
   const dismissed = await getDismissedUpdateVersion();
   if (dismissed && String(dismissed) === String(latestVersion)) {
+    debugLog('Update dismissed for latest version', { latestVersion });
     return { available: false, currentVersion, latestVersion, dismissed: true };
   }
 
+  debugLog('Update available', { currentVersion, latestVersion });
   return { available: true, currentVersion, latestVersion, storeUrl };
 };
 
 export const openStoreForUpdate = async (storeUrl) => {
   const url = (storeUrl || '').trim();
-  if (!url) return false;
+  if (!url) {
+    debugLog('Open store skipped (no url)');
+    return false;
+  }
 
   try {
     if (Platform.OS === 'android') {
@@ -102,6 +145,7 @@ export const openStoreForUpdate = async (storeUrl) => {
         const can = await Linking.canOpenURL(marketUrl);
         if (can) {
           await Linking.openURL(marketUrl);
+          debugLog('Opened Play Store via market://', { marketUrl });
           return true;
         }
       }
@@ -110,9 +154,10 @@ export const openStoreForUpdate = async (storeUrl) => {
     const canOpen = await Linking.canOpenURL(url);
     if (!canOpen) return false;
     await Linking.openURL(url);
+    debugLog('Opened store url', { url });
     return true;
   } catch {
+    debugLog('Open store failed');
     return false;
   }
 };
-

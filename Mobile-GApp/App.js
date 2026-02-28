@@ -78,7 +78,15 @@ function AppNavigator() {
     let cancelled = false;
     const run = async () => {
       try {
+        if (__DEV__) {
+          // eslint-disable-next-line no-console
+          console.log('[AppUpdate] Checking for app update...');
+        }
         const result = await checkForAppUpdate();
+        if (__DEV__) {
+          // eslint-disable-next-line no-console
+          console.log('[AppUpdate] Update check result', result);
+        }
         if (!cancelled && result?.available) {
           setUpdatePrompt(result);
         }
