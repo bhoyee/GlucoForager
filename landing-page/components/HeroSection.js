@@ -1,7 +1,5 @@
 "use client";
 
-import Image from "next/image";
-
 export default function HeroSection({ onDownloadClick }) {
   return (
     <section className="container mx-auto px-4 py-4 md:py-10 relative overflow-hidden bg-gradient-to-br from-white via-teal-50/30 to-purple-50/20">
@@ -171,17 +169,20 @@ export default function HeroSection({ onDownloadClick }) {
             </div>
           </div>
 
-          <div className="flex justify-center lg:justify-end -mt-10">
-            <div className="relative w-[220px] sm:w-[260px] md:w-[300px] lg:w-[340px] h-[470px] sm:h-[520px] md:h-[580px] lg:h-[640px]">
+          <div className="flex justify-center lg:justify-end lg:pr-10 xl:pr-14 -mt-10">
+            <div className="relative w-[220px] sm:w-[260px] md:w-[300px] lg:w-[340px] h-[470px] sm:h-[520px] md:h-[580px] lg:h-[640px] transform-gpu rotate-[6deg] lg:rotate-[8deg] hover:rotate-[3deg] transition-transform duration-300">
               <div className="absolute inset-0 rounded-[2.5rem] bg-white shadow-2xl ring-1 ring-black/5 transition-transform duration-300 hover:-translate-y-2 hover:shadow-emerald-200/40"></div>
               <div className="absolute inset-3 rounded-[2rem] overflow-hidden bg-white ring-1 ring-black/5">
-                <Image
-                  src="/screenshots/home-screenshot.png"
-                  alt="GlucoForager home screen"
-                  fill
-                  sizes="(max-width: 640px) 240px, (max-width: 768px) 280px, (max-width: 1024px) 320px, 360px"
-                  className="object-cover object-center"
-                  priority
+                <video
+                  className="h-full w-full object-cover object-center"
+                  src="/videos/app-demo.mp4"
+                  poster="/screenshots/home-screenshot.png"
+                  preload="metadata"
+                  muted
+                  playsInline
+                  loop
+                  autoPlay
+                  controls
                 />
               </div>
             </div>
