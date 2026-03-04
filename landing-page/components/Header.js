@@ -4,11 +4,15 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 
 export default function Header({ onDownloadClick }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const pathname = usePathname();
+
+  const homeSectionHref = (hash) => (pathname === '/' ? hash : `/${hash}`);
 
   // Handle scroll for header background
   useEffect(() => {
@@ -47,19 +51,19 @@ export default function Header({ onDownloadClick }) {
         
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center gap-8">
-          <a href="#features" className="text-gray-600 hover:text-teal-600 transition-colors">
+          <a href={homeSectionHref('#features')} className="text-gray-600 hover:text-teal-600 transition-colors">
             Features
           </a>
-          <a href="#screenshots" className="text-gray-600 hover:text-teal-600 transition-colors">
+          <a href={homeSectionHref('#screenshots')} className="text-gray-600 hover:text-teal-600 transition-colors">
             Screenshots
           </a>
-          <a href="#faq" className="text-gray-600 hover:text-teal-600 transition-colors">
+          <a href={homeSectionHref('#faq')} className="text-gray-600 hover:text-teal-600 transition-colors">
             FAQ
           </a>
-          <a href="#blog" className="text-gray-600 hover:text-teal-600 transition-colors">
+          <a href={homeSectionHref('#blog')} className="text-gray-600 hover:text-teal-600 transition-colors">
             Blog
           </a>
-          <a href="#contact" className="text-gray-600 hover:text-teal-600 transition-colors">
+          <a href={homeSectionHref('#contact')} className="text-gray-600 hover:text-teal-600 transition-colors">
             Contact
           </a>
         </nav>
@@ -96,35 +100,35 @@ export default function Header({ onDownloadClick }) {
         <div className="md:hidden bg-white border-t border-gray-200 shadow-lg">
           <div className="container mx-auto px-4 py-4 space-y-1">
             <a
-              href="#features"
+              href={homeSectionHref('#features')}
               onClick={() => setIsMenuOpen(false)}
               className="block py-3 px-4 text-gray-700 hover:text-teal-600 hover:bg-gray-50 rounded-lg transition-colors"
             >
               Features
             </a>
             <a
-              href="#screenshots"
+              href={homeSectionHref('#screenshots')}
               onClick={() => setIsMenuOpen(false)}
               className="block py-3 px-4 text-gray-700 hover:text-teal-600 hover:bg-gray-50 rounded-lg transition-colors"
             >
               Screenshots
             </a>
             <a
-              href="#faq"
+              href={homeSectionHref('#faq')}
               onClick={() => setIsMenuOpen(false)}
               className="block py-3 px-4 text-gray-700 hover:text-teal-600 hover:bg-gray-50 rounded-lg transition-colors"
             >
               FAQ
             </a>
             <a
-              href="#blog"
+              href={homeSectionHref('#blog')}
               onClick={() => setIsMenuOpen(false)}
               className="block py-3 px-4 text-gray-700 hover:text-teal-600 hover:bg-gray-50 rounded-lg transition-colors"
             >
               Blog
             </a>
             <a
-              href="#contact"
+              href={homeSectionHref('#contact')}
               onClick={() => setIsMenuOpen(false)}
               className="block py-3 px-4 text-gray-700 hover:text-teal-600 hover:bg-gray-50 rounded-lg transition-colors"
             >
