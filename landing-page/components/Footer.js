@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useState } from 'react';
+import { usePathname } from 'next/navigation';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -10,6 +11,8 @@ export default function Footer() {
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [newsletterBusy, setNewsletterBusy] = useState(false);
   const [newsletterMessage, setNewsletterMessage] = useState('');
+  const pathname = usePathname();
+  const homeSectionHref = (hash) => (pathname === '/' ? hash : `/${hash}`);
 
   const handleNewsletterSubmit = async (event) => {
     event.preventDefault();
@@ -118,10 +121,10 @@ export default function Footer() {
           <div>
             <h4 className="font-semibold text-lg mb-4 text-white">Product</h4>
             <ul className="space-y-3">
-              <li><a href="#features" className="text-gray-400 hover:text-teal-400 transition-colors">Features</a></li>
-              <li><a href="#screenshots" className="text-gray-400 hover:text-teal-400 transition-colors">Screenshots</a></li>
+              <li><a href={homeSectionHref('#features')} className="text-gray-400 hover:text-teal-400 transition-colors">Features</a></li>
+              <li><a href={homeSectionHref('#screenshots')} className="text-gray-400 hover:text-teal-400 transition-colors">Screenshots</a></li>
               <li><Link href="/blog" className="text-gray-400 hover:text-teal-400 transition-colors">Blog</Link></li>
-              <li><a href="#download" className="text-gray-400 hover:text-teal-400 transition-colors">Download</a></li>
+              <li><a href={homeSectionHref('#download')} className="text-gray-400 hover:text-teal-400 transition-colors">Download</a></li>
             </ul>
           </div>
           
@@ -129,8 +132,8 @@ export default function Footer() {
           <div>
             <h4 className="font-semibold text-lg mb-4 text-white">Support</h4>
             <ul className="space-y-3">
-              <li><a href="#faq" className="text-gray-400 hover:text-teal-400 transition-colors">FAQ</a></li>
-              <li><a href="#contact" className="text-gray-400 hover:text-teal-400 transition-colors">Contact Us</a></li>
+              <li><a href={homeSectionHref('#faq')} className="text-gray-400 hover:text-teal-400 transition-colors">FAQ</a></li>
+              <li><a href={homeSectionHref('#contact')} className="text-gray-400 hover:text-teal-400 transition-colors">Contact Us</a></li>
               <li><a href="/privacy-policy" className="text-gray-400 hover:text-teal-400 transition-colors">Privacy Policy</a></li>
               <li><a href="/terms" className="text-gray-400 hover:text-teal-400 transition-colors">Terms & Conditions</a></li>
             </ul>
