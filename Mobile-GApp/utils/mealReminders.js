@@ -316,6 +316,13 @@ export async function disableMealReminders() {
 
 export async function enableMealRemindersAndSchedule() {
   debugLog('Enabling reminders');
+
+  const hasPermission = await requestMealReminderPermissions();
+  if (!hasPermission) {
+    await setMealRemindersEnabled(false);
+    return { scheduled: false, reason: 'no_permission' };
+  }
+
   await setMealRemindersEnabled(true);
   const times = await getMealReminderTimes();
   return scheduleMealReminders(times);
