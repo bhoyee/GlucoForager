@@ -3,13 +3,20 @@ import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { LogBox, Modal, Pressable, View, Text } from 'react-native';
+import { ActivityIndicator, Alert, LogBox, Modal, Pressable, View, Text } from 'react-native';
 
 // Import Auth Provider
 import { AuthProvider, useAuth } from './context/authContext';
 import { configureRevenueCat } from './utils/revenuecat';
 import { startMobileLogUploader } from './utils/mobileLogUploader';
-import { configureMealReminderNotificationHandler, syncMealRemindersOnAppStart } from './utils/mealReminders';
+import {
+  configureMealReminderNotificationHandler,
+  enableMealRemindersAndSchedule,
+  getMealRemindersEnabled,
+  getMealRemindersPrompted,
+  setMealRemindersPrompted,
+  syncMealRemindersOnAppStart,
+} from './utils/mealReminders';
 import { checkForAppUpdate, dismissUpdateForVersion, openStoreForUpdate } from './utils/appUpdate';
 
 // Import screens
@@ -65,6 +72,8 @@ function AppNavigator() {
   const { userToken, isLoading } = authContext || {};
   const [minimumSplashDone, setMinimumSplashDone] = useState(false);
   const [updatePrompt, setUpdatePrompt] = useState(null);
+  const [mealPromptVisible, setMealPromptVisible] = useState(false);
+  const [mealPromptBusy, setMealPromptBusy] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -99,6 +108,32 @@ function AppNavigator() {
       cancelled = true;
     };
   }, [isLoading, minimumSplashDone]);
+
+  useEffect(() => {
+    if (isLoading || !minimumSplashDone) return;
+    if (!userToken) return;
+    if (updatePrompt?.available) return;
+    let cancelled = false;
+
+    const run = async () => {
+      try {
+        const [enabled, prompted] = await Promise.all([
+          getMealRemindersEnabled(),
+          getMealRemindersPrompted(),
+        ]);
+        if (!cancelled && !enabled && !prompted) {
+          setMealPromptVisible(true);
+        }
+      } catch {
+        // Ignore.
+      }
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoading, minimumSplashDone, updatePrompt?.available, userToken]);
   
   console.log('AppNavigator state:', { userToken, isLoading, hasAuthContext: !!authContext });
 
@@ -111,6 +146,92 @@ function AppNavigator() {
 
   return (
     <NavigationContainer>
+      <Modal
+        transparent
+        visible={mealPromptVisible}
+        animationType="fade"
+        onRequestClose={() => {
+          setMealRemindersPrompted();
+          setMealPromptVisible(false);
+        }}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', padding: 18 }}
+          onPress={() => {
+            setMealRemindersPrompted();
+            setMealPromptVisible(false);
+          }}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: 'white',
+              borderRadius: 16,
+              padding: 18,
+              maxWidth: 520,
+              width: '100%',
+              alignSelf: 'center',
+            }}
+          >
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#0C1824' }}>Enable meal reminders?</Text>
+            <Text style={{ marginTop: 8, color: '#374151', lineHeight: 20 }}>
+              Get gentle, silent reminders at breakfast, lunch, and dinner to scan your fridge or ingredients.
+              You can change this anytime in Profile.
+            </Text>
+
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+              <Pressable
+                disabled={mealPromptBusy}
+                onPress={async () => {
+                  await setMealRemindersPrompted();
+                  setMealPromptVisible(false);
+                }}
+                style={{
+                  paddingVertical: 10,
+                  paddingHorizontal: 14,
+                  borderRadius: 999,
+                  backgroundColor: '#F3F4F6',
+                  opacity: mealPromptBusy ? 0.65 : 1,
+                }}
+              >
+                <Text style={{ fontWeight: '700', color: '#111827' }}>Not now</Text>
+              </Pressable>
+              <Pressable
+                disabled={mealPromptBusy}
+                onPress={async () => {
+                  setMealPromptBusy(true);
+                  try {
+                    await setMealRemindersPrompted();
+                    const result = await enableMealRemindersAndSchedule();
+                    if (!result?.scheduled) {
+                      Alert.alert(
+                        'Notifications disabled',
+                        'Please allow notifications in your device Settings to enable meal reminders.'
+                      );
+                    }
+                    setMealPromptVisible(false);
+                  } finally {
+                    setMealPromptBusy(false);
+                  }
+                }}
+                style={{
+                  paddingVertical: 10,
+                  paddingHorizontal: 14,
+                  borderRadius: 999,
+                  backgroundColor: '#0D9488',
+                  opacity: mealPromptBusy ? 0.65 : 1,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                {mealPromptBusy ? <ActivityIndicator size="small" color="white" /> : null}
+                <Text style={{ fontWeight: '700', color: 'white' }}>Enable</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
       <Modal
         transparent
         visible={Boolean(updatePrompt?.available)}
