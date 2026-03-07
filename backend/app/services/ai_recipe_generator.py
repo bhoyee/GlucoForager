@@ -134,46 +134,61 @@ class AIRecipeGenerator:
     def _generate_image_gemini(self, prompt: str, *, size: int) -> bytes:
         url = "https://generativelanguage.googleapis.com/v1beta/openai/images/generations"
         size_value = f"{int(size)}x{int(size)}"
-        payload = {
-            "model": self.gemini_image_model,
-            "prompt": prompt,
-            "response_format": "b64_json",
-            "size": size_value,
-            "n": 1,
-        }
+
+        model_candidates = [
+            (self.gemini_image_model or "").strip(),
+            "imagen-3.0-generate-002",
+            "imagen-3.0-generate-001",
+        ]
+        model_candidates = [m for m in model_candidates if m]
 
         def attempt(*, headers: dict[str, str] | None, params: dict[str, str] | None):
             with httpx.Client(timeout=60) as client:
                 resp = client.post(url, headers=headers, params=params, json=payload)
             return resp
 
-        # Primary attempt: OpenAI-compatible auth header.
-        resp = attempt(
-            headers={
-                "Authorization": f"Bearer {self.gemini_api_key}",
-                "Content-Type": "application/json",
-            },
-            params=None,
-        )
+        last_error: Exception | None = None
+        last_resp: httpx.Response | None = None
 
-        # Fallback: some Gemini endpoints accept API key via query param instead.
-        if resp.status_code in (401, 403):
-            resp = attempt(
-                headers={"Content-Type": "application/json"},
-                params={"key": str(self.gemini_api_key)},
-            )
+        for model in model_candidates:
+            payload = {
+                "model": model,
+                "prompt": prompt,
+                "response_format": "b64_json",
+                "size": size_value,
+                "n": 1,
+            }
 
-        # Fallback: some environments accept x-goog-api-key.
-        if resp.status_code in (401, 403):
+            # Primary attempt: OpenAI-compatible auth header.
             resp = attempt(
                 headers={
+                    "Authorization": f"Bearer {self.gemini_api_key}",
                     "Content-Type": "application/json",
-                    "x-goog-api-key": str(self.gemini_api_key),
                 },
                 params=None,
             )
 
-        if resp.status_code < 200 or resp.status_code >= 300:
+            # Fallback: some Gemini endpoints accept API key via query param instead.
+            if resp.status_code in (401, 403):
+                resp = attempt(
+                    headers={"Content-Type": "application/json"},
+                    params={"key": str(self.gemini_api_key)},
+                )
+
+            # Fallback: some environments accept x-goog-api-key.
+            if resp.status_code in (401, 403):
+                resp = attempt(
+                    headers={
+                        "Content-Type": "application/json",
+                        "x-goog-api-key": str(self.gemini_api_key),
+                    },
+                    params=None,
+                )
+
+            if 200 <= resp.status_code < 300:
+                data = resp.json()
+                break
+
             body = ""
             try:
                 body = resp.text or ""
@@ -182,13 +197,24 @@ class AIRecipeGenerator:
             logger.warning(
                 "Gemini image generation HTTP %s (model=%s size=%s): %s",
                 resp.status_code,
-                self.gemini_image_model,
+                model,
                 size_value,
                 body[:800],
             )
-            resp.raise_for_status()
-
-        data = resp.json()
+            last_resp = resp
+            try:
+                resp.raise_for_status()
+            except Exception as exc:  # noqa: BLE001
+                last_error = exc
+                continue
+        else:
+            if last_resp is not None and last_error is None:
+                last_error = httpx.HTTPStatusError(
+                    f"Gemini image generation failed with status {last_resp.status_code}",
+                    request=last_resp.request,
+                    response=last_resp,
+                )
+            raise last_error or RuntimeError("Gemini image generation failed")
 
         items = data.get("data") or []
         if not items or not isinstance(items, list):
