@@ -19,8 +19,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
-
-import RecipePlaceholder from '../../assets/images/recipe-placeholder.jpeg';
+import { getRecipeImageSettings } from '../../utils/recipeImageSettings';
 
 export default function HomeScreen() {
   const navigation = useNavigation();
@@ -35,6 +34,7 @@ export default function HomeScreen() {
   const [dailyLimit, setDailyLimit] = useState(3);
   const [isLoading, setIsLoading] = useState(true);
   const [suggestedRecipes, setSuggestedRecipes] = useState([]);
+  const [recipeImagesEnabled, setRecipeImagesEnabled] = useState(true);
   const [recentRecipes, setRecentRecipes] = useState([]);
   const [isFetchingRecipes, setIsFetchingRecipes] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(true);
@@ -115,10 +115,16 @@ export default function HomeScreen() {
 
       await loadCachedData();
 
+      const loadRecipeImagesFlag = async () => {
+        const settings = await getRecipeImageSettings();
+        setRecipeImagesEnabled(Boolean(settings?.enabled));
+      };
+
       const results = await Promise.allSettled([
         loadScanStatus(),
         loadUserStats(),
         loadRecipes(),
+        loadRecipeImagesFlag(),
       ]);
 
       const allFailed = results.every((result) => result.status === 'rejected');
@@ -608,11 +614,9 @@ export default function HomeScreen() {
                 style={styles.recipeCard}
                 onPress={() => handleViewRecipeDetail(recipe)}
               >
-                {recipe.image_url && recipe.image_source !== 'placeholder' ? (
+                {recipeImagesEnabled && recipe.image_url && recipe.image_source !== 'placeholder' ? (
                   <Image source={{ uri: recipe.image_url }} style={styles.recipeImage} />
-                ) : (
-                  <Image source={RecipePlaceholder} style={styles.recipeImage} />
-                )}
+                ) : null}
                 <View style={styles.recipeInfo}>
                   <View style={styles.recipeHeader}>
                     <View style={styles.badge}>

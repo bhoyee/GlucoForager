@@ -18,6 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
+import { getRecipeImageSettings } from '../../utils/recipeImageSettings';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import RecipePlaceholder from '../../assets/images/recipe-placeholder.jpeg';
 
@@ -101,6 +102,8 @@ const RecipeDetailsScreen = () => {
   const [expandedTip, setExpandedTip] = useState(null);
   const [isSavingFavorite, setIsSavingFavorite] = useState(false);
   const [imageLoadError, setImageLoadError] = useState(false);
+  const [recipeImagesEnabled, setRecipeImagesEnabled] = useState(true);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -116,6 +119,74 @@ const RecipeDetailsScreen = () => {
     };
     init();
   }, [route.params]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      const settings = await getRecipeImageSettings();
+      if (!cancelled) {
+        setRecipeImagesEnabled(Boolean(settings?.enabled));
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleGenerateImage = async () => {
+    if (isGeneratingImage) return;
+    try {
+      setIsGeneratingImage(true);
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        Alert.alert('Sign in required', 'Please sign in to generate recipe images.');
+        return;
+      }
+
+      const ingredients = Array.isArray(recipe.ingredients)
+        ? recipe.ingredients
+            .map((item) => (typeof item === 'string' ? item : item?.name))
+            .filter(Boolean)
+        : [];
+
+      const response = await apiFetch(
+        `${API_URL}${API_ENDPOINTS.AI_RECIPES_IMAGE}`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: recipe.title,
+            description: recipe.description,
+            ingredients,
+          }),
+        },
+        { onUnauthorized: signOut, timeoutMs: 15000 }
+      );
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const detail = data?.detail || 'Unable to generate image right now.';
+        Alert.alert('Image generation', detail);
+        return;
+      }
+
+      if (data?.image_url) {
+        setImageLoadError(false);
+        setRecipe((prev) => ({
+          ...prev,
+          image: data.image_url,
+          image_url: data.image_url,
+          imageSource: data.image_source || 'ai',
+          image_source: data.image_source || 'ai',
+        }));
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Unable to generate image right now.');
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
 
 
   const fetchRecipeDetail = async (recipeId) => {
@@ -518,6 +589,17 @@ const RecipeDetailsScreen = () => {
           </View>
         </View>
       </View>
+      {recipeImagesEnabled && recipe.imageSource === 'placeholder' ? (
+        <TouchableOpacity
+          style={[styles.generateImageButton, isGeneratingImage ? styles.generateImageButtonDisabled : null]}
+          onPress={handleGenerateImage}
+          disabled={isGeneratingImage}
+        >
+          <Text style={styles.generateImageButtonText}>
+            {isGeneratingImage ? 'Generating…' : 'Generate image'}
+          </Text>
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 
@@ -916,6 +998,28 @@ const styles = StyleSheet.create({
   heroContainer: {
     height: 320,
     position: 'relative',
+  },
+  generateImageButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  generateImageButtonDisabled: {
+    opacity: 0.7,
+  },
+  generateImageButtonText: {
+    color: '#0C1824',
+    fontWeight: '700',
+    fontSize: 13,
   },
   recipeImage: {
     width: '100%',
