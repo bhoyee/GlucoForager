@@ -14,3 +14,4 @@ redis==5.0.1
 swagger-ui-bundle==0.0.9
 alembic==1.13.2
 apscheduler==3.10.4
+pillow==10.4.0
