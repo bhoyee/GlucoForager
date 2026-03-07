@@ -474,6 +474,7 @@ def generate_recipe_image(
         recipe_payload,
         tier,
         payload.ingredients or [],
+        size=settings.size,
     )
     if image_payload.get("image_url"):
         image_payload["image_source"] = "ai"
