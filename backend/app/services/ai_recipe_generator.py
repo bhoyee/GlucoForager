@@ -1,9 +1,13 @@
 import logging
 import logging
 import hashlib
+import io
+from pathlib import Path
 from typing import Any, Dict, List
 
+import httpx
 from openai import OpenAI, OpenAIError
+from PIL import Image
 
 from ..core.config import settings
 from ..core.constants import OPENAI_PROMPT
@@ -28,6 +32,8 @@ class AIRecipeGenerator:
         self.fallback_model = settings.deepseek_model
         self.enabled = bool(self.primary_client or self.fallback_client)
         self.cache = CacheService()
+        self.gemini_api_key = settings.gemini_api_key
+        self.gemini_image_model = settings.gemini_image_model
 
     def _call(self, client: OpenAI, model: str, ingredients: List[str], filters: List[str]) -> str:
         # Avoid KeyError from braces in the JSON template; replace only the {ingredients} token.
@@ -76,14 +82,105 @@ class AIRecipeGenerator:
                 recipe["image_source"] = "placeholder"
 
     def generate_image_for_recipe(
-        self, recipe: Dict[str, Any], tier: str, ingredients: List[str] | None = None
+        self,
+        recipe: Dict[str, Any],
+        tier: str,
+        ingredients: List[str] | None = None,
+        *,
+        size: int = 512,
     ) -> Dict[str, Any]:
         if not recipe:
             return {"image_url": None, "image_source": "none"}
-        return {
-            "image_url": self._placeholder_image(recipe),
-            "image_source": "placeholder",
+
+        prompt = self._build_image_prompt(recipe, ingredients or [])
+
+        try:
+            if self.gemini_api_key:
+                image_bytes = self._generate_image_gemini(prompt)
+                image_url = self._store_generated_image(image_bytes, recipe, size=size)
+                return {"image_url": image_url, "image_source": "ai"}
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Gemini image generation failed: %s", exc)
+
+        return {"image_url": self._placeholder_image(recipe), "image_source": "placeholder"}
+
+    def _build_image_prompt(self, recipe: Dict[str, Any], ingredients: List[str]) -> str:
+        title = (recipe.get("title") or recipe.get("name") or "").strip()
+        desc = (recipe.get("description") or "").strip()
+        raw_items = recipe.get("ingredients") or []
+        normalized = []
+        for item in raw_items:
+            if isinstance(item, dict):
+                name = (item.get("name") or "").strip()
+                if name:
+                    normalized.append(name)
+            elif isinstance(item, str) and item.strip():
+                normalized.append(item.strip())
+        if ingredients:
+            normalized = list(dict.fromkeys([*ingredients, *normalized]))
+        ingredient_text = ", ".join(normalized[:16]) if normalized else ""
+
+        parts = [
+            "Create a professional, appetizing, photorealistic food image for a recipe in a mobile app.",
+            "No text, no watermarks, no logos, no labels, no utensils brand names.",
+            "Square composition, centered plating, clean background, natural lighting, high detail.",
+        ]
+        if title:
+            parts.append(f"Recipe name: {title}.")
+        if desc:
+            parts.append(f"Description: {desc}")
+        if ingredient_text:
+            parts.append(f"Key ingredients: {ingredient_text}.")
+        parts.append("The dish should look diabetes-friendly (balanced plate, not overly sugary).")
+        return " ".join(parts)
+
+    def _generate_image_gemini(self, prompt: str) -> bytes:
+        url = "https://generativelanguage.googleapis.com/v1beta/openai/images/generations"
+        headers = {
+            "Authorization": f"Bearer {self.gemini_api_key}",
+            "Content-Type": "application/json",
         }
+        payload = {
+            "model": self.gemini_image_model,
+            "prompt": prompt,
+            "response_format": "b64_json",
+            "n": 1,
+        }
+        with httpx.Client(timeout=60) as client:
+            resp = client.post(url, headers=headers, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+
+        items = data.get("data") or []
+        if not items or not isinstance(items, list):
+            raise ValueError("Gemini image response missing data")
+
+        b64_json = items[0].get("b64_json")
+        if not b64_json:
+            raise ValueError("Gemini image response missing b64_json")
+
+        import base64
+
+        return base64.b64decode(b64_json)
+
+    def _store_generated_image(self, image_bytes: bytes, recipe: Dict[str, Any], *, size: int) -> str:
+        digest = self._image_cache_key(recipe).replace("img:", "")
+        folder = Path(settings.uploads_dir) / "recipe-images"
+        folder.mkdir(parents=True, exist_ok=True)
+        filename = f"{digest}-{int(size)}.jpg"
+        path = folder / filename
+
+        img = Image.open(io.BytesIO(image_bytes))
+        img = img.convert("RGB")
+        target = 512 if int(size) not in (512, 768, 1024) else int(size)
+        if img.size[0] != target or img.size[1] != target:
+            img = img.resize((target, target), Image.Resampling.LANCZOS)
+        img.save(path, format="JPEG", quality=82, optimize=True, progressive=True)
+
+        base = (settings.site_url or "").rstrip("/")
+        if base:
+            return f"{base}/uploads/recipe-images/{filename}"
+        return f"/uploads/recipe-images/{filename}"
 
     def generate(
         self,
