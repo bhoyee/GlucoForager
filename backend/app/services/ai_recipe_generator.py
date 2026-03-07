@@ -94,15 +94,12 @@ class AIRecipeGenerator:
 
         prompt = self._build_image_prompt(recipe, ingredients or [])
 
-        try:
-            if self.gemini_api_key:
-                image_bytes = self._generate_image_gemini(prompt)
-                image_url = self._store_generated_image(image_bytes, recipe, size=size)
-                return {"image_url": image_url, "image_source": "ai"}
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Gemini image generation failed: %s", exc)
+        if not self.gemini_api_key:
+            return {"image_url": self._placeholder_image(recipe), "image_source": "placeholder"}
 
-        return {"image_url": self._placeholder_image(recipe), "image_source": "placeholder"}
+        image_bytes = self._generate_image_gemini(prompt)
+        image_url = self._store_generated_image(image_bytes, recipe, size=size)
+        return {"image_url": image_url, "image_source": "ai"}
 
     def _build_image_prompt(self, recipe: Dict[str, Any], ingredients: List[str]) -> str:
         title = (recipe.get("title") or recipe.get("name") or "").strip()
