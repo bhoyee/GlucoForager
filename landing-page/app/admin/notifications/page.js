@@ -19,6 +19,11 @@ export default function AdminNotificationsPage() {
   const [iosLatestVersion, setIosLatestVersion] = useState('');
   const [androidStoreUrl, setAndroidStoreUrl] = useState('');
   const [iosStoreUrl, setIosStoreUrl] = useState('');
+  const [recipeImagesEnabled, setRecipeImagesEnabled] = useState(false);
+  const [recipeImageSize, setRecipeImageSize] = useState(512);
+  const [recipeImagesFreeDailyLimit, setRecipeImagesFreeDailyLimit] = useState(1);
+  const [recipeImagesPremiumDailyLimit, setRecipeImagesPremiumDailyLimit] = useState(10);
+  const [recipeImagesMaxPerRecipe, setRecipeImagesMaxPerRecipe] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -32,11 +37,12 @@ export default function AdminNotificationsPage() {
     setMessage('');
     try {
       const headers = { Authorization: `Bearer ${token}` };
-      const [signupRes, updatesRes] = await Promise.all([
+      const [signupRes, updatesRes, recipeImagesRes] = await Promise.all([
         fetch(`${API_URL}/api/admin/settings/signup-notifications`, { headers }),
         fetch(`${API_URL}/api/admin/settings/app-updates`, { headers }),
+        fetch(`${API_URL}/api/admin/settings/recipe-images`, { headers }),
       ]);
-      if (signupRes.status === 401 || updatesRes.status === 401) {
+      if (signupRes.status === 401 || updatesRes.status === 401 || recipeImagesRes.status === 401) {
         localStorage.removeItem('adminToken');
         router.push('/admin');
         return;
@@ -52,6 +58,13 @@ export default function AdminNotificationsPage() {
       setIosLatestVersion(updates.ios_latest_version || '');
       setAndroidStoreUrl(updates.android_store_url || '');
       setIosStoreUrl(updates.ios_store_url || '');
+
+      const recipeImages = await recipeImagesRes.json().catch(() => ({}));
+      setRecipeImagesEnabled(Boolean(recipeImages.enabled));
+      setRecipeImageSize(Number(recipeImages.size) || 512);
+      setRecipeImagesFreeDailyLimit(Number(recipeImages.free_daily_limit) ?? 1);
+      setRecipeImagesPremiumDailyLimit(Number(recipeImages.premium_daily_limit) ?? 10);
+      setRecipeImagesMaxPerRecipe(Number(recipeImages.max_per_recipe) ?? 1);
     } catch (error) {
       setMessage('Failed to load notification settings.');
     } finally {
@@ -75,7 +88,7 @@ export default function AdminNotificationsPage() {
     setMessage('');
     try {
       const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-      const [signupRes, updatesRes] = await Promise.all([
+      const [signupRes, updatesRes, recipeImagesRes] = await Promise.all([
         fetch(`${API_URL}/api/admin/settings/signup-notifications`, {
           method: 'PUT',
           headers,
@@ -92,16 +105,33 @@ export default function AdminNotificationsPage() {
             ios_store_url: iosStoreUrl.trim() || null,
           }),
         }),
+        fetch(`${API_URL}/api/admin/settings/recipe-images`, {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({
+            enabled: recipeImagesEnabled,
+            size: Number(recipeImageSize) || 512,
+            free_daily_limit: Number(recipeImagesFreeDailyLimit) ?? 1,
+            premium_daily_limit: Number(recipeImagesPremiumDailyLimit) ?? 10,
+            max_per_recipe: Number(recipeImagesMaxPerRecipe) ?? 1,
+          }),
+        }),
       ]);
-      if (signupRes.status === 401 || updatesRes.status === 401) {
+      if (signupRes.status === 401 || updatesRes.status === 401 || recipeImagesRes.status === 401) {
         localStorage.removeItem('adminToken');
         router.push('/admin');
         return;
       }
       const signup = await signupRes.json().catch(() => ({}));
       const updates = await updatesRes.json().catch(() => ({}));
-      if (!signupRes.ok || !updatesRes.ok) {
-        setMessage(signup?.detail || updates?.detail || 'Failed to save notification settings.');
+      const recipeImages = await recipeImagesRes.json().catch(() => ({}));
+      if (!signupRes.ok || !updatesRes.ok || !recipeImagesRes.ok) {
+        setMessage(
+          signup?.detail ||
+            updates?.detail ||
+            recipeImages?.detail ||
+            'Failed to save notification settings.'
+        );
         return;
       }
       setEnabled(Boolean(signup.enabled));
@@ -113,6 +143,12 @@ export default function AdminNotificationsPage() {
       setIosLatestVersion(updates.ios_latest_version || '');
       setAndroidStoreUrl(updates.android_store_url || '');
       setIosStoreUrl(updates.ios_store_url || '');
+
+      setRecipeImagesEnabled(Boolean(recipeImages.enabled));
+      setRecipeImageSize(Number(recipeImages.size) || 512);
+      setRecipeImagesFreeDailyLimit(Number(recipeImages.free_daily_limit) ?? 1);
+      setRecipeImagesPremiumDailyLimit(Number(recipeImages.premium_daily_limit) ?? 10);
+      setRecipeImagesMaxPerRecipe(Number(recipeImages.max_per_recipe) ?? 1);
       setMessage('Settings saved.');
     } catch (error) {
       setMessage('Failed to save notification settings.');
@@ -258,6 +294,80 @@ export default function AdminNotificationsPage() {
               value={iosStoreUrl}
               onChange={(event) => setIosStoreUrl(event.target.value)}
               placeholder="https://apps.apple.com/us/app/glucoforager/id6758808427"
+              disabled={busy}
+            />
+          </div>
+        </div>
+
+        <div className="admin-actions" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button className="admin-button" type="button" onClick={save} disabled={busy}>
+            {busy ? 'Working...' : 'Save'}
+          </button>
+        </div>
+      </div>
+
+      <div className="admin-card" style={{ marginTop: 16 }}>
+        <h3 className="admin-title">Recipe images</h3>
+        <p className="admin-subtitle">
+          Control AI recipe image generation (cost-sensitive). Images are only generated when users tap "Generate image".
+        </p>
+
+        <label className="admin-inline-toggle" style={{ marginTop: 8 }}>
+          <input
+            type="checkbox"
+            checked={recipeImagesEnabled}
+            onChange={(event) => setRecipeImagesEnabled(event.target.checked)}
+            disabled={busy}
+          />
+          <span>Enable recipe image generation</span>
+        </label>
+
+        <div className="admin-grid" style={{ marginTop: 12 }}>
+          <div className="admin-field">
+            <label>Image size (default)</label>
+            <select
+              value={String(recipeImageSize)}
+              onChange={(event) => setRecipeImageSize(Number(event.target.value) || 512)}
+              disabled={busy}
+            >
+              <option value="512">512 × 512 (recommended)</option>
+              <option value="768">768 × 768</option>
+              <option value="1024">1024 × 1024</option>
+            </select>
+          </div>
+          <div className="admin-field">
+            <label>Max generations per recipe (per day)</label>
+            <input
+              type="number"
+              min={1}
+              max={50}
+              value={recipeImagesMaxPerRecipe}
+              onChange={(event) => setRecipeImagesMaxPerRecipe(Number(event.target.value) || 1)}
+              disabled={busy}
+            />
+          </div>
+        </div>
+
+        <div className="admin-grid">
+          <div className="admin-field">
+            <label>Free daily image limit</label>
+            <input
+              type="number"
+              min={0}
+              max={500}
+              value={recipeImagesFreeDailyLimit}
+              onChange={(event) => setRecipeImagesFreeDailyLimit(Number(event.target.value) ?? 0)}
+              disabled={busy}
+            />
+          </div>
+          <div className="admin-field">
+            <label>Premium daily image limit (-1 = unlimited)</label>
+            <input
+              type="number"
+              min={-1}
+              max={5000}
+              value={recipeImagesPremiumDailyLimit}
+              onChange={(event) => setRecipeImagesPremiumDailyLimit(Number(event.target.value) ?? 10)}
               disabled={busy}
             />
           </div>
