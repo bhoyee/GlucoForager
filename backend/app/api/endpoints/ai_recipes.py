@@ -15,6 +15,7 @@ from ...services.ai_pipeline import AIPipeline, IngredientValidationError
 from ...services.ai_recipe_generator import AIRecipeGenerator
 from ...services.cache_service import CacheService
 from ...services.cost_tracker import record_ai_request
+from ...core.config import settings as core_settings
 from ...services.settings_service import get_recipe_image_settings
 from ...services.subscription_service import get_effective_subscription_tier
 
@@ -423,6 +424,12 @@ def generate_recipe_image(
     if not settings.enabled:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Recipe images are disabled.")
 
+    if not core_settings.gemini_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Recipe image provider is not configured.",
+        )
+
     effective_tier = "premium" if tier == "premium" else "free"
     daily_limit = settings.premium_daily_limit if effective_tier == "premium" else settings.free_daily_limit
     if daily_limit == 0:
@@ -461,23 +468,43 @@ def generate_recipe_image(
 
     if daily_limit != -1:
         daily_key = f"imggen:{current_user.id}:{today}:count"
-        next_count = cache.incr(daily_key, ttl_seconds=24 * 60 * 60)
-        if next_count > daily_limit:
+        daily_raw = cache.get(daily_key)
+        daily_count = 0
+        try:
+            daily_count = int(daily_raw) if daily_raw is not None else 0
+        except Exception:  # noqa: BLE001
+            daily_count = 0
+        if daily_count >= daily_limit:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Daily image generation limit reached.",
             )
 
-    cache.set(per_recipe_key, str(per_recipe_count + 1), ttl_seconds=24 * 60 * 60)
+    try:
+        image_payload = image_helper.generate_image_for_recipe(
+            recipe_payload,
+            tier,
+            payload.ingredients or [],
+            size=settings.size,
+        )
+    except Exception:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Image generation failed. Please try again.",
+        ) from None
 
-    image_payload = image_helper.generate_image_for_recipe(
-        recipe_payload,
-        tier,
-        payload.ingredients or [],
-        size=settings.size,
-    )
-    if image_payload.get("image_url"):
-        image_payload["image_source"] = "ai"
+    if image_payload.get("image_source") != "ai" or not image_payload.get("image_url"):
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Image generation failed. Please try again.",
+        )
+
+    # Only count successful generations.
+    cache.set(per_recipe_key, str(per_recipe_count + 1), ttl_seconds=24 * 60 * 60)
+    if daily_limit != -1:
+        daily_key = f"imggen:{current_user.id}:{today}:count"
+        cache.incr(daily_key, ttl_seconds=24 * 60 * 60)
+
     image_payload["size"] = settings.size
     image_payload["daily_limit"] = daily_limit
     return image_payload
