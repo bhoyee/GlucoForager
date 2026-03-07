@@ -8,10 +8,13 @@ from ...models.admin_user import AdminUser
 from ...services.email_service import send_admin_signup_alert
 from ...services.settings_service import (
     AppUpdateSettings,
+    RecipeImageSettings,
     SignupNotificationSettings,
     get_app_update_settings,
+    get_recipe_image_settings,
     get_signup_notification_settings,
     update_app_update_settings,
+    update_recipe_image_settings,
     update_signup_notification_settings,
 )
 
@@ -29,6 +32,14 @@ class AppUpdatesPayload(BaseModel):
     ios_latest_version: str | None = Field(None, max_length=32)
     android_store_url: str | None = Field(None, max_length=500)
     ios_store_url: str | None = Field(None, max_length=500)
+
+
+class RecipeImagesPayload(BaseModel):
+    enabled: bool = False
+    size: int = Field(512, ge=256, le=2048)
+    free_daily_limit: int = Field(1, ge=0, le=500)
+    premium_daily_limit: int = Field(10, ge=-1, le=5000)
+    max_per_recipe: int = Field(1, ge=1, le=50)
 
 
 @router.get("/signup-notifications")
@@ -117,4 +128,42 @@ def put_app_updates(
         "ios_latest_version": settings.ios_latest_version,
         "android_store_url": settings.android_store_url,
         "ios_store_url": settings.ios_store_url,
+    }
+
+
+@router.get("/recipe-images")
+def get_recipe_images(
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    settings: RecipeImageSettings = get_recipe_image_settings(db)
+    return {
+        "enabled": settings.enabled,
+        "size": settings.size,
+        "free_daily_limit": settings.free_daily_limit,
+        "premium_daily_limit": settings.premium_daily_limit,
+        "max_per_recipe": settings.max_per_recipe,
+    }
+
+
+@router.put("/recipe-images")
+def put_recipe_images(
+    payload: RecipeImagesPayload,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    settings: RecipeImageSettings = update_recipe_image_settings(
+        db,
+        enabled=payload.enabled,
+        size=payload.size,
+        free_daily_limit=payload.free_daily_limit,
+        premium_daily_limit=payload.premium_daily_limit,
+        max_per_recipe=payload.max_per_recipe,
+    )
+    return {
+        "enabled": settings.enabled,
+        "size": settings.size,
+        "free_daily_limit": settings.free_daily_limit,
+        "premium_daily_limit": settings.premium_daily_limit,
+        "max_per_recipe": settings.max_per_recipe,
     }

@@ -1,5 +1,6 @@
 import hashlib
 import json
+from datetime import datetime, timezone
 import uuid
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
@@ -14,6 +15,7 @@ from ...services.ai_pipeline import AIPipeline, IngredientValidationError
 from ...services.ai_recipe_generator import AIRecipeGenerator
 from ...services.cache_service import CacheService
 from ...services.cost_tracker import record_ai_request
+from ...services.settings_service import get_recipe_image_settings
 from ...services.subscription_service import get_effective_subscription_tier
 
 router = APIRouter(prefix="/ai/recipes", tags=["ai"])
@@ -413,17 +415,68 @@ def fridge_to_recipes_alias(
 @router.post("/image")
 def generate_recipe_image(
     payload: RecipeImageRequest,
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     tier = get_effective_subscription_tier(db, current_user) or "free"
+    settings = get_recipe_image_settings(db)
+    if not settings.enabled:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Recipe images are disabled.")
+
+    effective_tier = "premium" if tier == "premium" else "free"
+    daily_limit = settings.premium_daily_limit if effective_tier == "premium" else settings.free_daily_limit
+    if daily_limit == 0:
+        raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail="Image generation is not available.")
+
     recipe_payload = {
         "title": payload.title or "Diabetes-friendly meal",
         "description": payload.description or "",
         "ingredients": [{"name": name} for name in (payload.ingredients or []) if name],
     }
+
+    today = datetime.now(timezone.utc).date().isoformat()
+    fingerprint = hashlib.sha256(
+        (
+            recipe_payload["title"]
+            + "|"
+            + recipe_payload["description"]
+            + "|"
+            + ",".join(payload.ingredients or [])
+        ).encode("utf-8")
+    ).hexdigest()
+
+    per_recipe_key = f"imggen:{current_user.id}:{today}:{fingerprint}"
+    per_recipe_count_raw = cache.get(per_recipe_key)
+    per_recipe_count = 0
+    try:
+        per_recipe_count = int(per_recipe_count_raw) if per_recipe_count_raw is not None else 0
+    except Exception:  # noqa: BLE001
+        per_recipe_count = 0
+
+    if per_recipe_count >= settings.max_per_recipe:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Image already generated for this recipe.",
+        )
+
+    if daily_limit != -1:
+        daily_key = f"imggen:{current_user.id}:{today}:count"
+        next_count = cache.incr(daily_key, ttl_seconds=24 * 60 * 60)
+        if next_count > daily_limit:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Daily image generation limit reached.",
+            )
+
+    cache.set(per_recipe_key, str(per_recipe_count + 1), ttl_seconds=24 * 60 * 60)
+
     image_payload = image_helper.generate_image_for_recipe(
         recipe_payload,
         tier,
         payload.ingredients or [],
     )
+    if image_payload.get("image_url"):
+        image_payload["image_source"] = "ai"
+    image_payload["size"] = settings.size
+    image_payload["daily_limit"] = daily_limit
     return image_payload

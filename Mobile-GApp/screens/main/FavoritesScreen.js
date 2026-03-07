@@ -20,7 +20,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
 import { useAuth } from '../../context/authContext';
-import RecipePlaceholder from '../../assets/images/recipe-placeholder.jpeg';
+import { getRecipeImageSettings } from '../../utils/recipeImageSettings';
 
 export default function FavoritesScreen() {
   const navigation = useNavigation();
@@ -34,6 +34,7 @@ export default function FavoritesScreen() {
   const [favorites, setFavorites] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [recipeImagesEnabled, setRecipeImagesEnabled] = useState(true);
 
   const getRecipeTimeValue = (recipe) => {
     const prepRaw =
@@ -114,6 +115,20 @@ export default function FavoritesScreen() {
       loadFavorites();
     }
   }, [isFocused, loadFavorites]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      const settings = await getRecipeImageSettings();
+      if (!cancelled) {
+        setRecipeImagesEnabled(Boolean(settings?.enabled));
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -199,26 +214,36 @@ export default function FavoritesScreen() {
             onPress={() => navigateToRecipe(item)}
             activeOpacity={0.7}
           >
-            {/* Recipe Image */}
-            <View style={styles.imageContainer}>
-              {item.image && item.imageSource !== 'placeholder' ? (
+            {recipeImagesEnabled && item.image && item.imageSource !== 'placeholder' ? (
+              <View style={styles.imageContainer}>
                 <Image source={{ uri: item.image }} style={styles.recipeImage} />
-              ) : (
-                <Image source={RecipePlaceholder} style={styles.recipeImage} />
-              )}
-              <View style={styles.imageOverlay}>
-                <View style={styles.favoriteBadge}>
+                <View style={styles.imageOverlay}>
+                  <View style={styles.favoriteBadge}>
+                    <Ionicons name="heart" size={12} color="white" />
+                    <Text style={styles.favoriteBadgeText}>Saved</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.removeButton}
+                    onPress={() => removeFromFavorites(item.favoriteId)}
+                  >
+                    <Ionicons name="trash-outline" size={16} color="white" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.noImageHeader}>
+                <View style={styles.favoriteBadgeInline}>
                   <Ionicons name="heart" size={12} color="white" />
                   <Text style={styles.favoriteBadgeText}>Saved</Text>
                 </View>
-              <TouchableOpacity
-                style={styles.removeButton}
-                onPress={() => removeFromFavorites(item.favoriteId)}
-              >
-                <Ionicons name="trash-outline" size={16} color="white" />
-              </TouchableOpacity>
-            </View>
-          </View>
+                <TouchableOpacity
+                  style={styles.removeButtonInline}
+                  onPress={() => removeFromFavorites(item.favoriteId)}
+                >
+                  <Ionicons name="trash-outline" size={16} color={Colors.textMuted} />
+                </TouchableOpacity>
+              </View>
+            )}
 
             {/* Recipe Info */}
             <View style={styles.recipeInfo}>
@@ -416,6 +441,29 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 16,
     backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  noImageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 14,
+  },
+  favoriteBadgeInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  removeButtonInline: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.background,
     justifyContent: 'center',
     alignItems: 'center',
   },
