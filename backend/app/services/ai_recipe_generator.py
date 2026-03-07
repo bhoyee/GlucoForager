@@ -97,7 +97,7 @@ class AIRecipeGenerator:
         if not self.gemini_api_key:
             return {"image_url": self._placeholder_image(recipe), "image_source": "placeholder"}
 
-        image_bytes = self._generate_image_gemini(prompt)
+        image_bytes = self._generate_image_gemini(prompt, size=size)
         image_url = self._store_generated_image(image_bytes, recipe, size=size)
         return {"image_url": image_url, "image_source": "ai"}
 
@@ -131,29 +131,79 @@ class AIRecipeGenerator:
         parts.append("The dish should look diabetes-friendly (balanced plate, not overly sugary).")
         return " ".join(parts)
 
-    def _generate_image_gemini(self, prompt: str) -> bytes:
+    def _generate_image_gemini(self, prompt: str, *, size: int) -> bytes:
         url = "https://generativelanguage.googleapis.com/v1beta/openai/images/generations"
-        headers = {
-            "Authorization": f"Bearer {self.gemini_api_key}",
-            "Content-Type": "application/json",
-        }
+        size_value = f"{int(size)}x{int(size)}"
         payload = {
             "model": self.gemini_image_model,
             "prompt": prompt,
             "response_format": "b64_json",
+            "size": size_value,
             "n": 1,
         }
-        with httpx.Client(timeout=60) as client:
-            resp = client.post(url, headers=headers, json=payload)
+
+        def attempt(*, headers: dict[str, str] | None, params: dict[str, str] | None):
+            with httpx.Client(timeout=60) as client:
+                resp = client.post(url, headers=headers, params=params, json=payload)
+            return resp
+
+        # Primary attempt: OpenAI-compatible auth header.
+        resp = attempt(
+            headers={
+                "Authorization": f"Bearer {self.gemini_api_key}",
+                "Content-Type": "application/json",
+            },
+            params=None,
+        )
+
+        # Fallback: some Gemini endpoints accept API key via query param instead.
+        if resp.status_code in (401, 403):
+            resp = attempt(
+                headers={"Content-Type": "application/json"},
+                params={"key": str(self.gemini_api_key)},
+            )
+
+        # Fallback: some environments accept x-goog-api-key.
+        if resp.status_code in (401, 403):
+            resp = attempt(
+                headers={
+                    "Content-Type": "application/json",
+                    "x-goog-api-key": str(self.gemini_api_key),
+                },
+                params=None,
+            )
+
+        if resp.status_code < 200 or resp.status_code >= 300:
+            body = ""
+            try:
+                body = resp.text or ""
+            except Exception:  # noqa: BLE001
+                body = ""
+            logger.warning(
+                "Gemini image generation HTTP %s (model=%s size=%s): %s",
+                resp.status_code,
+                self.gemini_image_model,
+                size_value,
+                body[:800],
+            )
             resp.raise_for_status()
-            data = resp.json()
+
+        data = resp.json()
 
         items = data.get("data") or []
         if not items or not isinstance(items, list):
             raise ValueError("Gemini image response missing data")
 
-        b64_json = items[0].get("b64_json")
+        first = items[0] if isinstance(items[0], dict) else {}
+        b64_json = first.get("b64_json")
         if not b64_json:
+            # Some providers may return a URL instead of base64.
+            url_value = first.get("url")
+            if url_value and isinstance(url_value, str):
+                with httpx.Client(timeout=60) as client:
+                    image_resp = client.get(url_value)
+                    image_resp.raise_for_status()
+                    return image_resp.content
             raise ValueError("Gemini image response missing b64_json")
 
         import base64
