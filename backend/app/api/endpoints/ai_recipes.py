@@ -2,8 +2,10 @@ import hashlib
 import json
 from datetime import datetime, timezone
 import uuid
+import logging
+from urllib.parse import urlsplit
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -18,12 +20,14 @@ from ...services.cost_tracker import record_ai_request
 from ...core.config import settings as core_settings
 from ...services.settings_service import get_recipe_image_settings
 from ...services.subscription_service import get_effective_subscription_tier
+from ...models.recipe_history import RecipeHistory
 
 router = APIRouter(prefix="/ai/recipes", tags=["ai"])
 pipeline = AIPipeline()
 cache = CacheService()
 image_helper = AIRecipeGenerator()
 VISION_CACHE_TTL_SECONDS = 21600
+logger = logging.getLogger(__name__)
 
 
 class VisionRecipeRequest(BaseModel):
@@ -415,6 +419,7 @@ def fridge_to_recipes_alias(
 
 @router.post("/image")
 def generate_recipe_image(
+    request: Request,
     payload: RecipeImageRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -442,13 +447,23 @@ def generate_recipe_image(
     }
 
     today = datetime.now(timezone.utc).date().isoformat()
+    title_norm = str(recipe_payload["title"]).strip().lower()
+    ingredient_norm_items = sorted(
+        {
+            str(item).strip().lower()
+            for item in (payload.ingredients or [])
+            if item and str(item).strip()
+        }
+    )
+
     fingerprint = hashlib.sha256(
         (
-            recipe_payload["title"]
+            # Intentionally DO NOT include description in the fingerprint because the mobile app
+            # may fill a default description when the backend omits it, which would prevent us
+            # from updating recipe_history and recent lists correctly.
+            title_norm
             + "|"
-            + recipe_payload["description"]
-            + "|"
-            + ",".join(payload.ingredients or [])
+            + ",".join(ingredient_norm_items)
         ).encode("utf-8")
     ).hexdigest()
 
@@ -461,6 +476,26 @@ def generate_recipe_image(
         per_recipe_count = 0
 
     if per_recipe_count >= settings.max_per_recipe:
+        cached_url = cache.get(f"{per_recipe_key}:url")
+        if cached_url and isinstance(cached_url, str):
+            base_url = str(request.base_url).rstrip("/")
+            path = urlsplit(cached_url).path if cached_url.startswith("http") else cached_url
+            if path.startswith("/uploads/"):
+                # Best-effort: persist to recipe history so lists/details reflect the image.
+                _persist_image_to_history(
+                    db,
+                    user_id=current_user.id,
+                    fingerprint=fingerprint,
+                    image_url=f"{base_url}{path}",
+                    title_norm=title_norm,
+                )
+                return {
+                    "image_url": f"{base_url}{path}",
+                    "image_source": "ai",
+                    "cached": True,
+                    "size": settings.size,
+                    "daily_limit": daily_limit,
+                }
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Image already generated for this recipe.",
@@ -487,7 +522,14 @@ def generate_recipe_image(
             payload.ingredients or [],
             size=settings.size,
         )
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "Recipe image generation failed (user_id=%s model=%s size=%s): %s",
+            getattr(current_user, "id", None),
+            getattr(image_helper, "gemini_image_model", None),
+            settings.size,
+            str(exc)[:400],
+        )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Image generation failed. Please try again.",
@@ -499,12 +541,143 @@ def generate_recipe_image(
             detail="Image generation failed. Please try again.",
         )
 
+    # Normalize the returned URL to the same base URL the mobile client is hitting (LAN, proxy, etc.)
+    # This avoids misconfiguration where SITE_URL points to a different domain.
+    image_url = str(image_payload.get("image_url") or "")
+    base_url = str(request.base_url).rstrip("/")
+    if image_url:
+        path = urlsplit(image_url).path if image_url.startswith("http") else image_url
+        if path.startswith("/uploads/"):
+            image_payload["image_url"] = f"{base_url}{path}"
+            image_url = image_payload["image_url"]
+
     # Only count successful generations.
     cache.set(per_recipe_key, str(per_recipe_count + 1), ttl_seconds=24 * 60 * 60)
+    cache.set(f"{per_recipe_key}:url", str(image_url), ttl_seconds=24 * 60 * 60)
+    # Also store a longer-lived mapping so "recent recipes" can show images without relying on
+    # mutating recipe_history JSON (which can be brittle if the client-side recipe differs slightly).
+    cache.set(f"recipeimg:{fingerprint}:url", str(image_url), ttl_seconds=60 * 24 * 60 * 60)
     if daily_limit != -1:
         daily_key = f"imggen:{current_user.id}:{today}:count"
         cache.incr(daily_key, ttl_seconds=24 * 60 * 60)
 
+    # Track successful image generations for admin cost/usage reporting.
+    try:
+        record_ai_request(
+            db,
+            current_user.id,
+            tier,
+            "recipe_image",
+            model_used=str(core_settings.gemini_image_model or "unknown"),
+            tokens_used=0,
+            cost_estimate=float(settings.cost_usd or 0.0),
+            device_id=None,
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
+    _persist_image_to_history(
+        db,
+        user_id=current_user.id,
+        fingerprint=fingerprint,
+        image_url=str(image_url),
+        title_norm=title_norm,
+    )
+
     image_payload["size"] = settings.size
     image_payload["daily_limit"] = daily_limit
     return image_payload
+
+
+def _recipe_fingerprint_from_item(item: dict) -> str:
+    title = str(item.get("title") or item.get("name") or "").strip().lower()
+    raw_ingredients = item.get("ingredients") or []
+    names: list[str] = []
+    if isinstance(raw_ingredients, list):
+        for ing in raw_ingredients:
+            if isinstance(ing, str):
+                if ing.strip():
+                    names.append(ing.strip())
+            elif isinstance(ing, dict):
+                name = str(ing.get("name") or ing.get("title") or "").strip()
+                if name:
+                    names.append(name)
+    joined = ",".join(names)
+    normalized = ",".join(sorted({name.strip().lower() for name in names if name.strip()}))
+    return hashlib.sha256((title + "|" + normalized).encode("utf-8")).hexdigest()
+
+
+def _persist_image_to_history(
+    db: Session,
+    *,
+    user_id: int,
+    fingerprint: str,
+    image_url: str,
+    title_norm: str,
+) -> bool:
+    """
+    Update the most recent recipe_history entries so /api/recipes/recent returns the generated image.
+    Returns True if an entry was updated.
+    """
+    if not fingerprint or not image_url:
+        return False
+
+    histories = (
+        db.query(RecipeHistory)
+        .filter(RecipeHistory.user_id == user_id)
+        .order_by(RecipeHistory.created_at.desc())
+        .limit(10)
+        .all()
+    )
+    for idx, history in enumerate(histories):
+        recipes = history.recipes or []
+        if not isinstance(recipes, list):
+            continue
+        changed = False
+        for recipe in recipes:
+            if not isinstance(recipe, dict):
+                continue
+            if _recipe_fingerprint_from_item(recipe) != fingerprint:
+                continue
+            recipe["image_url"] = image_url
+            recipe["image_source"] = "ai"
+            changed = True
+        if changed:
+            history.recipes = recipes
+            db.add(history)
+            db.commit()
+            logger.info(
+                "Persisted generated image into recipe_history (user_id=%s history_id=%s)",
+                user_id,
+                getattr(history, "id", None),
+            )
+            return True
+
+        # Fallback: on the most recent history only, match by title if unique.
+        if idx == 0 and title_norm:
+            matches = []
+            for recipe in recipes:
+                if not isinstance(recipe, dict):
+                    continue
+                recipe_title_norm = str(recipe.get("title") or recipe.get("name") or "").strip().lower()
+                if recipe_title_norm == title_norm:
+                    matches.append(recipe)
+            if len(matches) == 1:
+                matches[0]["image_url"] = image_url
+                matches[0]["image_source"] = "ai"
+                history.recipes = recipes
+                db.add(history)
+                db.commit()
+                logger.info(
+                    "Persisted generated image into recipe_history by title fallback (user_id=%s history_id=%s)",
+                    user_id,
+                    getattr(history, "id", None),
+                )
+                return True
+
+    logger.warning(
+        "Did not find matching recipe in recent history to persist image (user_id=%s fingerprint=%s)",
+        user_id,
+        fingerprint[:12],
+    )
+    return False

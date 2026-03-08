@@ -40,6 +40,7 @@ class RecipeImagesPayload(BaseModel):
     free_daily_limit: int = Field(1, ge=0, le=500)
     premium_daily_limit: int = Field(10, ge=-1, le=5000)
     max_per_recipe: int = Field(1, ge=1, le=50)
+    cost_usd: float | None = Field(None, ge=0, le=10)
 
 
 @router.get("/signup-notifications")
@@ -143,6 +144,7 @@ def get_recipe_images(
         "free_daily_limit": settings.free_daily_limit,
         "premium_daily_limit": settings.premium_daily_limit,
         "max_per_recipe": settings.max_per_recipe,
+        "cost_usd": settings.cost_usd,
     }
 
 
@@ -159,6 +161,7 @@ def put_recipe_images(
         free_daily_limit=payload.free_daily_limit,
         premium_daily_limit=payload.premium_daily_limit,
         max_per_recipe=payload.max_per_recipe,
+        cost_usd=payload.cost_usd,
     )
     return {
         "enabled": settings.enabled,
@@ -166,4 +169,5 @@ def put_recipe_images(
         "free_daily_limit": settings.free_daily_limit,
         "premium_daily_limit": settings.premium_daily_limit,
         "max_per_recipe": settings.max_per_recipe,
+        "cost_usd": settings.cost_usd,
     }

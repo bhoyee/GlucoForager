@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
+  Image,
 } from 'react-native';
 import { useNavigation, useRoute, useIsFocused } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
@@ -19,6 +20,7 @@ import { Colors } from '../../constants/Colors';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
 import { useAuth } from '../../context/authContext';
+import { getRecipeImageSettings } from '../../utils/recipeImageSettings';
 
 export default function RecentRecipesScreen() {
   const navigation = useNavigation();
@@ -36,6 +38,21 @@ export default function RecentRecipesScreen() {
   const [recipes, setRecipes] = useState(initialRecipes);
   const [isLoading, setIsLoading] = useState(initialRecipes.length === 0);
   const [refreshing, setRefreshing] = useState(false);
+  const [recipeImagesEnabled, setRecipeImagesEnabled] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      const settings = await getRecipeImageSettings();
+      if (!cancelled) {
+        setRecipeImagesEnabled(Boolean(settings?.enabled));
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const getRecipeTimeValue = (recipe) => {
     const prepRaw =
@@ -178,13 +195,26 @@ export default function RecentRecipesScreen() {
       >
         {recipes.map((recipe, index) => {
           const title = recipe.name || recipe.title || `Recipe ${index + 1}`;
+          const showThumb =
+            recipeImagesEnabled &&
+            Boolean(recipe.image_url) &&
+            recipe.image_source !== 'placeholder';
           return (
             <TouchableOpacity
               key={recipe.id || `${title}-${index}`}
               style={styles.recipeCard}
-              onPress={() => navigation.navigate('RecipeDetail', { recipe, source: 'admin' })}
+              onPress={() => navigation.navigate('RecipeDetail', { recipe, source: 'ai' })}
               activeOpacity={0.7}
             >
+              <View style={styles.thumb}>
+                {showThumb ? (
+                  <Image source={{ uri: recipe.image_url }} style={styles.thumbImage} />
+                ) : (
+                  <View style={styles.thumbPlaceholder}>
+                    <Ionicons name="image-outline" size={20} color={Colors.textLight} />
+                  </View>
+                )}
+              </View>
               <View style={styles.recipeInfo}>
                 <Text style={styles.recipeName} numberOfLines={1}>{title}</Text>
                 <Text style={styles.recipeDescription} numberOfLines={2}>
@@ -308,6 +338,24 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 2,
+  },
+  thumb: {
+    width: 54,
+    height: 54,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#F3F4F6',
+    marginRight: 12,
+  },
+  thumbImage: {
+    width: '100%',
+    height: '100%',
+  },
+  thumbPlaceholder: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   recipeInfo: {
     flex: 1,

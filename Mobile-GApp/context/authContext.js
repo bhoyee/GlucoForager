@@ -13,6 +13,12 @@ export function AuthProvider({ children }) {
   const [isLoading, setIsLoading] = useState(true);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
 
+  const devLog = (...args) => {
+    if (!__DEV__) return;
+    // eslint-disable-next-line no-console
+    console.log(...args);
+  };
+
   useEffect(() => {
     // Check auth status on app start
     setAuthRefreshHandler(refreshAccessToken);
@@ -27,7 +33,7 @@ export function AuthProvider({ children }) {
       const token = await AsyncStorage.getItem('userToken');
       const publicId = await AsyncStorage.getItem('publicUserId');
       
-      console.log('Auth check:', { onboarded, token });
+      devLog('Auth check:', { onboarded, hasToken: Boolean(token) });
       
       setHasCompletedOnboarding(onboarded === 'true');
       if (token) {
@@ -154,7 +160,7 @@ export function AuthProvider({ children }) {
         email: profile?.email || null,
         fullName: profile?.full_name || null,
       });
-      console.log('User signed in with token:', token);
+      devLog('User signed in');
     } catch (error) {
       console.error('Error signing in:', error);
       throw error;
@@ -179,7 +185,7 @@ export function AuthProvider({ children }) {
       await AsyncStorage.removeItem('publicUserId');
       setUserToken(null);
       await configureRevenueCat({});
-      console.log('User signed out');
+      devLog('User signed out');
     } catch (error) {
       console.error('Error signing out:', error);
       throw error;
@@ -190,7 +196,7 @@ export function AuthProvider({ children }) {
     try {
       await AsyncStorage.setItem('hasCompletedOnboarding', 'true');
       setHasCompletedOnboarding(true);
-      console.log('Onboarding completed');
+      devLog('Onboarding completed');
     } catch (error) {
       console.error('Error completing onboarding:', error);
       throw error;

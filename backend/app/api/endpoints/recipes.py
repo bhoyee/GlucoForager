@@ -8,8 +8,28 @@ from ...models.recipe import Recipe
 from ...models.recipe_history import RecipeHistory
 from ...models.user import User
 from ..dependencies import get_current_user
+from ...services.cache_service import CacheService
+import hashlib
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
+cache = CacheService()
+
+
+def _ai_recipe_fingerprint(item: dict) -> str:
+    title = str(item.get("title") or item.get("name") or "").strip().lower()
+    raw_ingredients = item.get("ingredients") or []
+    names: list[str] = []
+    if isinstance(raw_ingredients, list):
+        for ing in raw_ingredients:
+            if isinstance(ing, str):
+                if ing.strip():
+                    names.append(ing.strip())
+            elif isinstance(ing, dict):
+                name = str(ing.get("name") or ing.get("title") or "").strip()
+                if name:
+                    names.append(name)
+    normalized = ",".join(sorted({name.strip().lower() for name in names if name.strip()}))
+    return hashlib.sha256((title + "|" + normalized).encode("utf-8")).hexdigest()
 
 
 @router.get("/legacy")
@@ -64,6 +84,18 @@ def recent_recipes(
     if not latest:
         return {"items": []}
     recipes = latest.recipes or []
+
+    # Overlay generated images (if any) using our cache mapping from image generation.
+    # This makes the client "Recent recipes" reflect images even if the stored JSON still contains placeholders.
+    if isinstance(recipes, list):
+        for recipe in recipes:
+            if not isinstance(recipe, dict):
+                continue
+            fingerprint = _ai_recipe_fingerprint(recipe)
+            url = cache.get(f"recipeimg:{fingerprint}:url")
+            if url and isinstance(url, str):
+                recipe["image_url"] = url
+                recipe["image_source"] = "ai"
     return {"items": recipes[:3]}
 
 

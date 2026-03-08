@@ -25,6 +25,12 @@ export default function AdminDashboard() {
     metrics: {},
     message: '',
   });
+  const [imageUsage, setImageUsage] = useState({
+    currency: 'USD',
+    today: { count: 0, cost_usd: 0 },
+    week: { count: 0, cost_usd: 0 },
+    month: { count: 0, cost_usd: 0 },
+  });
   const token = typeof window !== 'undefined' ? localStorage.getItem('adminToken') : null;
 
   const fetchCount = useCallback(
@@ -85,6 +91,26 @@ export default function AdminDashboard() {
       : { available: false, currency: 'USD', metrics: {}, message: '' };
   }, [router, token]);
 
+  const fetchImageUsage = useCallback(async () => {
+    const response = await fetch(`${API_URL}/api/admin/ai/recipe-image-usage`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (response.status === 401) {
+      localStorage.removeItem('adminToken');
+      router.push('/admin');
+      return null;
+    }
+    const data = await response.json().catch(() => ({}));
+    return data && typeof data === 'object'
+      ? {
+          currency: data.currency || 'USD',
+          today: data.today || { count: 0, cost_usd: 0 },
+          week: data.week || { count: 0, cost_usd: 0 },
+          month: data.month || { count: 0, cost_usd: 0 },
+        }
+      : null;
+  }, [router, token]);
+
   const loadStats = useCallback(async () => {
     if (!token) {
       router.push('/admin');
@@ -100,6 +126,7 @@ export default function AdminDashboard() {
         totalRecipes,
         totalBlogPosts,
         salesData,
+        imageUsageData,
       ] = await Promise.all([
         fetchCount(),
         fetchCount('free'),
@@ -121,6 +148,7 @@ export default function AdminDashboard() {
           .catch(() => 0),
         fetchBlogPostCount().catch(() => 0),
         fetchSales().catch(() => ({ available: false, currency: 'USD', metrics: {}, message: '' })),
+        fetchImageUsage().catch(() => null),
       ]);
       if (
         totalUsers === null
@@ -131,6 +159,7 @@ export default function AdminDashboard() {
         || totalRecipes === null
         || totalBlogPosts === null
         || salesData === null
+        || imageUsageData === null
       ) {
         return;
       }
@@ -144,6 +173,7 @@ export default function AdminDashboard() {
         totalBlogPosts,
       });
       setSales(salesData);
+      setImageUsage(imageUsageData);
     } catch (error) {
       setStats({
         totalUsers: 0,
@@ -155,6 +185,12 @@ export default function AdminDashboard() {
         totalBlogPosts: 0,
       });
       setSales({ available: false, currency: 'USD', metrics: {}, message: '' });
+      setImageUsage({
+        currency: 'USD',
+        today: { count: 0, cost_usd: 0 },
+        week: { count: 0, cost_usd: 0 },
+        month: { count: 0, cost_usd: 0 },
+      });
     }
   }, [fetchBlogPostCount, fetchCount, fetchSales, router, token]);
 
@@ -251,6 +287,33 @@ export default function AdminDashboard() {
               may require data export.
             </p>
           )}
+        </div>
+        <div className="admin-card">
+          <h3>Recipe images</h3>
+          <p className="admin-subtitle">AI recipe image generations (estimated spend).</p>
+          <div className="admin-inline admin-subcards" style={{ marginTop: 0 }}>
+            <div className="admin-subcard">
+              <span>Today</span>
+              <strong>
+                {imageUsage.today?.count} / {formatMoney(imageUsage.today?.cost_usd, imageUsage.currency)}
+              </strong>
+            </div>
+            <div className="admin-subcard">
+              <span>This week</span>
+              <strong>
+                {imageUsage.week?.count} / {formatMoney(imageUsage.week?.cost_usd, imageUsage.currency)}
+              </strong>
+            </div>
+            <div className="admin-subcard">
+              <span>This month</span>
+              <strong>
+                {imageUsage.month?.count} / {formatMoney(imageUsage.month?.cost_usd, imageUsage.currency)}
+              </strong>
+            </div>
+          </div>
+          <p className="admin-help" style={{ marginTop: 10 }}>
+            Cost is estimated using your configured per-image cost in Admin → Settings → Recipe images.
+          </p>
         </div>
       </div>
     </div>
