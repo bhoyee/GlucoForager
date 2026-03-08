@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.orm import Session
 
 from ...core.config import settings
@@ -46,8 +46,8 @@ class ClientInfo(BaseModel):
     os_version: str | None = Field(None, max_length=64)
     device_model: str | None = Field(None, max_length=120)
 
-    @validator("platform", "app_version", "build_number", "os_version", "device_model", pre=True)
-    def normalize_text(cls, value: str | None) -> str | None:
+    @field_validator("platform", "app_version", "build_number", "os_version", "device_model", mode="before")
+    def normalize_text(cls, value: str | None) -> str | None:  # noqa: N805
         if value is None:
             return None
         cleaned = str(value).strip()
@@ -62,15 +62,15 @@ class UserCreate(BaseModel):
     country: str | None = Field(None, max_length=120)
     client: ClientInfo | None = None
 
-    @validator("full_name")
-    def validate_full_name(cls, value: str) -> str:
+    @field_validator("full_name")
+    def validate_full_name(cls, value: str) -> str:  # noqa: N805
         cleaned = value.strip()
         if not cleaned:
             raise ValueError("Full name is required")
         return cleaned
 
-    @validator("gender")
-    def validate_gender(cls, value: str | None) -> str | None:
+    @field_validator("gender")
+    def validate_gender(cls, value: str | None) -> str | None:  # noqa: N805
         if value is None:
             return None
         cleaned = value.strip().lower()
@@ -79,8 +79,8 @@ class UserCreate(BaseModel):
             raise ValueError("Invalid gender")
         return cleaned
 
-    @validator("country")
-    def validate_country(cls, value: str | None) -> str | None:
+    @field_validator("country")
+    def validate_country(cls, value: str | None) -> str | None:  # noqa: N805
         if value is None:
             return None
         cleaned = value.strip()

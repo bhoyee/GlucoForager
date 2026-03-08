@@ -12,6 +12,7 @@ __pycache__/
 # backend artifacts
 /backend/.env
 /backend/app/**/__pycache__/
+/backend/.venv/
 
 # landing page
 /landing-page/.next/

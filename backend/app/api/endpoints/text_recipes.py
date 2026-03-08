@@ -2,9 +2,10 @@ import hashlib
 import json
 import re
 import uuid
+from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
-from pydantic import BaseModel, conlist, constr, validator
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from ...api.dependencies import check_user_access, get_current_user
@@ -29,19 +30,21 @@ TEXT_CACHE_TTL_SECONDS = 21600
 
 ALLOWED_INGREDIENT_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9\s\-'/%]*$"
 
-IngredientStr = constr(
-    strip_whitespace=True,
-    min_length=2,
-    max_length=30,
-    regex=ALLOWED_INGREDIENT_PATTERN,
-)
+IngredientStr = Annotated[
+    str,
+    Field(
+        min_length=2,
+        max_length=30,
+        pattern=ALLOWED_INGREDIENT_PATTERN,
+    ),
+]
 
 
 class TextRecipeRequest(BaseModel):
-    ingredients: conlist(IngredientStr, min_items=1, max_items=20)
+    ingredients: list[IngredientStr] = Field(min_length=1, max_length=20)
     filters: list[str] | None = None
 
-    @validator("ingredients", pre=True)
+    @field_validator("ingredients", mode="before")
     def normalize_ingredients(cls, value):  # noqa: N805
         if not isinstance(value, list):
             return value
@@ -49,12 +52,16 @@ class TextRecipeRequest(BaseModel):
         for item in value:
             if not isinstance(item, str):
                 continue
-            normalized = " ".join(item.split())
-            if normalized:
-                cleaned.append(normalized)
+            # Accept comma-separated input as a convenience (mobile users often paste lists).
+            parts = [part.strip() for part in item.split(",")] if "," in item else [item.strip()]
+            for part in parts:
+                part = part.strip().strip(",.;")
+                normalized = " ".join(part.split())
+                if normalized:
+                    cleaned.append(normalized)
         return cleaned
 
-    @validator("ingredients")
+    @field_validator("ingredients")
     def reject_invalid_ingredients(cls, value):  # noqa: N805
         invalid = [item for item in value if not re.match(ALLOWED_INGREDIENT_PATTERN, item)]
         if invalid:

@@ -1,6 +1,9 @@
 import json
 
-from pydantic import BaseSettings, Field, validator
+import json
+
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -34,7 +37,7 @@ class Settings(BaseSettings):
     deepseek_model: str = Field("deepseek-chat", env="DEEPSEEK_MODEL")
     deepseek_vision_model: str = Field("deepseek-chat", env="DEEPSEEK_VISION_MODEL")
     gemini_api_key: str | None = Field(None, env="GEMINI_API_KEY")
-    gemini_image_model: str = Field("imagen-3.0-generate-002", env="GEMINI_IMAGE_MODEL")
+    gemini_image_model: str = Field("imagen-4.0-generate-001", env="GEMINI_IMAGE_MODEL")
     redis_url: str | None = Field(None, env="REDIS_URL")
     revenuecat_webhook_secret: str | None = Field(None, env="REVENUECAT_WEBHOOK_SECRET")
     revenuecat_secret_api_key: str | None = Field(None, env="REVENUECAT_SECRET_API_KEY")
@@ -43,12 +46,10 @@ class Settings(BaseSettings):
     admin_bootstrap_token: str | None = Field(None, env="ADMIN_BOOTSTRAP_TOKEN")
     site_url: str = Field("https://www.glucoforager.com", env="SITE_URL")
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
 
-    @validator("cors_origins", pre=True)
-    def assemble_cors_origins(cls, v):
+    @field_validator("cors_origins", mode="before")
+    def assemble_cors_origins(cls, v):  # noqa: N805
         if isinstance(v, str):
             value = v.strip()
             if not value:

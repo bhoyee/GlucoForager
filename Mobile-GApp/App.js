@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { ActivityIndicator, Alert, LogBox, Modal, Pressable, View, Text } from 'react-native';
+import { ActivityIndicator, Alert, Linking, LogBox, Modal, Pressable, View, Text } from 'react-native';
 
 // Import Auth Provider
 import { AuthProvider, useAuth } from './context/authContext';
@@ -34,8 +34,14 @@ import MainTabNavigator from './navigation/MainTabNavigator';
 
 const Stack = createNativeStackNavigator();
 
+const devLog = (...args) => {
+  if (!__DEV__) return;
+  // eslint-disable-next-line no-console
+  console.log(...args);
+};
+
 function AuthStack() {
-  console.log('Rendering AuthStack');
+  devLog('Rendering AuthStack');
   return (
     <Stack.Navigator 
       initialRouteName="Onboarding"
@@ -53,14 +59,17 @@ function AuthStack() {
 }
 
 function AppNavigator() {
-  console.log('AppNavigator rendering');
+  devLog('AppNavigator rendering');
   
   // Add safety check for useAuth
   let authContext;
   try {
     authContext = useAuth();
   } catch (error) {
-    console.error('Error accessing auth context:', error);
+    if (__DEV__) {
+      // eslint-disable-next-line no-console
+      console.error('Error accessing auth context:', error);
+    }
     // Return a fallback UI or null
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -87,15 +96,9 @@ function AppNavigator() {
     let cancelled = false;
     const run = async () => {
       try {
-        if (__DEV__) {
-          // eslint-disable-next-line no-console
-          console.log('[AppUpdate] Checking for app update...');
-        }
+        devLog('[AppUpdate] Checking for app update...');
         const result = await checkForAppUpdate();
-        if (__DEV__) {
-          // eslint-disable-next-line no-console
-          console.log('[AppUpdate] Update check result', result);
-        }
+        devLog('[AppUpdate] Update check result', result);
         if (!cancelled && result?.available) {
           setUpdatePrompt(result);
         }
@@ -134,15 +137,15 @@ function AppNavigator() {
       cancelled = true;
     };
   }, [isLoading, minimumSplashDone, updatePrompt?.available, userToken]);
-  
-  console.log('AppNavigator state:', { userToken, isLoading, hasAuthContext: !!authContext });
+
+  devLog('AppNavigator state:', { isLoading, hasToken: Boolean(userToken), hasAuthContext: !!authContext });
 
   if (isLoading || !minimumSplashDone) {
-    console.log('Showing SplashScreen');
+    devLog('Showing SplashScreen');
     return <SplashScreen />;
   }
 
-  console.log('Showing main navigation. User token:', userToken ? 'Present' : 'None');
+  devLog('Showing main navigation. User token:', userToken ? 'Present' : 'None');
 
   return (
     <NavigationContainer>
@@ -206,7 +209,20 @@ function AppNavigator() {
                     if (!result?.scheduled) {
                       Alert.alert(
                         'Notifications disabled',
-                        'Please allow notifications in your device Settings to enable meal reminders.'
+                        'Please allow notifications in your device Settings to enable meal reminders.',
+                        [
+                          { text: 'Not now', style: 'cancel' },
+                          {
+                            text: 'Open settings',
+                            onPress: () => {
+                              try {
+                                Linking.openSettings();
+                              } catch {
+                                // Ignore.
+                              }
+                            },
+                          },
+                        ]
                       );
                     }
                     setMealPromptVisible(false);
@@ -353,7 +369,7 @@ function MealRemindersBootstrap() {
 }
 
 export default function App() {
-  console.log('App component rendering');
+  devLog('App component rendering');
 
   useEffect(() => {
     LogBox.ignoreLogs(['[RevenueCat]']);

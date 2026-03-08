@@ -161,7 +161,7 @@ const RecipeDetailsScreen = () => {
             ingredients,
           }),
         },
-        { onUnauthorized: signOut, timeoutMs: 15000 }
+        { onUnauthorized: signOut, timeoutMs: 60000 }
       );
 
       const data = await response.json().catch(() => ({}));
@@ -180,6 +180,20 @@ const RecipeDetailsScreen = () => {
           imageSource: data.image_source || 'ai',
           image_source: data.image_source || 'ai',
         }));
+
+        // Best-effort: refresh cached recent recipes so the Home list can show the new thumbnail immediately.
+        try {
+          const recentResponse = await apiFetch(
+            `${API_URL}${API_ENDPOINTS.RECENT_RECIPES}`,
+            { headers: { Authorization: `Bearer ${token}` } },
+            { onUnauthorized: signOut, timeoutMs: 5000 }
+          );
+          const recentData = await recentResponse.json().catch(() => ({}));
+          const recentItems = Array.isArray(recentData.items) ? recentData.items : [];
+          await AsyncStorage.setItem('home_recent_recipes', JSON.stringify(recentItems));
+        } catch (e) {
+          // Ignore cache refresh errors.
+        }
       }
     } catch (error) {
       Alert.alert('Error', 'Unable to generate image right now.');
@@ -571,34 +585,23 @@ const RecipeDetailsScreen = () => {
       ) : (
         <Image source={RecipePlaceholder} style={styles.recipeImage} />
       )}
-      <View style={styles.imageOverlay}>
-        <View style={styles.heroContent}>
-          <View style={styles.recipeBadge}>
-            <Text style={styles.badgeText}>{recipe.category}</Text>
-          </View>
-          <View style={styles.nutritionBadge}>
-            <View style={styles.nutritionItem}>
-              <Text style={styles.nutritionIcon}>🥗</Text>
-              <Text style={styles.nutritionValue}>{recipe.nutrition.calories} cal</Text>
-            </View>
-            <View style={styles.nutritionDivider} />
-            <View style={styles.nutritionItem}>
-              <Text style={styles.nutritionIcon}>🍞</Text>
-              <Text style={styles.nutritionValue}>{recipe.nutrition.carbs} carbs</Text>
-            </View>
-          </View>
+      {recipeImagesEnabled && (recipe.imageSource === 'placeholder' || !recipe.image || imageLoadError) ? (
+        <View pointerEvents="box-none" style={styles.generateImageOverlay}>
+          <TouchableOpacity
+            style={[
+              styles.generateImageButton,
+              styles.generateImageOverlayButton,
+              isGeneratingImage ? styles.generateImageButtonDisabled : null,
+            ]}
+            onPress={handleGenerateImage}
+            disabled={isGeneratingImage}
+            activeOpacity={0.9}
+          >
+            <Text style={styles.generateImageButtonText}>
+              {isGeneratingImage ? 'Generating...' : 'Generate image'}
+            </Text>
+          </TouchableOpacity>
         </View>
-      </View>
-      {recipeImagesEnabled && recipe.imageSource === 'placeholder' ? (
-        <TouchableOpacity
-          style={[styles.generateImageButton, isGeneratingImage ? styles.generateImageButtonDisabled : null]}
-          onPress={handleGenerateImage}
-          disabled={isGeneratingImage}
-        >
-          <Text style={styles.generateImageButtonText}>
-            {isGeneratingImage ? 'Generating…' : 'Generate image'}
-          </Text>
-        </TouchableOpacity>
       ) : null}
     </View>
   );
@@ -624,6 +627,19 @@ const RecipeDetailsScreen = () => {
 
   const renderTitleSection = () => (
     <View style={styles.titleSection}>
+      {recipeImagesEnabled && recipe.imageSource === 'placeholder' && false ? (
+        <View style={styles.generateImageRow}>
+          <TouchableOpacity
+            style={[styles.generateImageButton, isGeneratingImage ? styles.generateImageButtonDisabled : null]}
+            onPress={handleGenerateImage}
+            disabled={isGeneratingImage}
+          >
+            <Text style={styles.generateImageButtonText}>
+              {isGeneratingImage ? 'Generating…' : 'Generate image'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
       <Text style={styles.recipeTitle}>{recipe.title}</Text>
       <Text style={styles.recipeDescription}>{recipe.description}</Text>
     </View>
@@ -984,7 +1000,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    backdropFilter: 'blur(10px)',
   },
   headerIconButton: {
     width: 44,
@@ -993,16 +1008,33 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    backdropFilter: 'blur(10px)',
   },
   heroContainer: {
     height: 320,
     position: 'relative',
   },
-  generateImageButton: {
+  generateImageOverlay: {
     position: 'absolute',
-    top: 16,
-    right: 16,
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    backgroundColor: 'rgba(0,0,0,0.12)',
+  },
+  generateImageOverlayButton: {
+    minWidth: 160,
+    alignItems: 'center',
+  },
+  generateImageRow: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginBottom: 10,
+  },
+  generateImageButton: {
     backgroundColor: 'rgba(255,255,255,0.92)',
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -1031,54 +1063,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5F5',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  imageOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    justifyContent: 'flex-end',
-  },
-  heroContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
-  recipeBadge: {
-    backgroundColor: 'rgba(76, 175, 80, 0.9)',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    marginBottom: 10,
-  },
-  badgeText: {
-    color: '#FFF',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  nutritionBadge: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    borderRadius: 16,
-    padding: 12,
-    alignSelf: 'flex-start',
-  },
-  nutritionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-  },
-  nutritionIcon: {
-    fontSize: 16,
-    marginRight: 4,
-  },
-  nutritionValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-  },
-  nutritionDivider: {
-    width: 1,
-    height: '100%',
-    backgroundColor: '#E0E0E0',
   },
   content: {
     flex: 1,
