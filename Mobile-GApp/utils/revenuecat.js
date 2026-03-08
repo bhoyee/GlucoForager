@@ -1,4 +1,3 @@
-import { Platform } from 'react-native';
 import Purchases from 'react-native-purchases';
 import PurchasesUI from 'react-native-purchases-ui';
 import { Platform } from 'react-native';
