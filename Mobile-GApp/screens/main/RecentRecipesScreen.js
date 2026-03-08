@@ -206,15 +206,17 @@ export default function RecentRecipesScreen() {
               onPress={() => navigation.navigate('RecipeDetail', { recipe, source: 'ai' })}
               activeOpacity={0.7}
             >
-              <View style={styles.thumb}>
-                {showThumb ? (
-                  <Image source={{ uri: recipe.image_url }} style={styles.thumbImage} />
-                ) : (
-                  <View style={styles.thumbPlaceholder}>
-                    <Ionicons name="image-outline" size={20} color={Colors.textLight} />
-                  </View>
-                )}
-              </View>
+              {recipeImagesEnabled ? (
+                <View style={styles.thumb}>
+                  {showThumb ? (
+                    <Image source={{ uri: recipe.image_url }} style={styles.thumbImage} />
+                  ) : (
+                    <View style={styles.thumbPlaceholder}>
+                      <Ionicons name="image-outline" size={20} color={Colors.textLight} />
+                    </View>
+                  )}
+                </View>
+              ) : null}
               <View style={styles.recipeInfo}>
                 <Text style={styles.recipeName} numberOfLines={1}>{title}</Text>
                 <Text style={styles.recipeDescription} numberOfLines={2}>
