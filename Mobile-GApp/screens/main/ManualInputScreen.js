@@ -182,23 +182,44 @@ export default function ManualInputScreen() {
   const handleFindRecipes = async () => {
     if (isLoading) return;
     const normalized = ingredients
-      .map((ing) => ing.trim().replace(/\s+/g, ' '))
-      .filter((ing) => ing !== '');
+      .flatMap((ing) =>
+        `${ing || ''}`
+          .split(',')
+          .map((part) =>
+            part
+              .trim()
+              .replace(/^[,.;]+|[,.;]+$/g, '')
+              .replace(/\s+/g, ' ')
+          )
+          .filter(Boolean)
+      )
+      .slice(0, 50);
 
-    if (normalized.length > 20) {
+    // De-dupe while keeping order (and enforce 20 max after splitting).
+    const seen = new Set();
+    const normalizedUnique = [];
+    for (const item of normalized) {
+      const key = item.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      normalizedUnique.push(item);
+      if (normalizedUnique.length >= 20) break;
+    }
+
+    if (normalizedUnique.length > 20) {
       Alert.alert('Too many ingredients', 'Please enter 20 ingredients or fewer.');
       return;
     }
 
-    const invalid = normalized.find(
-      (item) => item.length < 2 || item.length > 30 || !allowedIngredientPattern.test(item)
-    );
-    
-    if (normalized.length === 0) {
+    if (normalizedUnique.length === 0) {
       Alert.alert('Error', 'Please enter at least one ingredient');
       return;
     }
 
+    const invalid = normalizedUnique.find(
+      (item) => item.length < 2 || item.length > 30 || !allowedIngredientPattern.test(item)
+    );
+    
     if (invalid) {
       Alert.alert(
         'Invalid ingredient',
@@ -228,7 +249,7 @@ export default function ManualInputScreen() {
           'Content-Type': 'application/json',
           'X-Device-Id': deviceId,
         },
-        body: JSON.stringify({ ingredients: normalized }),
+        body: JSON.stringify({ ingredients: normalizedUnique }),
         signal: controller.signal,
         },
         { onUnauthorized: signOut, timeoutMs: 45000 }
@@ -255,9 +276,9 @@ export default function ManualInputScreen() {
       }
       const jobId = data.job_id;
       setActiveJobId(jobId);
-      await pollJob(jobId, normalized);
+      await pollJob(jobId, normalizedUnique);
       pollingRef.current = setInterval(() => {
-        pollJob(jobId, normalized);
+        pollJob(jobId, normalizedUnique);
       }, 3000);
       timeoutRef.current = setTimeout(() => {
         stopPolling();

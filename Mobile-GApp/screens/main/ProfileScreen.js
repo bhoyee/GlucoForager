@@ -5,13 +5,14 @@ import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/nativ
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 import { Colors } from '../../constants/Colors';
 import { AuthContext } from '../../context/authContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
 import { configureRevenueCat, getCustomerInfo, getOfferings, getPaywallOffering, isPremiumEntitled, isRevenueCatConfigured, presentCustomerCenter, presentPaywall, restorePurchases } from '../../utils/revenuecat';
-import { disableMealReminders, enableMealRemindersAndSchedule, getMealRemindersEnabled, setMealRemindersPrompted, devInspectScheduledNotifications, devSendTestMealNotification } from '../../utils/mealReminders';
+import { disableMealReminders, enableMealRemindersAndSchedule, getMealRemindersEnabled, setMealRemindersPrompted } from '../../utils/mealReminders';
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
@@ -52,6 +53,10 @@ export default function ProfileScreen() {
   const debugTapThreshold = 7;
   const revenueCatReady = isRevenueCatConfigured();
   const premiumPriceCacheKey = 'premium_price_line_cache_v1';
+  const appVersion =
+    Constants?.expoConfig?.version ||
+    Constants?.manifest?.version ||
+    'unknown';
 
   const openExternalLink = async (url) => {
     try {
@@ -175,7 +180,20 @@ export default function ProfileScreen() {
             setMealRemindersEnabled(false);
             Alert.alert(
               'Notifications disabled',
-              'Please allow notifications in your device Settings to enable meal reminders.'
+              'Please allow notifications in your device Settings to enable meal reminders.',
+              [
+                { text: 'Not now', style: 'cancel' },
+                {
+                  text: 'Open settings',
+                  onPress: () => {
+                    try {
+                      Linking.openSettings();
+                    } catch {
+                      // Ignore.
+                    }
+                  },
+                },
+              ]
             );
             return;
           }
@@ -426,6 +444,7 @@ export default function ProfileScreen() {
   };
 
   const handleDebugTap = () => {
+    if (!__DEV__) return;
     if (debugTapTimer) {
       clearTimeout(debugTapTimer);
     }
@@ -639,25 +658,6 @@ export default function ProfileScreen() {
             thumbColor={mealRemindersEnabled ? Colors.primary : '#FFFFFF'}
           />
         </View>
-
-        {__DEV__ ? (
-          <>
-            <TouchableOpacity
-              style={styles.devReminderButton}
-              onPress={() => void devSendTestMealNotification()}
-            >
-              <Ionicons name="notifications-outline" size={18} color={Colors.primary} />
-              <Text style={styles.devReminderButtonText}>Send test notification</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.devReminderButton}
-              onPress={() => void devInspectScheduledNotifications()}
-            >
-              <Ionicons name="list-outline" size={18} color={Colors.primary} />
-              <Text style={styles.devReminderButtonText}>Inspect scheduled notifications</Text>
-            </TouchableOpacity>
-          </>
-        ) : null}
       </View>
 
       <View style={styles.menuSection}>
@@ -733,11 +733,11 @@ export default function ProfileScreen() {
       <TouchableOpacity
         style={styles.versionContainer}
         activeOpacity={0.8}
-        onPress={handleDebugTap}
+        onPress={__DEV__ ? handleDebugTap : undefined}
       >
         <View style={styles.versionRow}>
           <Text style={styles.versionText}>GlucoForager</Text>
-          <Text style={styles.versionSubText}>v1.0</Text>
+          <Text style={styles.versionSubText}>v{appVersion}</Text>
         </View>
       </TouchableOpacity>
       </ScrollView>
@@ -1043,24 +1043,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textLight,
     fontWeight: '500',
-  },
-  devReminderButton: {
-    marginTop: 10,
-    marginHorizontal: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    backgroundColor: `${Colors.primary}10`,
-    borderWidth: 1,
-    borderColor: `${Colors.primary}22`,
-  },
-  devReminderButtonText: {
-    fontSize: 13,
-    color: Colors.primary,
-    fontWeight: '600',
   },
   versionContainer: {
     alignItems: 'center',

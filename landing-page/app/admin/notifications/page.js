@@ -24,6 +24,7 @@ export default function AdminNotificationsPage() {
   const [recipeImagesFreeDailyLimit, setRecipeImagesFreeDailyLimit] = useState(1);
   const [recipeImagesPremiumDailyLimit, setRecipeImagesPremiumDailyLimit] = useState(10);
   const [recipeImagesMaxPerRecipe, setRecipeImagesMaxPerRecipe] = useState(1);
+  const [recipeImagesCostUsd, setRecipeImagesCostUsd] = useState(0.04);
   const [isLoading, setIsLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -65,6 +66,11 @@ export default function AdminNotificationsPage() {
       setRecipeImagesFreeDailyLimit(Number(recipeImages.free_daily_limit) ?? 1);
       setRecipeImagesPremiumDailyLimit(Number(recipeImages.premium_daily_limit) ?? 10);
       setRecipeImagesMaxPerRecipe(Number(recipeImages.max_per_recipe) ?? 1);
+      setRecipeImagesCostUsd(
+        recipeImages.cost_usd !== undefined && recipeImages.cost_usd !== null
+          ? Number(recipeImages.cost_usd) || 0.04
+          : 0.04
+      );
     } catch (error) {
       setMessage('Failed to load notification settings.');
     } finally {
@@ -114,6 +120,7 @@ export default function AdminNotificationsPage() {
             free_daily_limit: Number(recipeImagesFreeDailyLimit) ?? 1,
             premium_daily_limit: Number(recipeImagesPremiumDailyLimit) ?? 10,
             max_per_recipe: Number(recipeImagesMaxPerRecipe) ?? 1,
+            cost_usd: Number(recipeImagesCostUsd) || 0,
           }),
         }),
       ]);
@@ -149,6 +156,11 @@ export default function AdminNotificationsPage() {
       setRecipeImagesFreeDailyLimit(Number(recipeImages.free_daily_limit) ?? 1);
       setRecipeImagesPremiumDailyLimit(Number(recipeImages.premium_daily_limit) ?? 10);
       setRecipeImagesMaxPerRecipe(Number(recipeImages.max_per_recipe) ?? 1);
+      setRecipeImagesCostUsd(
+        recipeImages.cost_usd !== undefined && recipeImages.cost_usd !== null
+          ? Number(recipeImages.cost_usd) || 0.04
+          : 0.04
+      );
       setMessage('Settings saved.');
     } catch (error) {
       setMessage('Failed to save notification settings.');
@@ -343,6 +355,18 @@ export default function AdminNotificationsPage() {
               max={50}
               value={recipeImagesMaxPerRecipe}
               onChange={(event) => setRecipeImagesMaxPerRecipe(Number(event.target.value) || 1)}
+              disabled={busy}
+            />
+          </div>
+          <div className="admin-field">
+            <label>Estimated cost per image (USD)</label>
+            <input
+              type="number"
+              min={0}
+              max={10}
+              step={0.001}
+              value={recipeImagesCostUsd}
+              onChange={(event) => setRecipeImagesCostUsd(Number(event.target.value) || 0)}
               disabled={busy}
             />
           </div>

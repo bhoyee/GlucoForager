@@ -1,9 +1,10 @@
 import os
 import uuid
 from datetime import datetime
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
-from pydantic import BaseModel, EmailStr, Field, HttpUrl, validator
+from pydantic import BaseModel, EmailStr, Field, HttpUrl, field_validator
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
@@ -66,16 +67,16 @@ class RecipePayload(BaseModel):
     instructions: list[str]
     nutrition: NutritionInput | None = None
 
-    @validator("meal_type")
-    def validate_meal_type(cls, value: str) -> str:
+    @field_validator("meal_type")
+    def validate_meal_type(cls, value: str) -> str:  # noqa: N805
         normalized = value.strip().lower()
         allowed = {"breakfast", "lunch", "dinner", "snack"}
         if normalized not in allowed:
             raise ValueError("meal_type must be breakfast, lunch, dinner, or snack")
         return normalized
 
-    @validator("instructions")
-    def validate_instructions(cls, value: list[str]) -> list[str]:
+    @field_validator("instructions")
+    def validate_instructions(cls, value: list[str]) -> list[str]:  # noqa: N805
         cleaned = [step.strip() for step in value if step.strip()]
         if not cleaned:
             raise ValueError("At least one instruction is required")
@@ -97,8 +98,8 @@ class AdminTierPayload(BaseModel):
     tier: str = Field(..., min_length=3, max_length=20)
     expires_at: datetime | None = None
 
-    @validator("tier")
-    def validate_tier(cls, value: str) -> str:
+    @field_validator("tier")
+    def validate_tier(cls, value: str) -> str:  # noqa: N805
         normalized = value.strip().lower()
         if normalized not in {"free", "premium"}:
             raise ValueError("tier must be free or premium")
@@ -725,6 +726,50 @@ def bootstrap_admin(
 @router.get("/status")
 def admin_status(db: Session = Depends(get_db)):
     return {"has_admin": db.query(AdminUser).first() is not None}
+
+
+@router.get("/ai/recipe-image-usage")
+def recipe_image_usage(
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    now = datetime.utcnow()
+    today_start = datetime(now.year, now.month, now.day)
+    week_start = today_start - timedelta(days=today_start.weekday())  # Monday
+    month_start = datetime(now.year, now.month, 1)
+
+    def _count_and_cost(start: datetime) -> dict:
+        q = db.query(AIRequest).filter(
+            AIRequest.request_type == "recipe_image",
+            AIRequest.created_at >= start,
+            AIRequest.created_at <= now,
+        )
+        count = q.count()
+        cost = (
+            db.query(func.coalesce(func.sum(AIRequest.cost_estimate), 0))
+            .filter(
+                AIRequest.request_type == "recipe_image",
+                AIRequest.created_at >= start,
+                AIRequest.created_at <= now,
+            )
+            .scalar()
+        )
+        try:
+            cost_value = float(cost or 0)
+        except Exception:  # noqa: BLE001
+            cost_value = 0.0
+        return {"count": int(count), "cost_usd": cost_value}
+
+    today = _count_and_cost(today_start)
+    week = _count_and_cost(week_start)
+    month = _count_and_cost(month_start)
+
+    return {
+        "currency": "USD",
+        "today": today,
+        "week": week,
+        "month": month,
+    }
 
 
 @router.post("/uploads")

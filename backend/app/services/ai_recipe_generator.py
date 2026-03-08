@@ -5,7 +5,6 @@ import io
 from pathlib import Path
 from typing import Any, Dict, List
 
-import httpx
 from openai import OpenAI, OpenAIError
 from PIL import Image
 
@@ -103,7 +102,6 @@ class AIRecipeGenerator:
 
     def _build_image_prompt(self, recipe: Dict[str, Any], ingredients: List[str]) -> str:
         title = (recipe.get("title") or recipe.get("name") or "").strip()
-        desc = (recipe.get("description") or "").strip()
         raw_items = recipe.get("ingredients") or []
         normalized = []
         for item in raw_items:
@@ -118,123 +116,106 @@ class AIRecipeGenerator:
         ingredient_text = ", ".join(normalized[:16]) if normalized else ""
 
         parts = [
-            "Create a professional, appetizing, photorealistic food image for a recipe in a mobile app.",
-            "No text, no watermarks, no logos, no labels, no utensils brand names.",
-            "Square composition, centered plating, clean background, natural lighting, high detail.",
+            "Create a real-looking food photograph of the finished dish (not an illustration, not CGI, not 3D).",
+            "Look like a real photo taken with a modern smartphone or DSLR in natural lighting.",
+            "Square 1:1 composition, centered plating, clean simple background, high detail, realistic textures.",
+            "Include subtle, natural imperfections (not overly polished) so it does not look AI-generated.",
+            "Avoid common AI artifacts: plastic/glossy textures, over-saturated colors, unnatural bokeh, warped cutlery, smeared details.",
+            "IMPORTANT: Absolutely no text of any kind (no letters, numbers, titles, captions, labels, watermarks, logos, UI).",
+            "Do not generate menus, recipe cards, app screens, packaging, or any overlay text.",
+            "No borders, no frames, no top banners, no UI elements — the image must be an edge-to-edge food photo only.",
         ]
-        if title:
-            parts.append(f"Recipe name: {title}.")
-        if desc:
-            parts.append(f"Description: {desc}")
+        # Avoid including structured labels like "Recipe name:" / "Ingredients:" which increases the chance
+        # the model will generate a recipe-card image with text overlays.
         if ingredient_text:
-            parts.append(f"Key ingredients: {ingredient_text}.")
+            parts.append(f"The dish is made from {ingredient_text}.")
+        elif title:
+            parts.append("The dish matches the recipe title concept, but do not write any words in the image.")
         parts.append("The dish should look diabetes-friendly (balanced plate, not overly sugary).")
         return " ".join(parts)
 
     def _generate_image_gemini(self, prompt: str, *, size: int) -> bytes:
-        url = "https://generativelanguage.googleapis.com/v1beta/openai/images/generations"
-        size_value = f"{int(size)}x{int(size)}"
+        """
+        Generate an image using Google's GenAI API (Imagen or Gemini image models).
 
-        model_candidates = [
-            (self.gemini_image_model or "").strip(),
-            "imagen-3.0-generate-002",
-            "imagen-3.0-generate-001",
-        ]
-        model_candidates = [m for m in model_candidates if m]
+        Notes:
+        - Some Google API keys/projects do not have access to Imagen. In that case, use a Gemini
+          image-capable model and the generate_content flow.
+        - We always store/rescale to the requested `size` (512 by default) even if the provider
+          returns a larger image.
+        """
 
-        def attempt(*, headers: dict[str, str] | None, params: dict[str, str] | None):
-            with httpx.Client(timeout=60) as client:
-                resp = client.post(url, headers=headers, params=params, json=payload)
-            return resp
+        try:
+            from google import genai  # type: ignore[import-not-found]
+            from google.genai import types  # type: ignore[import-not-found]
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError("google-genai is not installed; cannot generate images") from exc
 
-        last_error: Exception | None = None
-        last_resp: httpx.Response | None = None
+        model = (self.gemini_image_model or "").strip()
+        if not model:
+            raise RuntimeError("GEMINI_IMAGE_MODEL is not set")
 
-        for model in model_candidates:
-            payload = {
-                "model": model,
-                "prompt": prompt,
-                "response_format": "b64_json",
-                "size": size_value,
-                "n": 1,
-            }
+        client = genai.Client(api_key=str(self.gemini_api_key))
 
-            # Primary attempt: OpenAI-compatible auth header.
-            resp = attempt(
-                headers={
-                    "Authorization": f"Bearer {self.gemini_api_key}",
-                    "Content-Type": "application/json",
-                },
-                params=None,
-            )
-
-            # Fallback: some Gemini endpoints accept API key via query param instead.
-            if resp.status_code in (401, 403):
-                resp = attempt(
-                    headers={"Content-Type": "application/json"},
-                    params={"key": str(self.gemini_api_key)},
-                )
-
-            # Fallback: some environments accept x-goog-api-key.
-            if resp.status_code in (401, 403):
-                resp = attempt(
-                    headers={
-                        "Content-Type": "application/json",
-                        "x-goog-api-key": str(self.gemini_api_key),
-                    },
-                    params=None,
-                )
-
-            if 200 <= resp.status_code < 300:
-                data = resp.json()
-                break
-
-            body = ""
+        # Imagen path (official "generate_images" API).
+        if model.startswith("imagen-"):
             try:
-                body = resp.text or ""
-            except Exception:  # noqa: BLE001
-                body = ""
-            logger.warning(
-                "Gemini image generation HTTP %s (model=%s size=%s): %s",
-                resp.status_code,
-                model,
-                size_value,
-                body[:800],
-            )
-            last_resp = resp
-            try:
-                resp.raise_for_status()
+                resp = client.models.generate_images(
+                    model=model,
+                    prompt=prompt,
+                    config=types.GenerateImagesConfig(
+                        number_of_images=1,
+                        aspect_ratio="1:1",
+                        output_mime_type="image/jpeg",
+                    ),
+                )
+                generated = getattr(resp, "generated_images", None) or []
+                if not generated:
+                    raise RuntimeError("Imagen response missing generated_images")
+                img_obj = generated[0].image
+                # google-genai image object commonly provides raw bytes; fall back to PIL conversion.
+                image_bytes = getattr(img_obj, "image_bytes", None) or getattr(img_obj, "data", None)
+                if isinstance(image_bytes, (bytes, bytearray)) and image_bytes:
+                    return bytes(image_bytes)
+                try:
+                    pil_img = img_obj.to_pil()  # type: ignore[attr-defined]
+                except Exception:  # noqa: BLE001
+                    pil_img = None
+                if pil_img is not None:
+                    buf = io.BytesIO()
+                    pil_img.save(buf, format="JPEG", quality=90)
+                    return buf.getvalue()
+                raise RuntimeError("Imagen returned image without bytes")
             except Exception as exc:  # noqa: BLE001
-                last_error = exc
+                # Fall back to Gemini image generation if available.
+                logger.warning("Imagen generate_images failed (model=%s): %s", model, str(exc)[:400])
+
+        # Gemini image-capable models path via generate_content.
+        # For example: gemini-3-pro-image-preview (if available) or whatever your project supports.
+        try:
+            resp = client.models.generate_content(
+                model=model,
+                contents=[prompt],
+                config=types.GenerateContentConfig(
+                    response_modalities=["IMAGE"],
+                ),
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError(f"Gemini generate_content failed for model '{model}'") from exc
+
+        candidates = getattr(resp, "candidates", None) or []
+        if not candidates:
+            raise RuntimeError("Gemini response missing candidates")
+        content = getattr(candidates[0], "content", None)
+        parts = getattr(content, "parts", None) or []
+        for part in parts:
+            inline = getattr(part, "inline_data", None)
+            if inline is None:
                 continue
-        else:
-            if last_resp is not None and last_error is None:
-                last_error = httpx.HTTPStatusError(
-                    f"Gemini image generation failed with status {last_resp.status_code}",
-                    request=last_resp.request,
-                    response=last_resp,
-                )
-            raise last_error or RuntimeError("Gemini image generation failed")
-
-        items = data.get("data") or []
-        if not items or not isinstance(items, list):
-            raise ValueError("Gemini image response missing data")
-
-        first = items[0] if isinstance(items[0], dict) else {}
-        b64_json = first.get("b64_json")
-        if not b64_json:
-            # Some providers may return a URL instead of base64.
-            url_value = first.get("url")
-            if url_value and isinstance(url_value, str):
-                with httpx.Client(timeout=60) as client:
-                    image_resp = client.get(url_value)
-                    image_resp.raise_for_status()
-                    return image_resp.content
-            raise ValueError("Gemini image response missing b64_json")
-
-        import base64
-
-        return base64.b64decode(b64_json)
+            data = getattr(inline, "data", None)
+            if isinstance(data, (bytes, bytearray)) and data:
+                return bytes(data)
+        raise RuntimeError("Gemini response did not include inline image data")
 
     def _store_generated_image(self, image_bytes: bytes, recipe: Dict[str, Any], *, size: int) -> str:
         digest = self._image_cache_key(recipe).replace("img:", "")
