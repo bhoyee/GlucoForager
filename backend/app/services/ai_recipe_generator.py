@@ -705,6 +705,7 @@ class AIRecipeGenerator:
         started = time.time()
         budget = float(timeout_seconds) if timeout_seconds else None
         attempts: list[dict[str, Any]] = []
+        used_deterministic_schedule = False
 
         def _try_models(
             models: list[str],
@@ -755,7 +756,8 @@ class AIRecipeGenerator:
                         timeout_seconds=per_request_timeout,
                         max_output_tokens=1200 if mode_norm in ("surprise", "quick") else 2000,
                     )
-                    recipes = self._filter_recipes(parse_content(content), banned_titles_norm)
+                    parsed = parse_content(content)
+                    recipes = self._filter_recipes(parsed, banned_titles_norm)
                     if recipes:
                         # Keep "Eat now" modes single-shot to stay within the 60s mobile budget.
                         if mode_norm not in ("surprise", "quick") and (exclude_titles or variety_mode) and len(recipes) < 3:
@@ -783,6 +785,17 @@ class AIRecipeGenerator:
                         else:
                             self._attach_placeholders(recipes)
                         return recipes
+                    if settings.ai_debug_logging:
+                        preview = (content or "").strip().replace("\n", " ")
+                        if len(preview) > 600:
+                            preview = preview[:600] + "…"
+                        logger.info(
+                            "AI output rejected provider=%s model=%s reason=%s preview=%s",
+                            provider,
+                            model,
+                            ("empty_content" if not (content or "").strip() else "unparseable_or_empty_recipes"),
+                            preview,
+                        )
                     attempts.append({"model": model, "provider": provider, "error": "empty_or_unparseable_json"})
                 except OpenAIError as exc:
                     logger.warning("Model %s failed, trying next: %s", model, exc)
@@ -795,6 +808,7 @@ class AIRecipeGenerator:
             openai_models = [m for m in model_chain if "deepseek" not in m.lower()]
             deepseek_models = [m for m in model_chain if "deepseek" in m.lower()]
             if self.primary_client and self.fallback_client and openai_models and deepseek_models:
+                used_deterministic_schedule = True
                 phase_budget = 30.0 if budget >= 60.0 else max(5.0, budget / 2.0)
                 if settings.ai_debug_logging:
                     logger.info(
@@ -814,7 +828,8 @@ class AIRecipeGenerator:
                     return recipes
                 # Use remaining time (up to 30s) for the fallback provider.
                 remaining_total = max(0.0, budget - (time.time() - started))
-                fallback_budget = min(30.0, remaining_total)
+                # Let the fallback use *all* remaining time (keeps total <= overall budget).
+                fallback_budget = remaining_total
                 if settings.ai_debug_logging:
                     logger.info(
                         "AI switching to fallback mode=%s tier=%s remaining_total=%.1fs fallback_budget=%.1fs",
@@ -834,6 +849,9 @@ class AIRecipeGenerator:
             # If only one provider is configured, fall through to the generic model-chain logic below.
 
         # Generic: iterate through model chain with provider-specific clients
+        if used_deterministic_schedule:
+            # We already tried primary + fallback within the full budget; don't loop again.
+            model_chain = []
         for model in model_chain:
             if budget is not None:
                 remaining = budget - (time.time() - started)
