@@ -3,6 +3,7 @@ import logging
 import hashlib
 import io
 import re
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Sequence
 
@@ -44,6 +45,7 @@ class AIRecipeGenerator:
         *,
         extra_instructions: str | None = None,
         temperature: float = 0.4,
+        timeout_seconds: float | None = None,
     ) -> str:
         # Avoid KeyError from braces in the JSON template; replace only the {ingredients} token.
         base_prompt = OPENAI_PROMPT
@@ -80,13 +82,13 @@ class AIRecipeGenerator:
         # Prefer strict JSON mode where supported (OpenAI supports this; some OpenAI-compatible providers may not).
         params_json = {**params, "response_format": {"type": "json_object"}}
         try:
-            resp = client.chat.completions.create(**params_json)
+            resp = client.chat.completions.create(**params_json, timeout=timeout_seconds)
         except OpenAIError as exc:
             # If the provider rejects response_format, retry without it.
             msg = str(exc).lower()
             if "response_format" not in msg and "unknown parameter" not in msg and "unexpected" not in msg:
                 raise
-            resp = client.chat.completions.create(**params)
+            resp = client.chat.completions.create(**params, timeout=timeout_seconds)
         return resp.choices[0].message.content or ""
 
     def _placeholder_image(self, recipe: Dict[str, Any]) -> str:
@@ -273,6 +275,7 @@ class AIRecipeGenerator:
         filters: List[str] | None = None,
         exclude_titles: Sequence[str] | None = None,
         variety_mode: bool = False,
+        timeout_seconds: float | None = None,
         generate_images: bool = True,
     ) -> List[Dict[str, Any]]:
         filters = filters or []
@@ -486,14 +489,25 @@ class AIRecipeGenerator:
                 self._attach_placeholders(fallback)
             return fallback
 
+        started = time.time()
+        budget = float(timeout_seconds) if timeout_seconds else None
+
         # Iterate through model chain with provider-specific clients
         for model in model_chain:
+            if budget is not None:
+                remaining = budget - (time.time() - started)
+                if remaining <= 2:
+                    break
             use_fallback = "deepseek" in model.lower()
             client = self.fallback_client if use_fallback else self.primary_client
             if not client:
                 continue
             try:
                 temperature = 0.7 if variety_mode else 0.4
+                per_request_timeout = None
+                if budget is not None:
+                    remaining = budget - (time.time() - started)
+                    per_request_timeout = max(5.0, min(25.0, remaining))
                 content = self._call(
                     client,
                     model,
@@ -501,6 +515,7 @@ class AIRecipeGenerator:
                     filters,
                     extra_instructions=extra_instructions,
                     temperature=temperature,
+                    timeout_seconds=per_request_timeout,
                 )
                 recipes = parse_content(content)
                 recipes = self._filter_recipes(recipes, banned_titles_norm)
@@ -508,6 +523,10 @@ class AIRecipeGenerator:
                     # If we asked for variety but still got duplicates/overlaps, retry once with stricter wording.
                     if (exclude_titles or variety_mode) and len(recipes) < 3:
                         stricter = (extra_instructions or "") + " You must comply. Return 3 NEW recipes."
+                        per_request_timeout2 = per_request_timeout
+                        if budget is not None:
+                            remaining = budget - (time.time() - started)
+                            per_request_timeout2 = max(5.0, min(25.0, remaining))
                         content2 = self._call(
                             client,
                             model,
@@ -515,6 +534,7 @@ class AIRecipeGenerator:
                             filters,
                             extra_instructions=stricter,
                             temperature=0.8,
+                            timeout_seconds=per_request_timeout2,
                         )
                         recipes2 = self._filter_recipes(parse_content(content2), banned_titles_norm)
                         if recipes2:

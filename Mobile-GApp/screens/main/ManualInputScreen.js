@@ -373,7 +373,7 @@ export default function ManualInputScreen() {
           'Taking longer than usual',
           'Please try again in a moment. Your ingredients are still here.'
         );
-      }, 120000);
+      }, 60000);
     } catch (error) {
       if (error?.name === 'AbortError') {
         setIsLoading(false);
