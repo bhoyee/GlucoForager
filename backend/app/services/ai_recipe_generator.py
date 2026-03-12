@@ -312,6 +312,13 @@ class AIRecipeGenerator:
             fast_chain = tier_cfg.get("recipe_models_fast") or []
             if isinstance(fast_chain, list) and fast_chain:
                 model_chain = [str(m) for m in fast_chain if str(m).strip()]
+            # For "Eat now" modes, prioritize whichever provider is actually configured/reachable.
+            # If DeepSeek is configured, try it first so OpenAI timeouts don't consume the whole budget.
+            if self.fallback_client:
+                deepseek_models = [m for m in model_chain if "deepseek" in m.lower()]
+                other_models = [m for m in model_chain if "deepseek" not in m.lower()]
+                if deepseek_models:
+                    model_chain = [*deepseek_models, *other_models]
 
         if mode_norm in ("surprise", "quick"):
             cuisine_sets = [
@@ -704,7 +711,11 @@ class AIRecipeGenerator:
                 per_request_timeout = None
                 if budget is not None:
                     remaining = budget - (time.time() - started)
-                    cap = 25.0
+                    # Ensure we have time to actually reach the fallback provider.
+                    if mode_norm in ("surprise", "quick"):
+                        cap = 22.0 if (not use_fallback) else 28.0
+                    else:
+                        cap = 25.0
                     per_request_timeout = max(5.0, min(cap, remaining))
                 content = self._call(
                     client,
