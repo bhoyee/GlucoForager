@@ -5,6 +5,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  Pressable,
   TouchableOpacity,
   StatusBar,
   Alert,
@@ -607,7 +608,11 @@ export default function HomeScreen() {
           <Text style={styles.sectionTitle}>For today</Text>
           <Text style={styles.sectionSubtitle}>Quick help for meals, swaps, and habits.</Text>
 
-          <TouchableOpacity style={styles.tipCard} activeOpacity={0.85} onPress={handleOpenTip}>
+          <Pressable
+            style={({ pressed }) => [styles.tipCard, pressed && styles.cardPressed]}
+            android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
+            onPress={handleOpenTip}
+          >
             <View style={styles.tipIcon}>
               <Ionicons name="bulb-outline" size={20} color={Colors.primary} />
             </View>
@@ -618,7 +623,7 @@ export default function HomeScreen() {
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
-          </TouchableOpacity>
+          </Pressable>
 
           <TouchableOpacity style={styles.eatNowCard} activeOpacity={0.9} onPress={handleOpenEatNow}>
             <View style={styles.eatNowLeft}>
@@ -634,21 +639,29 @@ export default function HomeScreen() {
           </TouchableOpacity>
 
           <View style={styles.miniRow}>
-            <TouchableOpacity style={[styles.miniCard, styles.miniCardSwaps]} activeOpacity={0.9} onPress={handleOpenSwaps}>
+            <Pressable
+              style={({ pressed }) => [styles.miniCard, styles.miniCardSwaps, pressed && styles.cardPressed]}
+              android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
+              onPress={handleOpenSwaps}
+            >
               <View style={[styles.miniIcon, { backgroundColor: `${Colors.secondary}18` }]}>
                 <Ionicons name="swap-horizontal-outline" size={18} color={Colors.secondary} />
               </View>
               <Text style={styles.miniTitle}>Swaps</Text>
               <Text style={styles.miniSub} numberOfLines={1}>Better options</Text>
-            </TouchableOpacity>
+            </Pressable>
 
-            <TouchableOpacity style={[styles.miniCard, styles.miniCardChallenge]} activeOpacity={0.9} onPress={handleOpenChallenge}>
+            <Pressable
+              style={({ pressed }) => [styles.miniCard, styles.miniCardChallenge, pressed && styles.cardPressed]}
+              android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
+              onPress={handleOpenChallenge}
+            >
               <View style={[styles.miniIcon, { backgroundColor: `${Colors.primary}18` }]}>
                 <Ionicons name="trophy-outline" size={18} color={Colors.primary} />
               </View>
-              <Text style={styles.miniTitle}>7‑Day</Text>
+              <Text style={styles.miniTitle}>7-Day</Text>
               <Text style={styles.miniSub} numberOfLines={1}>Challenge</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </View>
 
@@ -900,6 +913,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textLight,
     fontWeight: '600',
+  },
+  cardPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.99 }],
   },
   tipCard: {
     marginTop: 12,
