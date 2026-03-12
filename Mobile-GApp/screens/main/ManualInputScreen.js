@@ -34,6 +34,7 @@ export default function ManualInputScreen() {
   const contentBottomPadding = footerHeight + Math.max(insets.bottom, 12);
   const [ingredients, setIngredients] = useState(['']);
   const [isLoading, setIsLoading] = useState(false);
+  const [longWait, setLongWait] = useState(false);
   const requestControllerRef = useRef(null);
   const pollingRef = useRef(null);
   const timeoutRef = useRef(null);
@@ -168,31 +169,16 @@ export default function ManualInputScreen() {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
+    setLongWait(false);
   };
 
-  const scheduleLongWaitAlert = (mode, normalizedUnique) => {
+  const scheduleLongWaitNotice = () => {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
-    timeoutRef.current = setTimeout(() => {
-      const isEatNow = mode === 'surprise' || mode === 'quick';
-      const message = isEatNow
-        ? 'Still generating your meals. This can take a bit longer on slow networks.'
-        : 'Still generating recipes. Your ingredients are still here.';
-
-      Alert.alert('Taking longer than usual', message, [
-        {
-          text: 'Keep waiting',
-          onPress: () => scheduleLongWaitAlert(mode, normalizedUnique),
-        },
-        {
-          text: 'Cancel',
-          style: 'destructive',
-          onPress: () => handleCancelRequest(),
-        },
-      ]);
-    }, 60000);
+    setLongWait(false);
+    timeoutRef.current = setTimeout(() => setLongWait(true), 45000);
   };
 
   const handleJobResult = (result, normalized) => {
@@ -308,7 +294,8 @@ export default function ManualInputScreen() {
     const controller = new AbortController();
     requestControllerRef.current = controller;
     setIsLoading(true);
-    
+    setLongWait(false);
+     
     try {
       const token = await AsyncStorage.getItem('userToken');
       if (!token) {
@@ -390,7 +377,7 @@ export default function ManualInputScreen() {
       pollingRef.current = setInterval(() => {
         pollJob(jobId, normalizedUnique);
       }, 3000);
-      scheduleLongWaitAlert(mode, normalizedUnique);
+      scheduleLongWaitNotice();
     } catch (error) {
       if (error?.name === 'AbortError') {
         setIsLoading(false);
@@ -411,6 +398,9 @@ export default function ManualInputScreen() {
     setActiveJobId(null);
     setIsLoading(false);
   };
+
+  const modeParam = route.params?.mode;
+  const isEatNow = modeParam === 'surprise' || modeParam === 'quick';
 
   return (
     <KeyboardAvoidingView
@@ -551,10 +541,22 @@ export default function ManualInputScreen() {
         <View style={styles.loadingOverlay}>
           <View style={styles.loadingCard}>
             <ActivityIndicator size="large" color={Colors.primary} />
-            <Text style={styles.loadingTitle}>Generating recipes...</Text>
-            <Text style={styles.loadingSubtitle}>
-              Please wait while we prepare your diabetes-safe options.
+            <Text style={styles.loadingTitle}>
+              {isEatNow ? 'Generating meals...' : 'Generating recipes...'}
             </Text>
+            <Text style={styles.loadingSubtitle}>
+              {isEatNow
+                ? 'Please wait while we prepare 3 diabetes-friendly meal options.'
+                : 'Please wait while we prepare your diabetes-safe options.'}
+            </Text>
+            {longWait ? (
+              <View style={styles.longWaitBox}>
+                <Text style={styles.longWaitTitle}>Taking longer than usual</Text>
+                <Text style={styles.longWaitText}>
+                  Still working in the background. You can keep waiting, or cancel and try again.
+                </Text>
+              </View>
+            ) : null}
             <TouchableOpacity
               style={styles.cancelButton}
               onPress={handleCancelRequest}
@@ -614,6 +616,26 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 13,
     color: Colors.textLight,
+    textAlign: 'center',
+  },
+  longWaitBox: {
+    marginTop: 14,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#F6F7FB',
+    width: '100%',
+  },
+  longWaitTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.text,
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  longWaitText: {
+    fontSize: 13,
+    color: Colors.textLight,
+    lineHeight: 18,
     textAlign: 'center',
   },
   cancelButton: {
