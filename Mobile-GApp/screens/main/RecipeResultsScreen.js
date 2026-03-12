@@ -210,10 +210,17 @@ export default function RecipeResultsScreen() {
           {hasRecipes ? recipes.map((recipe, index) => {
             const nutrition = recipe?.nutritional_info || {};
             const calories = nutrition.calories ?? recipe?.calories ?? 'N/A';
-            const carbs = nutrition.carbs ?? recipe?.carbs ?? 'N/A';
+            const protein = nutrition.protein ?? recipe?.protein ?? 'N/A';
+            const fiber = nutrition.fiber ?? recipe?.fiber ?? 'N/A';
             const title = recipe?.title || recipe?.name || `Recipe ${index + 1}`;
             const matchText = getMatchText(recipe);
             const imageKey = recipe.id || `${title}-${index}`;
+            const macroText = (label, value, unit = '') => {
+              const text = `${value ?? ''}`.trim();
+              if (!text || text.toLowerCase() === 'n/a') return `${label} --`;
+              if (unit && text.toLowerCase().endsWith(unit.toLowerCase())) return `${label} ${text}`;
+              return `${label} ${text}${unit}`;
+            };
             return (
               <TouchableOpacity
                 key={imageKey}
@@ -232,18 +239,13 @@ export default function RecipeResultsScreen() {
                   </View>
 
                   <View style={styles.recipeMeta}>
-                    <View style={styles.metaItem}>
-                      <Ionicons name="time-outline" size={14} color={Colors.textLight} />
-                      <Text style={styles.metaText}>{formatTime(recipe)}</Text>
-                    </View>
-                    <View style={styles.metaItem}>
-                      <Ionicons name="flame-outline" size={14} color={Colors.textLight} />
-                      <Text style={styles.metaText}>{calories} cal</Text>
-                    </View>
-                    <View style={styles.metaItem}>
-                      <Ionicons name="nutrition-outline" size={14} color={Colors.textLight} />
-                      <Text style={styles.metaText}>{carbs} carbs</Text>
-                    </View>
+                    <Text style={styles.metaText}>{formatTime(recipe)}</Text>
+                    <Text style={styles.recipeMetaDivider}>|</Text>
+                    <Text style={[styles.recipeMetaValue, styles.recipeCal]}>{macroText('Cal', calories)}</Text>
+                    <Text style={styles.recipeMetaDivider}>|</Text>
+                    <Text style={[styles.recipeMetaValue, styles.recipePro]}>{macroText('Pro', protein, 'g')}</Text>
+                    <Text style={styles.recipeMetaDivider}>|</Text>
+                    <Text style={[styles.recipeMetaValue, styles.recipeFib]}>{macroText('Fib', fiber, 'g')}</Text>
                   </View>
 
                   <View style={styles.matchContainer}>
@@ -506,17 +508,32 @@ const styles = StyleSheet.create({
   },
   recipeMeta: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
     marginBottom: 12,
   },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 16,
-  },
   metaText: {
-    marginLeft: 4,
     fontSize: 13,
     color: Colors.textLight,
+    fontWeight: '600',
+  },
+  recipeMetaDivider: {
+    marginHorizontal: 8,
+    fontSize: 12,
+    color: Colors.textMuted,
+  },
+  recipeMetaValue: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  recipeCal: {
+    color: Colors.accent,
+  },
+  recipePro: {
+    color: Colors.secondary,
+  },
+  recipeFib: {
+    color: Colors.primary,
   },
   matchContainer: {
     flexDirection: 'row',

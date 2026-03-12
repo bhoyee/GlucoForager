@@ -257,7 +257,12 @@ const RecipeDetailsScreen = () => {
       ? item.steps
       : [];
 
-    const nutrition = item.nutrition || item.nutrition_per_serving || {};
+    const nutrition =
+      item.nutrition ||
+      item.nutrition_per_serving ||
+      item.nutritional_info ||
+      item.nutritionPerServing ||
+      {};
 
     const prepTimeRaw = item.prep_time_minutes ?? item.prepTime ?? item.prep_time ?? null;
     const cookTimeRaw = item.cook_time_minutes ?? item.cookTime ?? item.cook_time ?? null;
