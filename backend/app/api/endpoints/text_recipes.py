@@ -162,6 +162,23 @@ def _run_text_job(job_id: str) -> None:
             mode=mode,
             device_id=device_id,
         )
+
+        providers: list[str] = []
+        models: list[str] = []
+        try:
+            for r in recipes or []:
+                if not isinstance(r, dict):
+                    continue
+                p = (r.get("_ai_provider") or "").strip()
+                m = (r.get("_ai_model") or "").strip()
+                if p:
+                    providers.append(p)
+                if m:
+                    models.append(m)
+        except Exception:
+            providers = []
+            models = []
+
         warning = None
         if classified.get("non_food"):
             warning = {
@@ -175,6 +192,10 @@ def _run_text_job(job_id: str) -> None:
             "filtered_out": classified["non_food"],
             "classification_source": classified["source"],
             "warning": warning,
+            "ai": {
+                "providers": sorted(set(providers)),
+                "models": sorted(set(models)),
+            },
         }
         job.status = "completed"
         job.error = None
@@ -286,6 +307,10 @@ def generate_from_text(
         "filtered_out": classified.get("non_food") or [],
         "classification_source": classified["source"],
         "warning": warning,
+        "ai": {
+            "providers": sorted({(r.get("_ai_provider") or "").strip() for r in (recipes or []) if isinstance(r, dict) and (r.get("_ai_provider") or "").strip()}),
+            "models": sorted({(r.get("_ai_model") or "").strip() for r in (recipes or []) if isinstance(r, dict) and (r.get("_ai_model") or "").strip()}),
+        },
     }
 
 
