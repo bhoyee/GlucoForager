@@ -3,6 +3,7 @@ import time
 
 from sqlalchemy.orm import Session
 
+from ..core.config import settings
 from ..services.tiered_ai_service import TieredAIService
 from ..models.recipe_history import RecipeHistory
 from .diabetes_friendly_classifier import DiabetesFriendlyClassifier
