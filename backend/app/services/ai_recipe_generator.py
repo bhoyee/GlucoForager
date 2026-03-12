@@ -56,6 +56,7 @@ class AIRecipeGenerator:
         extra_instructions: str | None = None,
         temperature: float = 0.4,
         timeout_seconds: float | None = None,
+        max_output_tokens: int = 2000,
     ) -> str:
         # Avoid KeyError from braces in the JSON template; replace only the {ingredients} token.
         base_prompt = OPENAI_PROMPT
@@ -86,9 +87,9 @@ class AIRecipeGenerator:
         }
         # Some newer models use max_completion_tokens instead of max_tokens
         if model.startswith("gpt-5"):
-            params["max_completion_tokens"] = 2000
+            params["max_completion_tokens"] = int(max_output_tokens)
         else:
-            params["max_tokens"] = 2000
+            params["max_tokens"] = int(max_output_tokens)
         # Prefer strict JSON mode where supported (OpenAI supports this; some OpenAI-compatible providers may not).
         params_json = {**params, "response_format": {"type": "json_object"}}
         try:
@@ -360,6 +361,10 @@ class AIRecipeGenerator:
                         "Use common, easy-to-find ingredients; avoid repeating the same main dish style.",
                     ]
                 )
+            # Keep output compact so it returns within mobile timeouts.
+            mode_parts.append(
+                "Keep the JSON compact: 6-8 instruction steps max, short 1-sentence description, and no extra commentary."
+            )
             extra_instructions = f"{(extra_instructions or '').strip()} {' '.join(mode_parts)}".strip()
 
         def parse_content(raw: str) -> List[Dict[str, Any]]:
@@ -750,6 +755,7 @@ class AIRecipeGenerator:
                     extra_instructions=extra_instructions,
                     temperature=temperature,
                     timeout_seconds=per_request_timeout,
+                    max_output_tokens=1200 if mode_norm in ("surprise", "quick") else 2000,
                 )
                 recipes = parse_content(content)
                 recipes = self._filter_recipes(recipes, banned_titles_norm)
@@ -769,6 +775,7 @@ class AIRecipeGenerator:
                             extra_instructions=stricter,
                             temperature=0.8,
                             timeout_seconds=per_request_timeout2,
+                            max_output_tokens=1200 if mode_norm in ("surprise", "quick") else 2000,
                         )
                         recipes2 = self._filter_recipes(parse_content(content2), banned_titles_norm)
                         if recipes2:
