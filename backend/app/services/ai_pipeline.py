@@ -188,6 +188,7 @@ class AIPipeline:
         filters: list[str] | None = None,
         exclude_titles: list[str] | None = None,
         variety_mode: bool = False,
+        mode: str = "ingredients",
         device_id: str | None = None,
     ) -> List[Dict[str, Any]]:
         recipes = self.ai.generate_recipes(
@@ -196,10 +197,11 @@ class AIPipeline:
             filters=filters,
             exclude_titles=exclude_titles or [],
             variety_mode=variety_mode,
+            mode=mode,
             timeout_seconds=55,
             generate_images=False,
         )
-        recipes = self._validated_recipes_or_none(recipes)
+        recipes = self._validated_recipes_or_none(recipes, mode=mode)
         if recipes is None:
             # One retry with variety enabled (and caching disabled) before failing the request.
             recipes_retry = self.ai.generate_recipes(
@@ -208,10 +210,11 @@ class AIPipeline:
                 filters=filters,
                 exclude_titles=exclude_titles or [],
                 variety_mode=True,
+                mode=mode,
                 timeout_seconds=55,
                 generate_images=False,
             )
-            recipes = self._validated_recipes_or_none(recipes_retry)
+            recipes = self._validated_recipes_or_none(recipes_retry, mode=mode)
 
         if recipes is None:
             raise RuntimeError("Recipe generation failed. Please try again.")
@@ -230,7 +233,12 @@ class AIPipeline:
         db.commit()
         return recipes
 
-    def _validated_recipes_or_none(self, recipes: List[Dict[str, Any]] | None) -> List[Dict[str, Any]] | None:
+    def _validated_recipes_or_none(
+        self,
+        recipes: List[Dict[str, Any]] | None,
+        *,
+        mode: str = "ingredients",
+    ) -> List[Dict[str, Any]] | None:
         if not recipes or not isinstance(recipes, list):
             return None
         if len(recipes) < 3:
@@ -262,6 +270,14 @@ class AIPipeline:
                 return None
             if calories_n <= 0 or (carbs_n <= 0 and protein_n <= 0):
                 return None
+            if mode == "quick":
+                total_time = recipe.get("total_time") or recipe.get("totalTime") or 0
+                try:
+                    total_n = int(float(total_time or 0))
+                except Exception:  # noqa: BLE001
+                    total_n = 0
+                if total_n <= 0 or total_n > 20:
+                    return None
             cleaned.append(recipe)
 
         return cleaned

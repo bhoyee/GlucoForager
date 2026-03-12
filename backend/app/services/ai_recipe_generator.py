@@ -2,6 +2,7 @@ import logging
 import logging
 import hashlib
 import io
+import random
 import re
 import time
 from pathlib import Path
@@ -275,6 +276,7 @@ class AIRecipeGenerator:
         filters: List[str] | None = None,
         exclude_titles: Sequence[str] | None = None,
         variety_mode: bool = False,
+        mode: str | None = None,
         timeout_seconds: float | None = None,
         generate_images: bool = True,
     ) -> List[Dict[str, Any]]:
@@ -295,6 +297,30 @@ class AIRecipeGenerator:
                 joined = "; ".join(exclude_titles[:12])
                 parts.append(f"Do NOT suggest recipes with titles matching or similar to: {joined}.")
             extra_instructions = " ".join(parts)
+
+        mode_norm = (mode or "").strip().lower()
+        if mode_norm in ("surprise", "quick"):
+            cuisine_sets = [
+                ("Mediterranean", "Mexican-inspired", "Asian-inspired"),
+                ("West African-inspired", "Indian-inspired", "American comfort (healthy)"),
+                ("Middle Eastern-inspired", "Italian-inspired (low-carb)", "Caribbean-inspired"),
+            ]
+            cuisines = random.choice(cuisine_sets)
+            mode_parts = [
+                f"Theme the three recipes across these cuisines: {', '.join(cuisines)}.",
+                "Ensure all three recipes are clearly different from each other (protein + method + flavor).",
+                f"Variation token: {random.randint(1000, 9999)}.",
+            ]
+            if mode_norm == "quick":
+                mode_parts.extend(
+                    [
+                        "All recipes must have total_time <= 20 minutes.",
+                        "Prefer no-oven methods (skillet, salad, quick saute) and minimal steps.",
+                    ]
+                )
+            else:
+                mode_parts.append("Use common, easy-to-find ingredients; avoid repeating the same main dish style.")
+            extra_instructions = f"{(extra_instructions or '').strip()} {' '.join(mode_parts)}".strip()
 
         def parse_content(raw: str) -> List[Dict[str, Any]]:
             import json, re
@@ -503,7 +529,7 @@ class AIRecipeGenerator:
             if not client:
                 continue
             try:
-                temperature = 0.7 if variety_mode else 0.4
+                temperature = 0.85 if mode_norm in ("surprise", "quick") else (0.7 if variety_mode else 0.4)
                 per_request_timeout = None
                 if budget is not None:
                     remaining = budget - (time.time() - started)
