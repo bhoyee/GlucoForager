@@ -315,6 +315,7 @@ class AIRecipeGenerator:
                 f"Theme the three recipes across these cuisines: {', '.join(cuisines)}.",
                 "Ensure all three recipes are clearly different from each other (protein + method + flavor).",
                 f"Variation token: {random.randint(1000, 9999)}.",
+                "Instructions must be beginner-friendly: write 8-12 steps per recipe. Each step should include at least one concrete detail (time in minutes, heat level, visual cue, or exact action). Avoid vague steps like 'cook until done' without guidance.",
             ]
             if mode_norm == "quick":
                 mode_parts.extend(
@@ -361,6 +362,40 @@ class AIRecipeGenerator:
                     else:
                         data = None
 
+            def _num(value: Any) -> int:
+                try:
+                    if value is None:
+                        return 0
+                    if isinstance(value, (int, float)):
+                        return int(round(float(value)))
+                    if isinstance(value, str):
+                        cleaned_v = value.strip().replace(",", "")
+                        match = re.search(r"-?\d+(?:\.\d+)?", cleaned_v)
+                        if match:
+                            return int(round(float(match.group(0))))
+                        return 0
+                    return int(round(float(value)))
+                except Exception:  # noqa: BLE001
+                    return 0
+
+            def _coerce_steps(value: Any) -> list[str]:
+                if isinstance(value, list):
+                    out: list[str] = []
+                    for item in value:
+                        if isinstance(item, str):
+                            text = item.strip()
+                            if text:
+                                out.append(text)
+                            continue
+                        if isinstance(item, dict):
+                            text = (item.get("text") or item.get("step") or item.get("instruction") or "").strip()
+                            if text:
+                                out.append(text)
+                    return out
+                if isinstance(value, str):
+                    return [line.strip() for line in value.split("\n") if line.strip()]
+                return []
+
             try:
                 if isinstance(data, dict):
                     data = data.get("recipes") or [data]
@@ -372,21 +407,6 @@ class AIRecipeGenerator:
                         # Map prompt schema -> API schema
                         item["title"] = item.get("title") or item.get("name") or "AI-Generated Recipe"
                         ni_src = item.get("nutritional_info") or item.get("nutrition_per_serving") or {}
-                        def _num(value: Any) -> int:
-                            try:
-                                if value is None:
-                                    return 0
-                                if isinstance(value, (int, float)):
-                                    return int(round(float(value)))
-                                if isinstance(value, str):
-                                    cleaned = value.strip().replace(",", "")
-                                    match = re.search(r"-?\d+(?:\.\d+)?", cleaned)
-                                    if match:
-                                        return int(round(float(match.group(0))))
-                                    return 0
-                                return int(round(float(value)))
-                            except Exception:  # noqa: BLE001
-                                return 0
                         item["nutritional_info"] = {
                             "calories": _num(ni_src.get("calories")),
                             "carbs": _num(ni_src.get("carbs")),
@@ -412,15 +432,20 @@ class AIRecipeGenerator:
                             if parts:
                                 description = "Diabetes-friendly option with " + ", ".join(parts) + "."
                         item.setdefault("description", description or "Diabetes-friendly recipe.")
-                        item.setdefault("instructions", item.get("instructions") or [])
+                        item["instructions"] = _coerce_steps(item.get("instructions") or item.get("steps") or [])
                         item.setdefault("tips", item.get("tips") or [])
                         item.setdefault("ingredients", item.get("ingredients") or [])
-                        item.setdefault("prep_time", item.get("prep_time", 0))
-                        item.setdefault("cook_time", item.get("cook_time", 0))
-                        item.setdefault("total_time", item.get("total_time", item["prep_time"] + item["cook_time"]))
+                        prep_n = _num(item.get("prep_time") or item.get("prepTime"))
+                        cook_n = _num(item.get("cook_time") or item.get("cookTime"))
+                        total_n = _num(item.get("total_time") or item.get("totalTime") or item.get("time")) or (
+                            prep_n + cook_n
+                        )
+                        item["prep_time"] = prep_n
+                        item["cook_time"] = cook_n
+                        item["total_time"] = total_n
                         item.setdefault("difficulty", item.get("difficulty") or "Easy")
                         item.setdefault("tags", item.get("tags") or [])
-                        item.setdefault("servings", item.get("servings") or 2)
+                        item.setdefault("servings", _num(item.get("servings")) or 2)
                         normalized.append(item)
                     if normalized:
                         return normalized
@@ -438,19 +463,26 @@ class AIRecipeGenerator:
                 "lemon",
             ]
             ingredient_text = ", ".join(base_ingredients) if base_ingredients else "common ingredients"
+            is_quick = mode_norm == "quick"
+            t1 = 18 if is_quick else 25
+            t2 = 19 if is_quick else 26
+            t3 = 20 if is_quick else 30
             base = [
                 {
                     "title": "Protein Bowl with Greens",
                     "description": f"Diabetes-friendly bowl using {ingredient_text}.",
                     "ingredients": [{"name": ing, "quantity": 1, "unit": "portion"} for ing in base_ingredients],
                     "instructions": [
-                        "Prep and season proteins.",
-                        "Saute greens with olive oil.",
-                        "Combine and serve warm.",
+                        "Prep: pat protein dry; season with salt/pepper (and lemon zest if available).",
+                        "Heat a skillet over medium-high heat for 1 minute; add a small drizzle of olive oil.",
+                        "Cook protein 4-6 minutes total, flipping once, until browned and cooked through.",
+                        "In the same pan, add garlic and greens; saute 2-3 minutes until wilted.",
+                        "Add broccoli (fresh or steamed) and toss 1 minute to warm through.",
+                        "Plate and finish with lemon juice and a light olive-oil drizzle.",
                     ],
                     "prep_time": 10,
-                    "cook_time": 15,
-                    "total_time": 25,
+                    "cook_time": max(0, t1 - 10),
+                    "total_time": t1,
                     "difficulty": "Easy",
                     "nutritional_info": {
                         "calories": 350,
@@ -469,13 +501,16 @@ class AIRecipeGenerator:
                     "description": f"Light fish entrée featuring {ingredient_text}.",
                     "ingredients": [{"name": ing, "quantity": 1, "unit": "portion"} for ing in base_ingredients],
                     "instructions": [
-                        "Bake fish with herbs and lemon.",
-                        "Wilt spinach with garlic.",
-                        "Plate together with olive oil drizzle.",
+                        "Prep: season fish with salt/pepper, lemon, and herbs.",
+                        "Cook fish 8-12 minutes until it flakes easily (or pan-sear 3-4 minutes per side).",
+                        "Meanwhile, heat a skillet over medium heat; add olive oil and garlic for 30 seconds.",
+                        "Add spinach; saute 2-3 minutes until just wilted.",
+                        "Plate fish over spinach; squeeze lemon on top and taste for salt.",
+                        "Serve with steamed broccoli for extra fiber.",
                     ],
                     "prep_time": 8,
-                    "cook_time": 18,
-                    "total_time": 26,
+                    "cook_time": max(0, t2 - 8),
+                    "total_time": t2,
                     "difficulty": "Easy",
                     "nutritional_info": {
                         "calories": 280,
@@ -494,13 +529,16 @@ class AIRecipeGenerator:
                     "description": f"One-pan meal with {ingredient_text}.",
                     "ingredients": [{"name": ing, "quantity": 1, "unit": "portion"} for ing in base_ingredients],
                     "instructions": [
-                        "Sear chicken until browned.",
-                        "Add vegetables and cook until tender.",
-                        "Finish with herbs and serve.",
+                        "Prep: cut chicken into bite-size pieces and season well.",
+                        "Heat skillet over medium-high heat; add olive oil.",
+                        "Sear chicken 5-7 minutes, stirring occasionally, until browned and cooked through.",
+                        "Add vegetables; saute 6-8 minutes until tender-crisp.",
+                        "Add garlic and cook 30 seconds until fragrant.",
+                        "Finish with lemon and serve immediately.",
                     ],
                     "prep_time": 12,
-                    "cook_time": 18,
-                    "total_time": 30,
+                    "cook_time": max(0, t3 - 12),
+                    "total_time": t3,
                     "difficulty": "Easy",
                     "nutritional_info": {
                         "calories": 360,
