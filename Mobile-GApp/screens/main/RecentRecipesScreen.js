@@ -76,11 +76,26 @@ export default function RecentRecipesScreen() {
   };
 
   const getCaloriesValue = (recipe) => {
-    const nutrition = recipe?.nutrition || recipe?.nutrition_per_serving || {};
-    const raw = nutrition.calories ?? recipe?.calories ?? null;
-    if (raw === null || raw === undefined || raw === '') return 'N/A';
-    const numeric = typeof raw === 'number' ? raw : parseFloat(raw);
-    return Number.isFinite(numeric) ? `${numeric}` : `${raw}`;
+    const value = recipe?.nutrition?.calories ?? recipe?.nutrition_per_serving?.calories ?? recipe?.calories;
+    return formatNutrient(value, 'cal', 'Cal --');
+  };
+
+  const getProteinValue = (recipe) => {
+    const value = recipe?.nutrition?.protein ?? recipe?.nutrition_per_serving?.protein ?? recipe?.protein;
+    return formatNutrient(value, 'g pro', 'Pro --');
+  };
+
+  const getFiberValue = (recipe) => {
+    const value = recipe?.nutrition?.fiber ?? recipe?.nutrition_per_serving?.fiber ?? recipe?.fiber;
+    return formatNutrient(value, 'g fib', 'Fib --');
+  };
+
+  const formatNutrient = (value, suffix, emptyLabel) => {
+    if (value === undefined || value === null || value === '') return emptyLabel;
+    if (typeof value === 'number') return `${value}${suffix ? ` ${suffix}` : ''}`.trim();
+    const match = `${value}`.match(/[-+]?\d*\.?\d+/);
+    if (match) return `${match[0]}${suffix ? ` ${suffix}` : ''}`.trim();
+    return `${value}`.includes(suffix.trim()) ? `${value}` : `${value} ${suffix}`.trim();
   };
 
   const loadRecent = useCallback(async () => {
@@ -222,15 +237,14 @@ export default function RecentRecipesScreen() {
                 <Text style={styles.recipeDescription} numberOfLines={2}>
                   {recipe.description || 'Diabetes-friendly recipe.'}
                 </Text>
-                <View style={styles.recipeMeta}>
-                  <View style={styles.metaItem}>
-                    <Ionicons name="time-outline" size={14} color={Colors.textLight} />
-                    <Text style={styles.metaText}>{getRecipeTimeValue(recipe)}</Text>
-                  </View>
-                  <View style={styles.metaItem}>
-                    <Ionicons name="flame-outline" size={14} color={Colors.textLight} />
-                    <Text style={styles.metaText}>{getCaloriesValue(recipe)} cal</Text>
-                  </View>
+                <View style={styles.recipeMetaRow}>
+                  <Text style={styles.metaText}>{getRecipeTimeValue(recipe)}</Text>
+                  <Text style={styles.recipeMetaDivider}>|</Text>
+                  <Text style={[styles.recipeMetaValue, styles.recipeCal]}>{getCaloriesValue(recipe)}</Text>
+                  <Text style={styles.recipeMetaDivider}>|</Text>
+                  <Text style={[styles.recipeMetaValue, styles.recipePro]}>{getProteinValue(recipe)}</Text>
+                  <Text style={styles.recipeMetaDivider}>|</Text>
+                  <Text style={[styles.recipeMetaValue, styles.recipeFib]}>{getFiberValue(recipe)}</Text>
                 </View>
               </View>
               <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
@@ -373,19 +387,31 @@ const styles = StyleSheet.create({
     color: Colors.textLight,
     marginBottom: 8,
   },
-  recipeMeta: {
+  recipeMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
   },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 12,
-  },
   metaText: {
-    marginLeft: 4,
     fontSize: 12,
     color: Colors.textLight,
+  },
+  recipeMetaValue: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  recipeMetaDivider: {
+    marginHorizontal: 8,
+    fontSize: 12,
+    color: Colors.textMuted,
+  },
+  recipeCal: {
+    color: Colors.accent,
+  },
+  recipePro: {
+    color: Colors.primary,
+  },
+  recipeFib: {
+    color: Colors.secondary,
   },
 });
