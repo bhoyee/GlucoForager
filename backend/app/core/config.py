@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     gemini_api_key: str | None = Field(None, env="GEMINI_API_KEY")
     gemini_image_model: str = Field("imagen-4.0-generate-001", env="GEMINI_IMAGE_MODEL")
     ai_disable_emergency_fallback: bool = Field(False, env="AI_DISABLE_EMERGENCY_FALLBACK")
+    ai_debug_logging: bool = Field(False, env="AI_DEBUG_LOGGING")
     redis_url: str | None = Field(None, env="REDIS_URL")
     revenuecat_webhook_secret: str | None = Field(None, env="REVENUECAT_WEBHOOK_SECRET")
     revenuecat_secret_api_key: str | None = Field(None, env="REVENUECAT_SECRET_API_KEY")
