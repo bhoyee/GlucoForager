@@ -80,6 +80,7 @@ export default function RecipeResultsScreen() {
 
   const heroImage = photoUri || images?.[0]?.uri;
   const hasRecipes = recipes.length > 0;
+  const hasDetectedIngredients = detectedIngredients.length > 0;
 
   const formatTime = (recipe) => {
     const total = recipe?.total_time ?? recipe?.time ?? 0;
@@ -144,11 +145,13 @@ export default function RecipeResultsScreen() {
             <Text style={styles.sectionTitle}>Your Scan</Text>
             <View style={styles.imageContainer}>
               <Image source={{ uri: heroImage }} style={styles.image} resizeMode="cover" />
-              <View style={styles.imageOverlay}>
-                <Text style={styles.imageOverlayText}>
-                  {detectedIngredients.length} ingredients detected
-                </Text>
-              </View>
+              {hasDetectedIngredients && (
+                <View style={styles.imageOverlay}>
+                  <Text style={styles.imageOverlayText}>
+                    {detectedIngredients.length} ingredients detected
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
         )}
@@ -160,38 +163,40 @@ export default function RecipeResultsScreen() {
           </View>
         )}
 
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Detected Ingredients</Text>
-            <Text style={styles.ingredientCount}>{detectedIngredients.length} items</Text>
-          </View>
+        {hasDetectedIngredients ? (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Detected Ingredients</Text>
+              <Text style={styles.ingredientCount}>{detectedIngredients.length} items</Text>
+            </View>
 
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.ingredientsScroll}
-          >
-            {detectedIngredients.map((item) => (
-              <View key={item.id} style={styles.ingredientCard}>
-                <View style={styles.ingredientIconContainer}>
-                  {toIngredientImageUrl(item.name) ? (
-                    <Image
-                      source={{ uri: toIngredientImageUrl(item.name) }}
-                      style={styles.ingredientImage}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <Ionicons name="nutrition-outline" size={26} color={Colors.primary} />
-                  )}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.ingredientsScroll}
+            >
+              {detectedIngredients.map((item) => (
+                <View key={item.id} style={styles.ingredientCard}>
+                  <View style={styles.ingredientIconContainer}>
+                    {toIngredientImageUrl(item.name) ? (
+                      <Image
+                        source={{ uri: toIngredientImageUrl(item.name) }}
+                        style={styles.ingredientImage}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <Ionicons name="nutrition-outline" size={26} color={Colors.primary} />
+                    )}
+                  </View>
+                  <Text style={styles.ingredientName} numberOfLines={1}>{item.name}</Text>
+                  <View style={styles.confidenceBadge}>
+                    <Text style={styles.confidenceText}>{item.confidence}</Text>
+                  </View>
                 </View>
-                <Text style={styles.ingredientName} numberOfLines={1}>{item.name}</Text>
-                <View style={styles.confidenceBadge}>
-                  <Text style={styles.confidenceText}>{item.confidence}</Text>
-                </View>
-              </View>
-            ))}
-          </ScrollView>
-        </View>
+              ))}
+            </ScrollView>
+          </View>
+        ) : null}
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -199,7 +204,7 @@ export default function RecipeResultsScreen() {
             <Text style={styles.recipeCount}>{recipes.length} recipes</Text>
           </View>
           <Text style={styles.sectionSubtitle}>
-            Low glycemic recipes based on your ingredients
+            {hasDetectedIngredients ? 'Low glycemic recipes based on your ingredients' : 'Diabetes-friendly ideas you can try today'}
           </Text>
 
           {hasRecipes ? recipes.map((recipe, index) => {
