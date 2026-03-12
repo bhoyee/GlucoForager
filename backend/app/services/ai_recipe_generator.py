@@ -324,7 +324,12 @@ class AIRecipeGenerator:
                     ]
                 )
             else:
-                mode_parts.append("Use common, easy-to-find ingredients; avoid repeating the same main dish style.")
+                mode_parts.extend(
+                    [
+                        "Aim for total_time <= 30 minutes.",
+                        "Use common, easy-to-find ingredients; avoid repeating the same main dish style.",
+                    ]
+                )
             extra_instructions = f"{(extra_instructions or '').strip()} {' '.join(mode_parts)}".strip()
 
         def parse_content(raw: str) -> List[Dict[str, Any]]:
