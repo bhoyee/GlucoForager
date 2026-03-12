@@ -65,6 +65,14 @@ export default function FavoritesScreen() {
     return Number.isFinite(numeric) ? `${numeric}` : `${raw}`;
   };
 
+  const formatNutrient = (value, suffix, emptyLabel) => {
+    if (value === undefined || value === null || value === '') return emptyLabel;
+    if (typeof value === 'number') return `${value}${suffix ? ` ${suffix}` : ''}`.trim();
+    const match = `${value}`.match(/[-+]?\d*\.?\d+/);
+    if (match) return `${match[0]}${suffix ? ` ${suffix}` : ''}`.trim();
+    return `${value}`.includes(suffix.trim()) ? `${value}` : `${value} ${suffix}`.trim();
+  };
+
   const normalizeFavorite = (item, index) => {
     const recipe = item.recipe || {};
     const nutrition = recipe.nutrition || recipe.nutrition_per_serving || {};
@@ -78,7 +86,9 @@ export default function FavoritesScreen() {
       image: recipe.image_url || recipe.image || '',
       imageSource: recipe.image_source || 'unknown',
       time: getRecipeTimeValue(recipe),
-      calories: getCaloriesValue(nutrition),
+      calories: formatNutrient(nutrition.calories ?? nutrition.calorie, 'cal', 'Cal --'),
+      protein: formatNutrient(nutrition.protein, 'g pro', 'Pro --'),
+      fiber: formatNutrient(nutrition.fiber, 'g fib', 'Fib --'),
     };
   };
 
@@ -255,16 +265,14 @@ export default function FavoritesScreen() {
                 {item.description}
               </Text>
               
-              <View style={styles.recipeMeta}>
-                <View style={styles.metaItem}>
-                  <Ionicons name="time-outline" size={14} color={Colors.textLight} />
-                  <Text style={styles.metaText}>{item.time}</Text>
-                </View>
-                
-                <View style={styles.metaItem}>
-                  <Ionicons name="flame-outline" size={14} color={Colors.textLight} />
-                  <Text style={styles.metaText}>{item.calories} cal</Text>
-                </View>
+              <View style={styles.recipeMetaRow}>
+                <Text style={styles.metaText}>{item.time}</Text>
+                <Text style={styles.recipeMetaDivider}>|</Text>
+                <Text style={[styles.recipeMetaValue, styles.recipeCal]}>{item.calories}</Text>
+                <Text style={styles.recipeMetaDivider}>|</Text>
+                <Text style={[styles.recipeMetaValue, styles.recipePro]}>{item.protein}</Text>
+                <Text style={styles.recipeMetaDivider}>|</Text>
+                <Text style={[styles.recipeMetaValue, styles.recipeFib]}>{item.fiber}</Text>
               </View>
             </View>
           </TouchableOpacity>
@@ -488,19 +496,32 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 12,
   },
-  recipeMeta: {
+  recipeMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
   },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 16,
-  },
   metaText: {
     fontSize: 13,
     color: Colors.textLight,
-    marginLeft: 4,
+    marginLeft: 0,
+  },
+  recipeMetaValue: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  recipeMetaDivider: {
+    marginHorizontal: 8,
+    fontSize: 13,
+    color: Colors.textMuted,
+  },
+  recipeCal: {
+    color: Colors.accent,
+  },
+  recipePro: {
+    color: Colors.primary,
+  },
+  recipeFib: {
+    color: Colors.secondary,
   },
 });
