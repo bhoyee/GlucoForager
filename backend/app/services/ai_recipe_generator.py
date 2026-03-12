@@ -46,7 +46,14 @@ class AIRecipeGenerator:
         temperature: float = 0.4,
     ) -> str:
         # Avoid KeyError from braces in the JSON template; replace only the {ingredients} token.
-        prompt = OPENAI_PROMPT.replace("{ingredients}", ", ".join(ingredients))
+        base_prompt = OPENAI_PROMPT
+        if not ingredients:
+            base_prompt = OPENAI_PROMPT.replace(
+                "Create 3 diabetic-friendly recipes using ONLY: {ingredients}.",
+                "Create 3 diabetic-friendly recipes with common, easy-to-find ingredients. "
+                "Do not assume the user has any specific ingredients.",
+            )
+        prompt = base_prompt.replace("{ingredients}", ", ".join(ingredients))
         if filters:
             prompt += f"\nApply dietary filters: {', '.join(filters)}."
         if extra_instructions:
@@ -284,6 +291,27 @@ class AIRecipeGenerator:
                 cleaned = cleaned.strip("`").strip()
             try:
                 data = json.loads(cleaned)
+            except Exception:
+                # Some providers still wrap JSON with text. Try to extract a JSON object/array substring.
+                start = cleaned.find("{")
+                end = cleaned.rfind("}")
+                if start != -1 and end != -1 and end > start:
+                    try:
+                        data = json.loads(cleaned[start : end + 1])
+                    except Exception:
+                        data = None
+                else:
+                    start = cleaned.find("[")
+                    end = cleaned.rfind("]")
+                    if start != -1 and end != -1 and end > start:
+                        try:
+                            data = json.loads(cleaned[start : end + 1])
+                        except Exception:
+                            data = None
+                    else:
+                        data = None
+
+            try:
                 if isinstance(data, dict):
                     data = data.get("recipes") or [data]
                 if isinstance(data, list):
@@ -294,13 +322,20 @@ class AIRecipeGenerator:
                         # Map prompt schema -> API schema
                         item["title"] = item.get("title") or item.get("name") or "AI-Generated Recipe"
                         ni_src = item.get("nutritional_info") or item.get("nutrition_per_serving") or {}
+                        def _num(value: Any) -> int:
+                            try:
+                                if value is None:
+                                    return 0
+                                return int(round(float(value)))
+                            except Exception:  # noqa: BLE001
+                                return 0
                         item["nutritional_info"] = {
-                            "calories": ni_src.get("calories"),
-                            "carbs": ni_src.get("carbs"),
-                            "protein": ni_src.get("protein"),
-                            "fat": ni_src.get("fat"),
-                            "fiber": ni_src.get("fiber"),
-                            "sugar": ni_src.get("sugar"),
+                            "calories": _num(ni_src.get("calories")),
+                            "carbs": _num(ni_src.get("carbs")),
+                            "protein": _num(ni_src.get("protein")),
+                            "fat": _num(ni_src.get("fat")),
+                            "fiber": _num(ni_src.get("fiber")),
+                            "sugar": _num(ni_src.get("sugar")),
                             "glycemic_index": ni_src.get("glycemic_index"),
                         }
                         description = item.get("description") or ""
@@ -343,7 +378,7 @@ class AIRecipeGenerator:
                     "cook_time": 0,
                     "total_time": 0,
                     "difficulty": "Easy",
-                    "nutritional_info": {"calories": None, "carbs": None, "protein": None, "fat": None, "fiber": None, "sugar": None, "glycemic_index": None},
+                    "nutritional_info": {"calories": 0, "carbs": 0, "protein": 0, "fat": 0, "fiber": 0, "sugar": 0, "glycemic_index": None},
                     "tags": filters or [],
                     "image_url": "",
                     "servings": 2,
