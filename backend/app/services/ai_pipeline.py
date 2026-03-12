@@ -81,6 +81,7 @@ class AIPipeline:
             food_only,
             tier,
             filters=filters,
+            timeout_seconds=55,
             generate_images=False,
         )
         recipes = self._validated_recipes_or_none(recipes)
@@ -90,6 +91,7 @@ class AIPipeline:
                 tier,
                 filters=filters,
                 variety_mode=True,
+                timeout_seconds=55,
                 generate_images=False,
             )
             recipes = self._validated_recipes_or_none(recipes_retry)
@@ -150,6 +152,7 @@ class AIPipeline:
             food_only,
             tier,
             filters=filters,
+            timeout_seconds=55,
             generate_images=False,
         )
         recipes = self._validated_recipes_or_none(recipes)
@@ -159,6 +162,7 @@ class AIPipeline:
                 tier,
                 filters=filters,
                 variety_mode=True,
+                timeout_seconds=55,
                 generate_images=False,
             )
             recipes = self._validated_recipes_or_none(recipes_retry)
@@ -192,6 +196,7 @@ class AIPipeline:
             filters=filters,
             exclude_titles=exclude_titles or [],
             variety_mode=variety_mode,
+            timeout_seconds=55,
             generate_images=False,
         )
         recipes = self._validated_recipes_or_none(recipes)
@@ -203,6 +208,7 @@ class AIPipeline:
                 filters=filters,
                 exclude_titles=exclude_titles or [],
                 variety_mode=True,
+                timeout_seconds=55,
                 generate_images=False,
             )
             recipes = self._validated_recipes_or_none(recipes_retry)
