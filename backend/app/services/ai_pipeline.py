@@ -83,6 +83,18 @@ class AIPipeline:
             filters=filters,
             generate_images=False,
         )
+        recipes = self._validated_recipes_or_none(recipes)
+        if recipes is None:
+            recipes_retry = self.ai.generate_recipes(
+                food_only,
+                tier,
+                filters=filters,
+                variety_mode=True,
+                generate_images=False,
+            )
+            recipes = self._validated_recipes_or_none(recipes_retry)
+        if recipes is None:
+            raise RuntimeError("Recipe generation failed. Please try again.")
         record_ai_request(db, user_id, tier, "vision", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
         record_ai_request(db, user_id, tier, "recipes", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
         db.add(RecipeHistory(user_id=user_id, source="vision", recipes=recipes))
@@ -140,6 +152,18 @@ class AIPipeline:
             filters=filters,
             generate_images=False,
         )
+        recipes = self._validated_recipes_or_none(recipes)
+        if recipes is None:
+            recipes_retry = self.ai.generate_recipes(
+                food_only,
+                tier,
+                filters=filters,
+                variety_mode=True,
+                generate_images=False,
+            )
+            recipes = self._validated_recipes_or_none(recipes_retry)
+        if recipes is None:
+            raise RuntimeError("Recipe generation failed. Please try again.")
         record_ai_request(db, user_id, tier, "vision_batch", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
         record_ai_request(db, user_id, tier, "recipes", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
         db.add(RecipeHistory(user_id=user_id, source="vision", recipes=recipes))
@@ -170,7 +194,68 @@ class AIPipeline:
             variety_mode=variety_mode,
             generate_images=False,
         )
-        record_ai_request(db, user_id, tier, "text", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
+        recipes = self._validated_recipes_or_none(recipes)
+        if recipes is None:
+            # One retry with variety enabled (and caching disabled) before failing the request.
+            recipes_retry = self.ai.generate_recipes(
+                ingredients,
+                tier,
+                filters=filters,
+                exclude_titles=exclude_titles or [],
+                variety_mode=True,
+                generate_images=False,
+            )
+            recipes = self._validated_recipes_or_none(recipes_retry)
+
+        if recipes is None:
+            raise RuntimeError("Recipe generation failed. Please try again.")
+
+        record_ai_request(
+            db,
+            user_id,
+            tier,
+            "text",
+            model_used=tier,
+            tokens_used=0,
+            cost_estimate=0,
+            device_id=device_id,
+        )
         db.add(RecipeHistory(user_id=user_id, source="text", recipes=recipes))
         db.commit()
         return recipes
+
+    def _validated_recipes_or_none(self, recipes: List[Dict[str, Any]] | None) -> List[Dict[str, Any]] | None:
+        if not recipes or not isinstance(recipes, list):
+            return None
+        if len(recipes) < 3:
+            return None
+
+        cleaned: list[dict] = []
+        for recipe in recipes[:3]:
+            if not isinstance(recipe, dict):
+                return None
+            title = (recipe.get("title") or recipe.get("name") or "").strip()
+            if not title or title.lower() == "ai-generated recipe":
+                return None
+            instructions = recipe.get("instructions") or []
+            if not isinstance(instructions, list) or len(instructions) < 3:
+                return None
+            ingredients = recipe.get("ingredients") or []
+            if not isinstance(ingredients, list) or len(ingredients) < 3:
+                return None
+            ni = recipe.get("nutritional_info") or {}
+            calories = ni.get("calories")
+            carbs = ni.get("carbs")
+            protein = ni.get("protein")
+            # Treat missing/zero nutrition as invalid (this is what causes N/A in the UI).
+            try:
+                calories_n = int(calories or 0)
+                carbs_n = int(carbs or 0)
+                protein_n = int(protein or 0)
+            except Exception:  # noqa: BLE001
+                return None
+            if calories_n <= 0 or (carbs_n <= 0 and protein_n <= 0):
+                return None
+            cleaned.append(recipe)
+
+        return cleaned
