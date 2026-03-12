@@ -51,6 +51,7 @@ class TieredAIService:
         filters: List[str] | None = None,
         exclude_titles: List[str] | None = None,
         variety_mode: bool = False,
+        timeout_seconds: float | None = None,
         generate_images: bool = True,
     ) -> List[Dict[str, Any]]:
         payload = {
@@ -75,6 +76,7 @@ class TieredAIService:
             filters=filters or [],
             exclude_titles=exclude_titles or [],
             variety_mode=variety_mode,
+            timeout_seconds=timeout_seconds,
             generate_images=generate_images,
         )
         if should_cache:
