@@ -22,7 +22,11 @@ class AIRecipeGenerator:
     """GPT-5 recipe generator with DeepSeek fallback."""
 
     def __init__(self) -> None:
-        self.primary_client = OpenAI(api_key=settings.openai_api_key) if settings.openai_api_key else None
+        self.primary_client = (
+            OpenAI(api_key=settings.openai_api_key, organization=settings.openai_organization)
+            if settings.openai_api_key
+            else None
+        )
         self.primary_model = settings.openai_model
         self.image_model = "dall-e-3"
         # DeepSeek fallback for text (vision not supported)
