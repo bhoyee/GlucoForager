@@ -159,6 +159,7 @@ def _run_text_job(job_id: str) -> None:
             filters=filters,
             exclude_titles=exclude_titles,
             variety_mode=variety_mode,
+            mode=mode,
             device_id=device_id,
         )
         warning = None
@@ -270,6 +271,7 @@ def generate_from_text(
             filters=filters,
             exclude_titles=payload.exclude_titles or [],
             variety_mode=payload.variety_mode or (mode != "ingredients"),
+            mode=mode,
             device_id=device_id,
         )
     except RuntimeError as exc:
