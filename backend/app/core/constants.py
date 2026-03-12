@@ -105,6 +105,43 @@ FORMAT: Return VALID JSON with this EXACT structure:
 IMPORTANT: Return ONLY the JSON object. No additional text before or after.
 """
 
+# Lightweight schema for "Eat now" flows (Surprise me / Low-carb quick meal).
+# This avoids long responses that get truncated and become invalid JSON.
+EAT_NOW_PROMPT = """Create 3 diabetes-friendly meal ideas. Use common, easy-to-find ingredients.
+
+RULES:
+- Return ONLY a single valid JSON object. No markdown, no code fences, no commentary.
+- Provide exactly 3 recipes.
+- Keep it concise but usable (8-10 instruction steps with concrete details).
+
+FORMAT (VALID JSON):
+{
+  "recipes": [
+    {
+      "title": "Recipe title",
+      "description": "1 sentence why diabetes-friendly",
+      "prep_time": 10,
+      "cook_time": 10,
+      "total_time": 20,
+      "servings": 2,
+      "ingredients": [
+        {"name": "ingredient", "quantity": 1, "unit": "cup"}
+      ],
+      "instructions": ["Step 1", "Step 2"],
+      "nutritional_info": {
+        "calories": 320,
+        "carbs": 18,
+        "protein": 28,
+        "fat": 12,
+        "fiber": 7,
+        "sugar": 4
+      },
+      "tags": ["diabetes-friendly", "low-carb"]
+    }
+  ]
+}
+"""
+
 # Nutrition defaults keep structure consistent even when upstream data is sparse.
 EMPTY_NUTRITION = {
     "calories": 0,

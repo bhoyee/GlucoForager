@@ -11,7 +11,7 @@ from openai import OpenAI, OpenAIError
 from PIL import Image
 
 from ..core.config import settings
-from ..core.constants import OPENAI_PROMPT
+from ..core.constants import EAT_NOW_PROMPT, OPENAI_PROMPT
 from ..services.cache_service import CacheService
 
 logger = logging.getLogger(__name__)
@@ -52,6 +52,7 @@ class AIRecipeGenerator:
         ingredients: List[str],
         filters: List[str],
         *,
+        prompt_template: str | None = None,
         extra_instructions: str | None = None,
         temperature: float = 0.4,
         timeout_seconds: float | None = None,
@@ -63,14 +64,16 @@ class AIRecipeGenerator:
             raise RuntimeError("GEMINI_TEXT_MODEL is not set")
 
         # Build the same JSON-only prompt we use for OpenAI, but without response_format support.
-        base_prompt = OPENAI_PROMPT
-        if not ingredients:
+        base_prompt = prompt_template or OPENAI_PROMPT
+        if (not ingredients) and ("{ingredients}" in base_prompt):
             base_prompt = OPENAI_PROMPT.replace(
                 "Create 3 diabetic-friendly recipes using ONLY: {ingredients}.",
                 "Create 3 diabetic-friendly recipes with common, easy-to-find ingredients. "
                 "Do not assume the user has any specific ingredients.",
             )
-        prompt = base_prompt.replace("{ingredients}", ", ".join(ingredients))
+        prompt = base_prompt
+        if "{ingredients}" in prompt:
+            prompt = prompt.replace("{ingredients}", ", ".join(ingredients))
         if filters:
             prompt += f"\nApply dietary filters: {', '.join(filters)}."
         if extra_instructions:
@@ -114,6 +117,8 @@ class AIRecipeGenerator:
         if isinstance(text, str) and text.strip():
             return text
         candidates = getattr(resp, "candidates", None) or []
+        if settings.ai_debug_logging and not candidates:
+            logger.info("Gemini returned empty response (no candidates) model=%s", model)
         if candidates:
             content = getattr(candidates[0], "content", None)
             parts = getattr(content, "parts", None) or []
@@ -131,20 +136,23 @@ class AIRecipeGenerator:
         ingredients: List[str],
         filters: List[str],
         *,
+        prompt_template: str | None = None,
         extra_instructions: str | None = None,
         temperature: float = 0.4,
         timeout_seconds: float | None = None,
         max_output_tokens: int = 2000,
     ) -> str:
         # Avoid KeyError from braces in the JSON template; replace only the {ingredients} token.
-        base_prompt = OPENAI_PROMPT
-        if not ingredients:
+        base_prompt = prompt_template or OPENAI_PROMPT
+        if (not ingredients) and ("{ingredients}" in base_prompt):
             base_prompt = OPENAI_PROMPT.replace(
                 "Create 3 diabetic-friendly recipes using ONLY: {ingredients}.",
                 "Create 3 diabetic-friendly recipes with common, easy-to-find ingredients. "
                 "Do not assume the user has any specific ingredients.",
             )
-        prompt = base_prompt.replace("{ingredients}", ", ".join(ingredients))
+        prompt = base_prompt
+        if "{ingredients}" in prompt:
+            prompt = prompt.replace("{ingredients}", ", ".join(ingredients))
         if filters:
             prompt += f"\nApply dietary filters: {', '.join(filters)}."
         if extra_instructions:
@@ -400,6 +408,7 @@ class AIRecipeGenerator:
             extra_instructions = " ".join(parts)
 
         mode_norm = (mode or "").strip().lower()
+        prompt_template = EAT_NOW_PROMPT if mode_norm in ("surprise", "quick") else OPENAI_PROMPT
         if mode_norm in ("surprise", "quick"):
             fast_chain = tier_cfg.get("recipe_models_fast") or []
             if isinstance(fast_chain, list) and fast_chain:
@@ -448,7 +457,16 @@ class AIRecipeGenerator:
                 cleaned = cleaned.strip("`").strip()
             try:
                 data = json.loads(cleaned)
-            except Exception:
+            except Exception as exc:
+                if settings.ai_debug_logging:
+                    tail = cleaned[-240:] if len(cleaned) > 240 else cleaned
+                    tail = tail.replace("\n", " ")
+                    logger.info(
+                        "AI json.loads failed error=%s len=%s tail=%s",
+                        str(exc)[:200],
+                        len(cleaned),
+                        tail,
+                    )
                 # Some providers still wrap JSON with text. Try to extract a JSON object/array substring.
                 start = cleaned.find("{")
                 end = cleaned.rfind("}")
@@ -808,7 +826,10 @@ class AIRecipeGenerator:
                     per_request_timeout = None
                     if budget is not None:
                         remaining_total = budget - (time.time() - started)
-                        cap = 30.0 if mode_norm in ("surprise", "quick") else 25.0
+                        if mode_norm in ("surprise", "quick"):
+                            cap = 30.0 if budget <= 60.0 else 60.0
+                        else:
+                            cap = 25.0
                         per_request_timeout = max(5.0, min(cap, remaining_total))
                         if phase_timeout is not None:
                             remaining_phase = phase_timeout - (time.time() - phase_started)
@@ -830,10 +851,11 @@ class AIRecipeGenerator:
                         model,
                         ingredients,
                         filters,
+                        prompt_template=prompt_template,
                         extra_instructions=extra_instructions,
                         temperature=temperature,
                         timeout_seconds=per_request_timeout,
-                        max_output_tokens=1200 if mode_norm in ("surprise", "quick") else 2000,
+                        max_output_tokens=1600 if mode_norm in ("surprise", "quick") else 2000,
                     )
                     parsed = parse_content(content)
                     recipes = self._filter_recipes(parsed, banned_titles_norm)
@@ -846,6 +868,7 @@ class AIRecipeGenerator:
                                 model,
                                 ingredients,
                                 filters,
+                                prompt_template=prompt_template,
                                 extra_instructions=stricter,
                                 temperature=0.8,
                                 timeout_seconds=per_request_timeout,
@@ -899,7 +922,7 @@ class AIRecipeGenerator:
                 phase_budget = 30.0 if budget >= 60.0 else max(5.0, budget / 2.0)
                 if settings.ai_debug_logging:
                     logger.info(
-                        "AI schedule mode=%s tier=%s primary_budget=%.1fs fallback_budget<=30.0s total_budget=%.1fs",
+                        "AI schedule mode=%s tier=%s primary_budget=%.1fs fallback_budget=remaining total_budget=%.1fs",
                         mode_norm,
                         tier,
                         phase_budget,
@@ -933,6 +956,7 @@ class AIRecipeGenerator:
                             gemini_model,
                             ingredients,
                             filters,
+                            prompt_template=prompt_template,
                             extra_instructions=extra_instructions,
                             temperature=0.85,
                             timeout_seconds=fallback_budget if fallback_budget >= 5 else 5.0,
