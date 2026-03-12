@@ -23,7 +23,12 @@ class AIRecipeGenerator:
 
     def __init__(self) -> None:
         self.primary_client = (
-            OpenAI(api_key=settings.openai_api_key, organization=settings.openai_organization)
+            OpenAI(
+                api_key=settings.openai_api_key,
+                organization=settings.openai_organization,
+                # Avoid long compounded delays from retries on slow networks; we handle fallbacks ourselves.
+                max_retries=0,
+            )
             if settings.openai_api_key
             else None
         )
@@ -31,7 +36,7 @@ class AIRecipeGenerator:
         self.image_model = "dall-e-3"
         # DeepSeek fallback for text (vision not supported)
         self.fallback_client = (
-            OpenAI(api_key=settings.deepseek_api_key, base_url=settings.deepseek_base_url)
+            OpenAI(api_key=settings.deepseek_api_key, base_url=settings.deepseek_base_url, max_retries=0)
             if settings.deepseek_api_key
             else None
         )
@@ -699,7 +704,7 @@ class AIRecipeGenerator:
                 per_request_timeout = None
                 if budget is not None:
                     remaining = budget - (time.time() - started)
-                    cap = 15.0 if mode_norm in ("surprise", "quick") else 25.0
+                    cap = 25.0
                     per_request_timeout = max(5.0, min(cap, remaining))
                 content = self._call(
                     client,
