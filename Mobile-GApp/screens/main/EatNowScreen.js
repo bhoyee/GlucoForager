@@ -48,7 +48,7 @@ export default function EatNowScreen() {
       {
         key: 'surprise',
         title: 'Surprise me',
-        subtitle: 'No input needed — just 3 diabetes‑friendly meals.',
+        subtitle: 'No input needed - just 3 diabetes-friendly meals.',
         icon: 'sparkles-outline',
         action: async () => {
           navigation.navigate('ManualInput', {
@@ -60,7 +60,7 @@ export default function EatNowScreen() {
       },
       {
         key: 'quick',
-        title: 'Low‑carb quick meal',
+        title: 'Low-carb quick meal',
         subtitle: 'Under 20 minutes (best effort).',
         icon: 'flash-outline',
         action: async () => {
@@ -108,7 +108,7 @@ export default function EatNowScreen() {
         ))}
 
         <Text style={styles.note}>
-          Tip: for best results, scan or type your ingredients first — then "Use ingredients I have" becomes 1-tap.
+          Tip: for best results, scan or type your ingredients first - then "Use ingredients I have" becomes 1-tap.
         </Text>
       </View>
     </View>
