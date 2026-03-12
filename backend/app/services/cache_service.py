@@ -1,5 +1,4 @@
 import logging
-import logging
 import time
 from typing import Any, Optional
 
@@ -15,16 +14,21 @@ class CacheService:
 
     def __init__(self) -> None:
         self.client: Optional[redis.Redis] = None
+        self.memory_cache: dict[str, tuple[float, Any]] = {}
         redis_url = getattr(settings, "redis_url", None)
         if redis_url:
             try:
-                self.client = redis.from_url(redis_url)
-                self.client.ping()
-                logger.info("Redis cache connected")
+                # Don't block app startup on Redis availability (common in local dev).
+                # Connection will be attempted on first command; keep timeouts short.
+                self.client = redis.from_url(
+                    redis_url,
+                    socket_connect_timeout=1,
+                    socket_timeout=1,
+                    retry_on_timeout=False,
+                )
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Redis unavailable, using in-memory cache: %s", exc)
                 self.client = None
-        self.memory_cache: dict[str, tuple[float, Any]] = {}
 
     def get(self, key: str) -> Any:
         if self.client:
@@ -35,6 +39,7 @@ class CacheService:
                 return value.decode("utf-8")
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Redis get failed: %s", exc)
+                self.client = None
         if key in self.memory_cache:
             expires, value = self.memory_cache[key]
             if expires >= time.time():
@@ -49,6 +54,7 @@ class CacheService:
                 return
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Redis set failed: %s", exc)
+                self.client = None
         self.memory_cache[key] = (time.time() + ttl_seconds, value)
 
     def incr(self, key: str, ttl_seconds: int = 300) -> int:
@@ -63,6 +69,7 @@ class CacheService:
                 return int(value)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Redis incr failed: %s", exc)
+                self.client = None
 
         current = 0
         if key in self.memory_cache:
