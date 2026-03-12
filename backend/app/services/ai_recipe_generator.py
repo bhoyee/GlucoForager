@@ -671,6 +671,7 @@ class AIRecipeGenerator:
 
         started = time.time()
         budget = float(timeout_seconds) if timeout_seconds else None
+        attempts: list[dict[str, Any]] = []
 
         # Iterate through model chain with provider-specific clients
         for model in model_chain:
@@ -681,6 +682,7 @@ class AIRecipeGenerator:
             use_fallback = "deepseek" in model.lower()
             client = self.fallback_client if use_fallback else self.primary_client
             if not client:
+                attempts.append({"model": model, "provider": "deepseek" if use_fallback else "openai", "error": "client_not_configured"})
                 continue
             try:
                 temperature = 0.85 if mode_norm in ("surprise", "quick") else (0.7 if variety_mode else 0.4)
@@ -721,16 +723,45 @@ class AIRecipeGenerator:
                         if recipes2:
                             recipes = recipes2
                     recipes = recipes[:3]
+                    for recipe in recipes:
+                        if isinstance(recipe, dict):
+                            recipe["_ai_provider"] = "deepseek" if use_fallback else "openai"
+                            recipe["_ai_model"] = model
                     if generate_images:
                         self._attach_images(recipes, tier, ingredients)
                     else:
                         self._attach_placeholders(recipes)
                     return recipes
+                attempts.append(
+                    {
+                        "model": model,
+                        "provider": "deepseek" if use_fallback else "openai",
+                        "error": "empty_or_unparseable_json",
+                    }
+                )
             except OpenAIError as exc:
                 logger.warning("Model %s failed, trying next: %s", model, exc)
+                attempts.append(
+                    {
+                        "model": model,
+                        "provider": "deepseek" if use_fallback else "openai",
+                        "error": str(exc),
+                    }
+                )
                 continue
 
         fallback = emergency_recipes()
+        for recipe in fallback:
+            if isinstance(recipe, dict):
+                recipe["_ai_provider"] = "fallback"
+                recipe["_ai_model"] = "emergency_recipes"
+        if attempts:
+            logger.warning(
+                "All AI models failed or returned invalid output (mode=%s tier=%s). Using emergency recipes. attempts=%s",
+                mode_norm or "ingredients",
+                tier,
+                attempts,
+            )
         if generate_images:
             self._attach_images(fallback, tier, ingredients)
         else:
