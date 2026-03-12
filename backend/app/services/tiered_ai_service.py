@@ -49,11 +49,20 @@ class TieredAIService:
         ingredients: List[str],
         tier: str,
         filters: List[str] | None = None,
+        exclude_titles: List[str] | None = None,
+        variety_mode: bool = False,
         generate_images: bool = True,
     ) -> List[Dict[str, Any]]:
-        payload = {"ingredients": ingredients, "tier": tier, "filters": filters or []}
+        payload = {
+            "ingredients": ingredients,
+            "tier": tier,
+            "filters": filters or [],
+            "exclude_titles": exclude_titles or [],
+            "variety_mode": bool(variety_mode),
+        }
         key = self._cache_key("recipes", payload)
-        if self._should_cache(tier):
+        should_cache = self._should_cache(tier) and not (exclude_titles or variety_mode)
+        if should_cache:
             cached = self.cache.get(key)
             if cached:
                 try:
@@ -64,8 +73,10 @@ class TieredAIService:
             ingredients,
             tier=tier,
             filters=filters or [],
+            exclude_titles=exclude_titles or [],
+            variety_mode=variety_mode,
             generate_images=generate_images,
         )
-        if self._should_cache(tier):
+        if should_cache:
             self.cache.set(key, json.dumps(result), ttl_seconds=300)
         return result

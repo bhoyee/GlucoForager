@@ -158,12 +158,16 @@ class AIPipeline:
         tier: str,
         ingredients: List[str],
         filters: list[str] | None = None,
+        exclude_titles: list[str] | None = None,
+        variety_mode: bool = False,
         device_id: str | None = None,
     ) -> List[Dict[str, Any]]:
         recipes = self.ai.generate_recipes(
             ingredients,
             tier,
             filters=filters,
+            exclude_titles=exclude_titles or [],
+            variety_mode=variety_mode,
             generate_images=False,
         )
         record_ai_request(db, user_id, tier, "text", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
