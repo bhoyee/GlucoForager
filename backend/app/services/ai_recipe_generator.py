@@ -436,7 +436,7 @@ class AIRecipeGenerator:
                 mode_parts.extend(
                     [
                         "All recipes must have total_time <= 20 minutes.",
-                        "Prefer no-oven methods (skillet, salad, quick saute) and minimal steps.",
+                        "Oven is allowed if it still fits total_time <= 20 minutes (assume oven is preheated). Prefer faster methods (skillet, salad, quick saute) when possible.",
                     ]
                 )
             else:
