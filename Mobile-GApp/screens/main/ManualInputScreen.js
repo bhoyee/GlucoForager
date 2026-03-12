@@ -271,6 +271,33 @@ export default function ManualInputScreen() {
         return;
       }
       const deviceId = await getDeviceId();
+      const shouldExcludeRecent =
+        Boolean(route.params?.excludeRecent) || route.params?.source === 'eat_now_have';
+      const varietyMode =
+        Boolean(route.params?.varietyMode) || route.params?.source === 'eat_now_have';
+
+      let excludeTitles;
+      if (shouldExcludeRecent) {
+        try {
+          const recentRes = await apiFetch(
+            `${API_URL}${API_ENDPOINTS.RECENT_RECIPES}`,
+            { headers: { Authorization: `Bearer ${token}` } },
+            { onUnauthorized: signOut, timeoutMs: 10000 }
+          );
+          if (recentRes.ok) {
+            const recentData = await recentRes.json();
+            const items = Array.isArray(recentData?.items) ? recentData.items : [];
+            const titles = items
+              .map((item) => (item?.title || item?.name || '').toString().trim())
+              .filter(Boolean);
+            if (titles.length) {
+              excludeTitles = titles.slice(0, 10);
+            }
+          }
+        } catch {
+          // Ignore recent fetch failures.
+        }
+      }
       const response = await apiFetch(
         `${API_URL}${API_ENDPOINTS.AI_TEXT_RECIPES_ASYNC}`,
         {
@@ -280,7 +307,12 @@ export default function ManualInputScreen() {
           'Content-Type': 'application/json',
           'X-Device-Id': deviceId,
         },
-        body: JSON.stringify({ ingredients: normalizedUnique, filters: Array.isArray(route.params?.filters) ? route.params.filters : undefined }),
+        body: JSON.stringify({
+          ingredients: normalizedUnique,
+          filters: Array.isArray(route.params?.filters) ? route.params.filters : undefined,
+          exclude_titles: excludeTitles,
+          variety_mode: varietyMode || undefined,
+        }),
         signal: controller.signal,
         },
         { onUnauthorized: signOut, timeoutMs: 45000 }
