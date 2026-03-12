@@ -92,13 +92,26 @@ class AIRecipeGenerator:
         # Prefer strict JSON mode where supported (OpenAI supports this; some OpenAI-compatible providers may not).
         params_json = {**params, "response_format": {"type": "json_object"}}
         try:
+            started = time.time()
             resp = client.chat.completions.create(**params_json, timeout=timeout_seconds)
         except OpenAIError as exc:
             # If the provider rejects response_format, retry without it.
             msg = str(exc).lower()
             if "response_format" not in msg and "unknown parameter" not in msg and "unexpected" not in msg:
                 raise
+            started = time.time()
             resp = client.chat.completions.create(**params, timeout=timeout_seconds)
+        finally:
+            if settings.ai_debug_logging:
+                elapsed = time.time() - started if "started" in locals() else None
+                base_url = str(getattr(client, "base_url", "") or "")
+                logger.info(
+                    "AI call finished model=%s base_url=%s timeout=%s elapsed=%.3fs",
+                    model,
+                    base_url,
+                    timeout_seconds,
+                    elapsed or -1.0,
+                )
         return resp.choices[0].message.content or ""
 
     def _placeholder_image(self, recipe: Dict[str, Any]) -> str:
@@ -717,6 +730,18 @@ class AIRecipeGenerator:
                     else:
                         cap = 25.0
                     per_request_timeout = max(5.0, min(cap, remaining))
+                if settings.ai_debug_logging:
+                    base_url = str(getattr(client, "base_url", "") or "")
+                    logger.info(
+                        "AI attempt start mode=%s tier=%s provider=%s model=%s timeout=%s remaining_budget=%.2fs base_url=%s",
+                        mode_norm or "ingredients",
+                        tier,
+                        "deepseek" if use_fallback else "openai",
+                        model,
+                        per_request_timeout,
+                        (budget - (time.time() - started)) if budget is not None else -1.0,
+                        base_url,
+                    )
                 content = self._call(
                     client,
                     model,
