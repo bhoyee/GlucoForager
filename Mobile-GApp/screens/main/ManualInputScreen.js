@@ -12,7 +12,7 @@ import {
   Modal,
   ActivityIndicator,
 } from 'react-native';
-import { useNavigation, useIsFocused } from '@react-navigation/native';
+import { useNavigation, useIsFocused, useRoute } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,6 +24,7 @@ import { apiFetch } from '../../utils/api';
 
 export default function ManualInputScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
   const isFocused = useIsFocused();
   const { signOut } = useAuth();
   const insets = useSafeAreaInsets();
@@ -41,6 +42,7 @@ export default function ManualInputScreen() {
     remaining: null,
     isPremium: false,
   });
+  const lastPrefillTokenRef = useRef(null);
   const limitReached = !scanStatus.isPremium && scanStatus.remaining === 0;
   const allowedIngredientPattern = /^[A-Za-z0-9][A-Za-z0-9\s\-'/%%]*$/;
 
@@ -108,6 +110,28 @@ export default function ManualInputScreen() {
       fetchScanStatus();
     }
   }, [isFocused]);
+
+  useEffect(() => {
+    if (!isFocused) return;
+    const prefill = route.params?.prefillIngredients;
+    if (!Array.isArray(prefill) || prefill.length === 0) return;
+    const cleaned = prefill
+      .map((item) => `${item || ''}`.trim())
+      .filter(Boolean)
+      .slice(0, 20);
+    if (!cleaned.length) return;
+
+    const token = `${route.params?.source || 'prefill'}|${cleaned.join('|')}`;
+    if (lastPrefillTokenRef.current === token) return;
+    lastPrefillTokenRef.current = token;
+
+    setIngredients(cleaned);
+    if (route.params?.autoSubmit) {
+      setTimeout(() => {
+        handleFindRecipes(cleaned);
+      }, 250);
+    }
+  }, [isFocused, route.params]);
 
   useEffect(() => {
     return () => {
@@ -179,9 +203,10 @@ export default function ManualInputScreen() {
     }
   };
 
-  const handleFindRecipes = async () => {
+  const handleFindRecipes = async (overrideIngredients) => {
     if (isLoading) return;
-    const normalized = ingredients
+    const sourceIngredients = Array.isArray(overrideIngredients) ? overrideIngredients : ingredients;
+    const normalized = sourceIngredients
       .flatMap((ing) =>
         `${ing || ''}`
           .split(',')
@@ -214,6 +239,12 @@ export default function ManualInputScreen() {
     if (normalizedUnique.length === 0) {
       Alert.alert('Error', 'Please enter at least one ingredient');
       return;
+    }
+
+    try {
+      await AsyncStorage.setItem('last_used_ingredients_v1', JSON.stringify(normalizedUnique));
+    } catch {
+      // Ignore.
     }
 
     const invalid = normalizedUnique.find(
@@ -249,7 +280,7 @@ export default function ManualInputScreen() {
           'Content-Type': 'application/json',
           'X-Device-Id': deviceId,
         },
-        body: JSON.stringify({ ingredients: normalizedUnique }),
+        body: JSON.stringify({ ingredients: normalizedUnique, filters: Array.isArray(route.params?.filters) ? route.params.filters : undefined }),
         signal: controller.signal,
         },
         { onUnauthorized: signOut, timeoutMs: 45000 }
