@@ -300,6 +300,11 @@ class AIRecipeGenerator:
 
         mode_norm = (mode or "").strip().lower()
         if mode_norm in ("surprise", "quick"):
+            fast_chain = tier_cfg.get("recipe_models_fast") or []
+            if isinstance(fast_chain, list) and fast_chain:
+                model_chain = [str(m) for m in fast_chain if str(m).strip()]
+
+        if mode_norm in ("surprise", "quick"):
             cuisine_sets = [
                 ("Mediterranean", "Mexican-inspired", "Asian-inspired"),
                 ("West African-inspired", "Indian-inspired", "American comfort (healthy)"),
@@ -533,7 +538,8 @@ class AIRecipeGenerator:
                 per_request_timeout = None
                 if budget is not None:
                     remaining = budget - (time.time() - started)
-                    per_request_timeout = max(5.0, min(25.0, remaining))
+                    cap = 15.0 if mode_norm in ("surprise", "quick") else 25.0
+                    per_request_timeout = max(5.0, min(cap, remaining))
                 content = self._call(
                     client,
                     model,

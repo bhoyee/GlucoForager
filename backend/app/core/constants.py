@@ -14,6 +14,11 @@ TIER_CONFIG = {
             "gpt-4o-mini-2024-07-18",
             "deepseek-chat",
         ],
+        # "Surprise me" / "Quick meal" should be fast and cheap.
+        "recipe_models_fast": [
+            "gpt-4o-mini-2024-07-18",
+            "deepseek-chat",
+        ],
         "cache_priority": "high",
     },
     "premium": {
@@ -24,6 +29,11 @@ TIER_CONFIG = {
             "gpt-5.1-2025-11-13",
             "gpt-5-2025-08-07",
             "gpt-4o-2024-11-20",
+            "gpt-4o-mini-2024-07-18",
+            "deepseek-chat",
+        ],
+        # "Surprise me" / "Quick meal" should be fast and cheap even for premium.
+        "recipe_models_fast": [
             "gpt-4o-mini-2024-07-18",
             "deepseek-chat",
         ],
