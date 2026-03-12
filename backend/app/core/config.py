@@ -27,13 +27,14 @@ class Settings(BaseSettings):
     resend_api_key: str | None = Field(None, env="RESEND_API_KEY")
     uploads_dir: str = Field("uploads", env="UPLOADS_DIR")
     openai_api_key: str | None = Field(None, env="OPENAI_API_KEY")
+    openai_organization: str | None = Field(None, env="OPENAI_ORG_ID")
     # Use available models by default; can be overridden via env.
     openai_model: str = Field("gpt-4o-mini", env="OPENAI_MODEL")
     # Default vision-capable model; can be overridden in .env
     openai_vision_model: str = Field("gpt-4o-2024-11-20", env="OPENAI_VISION_MODEL")
     deepseek_api_key: str | None = Field(None, env="DEEPSEEK_API_KEY")
     # DeepSeek text fallback (no vision support)
-    deepseek_base_url: str = Field("https://api.deepseek.com", env="DEEPSEEK_BASE_URL")
+    deepseek_base_url: str = Field("https://api.deepseek.com/v1", env="DEEPSEEK_BASE_URL")
     deepseek_model: str = Field("deepseek-chat", env="DEEPSEEK_MODEL")
     deepseek_vision_model: str = Field("deepseek-chat", env="DEEPSEEK_VISION_MODEL")
     gemini_api_key: str | None = Field(None, env="GEMINI_API_KEY")
@@ -61,6 +62,16 @@ class Settings(BaseSettings):
                     return ["*"]
             return [item.strip() for item in value.split(",") if item.strip()]
         return v
+
+    @field_validator("deepseek_base_url", mode="before")
+    def normalize_deepseek_base_url(cls, v):  # noqa: N805
+        if not isinstance(v, str):
+            return v
+        value = v.strip().rstrip("/")
+        # DeepSeek OpenAI-compatible endpoints live under /v1.
+        if value == "https://api.deepseek.com":
+            return "https://api.deepseek.com/v1"
+        return value
 
 
 settings = Settings()

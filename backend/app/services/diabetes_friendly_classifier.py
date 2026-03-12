@@ -13,7 +13,11 @@ logger = logging.getLogger(__name__)
 
 class DiabetesFriendlyClassifier:
     def __init__(self) -> None:
-        self.client = OpenAI(api_key=settings.openai_api_key) if settings.openai_api_key else None
+        self.client = (
+            OpenAI(api_key=settings.openai_api_key, organization=settings.openai_organization)
+            if settings.openai_api_key
+            else None
+        )
         self.model = settings.openai_model
         self.cache = CacheService()
 
