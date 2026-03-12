@@ -20,6 +20,7 @@ import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
 import { getRecipeImageSettings } from '../../utils/recipeImageSettings';
+import { getTodayTip } from '../../utils/todayTips';
 
 export default function HomeScreen() {
   const navigation = useNavigation();
@@ -46,6 +47,7 @@ export default function HomeScreen() {
     scansToday: 0,
     favoritesSaved: 0,
   });
+  const todayTip = getTodayTip();
 
   const getDeviceId = async () => {
     const existing = await AsyncStorage.getItem('deviceId');
@@ -312,6 +314,11 @@ export default function HomeScreen() {
       setIsFetchingRecipes(false);
     }
   };
+
+  const handleOpenEatNow = () => navigation.navigate('EatNow');
+  const handleOpenSwaps = () => navigation.navigate('CarbSwaps');
+  const handleOpenChallenge = () => navigation.navigate('Challenge');
+  const handleOpenTip = () => navigation.navigate('TodayTip', { tip: todayTip });
 
   const getRecipeTimeLabel = (recipe) => {
     const prepRaw = recipe.prep_time_minutes ?? recipe.prepTime ?? recipe.prep_time;
@@ -595,6 +602,56 @@ export default function HomeScreen() {
           )}
         </View>
 
+        {/* For today */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>For today</Text>
+          <Text style={styles.sectionSubtitle}>Quick help for meals, swaps, and habits.</Text>
+
+          <TouchableOpacity style={styles.tipCard} activeOpacity={0.85} onPress={handleOpenTip}>
+            <View style={styles.tipIcon}>
+              <Ionicons name="bulb-outline" size={20} color={Colors.primary} />
+            </View>
+            <View style={styles.tipText}>
+              <Text style={styles.tipLabel}>Today&apos;s tip</Text>
+              <Text style={styles.tipTitle} numberOfLines={2}>
+                {todayTip.title}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.eatNowCard} activeOpacity={0.9} onPress={handleOpenEatNow}>
+            <View style={styles.eatNowLeft}>
+              <View style={styles.eatNowIcon}>
+                <Ionicons name="sparkles-outline" size={22} color="white" />
+              </View>
+              <View style={styles.eatNowText}>
+                <Text style={styles.eatNowTitle}>Eat now</Text>
+                <Text style={styles.eatNowSub}>3 ideas in seconds — use what you have or surprise me.</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={22} color="rgba(255,255,255,0.9)" />
+          </TouchableOpacity>
+
+          <View style={styles.miniRow}>
+            <TouchableOpacity style={[styles.miniCard, styles.miniCardSwaps]} activeOpacity={0.9} onPress={handleOpenSwaps}>
+              <View style={[styles.miniIcon, { backgroundColor: `${Colors.secondary}18` }]}>
+                <Ionicons name="swap-horizontal-outline" size={18} color={Colors.secondary} />
+              </View>
+              <Text style={styles.miniTitle}>Swaps</Text>
+              <Text style={styles.miniSub} numberOfLines={1}>Better options</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.miniCard, styles.miniCardChallenge]} activeOpacity={0.9} onPress={handleOpenChallenge}>
+              <View style={[styles.miniIcon, { backgroundColor: `${Colors.primary}18` }]}>
+                <Ionicons name="trophy-outline" size={18} color={Colors.primary} />
+              </View>
+              <Text style={styles.miniTitle}>7‑Day</Text>
+              <Text style={styles.miniSub} numberOfLines={1}>Challenge</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* Suggest Me 3 Recipes */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -665,24 +722,6 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Quick Stats */}
-        <View style={styles.statsSection}>
-          <Text style={styles.sectionTitle}>Your Stats</Text>
-          <View style={styles.statsGrid}>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{userStats.recipesGenerated}</Text>
-              <Text style={styles.statLabel}>Recipes today</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{userStats.scansToday}</Text>
-              <Text style={styles.statLabel}>Scans today</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{userStats.favoritesSaved}</Text>
-              <Text style={styles.statLabel}>Favorites today</Text>
-            </View>
-          </View>
-        </View>
       </ScrollView>
 
     </View>
@@ -856,6 +895,98 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: Colors.text,
   },
+  sectionSubtitle: {
+    marginTop: 6,
+    fontSize: 13,
+    color: Colors.textLight,
+    fontWeight: '600',
+  },
+  tipCard: {
+    marginTop: 12,
+    backgroundColor: `${Colors.primary}08`,
+    borderRadius: 16,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderColor: `${Colors.primary}18`,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  tipIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: `${Colors.primary}14`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tipText: { flex: 1 },
+  tipLabel: { fontSize: 12, fontWeight: '900', color: Colors.primary, textTransform: 'uppercase' },
+  tipTitle: { marginTop: 2, fontSize: 14, fontWeight: '800', color: Colors.text },
+  eatNowCard: {
+    marginTop: 12,
+    borderRadius: 18,
+    padding: 16,
+    backgroundColor: Colors.primary,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    elevation: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  eatNowLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  eatNowIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  eatNowText: { flex: 1 },
+  eatNowTitle: { fontSize: 16, fontWeight: '900', color: 'white' },
+  eatNowSub: { marginTop: 4, fontSize: 12, lineHeight: 17, color: 'rgba(255,255,255,0.92)', fontWeight: '600' },
+  miniRow: { flexDirection: 'row', gap: 12, marginTop: 12 },
+  miniCard: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: `${Colors.border}AA`,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  miniIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  miniCardSwaps: {
+    backgroundColor: `${Colors.secondary}08`,
+    borderColor: `${Colors.secondary}18`,
+  },
+  miniCardChallenge: {
+    backgroundColor: `${Colors.primary}08`,
+    borderColor: `${Colors.primary}18`,
+  },
+  miniTitle: { fontSize: 14, fontWeight: '900', color: Colors.text },
+  miniSub: { marginTop: 2, fontSize: 12, color: Colors.textLight, fontWeight: '700' },
   seeAllText: {
     color: Colors.primary,
     fontSize: 14,
@@ -1036,38 +1167,6 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontWeight: '600',
     fontSize: 14,
-  },
-  statsSection: {
-    paddingHorizontal: 20,
-    paddingBottom: 4,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    padding: 16,
-    marginHorizontal: 4,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: Colors.primary,
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: Colors.textLight,
-    textAlign: 'center',
   },
   devResetButton: {
     position: 'absolute',
