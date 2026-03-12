@@ -170,6 +170,31 @@ export default function ManualInputScreen() {
     }
   };
 
+  const scheduleLongWaitAlert = (mode, normalizedUnique) => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    timeoutRef.current = setTimeout(() => {
+      const isEatNow = mode === 'surprise' || mode === 'quick';
+      const message = isEatNow
+        ? 'Still generating your meals. This can take a bit longer on slow networks.'
+        : 'Still generating recipes. Your ingredients are still here.';
+
+      Alert.alert('Taking longer than usual', message, [
+        {
+          text: 'Keep waiting',
+          onPress: () => scheduleLongWaitAlert(mode, normalizedUnique),
+        },
+        {
+          text: 'Cancel',
+          style: 'destructive',
+          onPress: () => handleCancelRequest(),
+        },
+      ]);
+    }, 60000);
+  };
+
   const handleJobResult = (result, normalized) => {
     const recipes = result?.results || [];
     if (!recipes.length) {
@@ -365,15 +390,7 @@ export default function ManualInputScreen() {
       pollingRef.current = setInterval(() => {
         pollJob(jobId, normalizedUnique);
       }, 3000);
-      timeoutRef.current = setTimeout(() => {
-        stopPolling();
-        setIsLoading(false);
-        setActiveJobId(null);
-        Alert.alert(
-          'Taking longer than usual',
-          'Please try again in a moment. Your ingredients are still here.'
-        );
-      }, 60000);
+      scheduleLongWaitAlert(mode, normalizedUnique);
     } catch (error) {
       if (error?.name === 'AbortError') {
         setIsLoading(false);
