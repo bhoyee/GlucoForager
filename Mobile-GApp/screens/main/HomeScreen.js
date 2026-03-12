@@ -612,7 +612,7 @@ export default function HomeScreen() {
               <Ionicons name="bulb-outline" size={20} color={Colors.primary} />
             </View>
             <View style={styles.tipText}>
-              <Text style={styles.tipLabel}>Today&apos;s tip</Text>
+              <Text style={styles.tipLabel}>Today's tip</Text>
               <Text style={styles.tipTitle} numberOfLines={2}>
                 {todayTip.title}
               </Text>
@@ -909,8 +909,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    borderWidth: 1,
-    borderColor: `${Colors.primary}18`,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
@@ -961,8 +959,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 14,
-    borderWidth: 1,
-    borderColor: `${Colors.border}AA`,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
@@ -979,11 +975,9 @@ const styles = StyleSheet.create({
   },
   miniCardSwaps: {
     backgroundColor: `${Colors.secondary}08`,
-    borderColor: `${Colors.secondary}18`,
   },
   miniCardChallenge: {
     backgroundColor: `${Colors.primary}08`,
-    borderColor: `${Colors.primary}18`,
   },
   miniTitle: { fontSize: 14, fontWeight: '900', color: Colors.text },
   miniSub: { marginTop: 2, fontSize: 12, color: Colors.textLight, fontWeight: '700' },
