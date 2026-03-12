@@ -8,54 +8,6 @@ import { Colors } from '../../constants/Colors';
 
 const LAST_INGREDIENTS_KEY = 'last_used_ingredients_v1';
 
-const STAPLES_POOL = [
-  'eggs',
-  'spinach',
-  'chicken',
-  'salmon',
-  'tuna',
-  'greek yogurt',
-  'avocado',
-  'tomatoes',
-  'onion',
-  'garlic',
-  'broccoli',
-  'cauliflower',
-  'zucchini',
-  'mushrooms',
-  'bell pepper',
-  'olive oil',
-  'lemon',
-  'cumin',
-  'chili flakes',
-  'lentils',
-];
-
-const LOW_CARB_POOL = [
-  'chicken',
-  'eggs',
-  'spinach',
-  'broccoli',
-  'zucchini',
-  'cauliflower',
-  'mushrooms',
-  'avocado',
-  'greek yogurt',
-  'salmon',
-  'tuna',
-  'olive oil',
-];
-
-const pickRandom = (items, count) => {
-  const pool = [...items];
-  const out = [];
-  while (pool.length && out.length < count) {
-    const idx = Math.floor(Math.random() * pool.length);
-    out.push(pool.splice(idx, 1)[0]);
-  }
-  return out;
-};
-
 export default function EatNowScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -99,11 +51,9 @@ export default function EatNowScreen() {
         subtitle: 'No input needed — just 3 diabetes‑friendly meals.',
         icon: 'sparkles-outline',
         action: async () => {
-          const ingredients = pickRandom(STAPLES_POOL, 6);
           navigation.navigate('ManualInput', {
-            prefillIngredients: ingredients,
             autoSubmit: true,
-            filters: ['diabetes-friendly'],
+            mode: 'surprise',
             source: 'eat_now_surprise',
           });
         },
@@ -114,11 +64,9 @@ export default function EatNowScreen() {
         subtitle: 'Under 20 minutes (best effort).',
         icon: 'flash-outline',
         action: async () => {
-          const ingredients = pickRandom(LOW_CARB_POOL, 6);
           navigation.navigate('ManualInput', {
-            prefillIngredients: ingredients,
             autoSubmit: true,
-            filters: ['low carb', 'under 20 minutes', 'high protein'],
+            mode: 'quick',
             source: 'eat_now_quick',
           });
         },
@@ -160,7 +108,7 @@ export default function EatNowScreen() {
         ))}
 
         <Text style={styles.note}>
-          Tip: for best results, scan or type your ingredients first — then “Use ingredients I have” becomes 1‑tap.
+          Tip: for best results, scan or type your ingredients first — then "Use ingredients I have" becomes 1-tap.
         </Text>
       </View>
     </View>
