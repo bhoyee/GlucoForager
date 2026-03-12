@@ -1,4 +1,5 @@
 from typing import Any, Dict, List
+import time
 
 from sqlalchemy.orm import Session
 
@@ -191,6 +192,10 @@ class AIPipeline:
         mode: str = "ingredients",
         device_id: str | None = None,
     ) -> List[Dict[str, Any]]:
+        started = time.time()
+        # Mobile polling stops at ~60s; keep Surprise/Quick comfortably below that.
+        overall_budget_seconds = 40 if mode in ("surprise", "quick") else 55
+
         recipes = self.ai.generate_recipes(
             ingredients,
             tier,
@@ -198,12 +203,15 @@ class AIPipeline:
             exclude_titles=exclude_titles or [],
             variety_mode=variety_mode,
             mode=mode,
-            timeout_seconds=55,
+            timeout_seconds=overall_budget_seconds,
             generate_images=False,
         )
         recipes = self._validated_recipes_or_none(recipes, mode=mode)
         if recipes is None:
-            # One retry with variety enabled (and caching disabled) before failing the request.
+            remaining = overall_budget_seconds - (time.time() - started)
+            # One retry (variety on, cache bypassed) only if there is enough time left.
+            if remaining <= 8:
+                raise RuntimeError("Recipe generation failed. Please try again.")
             recipes_retry = self.ai.generate_recipes(
                 ingredients,
                 tier,
@@ -211,7 +219,7 @@ class AIPipeline:
                 exclude_titles=exclude_titles or [],
                 variety_mode=True,
                 mode=mode,
-                timeout_seconds=55,
+                timeout_seconds=max(8, remaining),
                 generate_images=False,
             )
             recipes = self._validated_recipes_or_none(recipes_retry, mode=mode)
