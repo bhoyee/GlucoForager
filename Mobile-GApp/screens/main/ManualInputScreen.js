@@ -134,6 +134,21 @@ export default function ManualInputScreen() {
   }, [isFocused, route.params]);
 
   useEffect(() => {
+    if (!isFocused) return;
+    if (!route.params?.autoSubmit) return;
+    const mode = route.params?.mode;
+    if (mode !== 'surprise' && mode !== 'quick') return;
+
+    const token = `mode|${mode}`;
+    if (lastPrefillTokenRef.current === token) return;
+    lastPrefillTokenRef.current = token;
+
+    setTimeout(() => {
+      handleFindRecipes([]);
+    }, 250);
+  }, [isFocused, route.params]);
+
+  useEffect(() => {
     return () => {
       if (pollingRef.current) {
         clearInterval(pollingRef.current);
@@ -205,6 +220,7 @@ export default function ManualInputScreen() {
 
   const handleFindRecipes = async (overrideIngredients) => {
     if (isLoading) return;
+    const mode = route.params?.mode;
     const sourceIngredients = Array.isArray(overrideIngredients) ? overrideIngredients : ingredients;
     const normalized = sourceIngredients
       .flatMap((ing) =>
@@ -237,26 +253,31 @@ export default function ManualInputScreen() {
     }
 
     if (normalizedUnique.length === 0) {
-      Alert.alert('Error', 'Please enter at least one ingredient');
-      return;
+      const allowEmpty = mode === 'surprise' || mode === 'quick';
+      if (!allowEmpty) {
+        Alert.alert('Error', 'Please enter at least one ingredient');
+        return;
+      }
+    } else {
+      try {
+        await AsyncStorage.setItem('last_used_ingredients_v1', JSON.stringify(normalizedUnique));
+      } catch {
+        // Ignore.
+      }
     }
 
-    try {
-      await AsyncStorage.setItem('last_used_ingredients_v1', JSON.stringify(normalizedUnique));
-    } catch {
-      // Ignore.
-    }
-
-    const invalid = normalizedUnique.find(
-      (item) => item.length < 2 || item.length > 30 || !allowedIngredientPattern.test(item)
-    );
-    
-    if (invalid) {
-      Alert.alert(
-        'Invalid ingredient',
-        "Use letters, numbers, spaces, hyphens, apostrophes, slashes, or % only."
+    if (normalizedUnique.length) {
+      const invalid = normalizedUnique.find(
+        (item) => item.length < 2 || item.length > 30 || !allowedIngredientPattern.test(item)
       );
-      return;
+
+      if (invalid) {
+        Alert.alert(
+          'Invalid ingredient',
+          "Use letters, numbers, spaces, hyphens, apostrophes, slashes, or % only."
+        );
+        return;
+      }
     }
 
     const controller = new AbortController();
@@ -310,6 +331,7 @@ export default function ManualInputScreen() {
         body: JSON.stringify({
           ingredients: normalizedUnique,
           filters: Array.isArray(route.params?.filters) ? route.params.filters : undefined,
+          mode: mode || undefined,
           exclude_titles: excludeTitles,
           variety_mode: varietyMode || undefined,
         }),

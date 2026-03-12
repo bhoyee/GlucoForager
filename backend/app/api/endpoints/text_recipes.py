@@ -2,10 +2,10 @@ import hashlib
 import json
 import re
 import uuid
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy.orm import Session
 
 from ...api.dependencies import check_user_access, get_current_user
@@ -41,10 +41,18 @@ IngredientStr = Annotated[
 
 
 class TextRecipeRequest(BaseModel):
-    ingredients: list[IngredientStr] = Field(min_length=1, max_length=20)
+    ingredients: list[IngredientStr] = Field(default_factory=list, max_length=20)
     filters: list[str] | None = None
     exclude_titles: list[str] | None = Field(default=None, max_length=20)
     variety_mode: bool = False
+    mode: Literal["ingredients", "surprise", "quick"] = "ingredients"
+
+    @model_validator(mode="after")
+    def validate_mode(self):  # noqa: D401
+        """Allow empty ingredients only for special modes."""
+        if self.mode == "ingredients" and not self.ingredients:
+            raise ValueError("Please enter at least one ingredient.")
+        return self
 
     @field_validator("ingredients", mode="before")
     def normalize_ingredients(cls, value):  # noqa: N805
@@ -90,6 +98,14 @@ def _ensure_images(recipes: list[dict], tier: str, ingredients: list[str]) -> li
     return recipes
 
 
+def _filters_for_mode(mode: str) -> list[str]:
+    if mode == "quick":
+        return ["diabetes-friendly", "low carb", "under 20 minutes", "high protein"]
+    if mode == "surprise":
+        return ["diabetes-friendly"]
+    return []
+
+
 def _run_text_job(job_id: str) -> None:
     db = SessionLocal()
     try:
@@ -104,6 +120,7 @@ def _run_text_job(job_id: str) -> None:
         filters = payload.get("filters") or []
         exclude_titles = payload.get("exclude_titles") or []
         variety_mode = bool(payload.get("variety_mode") or False)
+        mode = (payload.get("mode") or "ingredients").strip().lower()
         device_id = payload.get("device_id")
 
         user = db.query(User).filter(User.id == job.user_id).first()
@@ -113,32 +130,39 @@ def _run_text_job(job_id: str) -> None:
             db.commit()
             return
 
-        classified = classifier.classify(ingredients)
-        if not classified["food"]:
-            job.status = "failed"
-            job.error = "Content not related to food. Please enter real ingredients."
-            job.result = {
-                "error": {
-                    "type": "invalid_input",
-                    "code": "not_food",
-                    "message": job.error,
+        if mode not in ("surprise", "quick"):
+            classified = classifier.classify(ingredients)
+            if not classified["food"]:
+                job.status = "failed"
+                job.error = "Content not related to food. Please enter real ingredients."
+                job.result = {
+                    "error": {
+                        "type": "invalid_input",
+                        "code": "not_food",
+                        "message": job.error,
+                    }
                 }
-            }
-            db.commit()
-            return
+                db.commit()
+                return
+            ingredients = classified["food"]
+        else:
+            classified = {"food": [], "non_food": [], "source": "mode"}
+            ingredients = []
+            filters = [*(_filters_for_mode(mode)), *filters]
+            variety_mode = True
 
         recipes = pipeline.text_to_recipes(
             db,
             user.id,
             get_effective_subscription_tier(db, user) or "free",
-            classified["food"],
+            ingredients,
             filters=filters,
             exclude_titles=exclude_titles,
             variety_mode=variety_mode,
             device_id=device_id,
         )
         warning = None
-        if classified["non_food"]:
+        if classified.get("non_food"):
             warning = {
                 "code": "non_food_ignored",
                 "message": "Some items were not food ingredients and were ignored.",
@@ -184,14 +208,30 @@ def generate_from_text(
             detail=f"Daily limit reached. Scans left: {access['searches_left']}",
         )
     tier = get_effective_subscription_tier(db, current_user) or "free"
-    classified = classifier.classify(payload.ingredients)
-    if not classified["food"]:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Content not related to food. Please enter real ingredients.",
-        )
-    ingredients = classified["food"]
-    use_cache = not (payload.variety_mode or (payload.exclude_titles or []))
+    mode = payload.mode
+    if mode == "ingredients":
+        classified = classifier.classify(payload.ingredients)
+        if not classified["food"]:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Content not related to food. Please enter real ingredients.",
+            )
+        ingredients = classified["food"]
+        filters = payload.filters or []
+        warning = None
+        if classified["non_food"]:
+            warning = {
+                "code": "non_food_ignored",
+                "message": "Some items were not food ingredients and were ignored.",
+                "source": classified["source"],
+            }
+    else:
+        classified = {"food": [], "non_food": [], "source": "mode"}
+        ingredients = []
+        filters = [*(_filters_for_mode(mode)), *(payload.filters or [])]
+        warning = None
+
+    use_cache = not (mode != "ingredients" or payload.variety_mode or (payload.exclude_titles or []))
     cache_key = _cache_key(current_user.id, tier, ingredients, payload.filters or [])
     if use_cache:
         cached = cache.get(cache_key)
@@ -213,18 +253,11 @@ def generate_from_text(
                     cost_estimate=0,
                     device_id=device_id,
                 )
-                warning = None
-                if classified["non_food"]:
-                    warning = {
-                        "code": "non_food_ignored",
-                        "message": "Some items were not food ingredients and were ignored.",
-                        "source": classified["source"],
-                    }
                 return {
                     "results": cached_recipes,
                     "access": access,
-                    "detected": classified["food"],
-                    "filtered_out": classified["non_food"],
+                    "detected": classified.get("food") or [],
+                    "filtered_out": classified.get("non_food") or [],
                     "classification_source": classified["source"],
                     "warning": warning,
                 }
@@ -234,9 +267,9 @@ def generate_from_text(
             current_user.id,
             tier,
             ingredients,
-            filters=payload.filters or [],
+            filters=filters,
             exclude_titles=payload.exclude_titles or [],
-            variety_mode=payload.variety_mode,
+            variety_mode=payload.variety_mode or (mode != "ingredients"),
             device_id=device_id,
         )
     except RuntimeError as exc:
@@ -244,18 +277,11 @@ def generate_from_text(
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
     if use_cache:
         cache.set(cache_key, json.dumps(recipes), ttl_seconds=TEXT_CACHE_TTL_SECONDS)
-    warning = None
-    if classified["non_food"]:
-        warning = {
-            "code": "non_food_ignored",
-            "message": "Some items were not food ingredients and were ignored.",
-            "source": classified["source"],
-        }
     return {
         "results": recipes,
         "access": access,
-        "detected": classified["food"],
-        "filtered_out": classified["non_food"],
+        "detected": classified.get("food") or [],
+        "filtered_out": classified.get("non_food") or [],
         "classification_source": classified["source"],
         "warning": warning,
     }
@@ -287,6 +313,7 @@ def generate_from_text_async(
             "filters": payload.filters or [],
             "exclude_titles": payload.exclude_titles or [],
             "variety_mode": payload.variety_mode,
+            "mode": payload.mode,
             "device_id": device_id,
         },
     )
