@@ -454,22 +454,128 @@ class AIRecipeGenerator:
             return []
 
         def emergency_recipes() -> List[Dict[str, Any]]:
-            base_ingredients = ingredients or [
-                "chicken breast",
-                "spinach",
-                "broccoli",
-                "olive oil",
-                "garlic",
-                "lemon",
-            ]
-            ingredient_text = ", ".join(base_ingredients) if base_ingredients else "common ingredients"
             is_quick = mode_norm == "quick"
+            # If we ever hit emergency fallback for Surprise/Quick, avoid returning the same 3 recipes forever.
+            # This is only used when AI calls fail, so a little variety matters for UX.
+            if not ingredients and is_quick:
+                variation = random.randint(1000, 9999)
+                return [
+                    {
+                        "title": f"10-Min Egg & Spinach Scramble ({variation})",
+                        "description": "Fast, diabetes-friendly, high-protein breakfast or light meal.",
+                        "ingredients": [
+                            {"name": "eggs", "quantity": 2, "unit": "large"},
+                            {"name": "spinach", "quantity": 2, "unit": "cups"},
+                            {"name": "olive oil", "quantity": 1, "unit": "tsp"},
+                            {"name": "garlic", "quantity": 1, "unit": "clove"},
+                        ],
+                        "instructions": [
+                            "Wash spinach and mince garlic.",
+                            "Heat a nonstick skillet over medium heat for 30 seconds; add olive oil.",
+                            "Add garlic; cook 20-30 seconds until fragrant (don’t brown).",
+                            "Add spinach; saute 1-2 minutes until wilted.",
+                            "Whisk eggs with a pinch of salt and pepper; pour into the pan.",
+                            "Stir gently 2-3 minutes until just set; remove from heat and serve.",
+                        ],
+                        "prep_time": 3,
+                        "cook_time": 7,
+                        "total_time": 10,
+                        "difficulty": "Easy",
+                        "nutritional_info": {
+                            "calories": 320,
+                            "carbs": 8,
+                            "protein": 26,
+                            "fat": 20,
+                            "fiber": 5,
+                            "sugar": 2,
+                            "glycemic_index": "Low",
+                        },
+                        "tags": ["diabetes-friendly", "low-carb", "high-protein", "quick"],
+                        "servings": 1,
+                    },
+                    {
+                        "title": "Tuna Avocado Salad Cups",
+                        "description": "No-cook, low-carb lunch that’s filling and quick to assemble.",
+                        "ingredients": [
+                            {"name": "canned tuna", "quantity": 1, "unit": "can"},
+                            {"name": "avocado", "quantity": 0.5, "unit": "whole"},
+                            {"name": "lemon", "quantity": 1, "unit": "tbsp juice"},
+                            {"name": "olive oil", "quantity": 1, "unit": "tsp"},
+                            {"name": "lettuce", "quantity": 4, "unit": "leaves"},
+                        ],
+                        "instructions": [
+                            "Drain tuna well; mash avocado with lemon juice in a bowl.",
+                            "Mix tuna into avocado; add olive oil, salt, and pepper to taste.",
+                            "Spoon mixture into lettuce leaves.",
+                            "Finish with extra lemon or chili flakes if desired; serve immediately.",
+                        ],
+                        "prep_time": 8,
+                        "cook_time": 0,
+                        "total_time": 8,
+                        "difficulty": "Easy",
+                        "nutritional_info": {
+                            "calories": 360,
+                            "carbs": 10,
+                            "protein": 32,
+                            "fat": 22,
+                            "fiber": 7,
+                            "sugar": 2,
+                            "glycemic_index": "Low",
+                        },
+                        "tags": ["diabetes-friendly", "low-carb", "high-protein", "quick"],
+                        "servings": 1,
+                    },
+                    {
+                        "title": "Greek Yogurt Chia Bowl",
+                        "description": "Quick, fiber-boosted snack or breakfast that supports steadier energy.",
+                        "ingredients": [
+                            {"name": "plain Greek yogurt", "quantity": 1, "unit": "cup"},
+                            {"name": "chia seeds", "quantity": 1, "unit": "tbsp"},
+                            {"name": "cinnamon", "quantity": 0.5, "unit": "tsp"},
+                            {"name": "berries", "quantity": 0.25, "unit": "cup"},
+                        ],
+                        "instructions": [
+                            "Stir chia seeds and cinnamon into Greek yogurt until well combined.",
+                            "Top with berries (keep portion small).",
+                            "Let sit 3-5 minutes to thicken, then eat.",
+                        ],
+                        "prep_time": 5,
+                        "cook_time": 0,
+                        "total_time": 5,
+                        "difficulty": "Easy",
+                        "nutritional_info": {
+                            "calories": 260,
+                            "carbs": 18,
+                            "protein": 25,
+                            "fat": 8,
+                            "fiber": 7,
+                            "sugar": 8,
+                            "glycemic_index": "Low",
+                        },
+                        "tags": ["diabetes-friendly", "high-protein", "high-fiber", "quick"],
+                        "servings": 1,
+                    },
+                ]
+
+            if ingredients:
+                base_ingredients = ingredients
+            else:
+                protein_pool = ["chicken breast", "salmon", "tuna", "eggs", "tofu", "turkey"]
+                veg_pool = ["spinach", "broccoli", "zucchini", "cauliflower", "mushrooms", "bell pepper", "tomatoes"]
+                flavor_pool = ["lemon", "garlic", "cumin", "chili flakes", "black pepper", "paprika"]
+                protein = random.choice(protein_pool)
+                vegs = random.sample(veg_pool, k=2)
+                flavors = random.sample(flavor_pool, k=2)
+                base_ingredients = [protein, *vegs, "olive oil", *flavors]
+
+            ingredient_text = ", ".join(base_ingredients) if base_ingredients else "common ingredients"
+            main = (base_ingredients[0] if base_ingredients else "protein").strip()
             t1 = 18 if is_quick else 25
             t2 = 19 if is_quick else 26
             t3 = 20 if is_quick else 30
             base = [
                 {
-                    "title": "Protein Bowl with Greens",
+                    "title": f"{main.title()} Bowl with Greens",
                     "description": f"Diabetes-friendly bowl using {ingredient_text}.",
                     "ingredients": [{"name": ing, "quantity": 1, "unit": "portion"} for ing in base_ingredients],
                     "instructions": [
@@ -497,15 +603,15 @@ class AIRecipeGenerator:
                     "servings": 2,
                 },
                 {
-                    "title": "Baked Herb Fish & Spinach",
+                    "title": f"Herb {main.title()} & Greens",
                     "description": f"Light fish entrée featuring {ingredient_text}.",
                     "ingredients": [{"name": ing, "quantity": 1, "unit": "portion"} for ing in base_ingredients],
                     "instructions": [
-                        "Prep: season fish with salt/pepper, lemon, and herbs.",
-                        "Cook fish 8-12 minutes until it flakes easily (or pan-sear 3-4 minutes per side).",
+                        "Prep: season the protein with salt/pepper, lemon, and herbs/spices.",
+                        "Cook protein 8-12 minutes until done (or pan-sear 3-4 minutes per side, depending on thickness).",
                         "Meanwhile, heat a skillet over medium heat; add olive oil and garlic for 30 seconds.",
                         "Add spinach; saute 2-3 minutes until just wilted.",
-                        "Plate fish over spinach; squeeze lemon on top and taste for salt.",
+                        "Plate protein over spinach; squeeze lemon on top and taste for salt.",
                         "Serve with steamed broccoli for extra fiber.",
                     ],
                     "prep_time": 8,
@@ -525,13 +631,13 @@ class AIRecipeGenerator:
                     "servings": 2,
                 },
                 {
-                    "title": "Chicken & Veg Skillet",
+                    "title": f"{main.title()} & Veg Skillet",
                     "description": f"One-pan meal with {ingredient_text}.",
                     "ingredients": [{"name": ing, "quantity": 1, "unit": "portion"} for ing in base_ingredients],
                     "instructions": [
-                        "Prep: cut chicken into bite-size pieces and season well.",
+                        "Prep: cut the protein into bite-size pieces (if needed) and season well.",
                         "Heat skillet over medium-high heat; add olive oil.",
-                        "Sear chicken 5-7 minutes, stirring occasionally, until browned and cooked through.",
+                        "Sear protein 5-7 minutes, stirring occasionally, until browned and cooked through.",
                         "Add vegetables; saute 6-8 minutes until tender-crisp.",
                         "Add garlic and cook 30 seconds until fragrant.",
                         "Finish with lemon and serve immediately.",
