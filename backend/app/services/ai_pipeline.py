@@ -279,7 +279,11 @@ class AIPipeline:
             if calories_n <= 0 or (carbs_n <= 0 and protein_n <= 0):
                 return None
             if mode == "quick":
-                total_time = recipe.get("total_time") or recipe.get("totalTime") or 0
+                total_time = recipe.get("total_time")
+                if total_time is None or total_time == 0:
+                    total_time = recipe.get("totalTime")
+                if total_time is None or total_time == 0:
+                    total_time = (recipe.get("prep_time") or 0) + (recipe.get("cook_time") or 0)
                 try:
                     total_n = int(float(total_time or 0))
                 except Exception:  # noqa: BLE001
