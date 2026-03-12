@@ -51,6 +51,7 @@ class TieredAIService:
         filters: List[str] | None = None,
         exclude_titles: List[str] | None = None,
         variety_mode: bool = False,
+        mode: str | None = None,
         timeout_seconds: float | None = None,
         generate_images: bool = True,
     ) -> List[Dict[str, Any]]:
@@ -60,6 +61,7 @@ class TieredAIService:
             "filters": filters or [],
             "exclude_titles": exclude_titles or [],
             "variety_mode": bool(variety_mode),
+            "mode": (mode or ""),
         }
         key = self._cache_key("recipes", payload)
         should_cache = self._should_cache(tier) and not (exclude_titles or variety_mode)
@@ -76,6 +78,7 @@ class TieredAIService:
             filters=filters or [],
             exclude_titles=exclude_titles or [],
             variety_mode=variety_mode,
+            mode=mode,
             timeout_seconds=timeout_seconds,
             generate_images=generate_images,
         )
