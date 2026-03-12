@@ -368,33 +368,26 @@ class AIRecipeGenerator:
                         return normalized
             except Exception:
                 pass
-            return [
-                {
-                    "title": "AI-Generated Recipe",
-                    "description": cleaned[:200],
-                    "ingredients": [{"name": i, "quantity": 1, "unit": ""} for i in ingredients],
-                    "instructions": [],
-                    "prep_time": 0,
-                    "cook_time": 0,
-                    "total_time": 0,
-                    "difficulty": "Easy",
-                    "nutritional_info": {"calories": 0, "carbs": 0, "protein": 0, "fat": 0, "fiber": 0, "sugar": 0, "glycemic_index": None},
-                    "tags": filters or [],
-                    "image_url": "",
-                    "servings": 2,
-                }
-            ]
+            return []
 
         def emergency_recipes() -> List[Dict[str, Any]]:
-            ingredient_text = ", ".join(ingredients) if ingredients else "available ingredients"
+            base_ingredients = ingredients or [
+                "chicken breast",
+                "spinach",
+                "broccoli",
+                "olive oil",
+                "garlic",
+                "lemon",
+            ]
+            ingredient_text = ", ".join(base_ingredients) if base_ingredients else "common ingredients"
             base = [
                 {
                     "title": "Protein Bowl with Greens",
                     "description": f"Diabetes-friendly bowl using {ingredient_text}.",
-                    "ingredients": [{"name": ing, "quantity": 1, "unit": "portion"} for ing in ingredients],
+                    "ingredients": [{"name": ing, "quantity": 1, "unit": "portion"} for ing in base_ingredients],
                     "instructions": [
                         "Prep and season proteins.",
-                        "Sauté greens with olive oil.",
+                        "Saute greens with olive oil.",
                         "Combine and serve warm.",
                     ],
                     "prep_time": 10,
@@ -416,7 +409,7 @@ class AIRecipeGenerator:
                 {
                     "title": "Baked Herb Fish & Spinach",
                     "description": f"Light fish entrée featuring {ingredient_text}.",
-                    "ingredients": [{"name": ing, "quantity": 1, "unit": "portion"} for ing in ingredients],
+                    "ingredients": [{"name": ing, "quantity": 1, "unit": "portion"} for ing in base_ingredients],
                     "instructions": [
                         "Bake fish with herbs and lemon.",
                         "Wilt spinach with garlic.",
@@ -441,7 +434,7 @@ class AIRecipeGenerator:
                 {
                     "title": "Chicken & Veg Skillet",
                     "description": f"One-pan meal with {ingredient_text}.",
-                    "ingredients": [{"name": ing, "quantity": 1, "unit": "portion"} for ing in ingredients],
+                    "ingredients": [{"name": ing, "quantity": 1, "unit": "portion"} for ing in base_ingredients],
                     "instructions": [
                         "Sear chicken until browned.",
                         "Add vegetables and cook until tender.",
