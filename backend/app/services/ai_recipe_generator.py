@@ -61,7 +61,13 @@ class AIRecipeGenerator:
         params = {
             "model": model,
             "messages": [
-                {"role": "system", "content": "You are a diabetes-safe recipe generator."},
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a diabetes-safe recipe generator. "
+                        "Respond with a single valid JSON object and no other text."
+                    ),
+                },
                 {"role": "user", "content": prompt},
             ],
             "temperature": float(temperature),
@@ -71,11 +77,16 @@ class AIRecipeGenerator:
             params["max_completion_tokens"] = 2000
         else:
             params["max_tokens"] = 2000
-        base = str(getattr(client, "base_url", ""))
-        if "openai" in base or base == "" or base is None:
-            # OpenAI supports response_format for strict JSON
-            params["response_format"] = {"type": "json_object"}
-        resp = client.chat.completions.create(**params)
+        # Prefer strict JSON mode where supported (OpenAI supports this; some OpenAI-compatible providers may not).
+        params_json = {**params, "response_format": {"type": "json_object"}}
+        try:
+            resp = client.chat.completions.create(**params_json)
+        except OpenAIError as exc:
+            # If the provider rejects response_format, retry without it.
+            msg = str(exc).lower()
+            if "response_format" not in msg and "unknown parameter" not in msg and "unexpected" not in msg:
+                raise
+            resp = client.chat.completions.create(**params)
         return resp.choices[0].message.content or ""
 
     def _placeholder_image(self, recipe: Dict[str, Any]) -> str:
@@ -325,6 +336,14 @@ class AIRecipeGenerator:
                         def _num(value: Any) -> int:
                             try:
                                 if value is None:
+                                    return 0
+                                if isinstance(value, (int, float)):
+                                    return int(round(float(value)))
+                                if isinstance(value, str):
+                                    cleaned = value.strip().replace(",", "")
+                                    match = re.search(r"-?\d+(?:\.\d+)?", cleaned)
+                                    if match:
+                                        return int(round(float(match.group(0))))
                                     return 0
                                 return int(round(float(value)))
                             except Exception:  # noqa: BLE001
