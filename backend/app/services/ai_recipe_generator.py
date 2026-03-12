@@ -666,7 +666,13 @@ class AIRecipeGenerator:
             return base
 
         if not self.enabled:
+            if settings.ai_disable_emergency_fallback:
+                raise RuntimeError("AI is not configured (missing OPENAI_API_KEY/DEEPSEEK_API_KEY).")
             fallback = emergency_recipes()
+            for recipe in fallback:
+                if isinstance(recipe, dict):
+                    recipe["_ai_provider"] = "fallback"
+                    recipe["_ai_model"] = "emergency_recipes"
             if generate_images:
                 self._attach_images(fallback, tier, ingredients)
             else:
@@ -755,6 +761,11 @@ class AIRecipeGenerator:
                 continue
 
         fallback = emergency_recipes()
+        if settings.ai_disable_emergency_fallback:
+            raise RuntimeError(
+                "All AI models failed or returned invalid output. "
+                "Emergency fallback is disabled (AI_DISABLE_EMERGENCY_FALLBACK=true)."
+            )
         for recipe in fallback:
             if isinstance(recipe, dict):
                 recipe["_ai_provider"] = "fallback"
