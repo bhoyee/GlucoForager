@@ -2,8 +2,9 @@ import logging
 import logging
 import hashlib
 import io
+import re
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Sequence
 
 from openai import OpenAI, OpenAIError
 from PIL import Image
@@ -34,18 +35,29 @@ class AIRecipeGenerator:
         self.gemini_api_key = settings.gemini_api_key
         self.gemini_image_model = settings.gemini_image_model
 
-    def _call(self, client: OpenAI, model: str, ingredients: List[str], filters: List[str]) -> str:
+    def _call(
+        self,
+        client: OpenAI,
+        model: str,
+        ingredients: List[str],
+        filters: List[str],
+        *,
+        extra_instructions: str | None = None,
+        temperature: float = 0.4,
+    ) -> str:
         # Avoid KeyError from braces in the JSON template; replace only the {ingredients} token.
         prompt = OPENAI_PROMPT.replace("{ingredients}", ", ".join(ingredients))
         if filters:
             prompt += f"\nApply dietary filters: {', '.join(filters)}."
+        if extra_instructions:
+            prompt += f"\n\n{extra_instructions.strip()}"
         params = {
             "model": model,
             "messages": [
                 {"role": "system", "content": "You are a diabetes-safe recipe generator."},
                 {"role": "user", "content": prompt},
             ],
-            "temperature": 0.4,
+            "temperature": float(temperature),
         }
         # Some newer models use max_completion_tokens instead of max_tokens
         if model.startswith("gpt-5"):
@@ -241,12 +253,27 @@ class AIRecipeGenerator:
         ingredients: List[str],
         tier: str,
         filters: List[str] | None = None,
+        exclude_titles: Sequence[str] | None = None,
+        variety_mode: bool = False,
         generate_images: bool = True,
     ) -> List[Dict[str, Any]]:
         filters = filters or []
+        exclude_titles = [str(t).strip() for t in (exclude_titles or []) if str(t).strip()]
         from ..core.constants import TIER_CONFIG  # local import to avoid cycle
         tier_cfg = TIER_CONFIG.get(tier, {})
         model_chain: List[str] = tier_cfg.get("recipe_models") or [self.primary_model]
+
+        banned_titles_norm = {self._normalize_title(t) for t in exclude_titles if t}
+        extra_instructions = None
+        if exclude_titles or variety_mode:
+            parts = [
+                "Important: provide 3 distinct diabetes-friendly recipes.",
+                "Make them meaningfully different (different cuisines and cooking methods; avoid near-duplicates).",
+            ]
+            if exclude_titles:
+                joined = "; ".join(exclude_titles[:12])
+                parts.append(f"Do NOT suggest recipes with titles matching or similar to: {joined}.")
+            extra_instructions = " ".join(parts)
 
         def parse_content(raw: str) -> List[Dict[str, Any]]:
             import json, re
@@ -419,14 +446,38 @@ class AIRecipeGenerator:
             if not client:
                 continue
             try:
-                content = self._call(client, model, ingredients, filters)
+                temperature = 0.7 if variety_mode else 0.4
+                content = self._call(
+                    client,
+                    model,
+                    ingredients,
+                    filters,
+                    extra_instructions=extra_instructions,
+                    temperature=temperature,
+                )
                 recipes = parse_content(content)
+                recipes = self._filter_recipes(recipes, banned_titles_norm)
                 if recipes:
+                    # If we asked for variety but still got duplicates/overlaps, retry once with stricter wording.
+                    if (exclude_titles or variety_mode) and len(recipes) < 3:
+                        stricter = (extra_instructions or "") + " You must comply. Return 3 NEW recipes."
+                        content2 = self._call(
+                            client,
+                            model,
+                            ingredients,
+                            filters,
+                            extra_instructions=stricter,
+                            temperature=0.8,
+                        )
+                        recipes2 = self._filter_recipes(parse_content(content2), banned_titles_norm)
+                        if recipes2:
+                            recipes = recipes2
+                    recipes = recipes[:3]
                     if generate_images:
                         self._attach_images(recipes, tier, ingredients)
                     else:
                         self._attach_placeholders(recipes)
-                    return recipes[:3]
+                    return recipes
             except OpenAIError as exc:
                 logger.warning("Model %s failed, trying next: %s", model, exc)
                 continue
@@ -437,3 +488,36 @@ class AIRecipeGenerator:
         else:
             self._attach_placeholders(fallback)
         return fallback
+
+    def _normalize_title(self, title: str) -> str:
+        value = (title or "").strip().lower()
+        if not value:
+            return ""
+        # Keep alnum only to improve "similar" matching for minor punctuation differences.
+        return re.sub(r"[^a-z0-9]+", " ", value).strip()
+
+    def _filter_recipes(
+        self,
+        recipes: List[Dict[str, Any]],
+        banned_titles_norm: set[str],
+    ) -> List[Dict[str, Any]]:
+        if not recipes:
+            return recipes
+        out: List[Dict[str, Any]] = []
+        seen: set[str] = set()
+        for recipe in recipes:
+            if not isinstance(recipe, dict):
+                continue
+            title = (recipe.get("title") or recipe.get("name") or "").strip()
+            norm = self._normalize_title(title)
+            if not norm:
+                continue
+            if norm in seen:
+                continue
+            if norm in banned_titles_norm:
+                continue
+            out.append(recipe)
+            seen.add(norm)
+            if len(out) >= 3:
+                break
+        return out

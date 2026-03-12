@@ -43,6 +43,8 @@ IngredientStr = Annotated[
 class TextRecipeRequest(BaseModel):
     ingredients: list[IngredientStr] = Field(min_length=1, max_length=20)
     filters: list[str] | None = None
+    exclude_titles: list[str] | None = Field(default=None, max_length=20)
+    variety_mode: bool = False
 
     @field_validator("ingredients", mode="before")
     def normalize_ingredients(cls, value):  # noqa: N805
@@ -100,6 +102,8 @@ def _run_text_job(job_id: str) -> None:
         payload = job.payload or {}
         ingredients = payload.get("ingredients") or []
         filters = payload.get("filters") or []
+        exclude_titles = payload.get("exclude_titles") or []
+        variety_mode = bool(payload.get("variety_mode") or False)
         device_id = payload.get("device_id")
 
         user = db.query(User).filter(User.id == job.user_id).first()
@@ -129,6 +133,8 @@ def _run_text_job(job_id: str) -> None:
             get_effective_subscription_tier(db, user) or "free",
             classified["food"],
             filters=filters,
+            exclude_titles=exclude_titles,
+            variety_mode=variety_mode,
             device_id=device_id,
         )
         warning = None
@@ -185,41 +191,43 @@ def generate_from_text(
             detail="Content not related to food. Please enter real ingredients.",
         )
     ingredients = classified["food"]
+    use_cache = not (payload.variety_mode or (payload.exclude_titles or []))
     cache_key = _cache_key(current_user.id, tier, ingredients, payload.filters or [])
-    cached = cache.get(cache_key)
-    if cached:
-        try:
-            cached_recipes = json.loads(cached) if isinstance(cached, str) else cached
-        except json.JSONDecodeError:
-            cached_recipes = None
-        if cached_recipes:
-            cached_recipes = _ensure_images(cached_recipes, tier, ingredients)
-            cache.set(cache_key, json.dumps(cached_recipes), ttl_seconds=TEXT_CACHE_TTL_SECONDS)
-            record_ai_request(
-                db,
-                current_user.id,
-                tier,
-                "text",
-                model_used="cache",
-                tokens_used=0,
-                cost_estimate=0,
-                device_id=device_id,
-            )
-            warning = None
-            if classified["non_food"]:
-                warning = {
-                    "code": "non_food_ignored",
-                    "message": "Some items were not food ingredients and were ignored.",
-                    "source": classified["source"],
+    if use_cache:
+        cached = cache.get(cache_key)
+        if cached:
+            try:
+                cached_recipes = json.loads(cached) if isinstance(cached, str) else cached
+            except json.JSONDecodeError:
+                cached_recipes = None
+            if cached_recipes:
+                cached_recipes = _ensure_images(cached_recipes, tier, ingredients)
+                cache.set(cache_key, json.dumps(cached_recipes), ttl_seconds=TEXT_CACHE_TTL_SECONDS)
+                record_ai_request(
+                    db,
+                    current_user.id,
+                    tier,
+                    "text",
+                    model_used="cache",
+                    tokens_used=0,
+                    cost_estimate=0,
+                    device_id=device_id,
+                )
+                warning = None
+                if classified["non_food"]:
+                    warning = {
+                        "code": "non_food_ignored",
+                        "message": "Some items were not food ingredients and were ignored.",
+                        "source": classified["source"],
+                    }
+                return {
+                    "results": cached_recipes,
+                    "access": access,
+                    "detected": classified["food"],
+                    "filtered_out": classified["non_food"],
+                    "classification_source": classified["source"],
+                    "warning": warning,
                 }
-            return {
-                "results": cached_recipes,
-                "access": access,
-                "detected": classified["food"],
-                "filtered_out": classified["non_food"],
-                "classification_source": classified["source"],
-                "warning": warning,
-            }
     try:
         recipes = pipeline.text_to_recipes(
             db,
@@ -227,12 +235,15 @@ def generate_from_text(
             tier,
             ingredients,
             filters=payload.filters or [],
+            exclude_titles=payload.exclude_titles or [],
+            variety_mode=payload.variety_mode,
             device_id=device_id,
         )
     except RuntimeError as exc:
         # AI not configured (missing keys) or other pipeline errors
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
-    cache.set(cache_key, json.dumps(recipes), ttl_seconds=TEXT_CACHE_TTL_SECONDS)
+    if use_cache:
+        cache.set(cache_key, json.dumps(recipes), ttl_seconds=TEXT_CACHE_TTL_SECONDS)
     warning = None
     if classified["non_food"]:
         warning = {
@@ -274,6 +285,8 @@ def generate_from_text_async(
         payload={
             "ingredients": payload.ingredients,
             "filters": payload.filters or [],
+            "exclude_titles": payload.exclude_titles or [],
+            "variety_mode": payload.variety_mode,
             "device_id": device_id,
         },
     )

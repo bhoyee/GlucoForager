@@ -85,6 +85,8 @@ export default function EatNowScreen() {
               prefillIngredients: ingredients,
               autoSubmit: true,
               source: 'eat_now_have',
+              excludeRecent: true,
+              varietyMode: true,
             });
           } catch {
             navigation.navigate('ManualInput');
@@ -243,4 +245,3 @@ const styles = StyleSheet.create({
     color: Colors.textLight,
   },
 });
-
