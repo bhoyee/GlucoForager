@@ -44,6 +44,85 @@ class AIRecipeGenerator:
         self.cache = CacheService()
         self.gemini_api_key = settings.gemini_api_key
         self.gemini_image_model = settings.gemini_image_model
+        self.gemini_text_model = (settings.gemini_text_model or "").strip() or None
+
+    def _call_gemini_text(
+        self,
+        model: str,
+        ingredients: List[str],
+        filters: List[str],
+        *,
+        extra_instructions: str | None = None,
+        temperature: float = 0.4,
+        timeout_seconds: float | None = None,
+        max_output_tokens: int = 2000,
+    ) -> str:
+        if not self.gemini_api_key:
+            raise RuntimeError("GEMINI_API_KEY is not set")
+        if not model:
+            raise RuntimeError("GEMINI_TEXT_MODEL is not set")
+
+        # Build the same JSON-only prompt we use for OpenAI, but without response_format support.
+        base_prompt = OPENAI_PROMPT
+        if not ingredients:
+            base_prompt = OPENAI_PROMPT.replace(
+                "Create 3 diabetic-friendly recipes using ONLY: {ingredients}.",
+                "Create 3 diabetic-friendly recipes with common, easy-to-find ingredients. "
+                "Do not assume the user has any specific ingredients.",
+            )
+        prompt = base_prompt.replace("{ingredients}", ", ".join(ingredients))
+        if filters:
+            prompt += f"\nApply dietary filters: {', '.join(filters)}."
+        if extra_instructions:
+            prompt += f"\n\n{extra_instructions.strip()}"
+        # Gemini models can be more likely to add prose; reinforce hard constraint.
+        prompt = (
+            "Return ONLY a single valid JSON object. No markdown, no code fences, no commentary.\n\n" + prompt
+        )
+
+        try:
+            from google import genai  # type: ignore[import-not-found]
+            from google.genai import types  # type: ignore[import-not-found]
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError("google-genai is not installed; cannot use Gemini text fallback") from exc
+
+        client = genai.Client(api_key=str(self.gemini_api_key))
+
+        started = time.time()
+        try:
+            resp = client.models.generate_content(
+                model=model,
+                contents=[prompt],
+                config=types.GenerateContentConfig(
+                    temperature=float(temperature),
+                    max_output_tokens=int(max_output_tokens),
+                ),
+                timeout=timeout_seconds,
+            )
+        finally:
+            if settings.ai_debug_logging:
+                elapsed = time.time() - started
+                logger.info(
+                    "AI call finished provider=gemini model=%s timeout=%s elapsed=%.3fs",
+                    model,
+                    timeout_seconds,
+                    elapsed,
+                )
+
+        # google-genai exposes convenience `.text` on responses; fall back to candidate parsing.
+        text = getattr(resp, "text", None)
+        if isinstance(text, str) and text.strip():
+            return text
+        candidates = getattr(resp, "candidates", None) or []
+        if candidates:
+            content = getattr(candidates[0], "content", None)
+            parts = getattr(content, "parts", None) or []
+            if parts:
+                part0 = parts[0]
+                part_text = getattr(part0, "text", None)
+                if isinstance(part_text, str):
+                    return part_text
+        return ""
 
     def _call(
         self,
@@ -785,6 +864,12 @@ class AIRecipeGenerator:
                         else:
                             self._attach_placeholders(recipes)
                         return recipes
+                    if settings.ai_debug_logging and settings.ai_log_raw_output:
+                        raw_preview = (content or "").strip()
+                        if len(raw_preview) > 6000:
+                            raw_preview = raw_preview[:6000] + "…"
+                        logger.info("AI raw output provider=%s model=%s raw=%s", provider, model, raw_preview)
+
                     if settings.ai_debug_logging:
                         preview = (content or "").strip().replace("\n", " ")
                         if len(preview) > 600:
@@ -807,7 +892,9 @@ class AIRecipeGenerator:
         if mode_norm in ("surprise", "quick") and budget is not None:
             openai_models = [m for m in model_chain if "deepseek" not in m.lower()]
             deepseek_models = [m for m in model_chain if "deepseek" in m.lower()]
-            if self.primary_client and self.fallback_client and openai_models and deepseek_models:
+            gemini_model = self.gemini_text_model
+            has_gemini = bool(self.gemini_api_key and gemini_model)
+            if self.primary_client and (has_gemini or self.fallback_client) and openai_models and (gemini_model or deepseek_models):
                 used_deterministic_schedule = True
                 phase_budget = 30.0 if budget >= 60.0 else max(5.0, budget / 2.0)
                 if settings.ai_debug_logging:
@@ -826,26 +913,70 @@ class AIRecipeGenerator:
                 )
                 if recipes:
                     return recipes
-                # Use remaining time (up to 30s) for the fallback provider.
+
+                # Use remaining time for the fallback provider (Gemini first if configured, then DeepSeek).
                 remaining_total = max(0.0, budget - (time.time() - started))
-                # Let the fallback use *all* remaining time (keeps total <= overall budget).
                 fallback_budget = remaining_total
-                if settings.ai_debug_logging:
-                    logger.info(
-                        "AI switching to fallback mode=%s tier=%s remaining_total=%.1fs fallback_budget=%.1fs",
-                        mode_norm,
-                        tier,
-                        remaining_total,
-                        fallback_budget,
+
+                if has_gemini and gemini_model:
+                    if settings.ai_debug_logging:
+                        logger.info(
+                            "AI switching to fallback provider=gemini mode=%s tier=%s remaining_total=%.1fs fallback_budget=%.1fs model=%s",
+                            mode_norm,
+                            tier,
+                            remaining_total,
+                            fallback_budget,
+                            gemini_model,
+                        )
+                    try:
+                        content = self._call_gemini_text(
+                            gemini_model,
+                            ingredients,
+                            filters,
+                            extra_instructions=extra_instructions,
+                            temperature=0.85,
+                            timeout_seconds=fallback_budget if fallback_budget >= 5 else 5.0,
+                            max_output_tokens=1200,
+                        )
+                        parsed = parse_content(content)
+                        recipes = self._filter_recipes(parsed, banned_titles_norm)
+                        if recipes:
+                            recipes = recipes[:3]
+                            for recipe in recipes:
+                                if isinstance(recipe, dict):
+                                    recipe["_ai_provider"] = "gemini"
+                                    recipe["_ai_model"] = gemini_model
+                            if generate_images:
+                                self._attach_images(recipes, tier, ingredients)
+                            else:
+                                self._attach_placeholders(recipes)
+                            return recipes
+                        attempts.append({"model": gemini_model, "provider": "gemini", "error": "empty_or_unparseable_json"})
+                        if settings.ai_debug_logging and settings.ai_log_raw_output:
+                            raw_preview = (content or "").strip()
+                            if len(raw_preview) > 6000:
+                                raw_preview = raw_preview[:6000] + "…"
+                            logger.info("AI raw output provider=gemini model=%s raw=%s", gemini_model, raw_preview)
+                    except Exception as exc:  # noqa: BLE001
+                        attempts.append({"model": gemini_model, "provider": "gemini", "error": str(exc)})
+
+                if self.fallback_client and deepseek_models:
+                    if settings.ai_debug_logging:
+                        logger.info(
+                            "AI switching to fallback provider=deepseek mode=%s tier=%s remaining_total=%.1fs fallback_budget=%.1fs",
+                            mode_norm,
+                            tier,
+                            remaining_total,
+                            fallback_budget,
+                        )
+                    recipes = _try_models(
+                        deepseek_models[:1],
+                        provider="deepseek",
+                        client=self.fallback_client,
+                        phase_timeout=fallback_budget,
                     )
-                recipes = _try_models(
-                    deepseek_models[:1],
-                    provider="deepseek",
-                    client=self.fallback_client,
-                    phase_timeout=fallback_budget,
-                )
-                if recipes:
-                    return recipes
+                    if recipes:
+                        return recipes
             # If only one provider is configured, fall through to the generic model-chain logic below.
 
         # Generic: iterate through model chain with provider-specific clients
