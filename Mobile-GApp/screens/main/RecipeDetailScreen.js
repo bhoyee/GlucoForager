@@ -764,6 +764,9 @@ const RecipeDetailsScreen = () => {
     if (recipe.source === 'admin') {
       return null;
     }
+    if (!Array.isArray(recipe.tips) || recipe.tips.length === 0) {
+      return null;
+    }
     return (
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Diabetes Management Tips</Text>
@@ -792,9 +795,6 @@ const RecipeDetailsScreen = () => {
               )}
             </TouchableOpacity>
           ))}
-          {recipe.tips.length === 0 && (
-            <Text style={styles.emptyText}>No tips available for this recipe yet.</Text>
-          )}
         </View>
       </View>
     );
