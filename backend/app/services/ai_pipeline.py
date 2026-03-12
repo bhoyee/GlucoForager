@@ -193,8 +193,8 @@ class AIPipeline:
         device_id: str | None = None,
     ) -> List[Dict[str, Any]]:
         started = time.time()
-        # Mobile polling stops at ~60s; keep Surprise/Quick comfortably below that.
-        overall_budget_seconds = 50 if mode in ("surprise", "quick") else 55
+        # Mobile polling stops at ~60s; Surprise/Quick should complete within that window.
+        overall_budget_seconds = 60 if mode in ("surprise", "quick") else 55
 
         recipes = self.ai.generate_recipes(
             ingredients,

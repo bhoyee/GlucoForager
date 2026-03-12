@@ -1,5 +1,4 @@
 import logging
-import logging
 import hashlib
 import io
 import random
@@ -326,13 +325,11 @@ class AIRecipeGenerator:
             fast_chain = tier_cfg.get("recipe_models_fast") or []
             if isinstance(fast_chain, list) and fast_chain:
                 model_chain = [str(m) for m in fast_chain if str(m).strip()]
-            # For "Eat now" modes, prioritize whichever provider is actually configured/reachable.
-            # If DeepSeek is configured, try it first so OpenAI timeouts don't consume the whole budget.
-            if self.fallback_client:
-                deepseek_models = [m for m in model_chain if "deepseek" in m.lower()]
-                other_models = [m for m in model_chain if "deepseek" not in m.lower()]
-                if deepseek_models:
-                    model_chain = [*deepseek_models, *other_models]
+            # For "Eat now" modes: run primary provider first, then fallback.
+            deepseek_models = [m for m in model_chain if "deepseek" in m.lower()]
+            other_models = [m for m in model_chain if "deepseek" not in m.lower()]
+            if other_models and deepseek_models:
+                model_chain = [*other_models, *deepseek_models]
 
         if mode_norm in ("surprise", "quick"):
             cuisine_sets = [
@@ -345,7 +342,7 @@ class AIRecipeGenerator:
                 f"Theme the three recipes across these cuisines: {', '.join(cuisines)}.",
                 "Ensure all three recipes are clearly different from each other (protein + method + flavor).",
                 f"Variation token: {random.randint(1000, 9999)}.",
-                "Instructions must be beginner-friendly: write 8-12 steps per recipe. Each step should include at least one concrete detail (time in minutes, heat level, visual cue, or exact action). Avoid vague steps like 'cook until done' without guidance.",
+                "Instructions must be beginner-friendly: write 8-10 steps per recipe. Each step should include at least one concrete detail (time in minutes, heat level, visual cue, or exact action). Avoid vague steps like 'cook until done' without guidance.",
             ]
             if mode_norm == "quick":
                 mode_parts.extend(
@@ -361,10 +358,6 @@ class AIRecipeGenerator:
                         "Use common, easy-to-find ingredients; avoid repeating the same main dish style.",
                     ]
                 )
-            # Keep output compact so it returns within mobile timeouts.
-            mode_parts.append(
-                "Keep the JSON compact: 6-8 instruction steps max, short 1-sentence description, and no extra commentary."
-            )
             extra_instructions = f"{(extra_instructions or '').strip()} {' '.join(mode_parts)}".strip()
 
         def parse_content(raw: str) -> List[Dict[str, Any]]:
@@ -713,100 +706,148 @@ class AIRecipeGenerator:
         budget = float(timeout_seconds) if timeout_seconds else None
         attempts: list[dict[str, Any]] = []
 
-        # Iterate through model chain with provider-specific clients
+        def _try_models(
+            models: list[str],
+            *,
+            provider: str,
+            client: OpenAI,
+            phase_timeout: float | None,
+        ) -> List[Dict[str, Any]] | None:
+            phase_started = time.time()
+            for model in models:
+                if budget is not None:
+                    remaining_total = budget - (time.time() - started)
+                    if remaining_total <= 2:
+                        break
+                if phase_timeout is not None:
+                    remaining_phase = phase_timeout - (time.time() - phase_started)
+                    if remaining_phase <= 2:
+                        break
+                try:
+                    temperature = 0.85 if mode_norm in ("surprise", "quick") else (0.7 if variety_mode else 0.4)
+                    per_request_timeout = None
+                    if budget is not None:
+                        remaining_total = budget - (time.time() - started)
+                        cap = 30.0 if mode_norm in ("surprise", "quick") else 25.0
+                        per_request_timeout = max(5.0, min(cap, remaining_total))
+                        if phase_timeout is not None:
+                            remaining_phase = phase_timeout - (time.time() - phase_started)
+                            per_request_timeout = max(5.0, min(per_request_timeout, remaining_phase))
+                    if settings.ai_debug_logging:
+                        base_url = str(getattr(client, "base_url", "") or "")
+                        logger.info(
+                            "AI attempt start mode=%s tier=%s provider=%s model=%s timeout=%s remaining_budget=%.2fs base_url=%s",
+                            mode_norm or "ingredients",
+                            tier,
+                            provider,
+                            model,
+                            per_request_timeout,
+                            (budget - (time.time() - started)) if budget is not None else -1.0,
+                            base_url,
+                        )
+                    content = self._call(
+                        client,
+                        model,
+                        ingredients,
+                        filters,
+                        extra_instructions=extra_instructions,
+                        temperature=temperature,
+                        timeout_seconds=per_request_timeout,
+                        max_output_tokens=1200 if mode_norm in ("surprise", "quick") else 2000,
+                    )
+                    recipes = self._filter_recipes(parse_content(content), banned_titles_norm)
+                    if recipes:
+                        # Keep "Eat now" modes single-shot to stay within the 60s mobile budget.
+                        if mode_norm not in ("surprise", "quick") and (exclude_titles or variety_mode) and len(recipes) < 3:
+                            stricter = (extra_instructions or "") + " You must comply. Return 3 NEW recipes."
+                            content2 = self._call(
+                                client,
+                                model,
+                                ingredients,
+                                filters,
+                                extra_instructions=stricter,
+                                temperature=0.8,
+                                timeout_seconds=per_request_timeout,
+                                max_output_tokens=2000,
+                            )
+                            recipes2 = self._filter_recipes(parse_content(content2), banned_titles_norm)
+                            if recipes2:
+                                recipes = recipes2
+                        recipes = recipes[:3]
+                        for recipe in recipes:
+                            if isinstance(recipe, dict):
+                                recipe["_ai_provider"] = provider
+                                recipe["_ai_model"] = model
+                        if generate_images:
+                            self._attach_images(recipes, tier, ingredients)
+                        else:
+                            self._attach_placeholders(recipes)
+                        return recipes
+                    attempts.append({"model": model, "provider": provider, "error": "empty_or_unparseable_json"})
+                except OpenAIError as exc:
+                    logger.warning("Model %s failed, trying next: %s", model, exc)
+                    attempts.append({"model": model, "provider": provider, "error": str(exc)})
+                    continue
+            return None
+
+        # Surprise/Quick: deterministic 60s schedule (30s primary, then 30s fallback).
+        if mode_norm in ("surprise", "quick") and budget is not None:
+            openai_models = [m for m in model_chain if "deepseek" not in m.lower()]
+            deepseek_models = [m for m in model_chain if "deepseek" in m.lower()]
+            if self.primary_client and self.fallback_client and openai_models and deepseek_models:
+                phase_budget = 30.0 if budget >= 60.0 else max(5.0, budget / 2.0)
+                if settings.ai_debug_logging:
+                    logger.info(
+                        "AI schedule mode=%s tier=%s primary_budget=%.1fs fallback_budget<=30.0s total_budget=%.1fs",
+                        mode_norm,
+                        tier,
+                        phase_budget,
+                        budget,
+                    )
+                recipes = _try_models(
+                    openai_models[:1],
+                    provider="openai",
+                    client=self.primary_client,
+                    phase_timeout=phase_budget,
+                )
+                if recipes:
+                    return recipes
+                # Use remaining time (up to 30s) for the fallback provider.
+                remaining_total = max(0.0, budget - (time.time() - started))
+                fallback_budget = min(30.0, remaining_total)
+                if settings.ai_debug_logging:
+                    logger.info(
+                        "AI switching to fallback mode=%s tier=%s remaining_total=%.1fs fallback_budget=%.1fs",
+                        mode_norm,
+                        tier,
+                        remaining_total,
+                        fallback_budget,
+                    )
+                recipes = _try_models(
+                    deepseek_models[:1],
+                    provider="deepseek",
+                    client=self.fallback_client,
+                    phase_timeout=fallback_budget,
+                )
+                if recipes:
+                    return recipes
+            # If only one provider is configured, fall through to the generic model-chain logic below.
+
+        # Generic: iterate through model chain with provider-specific clients
         for model in model_chain:
             if budget is not None:
                 remaining = budget - (time.time() - started)
                 if remaining <= 2:
                     break
             use_fallback = "deepseek" in model.lower()
+            provider = "deepseek" if use_fallback else "openai"
             client = self.fallback_client if use_fallback else self.primary_client
             if not client:
-                attempts.append({"model": model, "provider": "deepseek" if use_fallback else "openai", "error": "client_not_configured"})
+                attempts.append({"model": model, "provider": provider, "error": "client_not_configured"})
                 continue
-            try:
-                temperature = 0.85 if mode_norm in ("surprise", "quick") else (0.7 if variety_mode else 0.4)
-                per_request_timeout = None
-                if budget is not None:
-                    remaining = budget - (time.time() - started)
-                    # Ensure we have time to actually reach the fallback provider.
-                    if mode_norm in ("surprise", "quick"):
-                        cap = 22.0 if (not use_fallback) else 28.0
-                    else:
-                        cap = 25.0
-                    per_request_timeout = max(5.0, min(cap, remaining))
-                if settings.ai_debug_logging:
-                    base_url = str(getattr(client, "base_url", "") or "")
-                    logger.info(
-                        "AI attempt start mode=%s tier=%s provider=%s model=%s timeout=%s remaining_budget=%.2fs base_url=%s",
-                        mode_norm or "ingredients",
-                        tier,
-                        "deepseek" if use_fallback else "openai",
-                        model,
-                        per_request_timeout,
-                        (budget - (time.time() - started)) if budget is not None else -1.0,
-                        base_url,
-                    )
-                content = self._call(
-                    client,
-                    model,
-                    ingredients,
-                    filters,
-                    extra_instructions=extra_instructions,
-                    temperature=temperature,
-                    timeout_seconds=per_request_timeout,
-                    max_output_tokens=1200 if mode_norm in ("surprise", "quick") else 2000,
-                )
-                recipes = parse_content(content)
-                recipes = self._filter_recipes(recipes, banned_titles_norm)
-                if recipes:
-                    # If we asked for variety but still got duplicates/overlaps, retry once with stricter wording.
-                    if (exclude_titles or variety_mode) and len(recipes) < 3:
-                        stricter = (extra_instructions or "") + " You must comply. Return 3 NEW recipes."
-                        per_request_timeout2 = per_request_timeout
-                        if budget is not None:
-                            remaining = budget - (time.time() - started)
-                            per_request_timeout2 = max(5.0, min(25.0, remaining))
-                        content2 = self._call(
-                            client,
-                            model,
-                            ingredients,
-                            filters,
-                            extra_instructions=stricter,
-                            temperature=0.8,
-                            timeout_seconds=per_request_timeout2,
-                            max_output_tokens=1200 if mode_norm in ("surprise", "quick") else 2000,
-                        )
-                        recipes2 = self._filter_recipes(parse_content(content2), banned_titles_norm)
-                        if recipes2:
-                            recipes = recipes2
-                    recipes = recipes[:3]
-                    for recipe in recipes:
-                        if isinstance(recipe, dict):
-                            recipe["_ai_provider"] = "deepseek" if use_fallback else "openai"
-                            recipe["_ai_model"] = model
-                    if generate_images:
-                        self._attach_images(recipes, tier, ingredients)
-                    else:
-                        self._attach_placeholders(recipes)
-                    return recipes
-                attempts.append(
-                    {
-                        "model": model,
-                        "provider": "deepseek" if use_fallback else "openai",
-                        "error": "empty_or_unparseable_json",
-                    }
-                )
-            except OpenAIError as exc:
-                logger.warning("Model %s failed, trying next: %s", model, exc)
-                attempts.append(
-                    {
-                        "model": model,
-                        "provider": "deepseek" if use_fallback else "openai",
-                        "error": str(exc),
-                    }
-                )
-                continue
+            recipes = _try_models([model], provider=provider, client=client, phase_timeout=None)
+            if recipes:
+                return recipes
 
         fallback = emergency_recipes()
         if settings.ai_disable_emergency_fallback:
