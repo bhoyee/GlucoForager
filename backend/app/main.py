@@ -23,6 +23,7 @@ from .api.endpoints import (
     admin_user_email,
     admin_email_campaigns,
     app_public,
+    app_challenge,
     ingredients,
     recipes,
     subscriptions,
@@ -60,6 +61,7 @@ from .models import (  # ensure models are registered with SQLAlchemy
     blog_comment,
     newsletter_signup,
     app_setting,
+    user_daily_challenge,
 )
 from .services.abuse_detector import AbuseDetector
 from .services.system_log_service import log_system_event
@@ -271,6 +273,7 @@ app.include_router(admin_revenuecat.router, prefix="/api")
 app.include_router(admin_user_email.router, prefix="/api")
 app.include_router(admin_email_campaigns.router, prefix="/api")
 app.include_router(app_public.router, prefix="/api")
+app.include_router(app_challenge.router, prefix="/api")
 app.include_router(app_swaps.router, prefix="/api")
 app.include_router(ingredients.router, prefix="/api")
 app.include_router(recipes.router, prefix="/api")
