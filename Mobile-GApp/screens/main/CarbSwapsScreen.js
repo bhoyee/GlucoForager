@@ -33,6 +33,7 @@ export default function CarbSwapsScreen() {
   const headerPaddingTop = Math.max(insets.top, 16);
   const contentBottomPadding = Math.max(insets.bottom + 12, 12);
   const [query, setQuery] = useState('');
+  const [isFocused, setIsFocused] = useState(false);
 
   const suggestions = useMemo(
     () => ['rice', 'pasta', 'bread', 'potato', 'cereal', 'pizza', 'soda', 'juice', 'ice cream'],
@@ -76,11 +77,13 @@ export default function CarbSwapsScreen() {
           </View>
         </View>
 
-        <View style={styles.searchWrap}>
+        <View style={[styles.searchWrap, isFocused && styles.searchWrapFocused]}>
           <Ionicons name="search-outline" size={18} color={Colors.textLight} />
           <TextInput
             value={query}
             onChangeText={setQuery}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
             placeholder="Search a food (e.g. rice, bread, soda)"
             placeholderTextColor={Colors.textLight}
             style={styles.input}
@@ -192,27 +195,32 @@ const styles = StyleSheet.create({
   searchWrap: {
     marginTop: 10,
     marginHorizontal: 20,
-    borderRadius: 16,
+    borderRadius: 18,
     backgroundColor: Colors.surface,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     borderWidth: 1,
     borderColor: Colors.border,
+    minHeight: 54,
+  },
+  searchWrapFocused: {
+    borderColor: `${Colors.secondary}66`,
+    backgroundColor: `${Colors.secondary}08`,
   },
   input: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 15,
     color: Colors.text,
     fontWeight: '600',
     paddingVertical: 0,
   },
   clearButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: `${Colors.border}55`,
@@ -264,4 +272,3 @@ const styles = StyleSheet.create({
   pillText: { color: Colors.secondary, fontWeight: '900', fontSize: 12 },
   disclaimer: { marginTop: 14, fontSize: 12, lineHeight: 18, color: Colors.textLight, fontWeight: '600' },
 });
-
