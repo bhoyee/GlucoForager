@@ -41,6 +41,7 @@ export default function HomeScreen() {
   const [isFetchingRecipes, setIsFetchingRecipes] = useState(false);
   const [blockedTipIds, setBlockedTipIds] = useState([]);
   const [serverTodayTip, setServerTodayTip] = useState(null);
+  const [dailyChallenge, setDailyChallenge] = useState(null);
   const todayTip = useMemo(() => {
     if (serverTodayTip?.title && (serverTodayTip?.tip || serverTodayTip?.body)) return serverTodayTip;
     return getTodayTip(new Date(), { blockedTipIds });
@@ -100,6 +101,28 @@ export default function HomeScreen() {
       }
     } catch {
       // ignore
+    }
+  };
+
+  const loadDailyChallenge = async () => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        setDailyChallenge(null);
+        return;
+      }
+      const response = await apiFetch(
+        `${API_URL}/api/app/challenge/today`,
+        { method: 'GET', headers: { Authorization: `Bearer ${token}` } },
+        { timeoutMs: 5000 }
+      );
+      if (!response.ok) return;
+      const data = await response.json();
+      if (data?.challenge?.tasks?.length) {
+        setDailyChallenge(data.challenge);
+      }
+    } catch {
+      // ignore network errors
     }
   };
 
@@ -183,6 +206,7 @@ export default function HomeScreen() {
         loadRecipeImagesFlag(),
         loadTipConfig(),
         loadTodayTip(),
+        loadDailyChallenge(),
       ]);
 
       const allFailed = results.every((result) => result.status === 'rejected');
@@ -620,6 +644,47 @@ export default function HomeScreen() {
           </Pressable>
         </View>
 
+        {dailyChallenge?.tasks?.length ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Today's Diabetes Challenge</Text>
+            <Text style={styles.sectionSubtitle}>Complete these to support healthier blood sugar habits today.</Text>
+
+            <Pressable
+              style={({ pressed }) => [styles.challengeCard, pressed && styles.cardPressed]}
+              android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
+              onPress={handleOpenChallenge}
+            >
+              <View style={styles.challengeIcon}>
+                <Ionicons name="trophy-outline" size={20} color={Colors.primary} />
+              </View>
+              <View style={styles.challengeText}>
+                <Text style={styles.tipLabel}>Today</Text>
+                <Text style={styles.tipTitle} numberOfLines={2}>
+                  {dailyChallenge.completed_today ? 'Challenge complete' : '6 quick actions'}
+                </Text>
+                <Text style={styles.tipSnippet} numberOfLines={1}>
+                  Progress {Number(dailyChallenge?.progress?.completed || 0)} / {Number(dailyChallenge?.progress?.total || 0)} • Streak {Number(dailyChallenge?.streak_days || 0)} days
+                </Text>
+                <View style={styles.challengeRows}>
+                  {dailyChallenge.tasks.slice(0, 3).map((t) => (
+                    <View key={t.id} style={styles.challengeRow}>
+                      <Ionicons
+                        name={t.completed ? 'checkmark-circle' : 'ellipse-outline'}
+                        size={14}
+                        color={t.completed ? Colors.success : Colors.textLight}
+                      />
+                      <Text style={styles.challengeRowText} numberOfLines={1}>
+                        {t.text}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
+            </Pressable>
+          </View>
+        ) : null}
+
         {/* Main Actions */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Find Recipes</Text>
@@ -726,7 +791,7 @@ export default function HomeScreen() {
               <View style={[styles.miniIcon, { backgroundColor: `${Colors.primary}18` }]}>
                 <Ionicons name="trophy-outline" size={18} color={Colors.primary} />
               </View>
-              <Text style={styles.miniTitle}>7-Day</Text>
+              <Text style={styles.miniTitle}>Daily</Text>
               <Text style={styles.miniSub} numberOfLines={1}>Challenge</Text>
             </Pressable>
           </View>
@@ -1006,6 +1071,27 @@ const styles = StyleSheet.create({
   tipLabel: { fontSize: 12, fontWeight: '900', color: Colors.primary, textTransform: 'uppercase' },
   tipTitle: { marginTop: 2, fontSize: 14, fontWeight: '800', color: Colors.text },
   tipSnippet: { marginTop: 4, fontSize: 12, fontWeight: '700', color: Colors.textLight },
+  challengeCard: {
+    marginTop: 12,
+    backgroundColor: `${Colors.primary}10`,
+    borderRadius: 16,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  challengeIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: `${Colors.primary}14`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  challengeText: { flex: 1 },
+  challengeRows: { marginTop: 10, gap: 6 },
+  challengeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  challengeRowText: { flex: 1, fontSize: 12, color: Colors.textLight, fontWeight: '700' },
   eatNowCard: {
     marginTop: 12,
     borderRadius: 18,
