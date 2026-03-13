@@ -61,7 +61,7 @@ export default function CarbSwapsScreen() {
     return null;
   }, [query]);
 
-  const fetchAiSwaps = async (food) => {
+  const fetchAiSwaps = async (food, { forceSwaps = false } = {}) => {
     const trimmed = String(food || '').trim();
     if (!trimmed) return;
     const requestId = Date.now();
@@ -84,7 +84,7 @@ export default function CarbSwapsScreen() {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ food: trimmed }),
+          body: JSON.stringify({ food: trimmed, force_swaps: Boolean(forceSwaps) }),
         },
         { timeoutMs: 12000 }
       );
@@ -96,7 +96,7 @@ export default function CarbSwapsScreen() {
         return;
       }
       const data = await response.json();
-      if (data?.better_options?.length) {
+      if (data?.assessment?.verdict) {
         setAiResult(data);
       } else {
         setAiError('No swaps returned.');
@@ -198,26 +198,77 @@ export default function CarbSwapsScreen() {
           ) : aiResult ? (
             <>
               <Text style={styles.cardSub}>
-                Better options for <Text style={styles.bold}>{aiResult.food}</Text>
+                {aiResult.assessment?.verdict === 'good_choice'
+                  ? 'This is already a good choice'
+                  : aiResult.assessment?.verdict === 'depends'
+                    ? 'It depends'
+                    : 'Higher impact'}
               </Text>
-              <View style={styles.rows}>
-                {aiResult.better_options.map((item) => (
-                  <View key={item} style={styles.row}>
-                    <View style={styles.rowIcon}>
-                      <Ionicons name="sparkles-outline" size={16} color={Colors.secondary} />
-                    </View>
-                    <Text style={styles.rowText}>{item}</Text>
+
+              <View style={styles.noteCard}>
+                <Text style={styles.noteTitle}>Quick take</Text>
+                <Text style={styles.noteText}>{aiResult.assessment?.summary}</Text>
+              </View>
+
+              {Array.isArray(aiResult.assessment?.watch_outs) && aiResult.assessment.watch_outs.length > 0 ? (
+                <View style={styles.noteCard}>
+                  <Text style={styles.noteTitle}>Watch out for</Text>
+                  {aiResult.assessment.watch_outs.map((t) => (
+                    <Text key={t} style={styles.bulletText}>• {t}</Text>
+                  ))}
+                </View>
+              ) : null}
+
+              {Array.isArray(aiResult.assessment?.pair_with) && aiResult.assessment.pair_with.length > 0 ? (
+                <View style={styles.noteCard}>
+                  <Text style={styles.noteTitle}>Pair with</Text>
+                  {aiResult.assessment.pair_with.map((t) => (
+                    <Text key={t} style={styles.bulletText}>• {t}</Text>
+                  ))}
+                </View>
+              ) : null}
+
+              {aiResult.assessment?.portion_tip ? (
+                <View style={styles.noteCard}>
+                  <Text style={styles.noteTitle}>Portion tip</Text>
+                  <Text style={styles.noteText}>{aiResult.assessment.portion_tip}</Text>
+                </View>
+              ) : null}
+
+              {aiResult.should_show_swaps && aiResult.swaps?.better_options?.length ? (
+                <>
+                  <Text style={styles.cardSub}>
+                    Better options for <Text style={styles.bold}>{aiResult.food}</Text>
+                  </Text>
+                  <View style={styles.rows}>
+                    {aiResult.swaps.better_options.map((item) => (
+                      <View key={item} style={styles.row}>
+                        <View style={styles.rowIcon}>
+                          <Ionicons name="sparkles-outline" size={16} color={Colors.secondary} />
+                        </View>
+                        <Text style={styles.rowText}>{item}</Text>
+                      </View>
+                    ))}
                   </View>
-                ))}
-              </View>
-              <View style={styles.noteCard}>
-                <Text style={styles.noteTitle}>Why these are better</Text>
-                <Text style={styles.noteText}>{aiResult.why_these_are_better}</Text>
-              </View>
-              <View style={styles.noteCard}>
-                <Text style={styles.noteTitle}>Portion tip</Text>
-                <Text style={styles.noteText}>{aiResult.portion_tip}</Text>
-              </View>
+                  <View style={styles.noteCard}>
+                    <Text style={styles.noteTitle}>Why these are better</Text>
+                    <Text style={styles.noteText}>{aiResult.swaps.why_these_are_better}</Text>
+                  </View>
+                  <View style={styles.noteCard}>
+                    <Text style={styles.noteTitle}>Portion tip</Text>
+                    <Text style={styles.noteText}>{aiResult.swaps.portion_tip}</Text>
+                  </View>
+                </>
+              ) : (
+                <TouchableOpacity
+                  style={styles.secondaryButton}
+                  onPress={() => void fetchAiSwaps(query, { forceSwaps: true })}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.secondaryButtonText}>Need a substitute?</Text>
+                  <Ionicons name="chevron-forward" size={16} color={Colors.secondary} />
+                </TouchableOpacity>
+              )}
             </>
           ) : matches ? (
             <>
@@ -390,4 +441,18 @@ const styles = StyleSheet.create({
   },
   noteTitle: { fontSize: 12, fontWeight: '900', color: Colors.text, marginBottom: 6 },
   noteText: { fontSize: 13, lineHeight: 18, color: Colors.textLight, fontWeight: '700' },
+  bulletText: { marginTop: 6, fontSize: 13, lineHeight: 18, color: Colors.textLight, fontWeight: '700' },
+  secondaryButton: {
+    marginTop: 12,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: `${Colors.secondary}24`,
+    backgroundColor: `${Colors.secondary}10`,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  secondaryButtonText: { fontSize: 14, fontWeight: '900', color: Colors.secondary },
 });
