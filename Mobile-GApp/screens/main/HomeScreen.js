@@ -582,15 +582,41 @@ export default function HomeScreen() {
             </View>
           )}
           
-          {!userIsPremium && Number(remainingScans) <= 0 && (
-            <TouchableOpacity 
-              style={styles.upgradePrompt}
-              onPress={handleUpgradePaywall}
+        {!userIsPremium && Number(remainingScans) <= 0 && (
+          <TouchableOpacity 
+            style={styles.upgradePrompt}
+            onPress={handleUpgradePaywall}
             >
               <Text style={styles.upgradeText}>Upgrade to Premium</Text>
               <Ionicons name="arrow-forward" size={16} color={Colors.primary} />
             </TouchableOpacity>
           )}
+        </View>
+
+        {/* Daily guidance */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Daily guidance</Text>
+          <Text style={styles.sectionSubtitle}>Small daily actions to support steadier blood sugar.</Text>
+
+          <Pressable
+            style={({ pressed }) => [styles.tipCard, pressed && styles.cardPressed]}
+            android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
+            onPress={handleOpenTip}
+          >
+            <View style={styles.tipIcon}>
+              <Ionicons name="bulb-outline" size={20} color={Colors.primary} />
+            </View>
+            <View style={styles.tipText}>
+              <Text style={styles.tipLabel}>Today</Text>
+              <Text style={styles.tipTitle} numberOfLines={2}>
+                {todayTip.title}
+              </Text>
+              <Text style={styles.tipSnippet} numberOfLines={1}>
+                {todayTip.tip || todayTip.body || 'Small daily actions to support steadier blood sugar.'}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
+          </Pressable>
         </View>
 
         {/* Main Actions */}
@@ -664,26 +690,6 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>For today</Text>
           <Text style={styles.sectionSubtitle}>Quick help for meals, swaps, and habits.</Text>
-
-          <Pressable
-            style={({ pressed }) => [styles.tipCard, pressed && styles.cardPressed]}
-            android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
-            onPress={handleOpenTip}
-          >
-            <View style={styles.tipIcon}>
-              <Ionicons name="bulb-outline" size={20} color={Colors.primary} />
-            </View>
-            <View style={styles.tipText}>
-              <Text style={styles.tipLabel}>Daily guidance</Text>
-              <Text style={styles.tipTitle} numberOfLines={2}>
-                {todayTip.title}
-              </Text>
-              <Text style={styles.tipSnippet} numberOfLines={1}>
-                {todayTip.tip || todayTip.body || 'Small daily actions to support steadier blood sugar.'}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
-          </Pressable>
 
           <TouchableOpacity style={styles.eatNowCard} activeOpacity={0.9} onPress={handleOpenEatNow}>
             <View style={styles.eatNowLeft}>
