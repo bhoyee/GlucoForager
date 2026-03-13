@@ -40,6 +40,7 @@ export default function CarbSwapsScreen() {
   const [aiResult, setAiResult] = useState(null);
   const [aiError, setAiError] = useState(null);
   const [aiErrorCode, setAiErrorCode] = useState(null);
+  const [aiSuggestedQuery, setAiSuggestedQuery] = useState(null);
   const [shouldUpgrade, setShouldUpgrade] = useState(false);
   const [loading, setLoading] = useState(false);
   const lastRequestIdRef = useRef(0);
@@ -71,6 +72,7 @@ export default function CarbSwapsScreen() {
     setLoading(true);
     setAiError(null);
     setAiErrorCode(null);
+    setAiSuggestedQuery(null);
     setShouldUpgrade(false);
 
     try {
@@ -100,9 +102,11 @@ export default function CarbSwapsScreen() {
           setAiError(String(detail.message || 'Swaps request failed.'));
           setAiErrorCode(String(detail.code || 'request_failed'));
           setShouldUpgrade(Boolean(detail.upgrade));
+          setAiSuggestedQuery(typeof detail.suggested_query === 'string' ? detail.suggested_query : null);
         } else {
           setAiError(detail || 'Swaps request failed.');
           setAiErrorCode('request_failed');
+          setAiSuggestedQuery(null);
           setShouldUpgrade(false);
         }
         setAiResult(null);
@@ -129,6 +133,7 @@ export default function CarbSwapsScreen() {
     setAiResult(null);
     setAiError(null);
     setAiErrorCode(null);
+    setAiSuggestedQuery(null);
     setShouldUpgrade(false);
     if (!trimmed) {
       setLoading(false);
@@ -306,9 +311,18 @@ export default function CarbSwapsScreen() {
           ) : (
             <>
               <Text style={styles.cardSub}>{aiError ? aiError : 'No swaps found yet for that term.'}</Text>
-              <Text style={styles.disclaimer}>
-                Try a more general word (e.g. "bread" instead of a brand name).
-              </Text>
+              {aiErrorCode === 'needs_clarification' && aiSuggestedQuery ? (
+                <TouchableOpacity
+                  style={styles.secondaryButton}
+                  onPress={() => setQuery(aiSuggestedQuery)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.secondaryButtonText}>Search for “{aiSuggestedQuery}”</Text>
+                  <Ionicons name="chevron-forward" size={16} color={Colors.secondary} />
+                </TouchableOpacity>
+              ) : null}
+
+              <Text style={styles.disclaimer}>Try a general food or drink (e.g. “bread”, “donut”, “soda”).</Text>
               {shouldUpgrade ? (
                 <TouchableOpacity
                   style={styles.upgradeButton}

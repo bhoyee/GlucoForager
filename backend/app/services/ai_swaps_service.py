@@ -15,6 +15,8 @@ When a user enters a food or drink, suggest healthier alternatives that may have
 
 Rules:
 - Accept any food or drink (meals, snacks, drinks, desserts).
+- If the input is ambiguous or likely misspelled, ask for clarification instead of guessing.
+- If you can reasonably suggest a corrected spelling, include it as suggested_query.
 - First decide if the food is already a generally diabetes-friendly choice.
 - If it is already a good choice, DO NOT suggest swaps unless the user explicitly asks for substitutions.
 - If it is higher-impact (likely to spike), suggest swaps.
@@ -32,6 +34,9 @@ Return ONLY valid JSON with this exact shape:
     "is_food_or_drink": true | false,
     "confidence": 0.0,
     "verdict": "good_choice" | "higher_impact" | "depends",
+    "needs_clarification": true | false,
+    "suggested_query": "..." | null,
+    "clarification_question": "..." | null,
     "summary": "...",
     "watch_outs": ["...", "..."],
     "pair_with": ["...", "..."],
@@ -107,16 +112,29 @@ def _normalize_payload(data: Dict[str, Any]) -> Dict[str, Any] | None:
     verdict = str(assessment.get("verdict") or "").strip()
     if verdict not in {"good_choice", "higher_impact", "depends"}:
         return None
+
+    needs_clarification = bool(assessment.get("needs_clarification", False))
+    suggested_query = assessment.get("suggested_query")
+    clarification_question = assessment.get("clarification_question")
+    if suggested_query is not None and not isinstance(suggested_query, str):
+        suggested_query = None
+    if clarification_question is not None and not isinstance(clarification_question, str):
+        clarification_question = None
+
     summary = assessment.get("summary")
     portion_tip = assessment.get("portion_tip")
     if not isinstance(summary, str) or not summary.strip():
         return None
-    if not isinstance(portion_tip, str) or not portion_tip.strip():
-        return None
+    if not needs_clarification and is_food_or_drink:
+        if not isinstance(portion_tip, str) or not portion_tip.strip():
+            return None
+    else:
+        if not isinstance(portion_tip, str):
+            portion_tip = ""
     watch_outs = _normalize_string_list(assessment.get("watch_outs"), limit=3)
     pair_with = _normalize_string_list(assessment.get("pair_with"), limit=3)
 
-    should_show_bool = bool(should_show)
+    should_show_bool = bool(should_show) and (not needs_clarification) and bool(is_food_or_drink)
     normalized_swaps = None
     if should_show_bool:
         if not isinstance(swaps, dict):
@@ -141,10 +159,13 @@ def _normalize_payload(data: Dict[str, Any]) -> Dict[str, Any] | None:
             "is_food_or_drink": bool(is_food_or_drink),
             "confidence": max(0.0, min(1.0, confidence)),
             "verdict": verdict,
+            "needs_clarification": bool(needs_clarification),
+            "suggested_query": (_clean_food(suggested_query) if isinstance(suggested_query, str) else None),
+            "clarification_question": (clarification_question.strip()[:140] if isinstance(clarification_question, str) else None),
             "summary": summary.strip()[:240],
             "watch_outs": watch_outs,
             "pair_with": pair_with,
-            "portion_tip": portion_tip.strip()[:240],
+            "portion_tip": (portion_tip.strip()[:240] if isinstance(portion_tip, str) else ""),
         },
         "should_show_swaps": should_show_bool,
         "swaps": normalized_swaps,
