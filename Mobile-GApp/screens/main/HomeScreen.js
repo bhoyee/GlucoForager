@@ -618,9 +618,9 @@ export default function HomeScreen() {
           )}
         </View>
 
-        {/* Daily guidance */}
+        {/* Daily */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Daily guidance</Text>
+          <Text style={styles.sectionTitle}>Daily</Text>
           <Text style={styles.sectionSubtitle}>Small daily actions to support steadier blood sugar.</Text>
 
           <Pressable
@@ -646,9 +646,6 @@ export default function HomeScreen() {
 
         {dailyChallenge?.tasks?.length ? (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Today's Diabetes Challenge</Text>
-            <Text style={styles.sectionSubtitle}>Complete these to support healthier blood sugar habits today.</Text>
-
             <Pressable
               style={({ pressed }) => [styles.challengeCard, pressed && styles.cardPressed]}
               android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
@@ -660,7 +657,7 @@ export default function HomeScreen() {
               <View style={styles.challengeText}>
                 <Text style={styles.tipLabel}>Today</Text>
                 <Text style={styles.tipTitle} numberOfLines={2}>
-                  {dailyChallenge.completed_today ? 'Challenge complete' : '6 quick actions'}
+                  {dailyChallenge.completed_today ? 'Challenge complete' : "Today's Diabetes Challenge"}
                 </Text>
                 <Text style={styles.tipSnippet} numberOfLines={1}>
                   Progress {Number(dailyChallenge?.progress?.completed || 0)} / {Number(dailyChallenge?.progress?.total || 0)} • Streak {Number(dailyChallenge?.streak_days || 0)} days
@@ -688,6 +685,20 @@ export default function HomeScreen() {
         {/* Main Actions */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Find Recipes</Text>
+
+          {/* Eat now */}
+          <TouchableOpacity style={styles.eatNowCard} activeOpacity={0.9} onPress={handleOpenEatNow}>
+            <View style={styles.eatNowLeft}>
+              <View style={styles.eatNowIcon}>
+                <Ionicons name="sparkles-outline" size={22} color="white" />
+              </View>
+              <View style={styles.eatNowText}>
+                <Text style={styles.eatNowTitle}>Eat now</Text>
+                <Text style={styles.eatNowSub}>3 ideas in seconds - use what you have or surprise me.</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={22} color="rgba(255,255,255,0.9)" />
+          </TouchableOpacity>
           
           {/* Camera Scan Card */}
           <TouchableOpacity 
@@ -752,23 +763,10 @@ export default function HomeScreen() {
           )}
         </View>
 
-        {/* For today */}
+        {/* Tools */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>For today</Text>
-          <Text style={styles.sectionSubtitle}>Quick help for meals, swaps, and habits.</Text>
-
-          <TouchableOpacity style={styles.eatNowCard} activeOpacity={0.9} onPress={handleOpenEatNow}>
-            <View style={styles.eatNowLeft}>
-              <View style={styles.eatNowIcon}>
-                <Ionicons name="sparkles-outline" size={22} color="white" />
-              </View>
-              <View style={styles.eatNowText}>
-                <Text style={styles.eatNowTitle}>Eat now</Text>
-                <Text style={styles.eatNowSub}>3 ideas in seconds - use what you have or surprise me.</Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={22} color="rgba(255,255,255,0.9)" />
-          </TouchableOpacity>
+          <Text style={styles.sectionTitle}>Tools</Text>
+          <Text style={styles.sectionSubtitle}>Quick helpers for smarter choices.</Text>
 
           <View style={styles.miniRow}>
             <Pressable
@@ -781,18 +779,6 @@ export default function HomeScreen() {
               </View>
               <Text style={styles.miniTitle}>Food swaps</Text>
               <Text style={styles.miniSub} numberOfLines={1}>Carbs, desserts, drinks</Text>
-            </Pressable>
-
-            <Pressable
-              style={({ pressed }) => [styles.miniCard, styles.miniCardChallenge, pressed && styles.cardPressed]}
-              android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
-              onPress={handleOpenChallenge}
-            >
-              <View style={[styles.miniIcon, { backgroundColor: `${Colors.primary}18` }]}>
-                <Ionicons name="trophy-outline" size={18} color={Colors.primary} />
-              </View>
-              <Text style={styles.miniTitle}>Daily</Text>
-              <Text style={styles.miniSub} numberOfLines={1}>Challenge</Text>
             </Pressable>
           </View>
         </View>
