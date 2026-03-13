@@ -20,6 +20,7 @@ export default function EatNowScreen() {
         title: 'Use ingredients I have',
         subtitle: 'Generate 3 ideas from your last ingredients.',
         icon: 'leaf-outline',
+        accent: Colors.primary,
         action: async () => {
           try {
             const raw = await AsyncStorage.getItem(LAST_INGREDIENTS_KEY);
@@ -50,6 +51,7 @@ export default function EatNowScreen() {
         title: 'Surprise me',
         subtitle: 'No input needed - just 3 diabetes-friendly meals.',
         icon: 'sparkles-outline',
+        accent: Colors.secondary,
         action: async () => {
           navigation.navigate('ManualInput', {
             autoSubmit: true,
@@ -63,6 +65,7 @@ export default function EatNowScreen() {
         title: 'Low-carb quick meal',
         subtitle: 'Under 20 minutes (best effort).',
         icon: 'flash-outline',
+        accent: Colors.accent,
         action: async () => {
           navigation.navigate('ManualInput', {
             autoSubmit: true,
@@ -96,8 +99,9 @@ export default function EatNowScreen() {
             activeOpacity={0.8}
             onPress={() => void card.action()}
           >
-            <View style={styles.cardIcon}>
-              <Ionicons name={card.icon} size={22} color={Colors.primary} />
+            <View style={[styles.cardAccent, { backgroundColor: card.accent }]} />
+            <View style={[styles.cardIcon, { backgroundColor: `${card.accent}14` }]}>
+              <Ionicons name={card.icon} size={22} color={card.accent} />
             </View>
             <View style={styles.cardText}>
               <Text style={styles.cardTitle}>{card.title}</Text>
@@ -107,9 +111,13 @@ export default function EatNowScreen() {
           </TouchableOpacity>
         ))}
 
-        <Text style={styles.note}>
-          Tip: for best results, scan or type your ingredients first - then "Use ingredients I have" becomes 1-tap.
-        </Text>
+        <View style={styles.noteBox}>
+          <Ionicons name="information-circle-outline" size={18} color={Colors.secondary} />
+          <Text style={styles.noteText}>
+            <Text style={styles.noteLabel}>Tip:</Text> for best results, scan or type your ingredients first - then "Use
+            ingredients I have" becomes 1-tap.
+          </Text>
+        </View>
       </View>
     </View>
   );
@@ -158,17 +166,27 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
+    position: 'relative',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 2,
   },
+  cardAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 10,
+    bottom: 10,
+    width: 4,
+    borderTopRightRadius: 6,
+    borderBottomRightRadius: 6,
+    opacity: 0.9,
+  },
   cardIcon: {
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: `${Colors.primary}14`,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -186,10 +204,23 @@ const styles = StyleSheet.create({
     color: Colors.textLight,
     fontWeight: '600',
   },
-  note: {
+  noteBox: {
     marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: `${Colors.secondary}14`,
+  },
+  noteText: {
+    flex: 1,
     fontSize: 12,
     lineHeight: 18,
-    color: Colors.textLight,
+    color: Colors.text,
+  },
+  noteLabel: {
+    color: Colors.secondary,
+    fontWeight: '900',
   },
 });

@@ -1,4 +1,5 @@
 from typing import Any, Dict, List
+import logging
 import time
 
 from sqlalchemy.orm import Session
@@ -9,6 +10,9 @@ from ..models.recipe_history import RecipeHistory
 from .diabetes_friendly_classifier import DiabetesFriendlyClassifier
 from .ingredient_classifier import IngredientClassifier
 from .cost_tracker import record_ai_request
+
+
+logger = logging.getLogger(__name__)
 
 
 class IngredientValidationError(ValueError):
@@ -258,15 +262,31 @@ class AIPipeline:
         cleaned: list[dict] = []
         for recipe in recipes[:3]:
             if not isinstance(recipe, dict):
+                if settings.ai_debug_logging and mode in ("surprise", "quick"):
+                    logger.info("AI validation failed mode=%s reason=recipe_not_dict", mode)
                 return None
             title = (recipe.get("title") or recipe.get("name") or "").strip()
             if not title or title.lower() == "ai-generated recipe":
+                if settings.ai_debug_logging and mode in ("surprise", "quick"):
+                    logger.info("AI validation failed mode=%s reason=bad_title title=%s", mode, title[:120])
                 return None
             instructions = recipe.get("instructions") or []
             if not isinstance(instructions, list) or len(instructions) < 3:
+                if settings.ai_debug_logging and mode in ("surprise", "quick"):
+                    logger.info(
+                        "AI validation failed mode=%s reason=bad_instructions_len len=%s",
+                        mode,
+                        (len(instructions) if isinstance(instructions, list) else "n/a"),
+                    )
                 return None
             ingredients = recipe.get("ingredients") or []
             if not isinstance(ingredients, list) or len(ingredients) < 3:
+                if settings.ai_debug_logging and mode in ("surprise", "quick"):
+                    logger.info(
+                        "AI validation failed mode=%s reason=bad_ingredients_len len=%s",
+                        mode,
+                        (len(ingredients) if isinstance(ingredients, list) else "n/a"),
+                    )
                 return None
             ni = recipe.get("nutritional_info") or {}
             calories = ni.get("calories")
@@ -278,8 +298,18 @@ class AIPipeline:
                 carbs_n = int(carbs or 0)
                 protein_n = int(protein or 0)
             except Exception:  # noqa: BLE001
+                if settings.ai_debug_logging and mode in ("surprise", "quick"):
+                    logger.info("AI validation failed mode=%s reason=non_numeric_nutrition", mode)
                 return None
             if calories_n <= 0 or (carbs_n <= 0 and protein_n <= 0):
+                if settings.ai_debug_logging and mode in ("surprise", "quick"):
+                    logger.info(
+                        "AI validation failed mode=%s reason=missing_nutrition cal=%s carbs=%s protein=%s",
+                        mode,
+                        calories_n,
+                        carbs_n,
+                        protein_n,
+                    )
                 return None
             if mode == "quick":
                 total_time = recipe.get("total_time")
@@ -292,6 +322,8 @@ class AIPipeline:
                 except Exception:  # noqa: BLE001
                     total_n = 0
                 if total_n <= 0 or total_n > 20:
+                    if settings.ai_debug_logging:
+                        logger.info("AI validation failed mode=%s reason=total_time_out_of_range total=%s", mode, total_n)
                     return None
             cleaned.append(recipe)
 

@@ -76,6 +76,7 @@ export default function AdminShell({ children }) {
     { href: '/admin/users', label: 'Users', icon: '👤' },
     { href: '/admin/recipes', label: 'Recipes', icon: '🍲' },
     { href: '/admin/recipes/new', label: 'New Recipe', icon: '➕' },
+    { href: '/admin/tips', label: 'Daily Tips', icon: '💡' },
     { href: '/admin/blog', label: 'Blog', icon: '📝' },
     { href: '/admin/blog/new', label: 'New Post', icon: '➕' },
     { href: '/admin/blog/comments', label: 'Comments', icon: '💬' },

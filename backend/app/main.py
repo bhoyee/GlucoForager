@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from sqlalchemy.exc import OperationalError
 
 from .api.endpoints import (
     auth,
@@ -41,6 +42,7 @@ from .api.endpoints import (
     admin_blog,
     newsletter,
     admin_newsletter,
+    admin_tips,
 )
 from .core.config import settings
 from .database import Base, engine
@@ -157,6 +159,19 @@ async def abuse_guard(request: Request, call_next):
     start = time.time()
     try:
         response = await call_next(request)
+    except OperationalError as exc:
+        logger.warning("Database unavailable: %s", exc)
+        log_system_event({
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "level": "warn",
+            "source": "api",
+            "message": "Database unavailable",
+            "details": str(exc),
+            "path": request.url.path,
+            "method": request.method,
+            "ip": request.client.host if request.client else None,
+        })
+        return JSONResponse(status_code=503, content={"detail": "Database temporarily unavailable"})
     except Exception as exc:  # noqa: BLE001
         logger.exception("Unhandled error: %s", exc)
         log_system_event({
@@ -274,3 +289,4 @@ app.include_router(blog.router, prefix="/api")
 app.include_router(admin_blog.router, prefix="/api")
 app.include_router(newsletter.router, prefix="/api")
 app.include_router(admin_newsletter.router, prefix="/api")
+app.include_router(admin_tips.router, prefix="/api")
