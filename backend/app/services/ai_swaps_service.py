@@ -48,7 +48,7 @@ Return ONLY valid JSON with this exact shape:
 
 
 def _clean_food(value: str) -> str:
-    return " ".join((value or "").strip().split())[:40]
+    return " ".join((value or "").strip().split())[:25]
 
 
 def _parse_json_object(text: str) -> Dict[str, Any] | None:
