@@ -173,6 +173,7 @@ export default function CarbSwapsScreen() {
             placeholder="Search a food (e.g. rice, bread, soda)"
             placeholderTextColor={Colors.textLight}
             style={styles.input}
+            maxLength={40}
             autoCapitalize="none"
             autoCorrect={false}
             returnKeyType="search"
