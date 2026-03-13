@@ -8,6 +8,7 @@ const STORAGE_KEYS = {
   prompted: 'meal_reminders_prompted_v1',
   scheduledIds: 'meal_reminders_scheduled_ids_v1',
   times: 'meal_reminders_times_v1',
+  dailyGuidanceScheduledIds: 'daily_guidance_scheduled_ids_v1',
 };
 
 const DEFAULT_TIMES = {
@@ -17,8 +18,10 @@ const DEFAULT_TIMES = {
 };
 
 const ANDROID_CHANNEL_ID = 'meal-reminders';
+const DAILY_GUIDANCE_ANDROID_CHANNEL_ID = 'daily-guidance';
 const SCHEDULE_DAYS_AHEAD = 7;
 const PAST_TRIGGER_GRACE_MS = 60 * 1000;
+const DAILY_GUIDANCE_TIME = { hour: 9, minute: 30 };
 
 function debugLog(message, details) {
   if (!__DEV__) return;
@@ -148,6 +151,23 @@ async function ensureAndroidChannel() {
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
     });
     debugLog('Ensured Android channel', { id: ANDROID_CHANNEL_ID });
+  } catch {
+    // Ignore.
+  }
+}
+
+async function ensureAndroidDailyGuidanceChannel() {
+  if (Platform.OS !== 'android') return;
+  try {
+    await Notifications.setNotificationChannelAsync(DAILY_GUIDANCE_ANDROID_CHANNEL_ID, {
+      name: 'Daily guidance',
+      importance: Notifications.AndroidImportance.DEFAULT,
+      sound: null,
+      vibrationPattern: null,
+      enableVibrate: false,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+    });
+    debugLog('Ensured Android channel', { id: DAILY_GUIDANCE_ANDROID_CHANNEL_ID });
   } catch {
     // Ignore.
   }
@@ -306,12 +326,100 @@ export async function scheduleMealReminders(times = null) {
   return { scheduled: true };
 }
 
+async function cancelScheduledDailyGuidanceNotifications() {
+  const ids = await readJson(STORAGE_KEYS.dailyGuidanceScheduledIds, []);
+  if (!Array.isArray(ids) || ids.length === 0) return;
+  await Promise.allSettled(ids.map((id) => Notifications.cancelScheduledNotificationAsync(id)));
+  await writeJson(STORAGE_KEYS.dailyGuidanceScheduledIds, []);
+}
+
+async function cancelOrphanedDailyGuidanceNotifications() {
+  try {
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    const ids = (scheduled || [])
+      .filter((item) => item?.content?.data?.kind === 'daily_guidance')
+      .map((item) => item?.identifier)
+      .filter(Boolean);
+    await Promise.allSettled(ids.map((id) => Notifications.cancelScheduledNotificationAsync(id)));
+  } catch {
+    // Ignore.
+  }
+}
+
+export async function scheduleDailyGuidanceNotifications() {
+  const enabled = await getMealRemindersEnabled();
+  if (!enabled) {
+    debugLog('Daily guidance schedule skipped (disabled)');
+    return { scheduled: false, reason: 'disabled' };
+  }
+
+  const hasPermission = await requestMealReminderPermissions();
+  if (!hasPermission) {
+    debugLog('Daily guidance schedule skipped (no permission)');
+    return { scheduled: false, reason: 'no_permission' };
+  }
+
+  await ensureAndroidDailyGuidanceChannel();
+  await cancelScheduledDailyGuidanceNotifications();
+  await cancelOrphanedDailyGuidanceNotifications();
+
+  const ids = [];
+  const now = Date.now();
+  for (let dayOffset = 0; dayOffset < SCHEDULE_DAYS_AHEAD; dayOffset += 1) {
+    const target = new Date();
+    target.setHours(DAILY_GUIDANCE_TIME.hour, DAILY_GUIDANCE_TIME.minute, 0, 0);
+    target.setDate(target.getDate() + dayOffset);
+
+    if (target.getTime() <= now + PAST_TRIGGER_GRACE_MS) {
+      continue;
+    }
+
+    try {
+      const id = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: 'Daily Guidance',
+          body: "Your daily tip + challenge are ready. Tap to start.",
+          ...(Platform.OS === 'android' ? { channelId: DAILY_GUIDANCE_ANDROID_CHANNEL_ID } : {}),
+          data: {
+            kind: 'daily_guidance',
+            scheduledFor: target.toISOString(),
+          },
+        },
+        trigger:
+          Platform.OS === 'android'
+            ? {
+                type: Notifications.SchedulableTriggerInputTypes.DATE,
+                date: target,
+                channelId: DAILY_GUIDANCE_ANDROID_CHANNEL_ID,
+              }
+            : {
+                type: Notifications.SchedulableTriggerInputTypes.DATE,
+                date: target,
+              },
+      });
+      ids.push(id);
+    } catch (error) {
+      debugLog('Failed to schedule daily guidance', {
+        dayOffset,
+        target: target.toISOString(),
+        error: `${error?.message || error}`,
+      });
+    }
+  }
+
+  await writeJson(STORAGE_KEYS.dailyGuidanceScheduledIds, ids);
+  debugLog('Scheduled daily guidance', { count: ids.length, ids, time: DAILY_GUIDANCE_TIME });
+  return { scheduled: true };
+}
+
 export async function disableMealReminders() {
   debugLog('Disabling reminders');
   await setMealRemindersEnabled(false);
   await cancelScheduledMealReminders();
   await cancelOrphanedMealReminders();
   await dismissPresentedMealReminders();
+  await cancelScheduledDailyGuidanceNotifications();
+  await cancelOrphanedDailyGuidanceNotifications();
 }
 
 export async function enableMealRemindersAndSchedule() {
@@ -325,7 +433,13 @@ export async function enableMealRemindersAndSchedule() {
 
   await setMealRemindersEnabled(true);
   const times = await getMealReminderTimes();
-  return scheduleMealReminders(times);
+  const result = await scheduleMealReminders(times);
+  try {
+    await scheduleDailyGuidanceNotifications();
+  } catch {
+    // Ignore daily guidance scheduling failures.
+  }
+  return result;
 }
 
 export async function syncMealRemindersOnAppStart() {
@@ -344,6 +458,12 @@ export async function syncMealRemindersOnAppStart() {
   await cancelScheduledMealReminders();
   await cancelOrphanedMealReminders();
   await scheduleMealReminders(times);
+
+  try {
+    await scheduleDailyGuidanceNotifications();
+  } catch {
+    // Ignore.
+  }
 }
 
 export async function devInspectScheduledNotifications() {
