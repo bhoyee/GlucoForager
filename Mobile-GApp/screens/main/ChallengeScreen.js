@@ -59,7 +59,7 @@ export default function ChallengeScreen() {
     void loadChallenge();
   }, [loadChallenge]);
 
-  const toggleTask = useCallback(async (taskId, nextCompleted) => {
+  const toggleTask = useCallback(async (taskId, nextCompleted, { forceUndo = false } = {}) => {
     try {
       const token = await AsyncStorage.getItem('userToken');
       if (!token) return;
@@ -68,7 +68,7 @@ export default function ChallengeScreen() {
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ task_id: taskId, completed: Boolean(nextCompleted) }),
+          body: JSON.stringify({ task_id: taskId, completed: Boolean(nextCompleted), force_undo: Boolean(forceUndo) }),
         },
         { timeoutMs: 8000 }
       );
@@ -137,7 +137,24 @@ export default function ChallengeScreen() {
                 <TouchableOpacity
                   key={item.id}
                   style={styles.row}
-                  onPress={() => void toggleTask(item.id, !done)}
+                  onPress={() => {
+                    if (challenge?.completed_today && done) {
+                      Alert.alert(
+                        'Undo completion?',
+                        "This will undo today's completion and may affect your streak.",
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          {
+                            text: 'Undo',
+                            style: 'destructive',
+                            onPress: () => void toggleTask(item.id, false, { forceUndo: true }),
+                          },
+                        ]
+                      );
+                      return;
+                    }
+                    void toggleTask(item.id, !done);
+                  }}
                   activeOpacity={0.85}
                 >
                   <Ionicons
@@ -252,4 +269,3 @@ const styles = StyleSheet.create({
   completeTitle: { fontSize: 14, fontWeight: '900', color: Colors.success },
   completeSub: { marginTop: 4, fontSize: 12, lineHeight: 18, color: Colors.textLight, fontWeight: '700' },
 });
-
