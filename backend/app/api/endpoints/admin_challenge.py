@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -7,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from ..admin_dependencies import get_current_admin
 from ...database import get_db
+from ...models.user_daily_challenge import UserDailyChallenge
 from ...services.daily_challenge_service import get_catalog, save_catalog
 
 
@@ -129,3 +131,32 @@ def seed_challenge_tasks(
     save_catalog(db, existing)
     return {"mode": mode_norm, "added": added, "updated": updated, "total": len(existing)}
 
+
+@router.post("/reset-snapshots")
+def reset_daily_challenge_snapshots(
+    date_iso: str | None = None,
+    user_id: int | None = None,
+    db: Session = Depends(get_db),
+    admin=Depends(get_current_admin),  # noqa: ARG001
+):
+    """Clear daily challenge snapshots (user_daily_challenges) for a given date.
+
+    - Default: clears snapshots for today's UTC date for all users.
+    - date_iso: optional YYYY-MM-DD (UTC date).
+    - user_id: optional, clear only one user's snapshot for that date.
+    """
+    if date_iso:
+        try:
+            day = datetime.strptime(date_iso.strip(), "%Y-%m-%d").date()
+        except Exception:
+            raise HTTPException(status_code=422, detail="date_iso must be YYYY-MM-DD") from None
+    else:
+        day = datetime.now(timezone.utc).date()
+
+    q = db.query(UserDailyChallenge).filter(UserDailyChallenge.date == day)
+    if user_id is not None:
+        q = q.filter(UserDailyChallenge.user_id == int(user_id))
+
+    deleted = q.delete(synchronize_session=False)
+    db.commit()
+    return {"date": day.isoformat(), "deleted": int(deleted)}
