@@ -85,12 +85,15 @@ export default function RecipeResultsScreen() {
   const formatTime = (recipe) => {
     const total = recipe?.total_time ?? recipe?.time ?? 0;
     if (typeof total === 'number' && total > 0) {
-      return `${total} min`;
+      return `${total} mins`;
     }
     const prep = recipe?.prep_time ?? 0;
     const cook = recipe?.cook_time ?? 0;
     const sum = prep + cook;
-    return sum > 0 ? `${sum} min` : 'N/A';
+    if (sum > 0) {
+      return `${sum} mins`;
+    }
+    return 'N/A';
   };
 
   const getMatchText = (recipe) => {

@@ -93,15 +93,25 @@ class AIRecipeGenerator:
 
         started = time.time()
         try:
-            resp = client.models.generate_content(
-                model=model,
-                contents=[prompt],
-                config=types.GenerateContentConfig(
+            kwargs: dict[str, Any] = {
+                "model": model,
+                "contents": [prompt],
+                "config": types.GenerateContentConfig(
                     temperature=float(temperature),
                     max_output_tokens=int(max_output_tokens),
                 ),
-                timeout=timeout_seconds,
-            )
+            }
+            # google-genai has had API surface changes; only pass `timeout` if supported.
+            if timeout_seconds is not None:
+                try:
+                    import inspect
+
+                    if "timeout" in inspect.signature(client.models.generate_content).parameters:
+                        kwargs["timeout"] = timeout_seconds
+                except Exception:
+                    # If signature inspection fails, omit timeout rather than crashing.
+                    pass
+            resp = client.models.generate_content(**kwargs)
         finally:
             if settings.ai_debug_logging:
                 elapsed = time.time() - started
@@ -112,21 +122,27 @@ class AIRecipeGenerator:
                     elapsed,
                 )
 
-        # google-genai exposes convenience `.text` on responses; fall back to candidate parsing.
-        text = getattr(resp, "text", None)
-        if isinstance(text, str) and text.strip():
-            return text
+        # Prefer aggregating all candidate parts rather than using `resp.text` directly.
+        # In practice `resp.text` can be incomplete depending on SDK version / response shape.
         candidates = getattr(resp, "candidates", None) or []
         if settings.ai_debug_logging and not candidates:
             logger.info("Gemini returned empty response (no candidates) model=%s", model)
         if candidates:
-            content = getattr(candidates[0], "content", None)
-            parts = getattr(content, "parts", None) or []
-            if parts:
-                part0 = parts[0]
-                part_text = getattr(part0, "text", None)
-                if isinstance(part_text, str):
-                    return part_text
+            texts: list[str] = []
+            for cand in candidates:
+                content = getattr(cand, "content", None)
+                parts = getattr(content, "parts", None) or []
+                for part in parts:
+                    part_text = getattr(part, "text", None)
+                    if isinstance(part_text, str) and part_text:
+                        texts.append(part_text)
+            joined = "".join(texts).strip()
+            if joined:
+                return joined
+
+        text = getattr(resp, "text", None)
+        if isinstance(text, str) and text.strip():
+            return text
         return ""
 
     def _call(
@@ -430,7 +446,7 @@ class AIRecipeGenerator:
                 f"Theme the three recipes across these cuisines: {', '.join(cuisines)}.",
                 "Ensure all three recipes are clearly different from each other (protein + method + flavor).",
                 f"Variation token: {random.randint(1000, 9999)}.",
-                "Instructions must be beginner-friendly: write 8-10 steps per recipe. Each step should include at least one concrete detail (time in minutes, heat level, visual cue, or exact action). Avoid vague steps like 'cook until done' without guidance.",
+                "Instructions must be beginner-friendly: write 6-8 steps per recipe. Each step should include at least one concrete detail (time in minutes, heat level, visual cue, or exact action). Avoid vague steps like 'cook until done' without guidance.",
             ]
             if mode_norm == "quick":
                 mode_parts.extend(
@@ -455,9 +471,49 @@ class AIRecipeGenerator:
             if cleaned.startswith("```"):
                 cleaned = re.sub(r"^```[a-zA-Z]*", "", cleaned)
                 cleaned = cleaned.strip("`").strip()
+
+            def _escape_newlines_in_json_strings(text: str) -> str:
+                # Some providers (notably Gemini) occasionally emit literal newlines inside JSON strings,
+                # which makes the JSON invalid. Repair by escaping newlines *only when inside a string*.
+                out: list[str] = []
+                in_string = False
+                escape = False
+                for ch in text:
+                    if in_string:
+                        if escape:
+                            escape = False
+                            out.append(ch)
+                            continue
+                        if ch == "\\":
+                            escape = True
+                            out.append(ch)
+                            continue
+                        if ch == "\"":
+                            in_string = False
+                            out.append(ch)
+                            continue
+                        if ch == "\n":
+                            out.append("\\n")
+                            continue
+                        if ch == "\r":
+                            out.append("\\r")
+                            continue
+                        out.append(ch)
+                        continue
+                    else:
+                        if ch == "\"":
+                            in_string = True
+                        out.append(ch)
+                return "".join(out)
+
             try:
                 data = json.loads(cleaned)
             except Exception as exc:
+                # Try repairing invalid JSON caused by literal newlines inside quoted strings.
+                try:
+                    data = json.loads(_escape_newlines_in_json_strings(cleaned))
+                except Exception:
+                    data = None
                 if settings.ai_debug_logging:
                     tail = cleaned[-240:] if len(cleaned) > 240 else cleaned
                     tail = tail.replace("\n", " ")
@@ -472,7 +528,7 @@ class AIRecipeGenerator:
                 end = cleaned.rfind("}")
                 if start != -1 and end != -1 and end > start:
                     try:
-                        data = json.loads(cleaned[start : end + 1])
+                        data = json.loads(_escape_newlines_in_json_strings(cleaned[start : end + 1]))
                     except Exception:
                         data = None
                 else:
@@ -480,7 +536,7 @@ class AIRecipeGenerator:
                     end = cleaned.rfind("]")
                     if start != -1 and end != -1 and end > start:
                         try:
-                            data = json.loads(cleaned[start : end + 1])
+                            data = json.loads(_escape_newlines_in_json_strings(cleaned[start : end + 1]))
                         except Exception:
                             data = None
                     else:
@@ -573,8 +629,9 @@ class AIRecipeGenerator:
                         normalized.append(item)
                     if normalized:
                         return normalized
-            except Exception:
-                pass
+            except Exception as exc:
+                if settings.ai_debug_logging:
+                    logger.info("AI parse_content normalize failed error=%s", str(exc)[:240])
             return []
 
         def emergency_recipes() -> List[Dict[str, Any]]:
@@ -801,6 +858,10 @@ class AIRecipeGenerator:
 
         started = time.time()
         budget = float(timeout_seconds) if timeout_seconds else None
+        # "Eat now" modes are a daily-use feature: keep the total wall-clock budget bounded for UX.
+        # Even if a higher timeout is passed from upstream, clamp surprise/quick to 60s.
+        if mode_norm in ("surprise", "quick") and budget is not None:
+            budget = min(budget, 60.0)
         attempts: list[dict[str, Any]] = []
         used_deterministic_schedule = False
 
@@ -822,7 +883,9 @@ class AIRecipeGenerator:
                     if remaining_phase <= 2:
                         break
                 try:
-                    temperature = 0.85 if mode_norm in ("surprise", "quick") else (0.7 if variety_mode else 0.4)
+                    # "Eat now" modes must be fast + JSON-clean. Keep temperature moderate to reduce verbosity
+                    # and lower the chance of truncation/invalid JSON.
+                    temperature = 0.55 if mode_norm in ("surprise", "quick") else (0.7 if variety_mode else 0.4)
                     per_request_timeout = None
                     if budget is not None:
                         remaining_total = budget - (time.time() - started)
@@ -855,7 +918,9 @@ class AIRecipeGenerator:
                         extra_instructions=extra_instructions,
                         temperature=temperature,
                         timeout_seconds=per_request_timeout,
-                        max_output_tokens=1600 if mode_norm in ("surprise", "quick") else 2000,
+                        # Give enough room to finish valid JSON (truncation => invalid JSON => slow fallback chain).
+                        # The prompt already enforces concision, so a higher cap doesn't mean longer outputs.
+                        max_output_tokens=2200 if mode_norm in ("surprise", "quick") else 2000,
                     )
                     parsed = parse_content(content)
                     recipes = self._filter_recipes(parsed, banned_titles_norm)
@@ -882,6 +947,15 @@ class AIRecipeGenerator:
                             if isinstance(recipe, dict):
                                 recipe["_ai_provider"] = provider
                                 recipe["_ai_model"] = model
+                        if settings.ai_debug_logging:
+                            logger.info(
+                                "AI output accepted mode=%s tier=%s provider=%s model=%s recipes=%d",
+                                mode_norm or "ingredients",
+                                tier,
+                                provider,
+                                model,
+                                len(recipes),
+                            )
                         if generate_images:
                             self._attach_images(recipes, tier, ingredients)
                         else:
@@ -919,7 +993,12 @@ class AIRecipeGenerator:
             has_gemini = bool(self.gemini_api_key and gemini_model)
             if self.primary_client and (has_gemini or self.fallback_client) and openai_models and (gemini_model or deepseek_models):
                 used_deterministic_schedule = True
-                phase_budget = 30.0 if budget >= 60.0 else max(5.0, budget / 2.0)
+                # Give the primary provider enough time to actually return (otherwise we burn time on fallbacks).
+                # Keep a hard ceiling for mobile UX; fallbacks use whatever remains.
+                if budget >= 60.0:
+                    phase_budget = 40.0
+                else:
+                    phase_budget = max(5.0, budget / 2.0)
                 if settings.ai_debug_logging:
                     logger.info(
                         "AI schedule mode=%s tier=%s primary_budget=%.1fs fallback_budget=remaining total_budget=%.1fs",
@@ -958,7 +1037,7 @@ class AIRecipeGenerator:
                             filters,
                             prompt_template=prompt_template,
                             extra_instructions=extra_instructions,
-                            temperature=0.85,
+                            temperature=0.6,
                             timeout_seconds=fallback_budget if fallback_budget >= 5 else 5.0,
                             max_output_tokens=1200,
                         )
@@ -970,6 +1049,14 @@ class AIRecipeGenerator:
                                 if isinstance(recipe, dict):
                                     recipe["_ai_provider"] = "gemini"
                                     recipe["_ai_model"] = gemini_model
+                            if settings.ai_debug_logging:
+                                logger.info(
+                                    "AI output accepted mode=%s tier=%s provider=gemini model=%s recipes=%d",
+                                    mode_norm,
+                                    tier,
+                                    gemini_model,
+                                    len(recipes),
+                                )
                             if generate_images:
                                 self._attach_images(recipes, tier, ingredients)
                             else:
@@ -982,6 +1069,8 @@ class AIRecipeGenerator:
                                 raw_preview = raw_preview[:6000] + "…"
                             logger.info("AI raw output provider=gemini model=%s raw=%s", gemini_model, raw_preview)
                     except Exception as exc:  # noqa: BLE001
+                        # Important: log why Gemini didn't run/returned empty so we don't silently waste fallback time.
+                        logger.warning("Gemini fallback failed (model=%s): %s", gemini_model, str(exc)[:400])
                         attempts.append({"model": gemini_model, "provider": "gemini", "error": str(exc)})
 
                 if self.fallback_client and deepseek_models:

@@ -26,6 +26,7 @@ import EatNowScreen from '../screens/main/EatNowScreen';
 import CarbSwapsScreen from '../screens/main/CarbSwapsScreen';
 import ChallengeScreen from '../screens/main/ChallengeScreen';
 import TodayTipScreen from '../screens/main/TodayTipScreen';
+import TipsArchiveScreen from '../screens/main/TipsArchiveScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -51,6 +52,7 @@ function HomeStackNavigator() {
       <HomeStack.Screen name="CarbSwaps" component={CarbSwapsScreen} />
       <HomeStack.Screen name="Challenge" component={ChallengeScreen} />
       <HomeStack.Screen name="TodayTip" component={TodayTipScreen} />
+      <HomeStack.Screen name="TipsArchive" component={TipsArchiveScreen} />
     </HomeStack.Navigator>
   );
 }

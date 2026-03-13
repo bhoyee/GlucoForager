@@ -35,6 +35,8 @@ export default function ManualInputScreen() {
   const [ingredients, setIngredients] = useState(['']);
   const [isLoading, setIsLoading] = useState(false);
   const [longWait, setLongWait] = useState(false);
+  const [countdownSeconds, setCountdownSeconds] = useState(null);
+  const countdownDeadlineRef = useRef(null);
   const requestControllerRef = useRef(null);
   const pollingRef = useRef(null);
   const timeoutRef = useRef(null);
@@ -170,6 +172,8 @@ export default function ManualInputScreen() {
       timeoutRef.current = null;
     }
     setLongWait(false);
+    setCountdownSeconds(null);
+    countdownDeadlineRef.current = null;
   };
 
   const scheduleLongWaitNotice = () => {
@@ -180,6 +184,26 @@ export default function ManualInputScreen() {
     setLongWait(false);
     timeoutRef.current = setTimeout(() => setLongWait(true), 45000);
   };
+
+  useEffect(() => {
+    if (!isLoading) {
+      setCountdownSeconds(null);
+      countdownDeadlineRef.current = null;
+      return;
+    }
+    // Always show a 60s countdown for the loading modal (UX expectation for "Eat now" flows).
+    const deadline = Date.now() + 60_000;
+    countdownDeadlineRef.current = deadline;
+    setCountdownSeconds(60);
+    const id = setInterval(() => {
+      const currentDeadline = countdownDeadlineRef.current;
+      if (!currentDeadline) return;
+      const remainingMs = currentDeadline - Date.now();
+      const remaining = Math.max(0, Math.ceil(remainingMs / 1000));
+      setCountdownSeconds(remaining);
+    }, 250);
+    return () => clearInterval(id);
+  }, [isLoading]);
 
   const handleJobResult = (result, normalized) => {
     const recipes = result?.results || [];
@@ -549,6 +573,16 @@ export default function ManualInputScreen() {
                 ? 'Please wait while we prepare 3 diabetes-friendly meal options.'
                 : 'Please wait while we prepare your diabetes-safe options.'}
             </Text>
+            {typeof countdownSeconds === 'number' ? (
+              <View style={styles.countdownBox}>
+                <Text style={styles.countdownLabel}>
+                  {countdownSeconds > 0 ? 'Time remaining' : 'Still working...'}
+                </Text>
+                {countdownSeconds > 0 ? (
+                  <Text style={styles.countdownValue}>{countdownSeconds}s</Text>
+                ) : null}
+              </View>
+            ) : null}
             {longWait ? (
               <View style={styles.longWaitBox}>
                 <Text style={styles.longWaitTitle}>Taking longer than usual</Text>
@@ -616,6 +650,22 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 13,
     color: Colors.textLight,
+    textAlign: 'center',
+  },
+  countdownBox: {
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  countdownLabel: {
+    fontSize: 13,
+    color: Colors.textMuted,
+    textAlign: 'center',
+  },
+  countdownValue: {
+    marginTop: 4,
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.text,
     textAlign: 'center',
   },
   longWaitBox: {

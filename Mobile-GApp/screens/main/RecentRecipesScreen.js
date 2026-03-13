@@ -65,37 +65,56 @@ export default function RecentRecipesScreen() {
     const cook = typeof cookRaw === 'number' ? cookRaw : parseFloat(cookRaw);
     if (Number.isFinite(prep) || Number.isFinite(cook)) {
       const total = (Number.isFinite(prep) ? prep : 0) + (Number.isFinite(cook) ? cook : 0);
-      return total ? `${total} min` : 'Time N/A';
+      if (!total) return 'Time N/A';
+      return `${total} mins`;
     }
     const totalRaw = recipe?.total_time ?? recipe?.totalTime ?? recipe?.time ?? null;
     const total = typeof totalRaw === 'number' ? totalRaw : parseFloat(totalRaw);
     if (Number.isFinite(total)) {
-      return `${total} min`;
+      return `${total} mins`;
     }
     return 'Time N/A';
   };
 
+  const getNutritionObject = (recipe) => {
+    return (
+      recipe?.nutritional_info ||
+      recipe?.nutrition ||
+      recipe?.nutrition_per_serving ||
+      recipe?.nutritionPerServing ||
+      recipe?.nutrition_per_serving ||
+      {}
+    );
+  };
+
   const getCaloriesValue = (recipe) => {
-    const value = recipe?.nutrition?.calories ?? recipe?.nutrition_per_serving?.calories ?? recipe?.calories;
-    return formatNutrient(value, 'cal', 'Cal --');
+    const nutrition = getNutritionObject(recipe);
+    const value = nutrition?.calories ?? recipe?.calories;
+    return formatMacro('Cal', value);
   };
 
   const getProteinValue = (recipe) => {
-    const value = recipe?.nutrition?.protein ?? recipe?.nutrition_per_serving?.protein ?? recipe?.protein;
-    return formatNutrient(value, 'g pro', 'Pro --');
+    const nutrition = getNutritionObject(recipe);
+    const value = nutrition?.protein ?? recipe?.protein;
+    return formatMacro('Pro', value, 'g');
   };
 
   const getFiberValue = (recipe) => {
-    const value = recipe?.nutrition?.fiber ?? recipe?.nutrition_per_serving?.fiber ?? recipe?.fiber;
-    return formatNutrient(value, 'g fib', 'Fib --');
+    const nutrition = getNutritionObject(recipe);
+    const value = nutrition?.fiber ?? recipe?.fiber;
+    return formatMacro('Fib', value, 'g');
   };
 
-  const formatNutrient = (value, suffix, emptyLabel) => {
+  const formatMacro = (label, value, unit = '') => {
+    const emptyLabel = `${label} --`;
     if (value === undefined || value === null || value === '') return emptyLabel;
-    if (typeof value === 'number') return `${value}${suffix ? ` ${suffix}` : ''}`.trim();
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return `${label} ${value}${unit ? unit : ''}`;
+    }
     const match = `${value}`.match(/[-+]?\d*\.?\d+/);
-    if (match) return `${match[0]}${suffix ? ` ${suffix}` : ''}`.trim();
-    return `${value}`.includes(suffix.trim()) ? `${value}` : `${value} ${suffix}`.trim();
+    if (!match) return emptyLabel;
+    const n = match[0];
+    return `${label} ${n}${unit ? unit : ''}`;
   };
 
   const loadRecent = useCallback(async () => {
@@ -395,6 +414,8 @@ const styles = StyleSheet.create({
   metaText: {
     fontSize: 12,
     color: Colors.textLight,
+    flexShrink: 0,
+    minWidth: 58,
   },
   recipeMetaValue: {
     fontSize: 12,

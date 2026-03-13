@@ -1,7 +1,11 @@
+import json
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from ...database import get_db
+from ...models.app_setting import AppSetting
+from ...services.tip_catalog_service import get_tip_of_the_day
 from ...services.settings_service import (
     AppUpdateSettings,
     RecipeImageSettings,
@@ -38,3 +42,36 @@ def get_app_update_config(db: Session = Depends(get_db)):
             "max_per_recipe": recipe_images.max_per_recipe,
         },
     }
+
+
+@router.get("/tips/config")
+def get_tips_config(db: Session = Depends(get_db)):
+    """Public config for the mobile app (e.g., to disable specific tips without shipping a new build)."""
+    key = "tips.settings.v1"
+    row = db.query(AppSetting).filter(AppSetting.key == key).first()
+    if not row or not row.value:
+        return {"blocked_tip_ids": []}
+    try:
+        data = json.loads(row.value)
+    except Exception:
+        return {"blocked_tip_ids": []}
+    if not isinstance(data, dict):
+        return {"blocked_tip_ids": []}
+    blocked = data.get("blocked_tip_ids")
+    if not isinstance(blocked, list):
+        blocked = []
+    cleaned: list[str] = []
+    for item in blocked:
+        if isinstance(item, str):
+            s = item.strip()
+            if s:
+                cleaned.append(s)
+    return {"blocked_tip_ids": cleaned}
+
+
+@router.get("/tips/today")
+def get_tip_today(db: Session = Depends(get_db)):
+    tip = get_tip_of_the_day(db)
+    if not tip:
+        return {"tip": None}
+    return {"tip": tip}

@@ -34,6 +34,7 @@ TIER_CONFIG = {
         ],
         # "Surprise me" / "Quick meal" should be fast and cheap even for premium.
         "recipe_models_fast": [
+            "gpt-4o-2024-11-20",
             "gpt-4o-mini-2024-07-18",
             "deepseek-chat",
         ],
@@ -112,7 +113,11 @@ EAT_NOW_PROMPT = """Create 3 diabetes-friendly meal ideas. Use common, easy-to-f
 RULES:
 - Return ONLY a single valid JSON object. No markdown, no code fences, no commentary.
 - Provide exactly 3 recipes.
-- Keep it concise but usable (8-10 instruction steps with concrete details).
+- Follow the schema EXACTLY. Do not add extra keys like "tips", "diabetes_analysis", "sodium", etc.
+- All string values must be single-line (no newline characters). Use spaces instead.
+- Keep it concise but usable:
+  - max 10 ingredients per recipe
+  - 6-8 instruction steps per recipe, with concrete details (minutes/heat/action)
 
 FORMAT (VALID JSON):
 {

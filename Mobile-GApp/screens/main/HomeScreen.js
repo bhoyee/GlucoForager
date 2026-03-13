@@ -1,5 +1,5 @@
 // screens/main/HomeScreen.js - UPDATED PRODUCTION VERSION
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -39,6 +39,12 @@ export default function HomeScreen() {
   const [recipeImagesEnabled, setRecipeImagesEnabled] = useState(true);
   const [recentRecipes, setRecentRecipes] = useState([]);
   const [isFetchingRecipes, setIsFetchingRecipes] = useState(false);
+  const [blockedTipIds, setBlockedTipIds] = useState([]);
+  const [serverTodayTip, setServerTodayTip] = useState(null);
+  const todayTip = useMemo(() => {
+    if (serverTodayTip?.title && (serverTodayTip?.tip || serverTodayTip?.body)) return serverTodayTip;
+    return getTodayTip(new Date(), { blockedTipIds });
+  }, [blockedTipIds, serverTodayTip]);
   const [showSuggestions, setShowSuggestions] = useState(true);
   const [networkError, setNetworkError] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -48,7 +54,53 @@ export default function HomeScreen() {
     scansToday: 0,
     favoritesSaved: 0,
   });
-  const todayTip = getTodayTip();
+  const loadTipConfig = async () => {
+    try {
+      const cached = await AsyncStorage.getItem('tips_blocked_ids_v1');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) {
+          setBlockedTipIds(parsed.filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim()));
+        }
+      }
+    } catch {
+      // ignore cache errors
+    }
+
+    try {
+      const response = await apiFetch(
+        `${API_URL}/api/app/tips/config`,
+        { method: 'GET' },
+        { timeoutMs: 5000 }
+      );
+      if (!response.ok) return;
+      const data = await response.json();
+      const raw = data?.blocked_tip_ids;
+      const blocked = Array.isArray(raw) ? raw.filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim()) : [];
+      setBlockedTipIds(blocked);
+      await AsyncStorage.setItem('tips_blocked_ids_v1', JSON.stringify(blocked));
+    } catch {
+      // ignore network errors
+    }
+  };
+
+  const loadTodayTip = async () => {
+    try {
+      const response = await apiFetch(
+        `${API_URL}/api/app/tips/today`,
+        { method: 'GET' },
+        { timeoutMs: 5000 }
+      );
+      if (!response.ok) return;
+      const data = await response.json();
+      const tip = data?.tip;
+      if (tip?.title) {
+        setServerTodayTip(tip);
+      }
+    } catch {
+      // ignore
+    }
+  };
 
   const getDeviceId = async () => {
     const existing = await AsyncStorage.getItem('deviceId');
@@ -128,6 +180,8 @@ export default function HomeScreen() {
         loadUserStats(),
         loadRecipes(),
         loadRecipeImagesFlag(),
+        loadTipConfig(),
+        loadTodayTip(),
       ]);
 
       const allFailed = results.every((result) => result.status === 'rejected');
@@ -545,9 +599,10 @@ export default function HomeScreen() {
           
           {/* Camera Scan Card */}
           <TouchableOpacity 
-            style={styles.actionCard}
+            style={[styles.actionCard, styles.actionCardPrimary]}
             onPress={handleScanPress}
           >
+            <View style={[styles.cardAccent, { backgroundColor: Colors.primary }]} pointerEvents="none" />
             <View style={styles.actionContent}>
               <View style={[styles.actionIcon, { backgroundColor: `${Colors.primary}15` }]}>
                 <Ionicons name="camera-outline" size={28} color={Colors.primary} />
@@ -567,9 +622,10 @@ export default function HomeScreen() {
 
           {/* Manual Input Card */}
           <TouchableOpacity 
-            style={styles.actionCard}
+            style={[styles.actionCard, styles.actionCardSecondary]}
             onPress={handleManualInputPress}
           >
+            <View style={[styles.cardAccent, { backgroundColor: Colors.secondary }]} pointerEvents="none" />
             <View style={styles.actionContent}>
               <View style={[styles.actionIcon, { backgroundColor: `${Colors.secondary}15` }]}>
                 <Ionicons name="create-outline" size={28} color={Colors.secondary} />
@@ -591,6 +647,7 @@ export default function HomeScreen() {
               style={styles.recentRow}
               onPress={handleViewRecentRecipes}
             >
+              <View style={[styles.cardAccent, { backgroundColor: Colors.primary }]} pointerEvents="none" />
               <View style={styles.recentRowContent}>
                 <Ionicons name="time-outline" size={18} color={Colors.primary} />
                 <Text style={styles.recentRowText}>Last Recipes</Text>
@@ -703,7 +760,7 @@ export default function HomeScreen() {
                       return (
                         <Text style={styles.recipeTime}>
                           {timeValue}
-                          <Text style={styles.recipeTimeUnit}>min</Text>
+                          <Text style={styles.recipeTimeUnit}>mins</Text>
                         </Text>
                       );
                     })()}
@@ -1002,11 +1059,28 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     marginBottom: 12,
+    position: 'relative',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
+  },
+  actionCardPrimary: {
+    backgroundColor: `${Colors.primary}08`,
+  },
+  actionCardSecondary: {
+    backgroundColor: `${Colors.secondary}08`,
+  },
+  cardAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 12,
+    bottom: 12,
+    width: 4,
+    borderTopRightRadius: 6,
+    borderBottomRightRadius: 6,
+    opacity: 0.9,
   },
   actionContent: {
     flexDirection: 'row',
@@ -1037,16 +1111,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: Colors.surface,
+    backgroundColor: `${Colors.primary}08`,
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 16,
     marginTop: 4,
+    position: 'relative',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
   recentRowContent: {
     flexDirection: 'row',

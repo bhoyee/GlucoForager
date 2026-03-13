@@ -47,12 +47,12 @@ export default function FavoritesScreen() {
     const cook = typeof cookRaw === 'number' ? cookRaw : parseFloat(cookRaw);
     if (Number.isFinite(prep) || Number.isFinite(cook)) {
       const total = (Number.isFinite(prep) ? prep : 0) + (Number.isFinite(cook) ? cook : 0);
-      return total ? `${total} min` : 'Time N/A';
+      return total ? `${total} mins` : 'Time N/A';
     }
     const totalRaw = recipe?.total_time ?? recipe?.totalTime ?? recipe?.time ?? null;
     const total = typeof totalRaw === 'number' ? totalRaw : parseFloat(totalRaw);
     if (Number.isFinite(total)) {
-      return `${total} min`;
+      return `${total} mins`;
     }
     return 'Time N/A';
   };
@@ -505,6 +505,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textLight,
     marginLeft: 0,
+    flexShrink: 0,
+    minWidth: 62,
   },
   recipeMetaValue: {
     fontSize: 13,
