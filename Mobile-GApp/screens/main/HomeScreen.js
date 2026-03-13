@@ -659,10 +659,10 @@ export default function HomeScreen() {
                 <Text style={styles.tipTitle} numberOfLines={2}>
                   {dailyChallenge.completed_today
                     ? 'Challenge complete'
-                    : `Progress ${Number(dailyChallenge?.progress?.completed || 0)} / ${Number(dailyChallenge?.progress?.total || 0)}`}
+                    : "Today's Diabetes Challenge"}
                 </Text>
                 <Text style={styles.tipSnippet} numberOfLines={1}>
-                  Streak {Number(dailyChallenge?.streak_days || 0)} days
+                  Progress {Number(dailyChallenge?.progress?.completed || 0)} / {Number(dailyChallenge?.progress?.total || 0)} â€¢ Streak {Number(dailyChallenge?.streak_days || 0)} days
                 </Text>
                 <View style={styles.challengeRows}>
                   {dailyChallenge.tasks.slice(0, 3).map((t) => (
