@@ -18,6 +18,8 @@ Rules:
 - First decide if the food is already a generally diabetes-friendly choice.
 - If it is already a good choice, DO NOT suggest swaps unless the user explicitly asks for substitutions.
 - If it is higher-impact (likely to spike), suggest swaps.
+- If the input is not a food or drink, set is_food_or_drink=false and do NOT fabricate swaps.
+- When you do not suggest swaps, set should_show_swaps=false and swaps=null.
 - Avoid extreme diets unless necessary.
 - Focus on common grocery-store or restaurant options.
 - Include a short explanation.
@@ -27,6 +29,8 @@ Rules:
 Return ONLY valid JSON with this exact shape:
 {
   "assessment": {
+    "is_food_or_drink": true | false,
+    "confidence": 0.0,
     "verdict": "good_choice" | "higher_impact" | "depends",
     "summary": "...",
     "watch_outs": ["...", "..."],
@@ -92,6 +96,14 @@ def _normalize_payload(data: Dict[str, Any]) -> Dict[str, Any] | None:
 
     if not isinstance(assessment, dict):
         return None
+    is_food_or_drink_raw = assessment.get("is_food_or_drink")
+    is_food_or_drink = bool(is_food_or_drink_raw)
+    confidence_raw = assessment.get("confidence")
+    confidence = 0.0
+    try:
+        confidence = float(confidence_raw)
+    except Exception:
+        confidence = 0.0
     verdict = str(assessment.get("verdict") or "").strip()
     if verdict not in {"good_choice", "higher_impact", "depends"}:
         return None
@@ -126,6 +138,8 @@ def _normalize_payload(data: Dict[str, Any]) -> Dict[str, Any] | None:
 
     return {
         "assessment": {
+            "is_food_or_drink": bool(is_food_or_drink),
+            "confidence": max(0.0, min(1.0, confidence)),
             "verdict": verdict,
             "summary": summary.strip()[:240],
             "watch_outs": watch_outs,
