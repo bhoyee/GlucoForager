@@ -714,8 +714,8 @@ export default function HomeScreen() {
               <View style={[styles.miniIcon, { backgroundColor: `${Colors.secondary}18` }]}>
                 <Ionicons name="swap-horizontal-outline" size={18} color={Colors.secondary} />
               </View>
-              <Text style={styles.miniTitle}>Swaps</Text>
-              <Text style={styles.miniSub} numberOfLines={1}>Better options</Text>
+              <Text style={styles.miniTitle}>Food swaps</Text>
+              <Text style={styles.miniSub} numberOfLines={1}>Carbs, desserts, drinks</Text>
             </Pressable>
 
             <Pressable
