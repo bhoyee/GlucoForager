@@ -43,6 +43,7 @@ from .api.endpoints import (
     newsletter,
     admin_newsletter,
     admin_tips,
+    app_swaps,
 )
 from .core.config import settings
 from .database import Base, engine
@@ -270,6 +271,7 @@ app.include_router(admin_revenuecat.router, prefix="/api")
 app.include_router(admin_user_email.router, prefix="/api")
 app.include_router(admin_email_campaigns.router, prefix="/api")
 app.include_router(app_public.router, prefix="/api")
+app.include_router(app_swaps.router, prefix="/api")
 app.include_router(ingredients.router, prefix="/api")
 app.include_router(recipes.router, prefix="/api")
 app.include_router(subscriptions.router, prefix="/api")

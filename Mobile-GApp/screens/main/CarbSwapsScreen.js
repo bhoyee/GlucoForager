@@ -1,9 +1,12 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView } from 'react-native';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/Colors';
+import { apiFetch } from '../../utils/api';
+import { API_URL } from '../../config/api';
 
 const SWAPS = {
   rice: ['Cauliflower rice', 'Quinoa (small portion)', 'Konjac rice', 'Brown rice (small portion)'],
@@ -34,6 +37,10 @@ export default function CarbSwapsScreen() {
   const contentBottomPadding = Math.max(insets.bottom + 12, 12);
   const [query, setQuery] = useState('');
   const [isFocused, setIsFocused] = useState(false);
+  const [aiResult, setAiResult] = useState(null);
+  const [aiError, setAiError] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const lastRequestIdRef = useRef(0);
 
   const suggestions = useMemo(
     () => ['rice', 'pasta', 'bread', 'potato', 'cereal', 'pizza', 'soda', 'juice', 'ice cream'],
@@ -52,6 +59,70 @@ export default function CarbSwapsScreen() {
     const direct = Object.keys(SWAPS).find((k) => key.includes(k));
     if (direct) return { key: direct, items: SWAPS[direct] };
     return null;
+  }, [query]);
+
+  const fetchAiSwaps = async (food) => {
+    const trimmed = String(food || '').trim();
+    if (!trimmed) return;
+    const requestId = Date.now();
+    lastRequestIdRef.current = requestId;
+    setLoading(true);
+    setAiError(null);
+
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        setAiError('Sign in required to use Food swaps.');
+        setAiResult(null);
+        return;
+      }
+      const response = await apiFetch(
+        `${API_URL}/api/app/swaps`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ food: trimmed }),
+        },
+        { timeoutMs: 12000 }
+      );
+      if (lastRequestIdRef.current !== requestId) return;
+      if (!response.ok) {
+        const data = await response.json();
+        setAiError(data?.detail || 'Swaps request failed.');
+        setAiResult(null);
+        return;
+      }
+      const data = await response.json();
+      if (data?.better_options?.length) {
+        setAiResult(data);
+      } else {
+        setAiError('No swaps returned.');
+        setAiResult(null);
+      }
+    } catch {
+      if (lastRequestIdRef.current !== requestId) return;
+      setAiError('Swaps request failed.');
+      setAiResult(null);
+    } finally {
+      if (lastRequestIdRef.current === requestId) setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const trimmed = String(query || '').trim();
+    setAiResult(null);
+    setAiError(null);
+    if (!trimmed) {
+      setLoading(false);
+      return;
+    }
+    const handle = setTimeout(() => {
+      void fetchAiSwaps(trimmed);
+    }, 450);
+    return () => clearTimeout(handle);
   }, [query]);
 
   return (
@@ -119,6 +190,35 @@ export default function CarbSwapsScreen() {
               </View>
               <Text style={styles.disclaimer}>Tip: start with a general word (e.g. "bread" instead of a brand name).</Text>
             </>
+          ) : loading ? (
+            <View style={styles.loadingBox}>
+              <ActivityIndicator size="small" color={Colors.secondary} />
+              <Text style={styles.loadingText}>Finding swaps…</Text>
+            </View>
+          ) : aiResult ? (
+            <>
+              <Text style={styles.cardSub}>
+                Better options for <Text style={styles.bold}>{aiResult.food}</Text>
+              </Text>
+              <View style={styles.rows}>
+                {aiResult.better_options.map((item) => (
+                  <View key={item} style={styles.row}>
+                    <View style={styles.rowIcon}>
+                      <Ionicons name="sparkles-outline" size={16} color={Colors.secondary} />
+                    </View>
+                    <Text style={styles.rowText}>{item}</Text>
+                  </View>
+                ))}
+              </View>
+              <View style={styles.noteCard}>
+                <Text style={styles.noteTitle}>Why these are better</Text>
+                <Text style={styles.noteText}>{aiResult.why_these_are_better}</Text>
+              </View>
+              <View style={styles.noteCard}>
+                <Text style={styles.noteTitle}>Portion tip</Text>
+                <Text style={styles.noteText}>{aiResult.portion_tip}</Text>
+              </View>
+            </>
           ) : matches ? (
             <>
               <Text style={styles.cardSub}>
@@ -138,8 +238,10 @@ export default function CarbSwapsScreen() {
             </>
           ) : (
             <>
-              <Text style={styles.cardSub}>No swaps found yet for that term.</Text>
-              <Text style={styles.disclaimer}>Try a more general word (e.g. "bread" instead of a brand name).</Text>
+              <Text style={styles.cardSub}>{aiError ? aiError : 'No swaps found yet for that term.'}</Text>
+              <Text style={styles.disclaimer}>
+                Try a more general word (e.g. "bread" instead of a brand name).
+              </Text>
             </>
           )}
         </View>
@@ -271,4 +373,21 @@ const styles = StyleSheet.create({
   },
   pillText: { color: Colors.secondary, fontWeight: '900', fontSize: 12 },
   disclaimer: { marginTop: 14, fontSize: 12, lineHeight: 18, color: Colors.textLight, fontWeight: '600' },
+  loadingBox: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  loadingText: { fontSize: 13, color: Colors.textLight, fontWeight: '700' },
+  noteCard: {
+    marginTop: 12,
+    backgroundColor: `${Colors.secondary}08`,
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: `${Colors.secondary}18`,
+  },
+  noteTitle: { fontSize: 12, fontWeight: '900', color: Colors.text, marginBottom: 6 },
+  noteText: { fontSize: 13, lineHeight: 18, color: Colors.textLight, fontWeight: '700' },
 });
