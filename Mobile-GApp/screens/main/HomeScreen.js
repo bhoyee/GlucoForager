@@ -674,9 +674,12 @@ export default function HomeScreen() {
               <Ionicons name="bulb-outline" size={20} color={Colors.primary} />
             </View>
             <View style={styles.tipText}>
-              <Text style={styles.tipLabel}>Today's tip</Text>
+              <Text style={styles.tipLabel}>Daily guidance</Text>
               <Text style={styles.tipTitle} numberOfLines={2}>
                 {todayTip.title}
+              </Text>
+              <Text style={styles.tipSnippet} numberOfLines={1}>
+                {todayTip.tip || todayTip.body || 'Small daily actions to support steadier blood sugar.'}
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
@@ -689,7 +692,7 @@ export default function HomeScreen() {
               </View>
               <View style={styles.eatNowText}>
                 <Text style={styles.eatNowTitle}>Eat now</Text>
-                <Text style={styles.eatNowSub}>3 ideas in seconds — use what you have or surprise me.</Text>
+                <Text style={styles.eatNowSub}>3 ideas in seconds - use what you have or surprise me.</Text>
               </View>
             </View>
             <Ionicons name="chevron-forward" size={22} color="rgba(255,255,255,0.9)" />
@@ -995,6 +998,7 @@ const styles = StyleSheet.create({
   tipText: { flex: 1 },
   tipLabel: { fontSize: 12, fontWeight: '900', color: Colors.primary, textTransform: 'uppercase' },
   tipTitle: { marginTop: 2, fontSize: 14, fontWeight: '800', color: Colors.text },
+  tipSnippet: { marginTop: 4, fontSize: 12, fontWeight: '700', color: Colors.textLight },
   eatNowCard: {
     marginTop: 12,
     borderRadius: 18,
