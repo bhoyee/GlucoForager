@@ -19,13 +19,13 @@ router = APIRouter(prefix="/app", tags=["app"])
 
 
 class SwapsRequest(BaseModel):
-    food: str = Field(..., min_length=1, max_length=80)
+    food: str = Field(..., min_length=1, max_length=40)
     force_swaps: bool = False
 
 
 def _normalize_food_input(value: str) -> str:
     s = " ".join((value or "").strip().split())
-    return s[:80]
+    return s[:40]
 
 
 def _looks_like_food_query(value: str) -> bool:
