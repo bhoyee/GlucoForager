@@ -263,6 +263,7 @@ def set_task_completed(
     user: User,
     task_id: str,
     completed: bool,
+    force_undo: bool = False,
     on_date: date | None = None,
 ) -> dict[str, Any]:
     task_id = (task_id or "").strip()
@@ -277,6 +278,12 @@ def set_task_completed(
 
     completed_ids = [x for x in _parse_json_list(row.completed_task_ids_json) if isinstance(x, str)]
     completed_set = set(completed_ids)
+    if not completed:
+        # Safety guard: if the user already completed today's challenge, require an explicit "force undo"
+        # to avoid accidental taps that break completion and streak.
+        total_ids = {x for x in allowed_ids if x}
+        if total_ids and completed_set.issuperset(total_ids) and not bool(force_undo):
+            raise ValueError("Challenge already completed today. Confirm undo to uncheck tasks.")
     if completed:
         completed_set.add(task_id)
     else:
@@ -329,4 +336,3 @@ def get_streak_days(db: Session, *, user: User, up_to: date | None = None, max_d
             break
         cur = cur.fromordinal(cur.toordinal() - 1)
     return streak
-

@@ -14,6 +14,7 @@ router = APIRouter(prefix="/app", tags=["app"])
 class ChallengeCompletePayload(BaseModel):
     task_id: str = Field(..., min_length=1, max_length=80)
     completed: bool = True
+    force_undo: bool = False
 
 
 @router.get("/challenge/today")
@@ -31,8 +32,13 @@ def complete_challenge_task(
     user: User = Depends(get_current_user),
 ):
     try:
-        view = set_task_completed(db, user=user, task_id=payload.task_id, completed=bool(payload.completed))
+        view = set_task_completed(
+            db,
+            user=user,
+            task_id=payload.task_id,
+            completed=bool(payload.completed),
+            force_undo=bool(payload.force_undo),
+        )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
     return {"challenge": view}
-
