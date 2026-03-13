@@ -618,9 +618,9 @@ export default function HomeScreen() {
           )}
         </View>
 
-        {/* Daily */}
+        {/* Daily guidance */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Daily</Text>
+          <Text style={styles.sectionTitle}>Daily guidance</Text>
           <Text style={styles.sectionSubtitle}>Small daily actions to support steadier blood sugar.</Text>
 
           <Pressable
@@ -655,14 +655,14 @@ export default function HomeScreen() {
                 <Ionicons name="trophy-outline" size={20} color={Colors.primary} />
               </View>
               <View style={styles.challengeText}>
-                <Text style={styles.tipLabel}>Today's diabetes challenge</Text>
+                <Text style={styles.tipLabel}>Challenge</Text>
                 <Text style={styles.tipTitle} numberOfLines={2}>
                   {dailyChallenge.completed_today
                     ? 'Challenge complete'
                     : "Today's Diabetes Challenge"}
                 </Text>
                 <Text style={styles.tipSnippet} numberOfLines={1}>
-                  Progress {Number(dailyChallenge?.progress?.completed || 0)} / {Number(dailyChallenge?.progress?.total || 0)} â€¢ Streak {Number(dailyChallenge?.streak_days || 0)} days
+                  Progress {Number(dailyChallenge?.progress?.completed || 0)} / {Number(dailyChallenge?.progress?.total || 0)} | Streak {Number(dailyChallenge?.streak_days || 0)} days
                 </Text>
                 <View style={styles.challengeRows}>
                   {dailyChallenge.tasks.slice(0, 3).map((t) => (
