@@ -86,9 +86,10 @@ export default function HomeScreen() {
 
   const loadTodayTip = async () => {
     try {
+      const token = await AsyncStorage.getItem('userToken');
       const response = await apiFetch(
         `${API_URL}/api/app/tips/today`,
-        { method: 'GET' },
+        { method: 'GET', headers: token ? { Authorization: `Bearer ${token}` } : undefined },
         { timeoutMs: 5000 }
       );
       if (!response.ok) return;
