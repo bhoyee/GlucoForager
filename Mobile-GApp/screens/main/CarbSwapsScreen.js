@@ -105,7 +105,7 @@ export default function CarbSwapsScreen() {
           setAiSuggestedQuery(typeof detail.suggested_query === 'string' ? detail.suggested_query : null);
         } else {
           setAiError(detail || 'Swaps request failed.');
-          setAiErrorCode('request_failed');
+          setAiErrorCode(response.status === 0 ? 'network_error' : 'request_failed');
           setAiSuggestedQuery(null);
           setShouldUpgrade(false);
         }
@@ -121,7 +121,9 @@ export default function CarbSwapsScreen() {
       }
     } catch {
       if (lastRequestIdRef.current !== requestId) return;
-      setAiError('Swaps request failed.');
+      setAiError('Network request failed. Please check your connection.');
+      setAiErrorCode('network_error');
+      setAiSuggestedQuery(null);
       setAiResult(null);
     } finally {
       if (lastRequestIdRef.current === requestId) setLoading(false);
@@ -322,7 +324,15 @@ export default function CarbSwapsScreen() {
                 </TouchableOpacity>
               ) : null}
 
-              <Text style={styles.disclaimer}>Try a general food or drink (e.g. “bread”, “donut”, “soda”).</Text>
+              {aiErrorCode === 'invalid_food_input' ||
+              aiErrorCode === 'not_food_or_drink' ||
+              aiErrorCode === 'needs_clarification' ? (
+                <Text style={styles.disclaimer}>Try a general food or drink (e.g. “bread”, “donut”, “soda”).</Text>
+              ) : aiErrorCode === 'network_error' ? (
+                <Text style={styles.disclaimer}>Make sure your phone is online and the server is reachable.</Text>
+              ) : (
+                <Text style={styles.disclaimer}>Please try again in a moment.</Text>
+              )}
               {shouldUpgrade ? (
                 <TouchableOpacity
                   style={styles.upgradeButton}
