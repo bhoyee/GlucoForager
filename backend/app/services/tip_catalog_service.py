@@ -6,10 +6,71 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from ..models.app_setting import AppSetting
+from ..models.user import User
 
 
 CATALOG_KEY = "tips.catalog.v1"
 SETTINGS_KEY = "tips.settings.v1"
+
+
+ONBOARDING_TIPS: list[dict[str, Any]] = [
+    {
+        "id": "onboarding-day-1-protein-first",
+        "title": "Start meals with protein",
+        "tip": "Eat protein before carbohydrate-heavy foods.",
+        "why": "Protein slows carbohydrate digestion and may reduce post-meal glucose spikes.",
+        "try_today": "Eat eggs, yogurt, or chicken before rice or bread.",
+        "category": "meals",
+    },
+    {
+        "id": "onboarding-day-2-veg-first",
+        "title": "Eat vegetables before carbs",
+        "tip": "Start meals with vegetables whenever possible.",
+        "why": "Fiber slows carbohydrate absorption.",
+        "try_today": "Eat salad or vegetables before the main meal.",
+        "category": "meals",
+    },
+    {
+        "id": "onboarding-day-3-pair-carbs",
+        "title": "Never eat carbs alone",
+        "tip": "Combine carbohydrates with protein or healthy fat.",
+        "why": "Protein and fats slow glucose spikes.",
+        "try_today": "Eat apple slices with peanut butter instead of eating fruit alone.",
+        "category": "habits",
+    },
+    {
+        "id": "onboarding-day-4-walk-after",
+        "title": "Walk after eating",
+        "tip": "A short walk after meals helps control blood sugar.",
+        "why": "Muscles use glucose during activity.",
+        "try_today": "Walk for 10-15 minutes after dinner.",
+        "category": "movement",
+    },
+    {
+        "id": "onboarding-day-5-rice-portion",
+        "title": "Watch rice portions",
+        "tip": "Large portions of rice can spike glucose.",
+        "why": "Rice is high in carbohydrates.",
+        "try_today": "Reduce rice slightly and add vegetables.",
+        "category": "meals",
+    },
+    {
+        "id": "onboarding-day-6-protein-snacks",
+        "title": "Snack smarter",
+        "tip": "Choose snacks with protein instead of sugary snacks.",
+        "why": "Protein snacks stabilize blood sugar.",
+        "try_today": "Snack on nuts, yogurt, or boiled eggs.",
+        "category": "habits",
+    },
+    {
+        "id": "onboarding-day-7-balanced-plates",
+        "title": "Balance every meal",
+        "tip": "Build meals with protein, vegetables, and moderate carbs.",
+        "why": "Balanced meals reduce glucose spikes.",
+        "try_today": "Fill half your plate with vegetables.",
+        "category": "meals",
+    },
+]
 
 
 def _day_of_year_utc(value: date | None = None) -> int:
@@ -150,3 +211,23 @@ def get_tip_of_the_day(db: Session, *, on_date: date | None = None) -> dict[str,
         return {}
     index = _day_of_year_utc(on_date) % len(pool)
     return pool[index]
+
+
+def get_tip_for_user(db: Session, user: User | None, *, on_date: date | None = None) -> dict[str, Any]:
+    """Return onboarding tip for the first 7 days after signup, else the regular daily rotation."""
+    if user and getattr(user, "created_at", None):
+        created_at = user.created_at
+        try:
+            created_date = created_at.date()
+        except Exception:
+            created_date = None
+        today = on_date or datetime.now(timezone.utc).date()
+        if created_date:
+            days_since = (today - created_date).days
+            if 0 <= days_since < len(ONBOARDING_TIPS):
+                blocked = set(get_tip_settings(db).get("blocked_tip_ids") or [])
+                tip = ONBOARDING_TIPS[days_since]
+                # If an onboarding tip is blocked, fall back to normal rotation for that day.
+                if str(tip.get("id") or "") not in blocked:
+                    return tip
+    return get_tip_of_the_day(db, on_date=on_date)

@@ -1,11 +1,13 @@
 import json
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from ...database import get_db
 from ...models.app_setting import AppSetting
-from ...services.tip_catalog_service import get_tip_of_the_day
+from ...models.user import User
+from ...services.tip_catalog_service import get_tip_for_user
+from ...core.security import decode_access_token
 from ...services.settings_service import (
     AppUpdateSettings,
     RecipeImageSettings,
@@ -70,8 +72,21 @@ def get_tips_config(db: Session = Depends(get_db)):
 
 
 @router.get("/tips/today")
-def get_tip_today(db: Session = Depends(get_db)):
-    tip = get_tip_of_the_day(db)
+def get_tip_today(request: Request, db: Session = Depends(get_db)):
+    auth_header = request.headers.get("authorization") or ""
+    user: User | None = None
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header.split(" ", 1)[-1].strip()
+        if token:
+            try:
+                payload = decode_access_token(token)
+                user_id = payload.get("sub")
+                if user_id:
+                    user = db.query(User).filter(User.id == int(user_id)).first()
+            except Exception:
+                user = None
+
+    tip = get_tip_for_user(db, user)
     if not tip:
         return {"tip": None}
     return {"tip": tip}
