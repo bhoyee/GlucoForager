@@ -49,6 +49,11 @@ def _looks_like_food_query(value: str) -> bool:
     return True
 
 
+def _http_error(*, status_code: int, code: str, message: str, **extra):
+    detail = {"code": code, "message": message, **extra}
+    raise HTTPException(status_code=status_code, detail=detail)
+
+
 @router.post("/swaps")
 def generate_food_swaps(
     payload: SwapsRequest,
@@ -58,12 +63,10 @@ def generate_food_swaps(
 ):
     food = _normalize_food_input(payload.food)
     if not _looks_like_food_query(food):
-        raise HTTPException(
+        _http_error(
             status_code=422,
-            detail={
-                "code": "invalid_food_input",
-                "message": "Enter a single food or drink (e.g. 'rice', 'spinach', 'soda').",
-            },
+            code="invalid_food_input",
+            message="Enter a single food or drink (e.g. 'rice', 'spinach', 'soda').",
         )
 
     tier = get_effective_subscription_tier(db, user)
@@ -75,13 +78,11 @@ def generate_food_swaps(
     minute_key = f"swaps:rl:v1:user:{user.id}"
     minute_count = cache.incr(minute_key, ttl_seconds=60)
     if minute_count > per_minute_limit:
-        raise HTTPException(
+        _http_error(
             status_code=429,
-            detail={
-                "code": "rate_limited",
-                "message": "You're searching too fast. Please wait a moment and try again.",
-                "limit_per_minute": per_minute_limit,
-            },
+            code="rate_limited",
+            message="You're searching too fast. Please wait a moment and try again.",
+            limit_per_minute=per_minute_limit,
         )
 
     # Daily quota (UTC-ish; uses server UTC time).
@@ -98,23 +99,19 @@ def generate_food_swaps(
     )
     if used_today >= per_day_limit:
         if tier != "premium":
-            raise HTTPException(
+            _http_error(
                 status_code=429,
-                detail={
-                    "code": "daily_limit_reached",
-                    "message": "Daily Food swaps limit reached. Upgrade to Premium for more.",
-                    "limit_per_day": per_day_limit,
-                    "upgrade": True,
-                },
+                code="daily_limit_reached",
+                message="Daily Food swaps limit reached. Upgrade to Premium for more.",
+                limit_per_day=per_day_limit,
+                upgrade=True,
             )
-        raise HTTPException(
+        _http_error(
             status_code=429,
-            detail={
-                "code": "daily_limit_reached",
-                "message": "Daily Food swaps limit reached. Please try again tomorrow.",
-                "limit_per_day": per_day_limit,
-                "upgrade": False,
-            },
+            code="daily_limit_reached",
+            message="Daily Food swaps limit reached. Please try again tomorrow.",
+            limit_per_day=per_day_limit,
+            upgrade=False,
         )
 
     # Cache identical requests (shared by tier + food + force flag).
@@ -144,7 +141,18 @@ def generate_food_swaps(
         result = service.generate_swaps(food=food, force_swaps=bool(payload.force_swaps), timeout_seconds=12.0)
         assessment = result.get("assessment") or {}
         if not isinstance(assessment, dict):
-            raise HTTPException(status_code=502, detail="Swaps generation failed")
+            _http_error(status_code=502, code="swaps_failed", message="Couldn't generate swaps right now. Please try again.")
+
+        if bool(assessment.get("needs_clarification")):
+            suggested_query = assessment.get("suggested_query")
+            question = assessment.get("clarification_question")
+            msg = (question or "").strip() or "I couldn't understand that. Try a simpler food name (e.g. 'donut', 'bread')."
+            _http_error(
+                status_code=422,
+                code="needs_clarification",
+                message=msg,
+                suggested_query=suggested_query,
+            )
         is_food_or_drink = bool(assessment.get("is_food_or_drink", True))
         confidence = 1.0
         try:
@@ -152,12 +160,10 @@ def generate_food_swaps(
         except Exception:
             confidence = 1.0
         if not is_food_or_drink or confidence < 0.65:
-            raise HTTPException(
+            _http_error(
                 status_code=422,
-                detail={
-                    "code": "not_food_or_drink",
-                    "message": "Please enter a food or drink (e.g. 'rice', 'spinach', 'soda').",
-                },
+                code="not_food_or_drink",
+                message="Please enter a food or drink (e.g. 'rice', 'spinach', 'soda').",
             )
 
         device_id = request.headers.get("x-device-id")
@@ -182,6 +188,24 @@ def generate_food_swaps(
         cache.set(cache_key, json.dumps(response_payload, ensure_ascii=False), ttl_seconds=6 * 60 * 60)
         return response_payload
     except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e)) from e
+        msg = str(e or "")
+        if msg in {"food is required"}:
+            _http_error(
+                status_code=422,
+                code="invalid_food_input",
+                message="Enter a single food or drink (e.g. 'rice', 'spinach', 'soda').",
+            )
+        # Never leak model/parsing errors to the client (e.g. "Invalid AI swaps payload").
+        _http_error(
+            status_code=502,
+            code="ai_output_invalid",
+            message="Couldn't generate swaps right now. Please try again in a moment.",
+        )
+    except HTTPException:
+        raise
     except Exception:
-        raise HTTPException(status_code=502, detail="Swaps generation failed")
+        _http_error(
+            status_code=502,
+            code="swaps_failed",
+            message="Couldn't generate swaps right now. Please try again in a moment.",
+        )
