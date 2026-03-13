@@ -19,6 +19,7 @@ from .api.endpoints import (
     auth,
     admin,
     admin_settings,
+    admin_challenge,
     admin_revenuecat,
     admin_user_email,
     admin_email_campaigns,
@@ -269,6 +270,7 @@ except Exception as exc:  # noqa: BLE001
 app.include_router(auth.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 app.include_router(admin_settings.router, prefix="/api")
+app.include_router(admin_challenge.router, prefix="/api")
 app.include_router(admin_revenuecat.router, prefix="/api")
 app.include_router(admin_user_email.router, prefix="/api")
 app.include_router(admin_email_campaigns.router, prefix="/api")
