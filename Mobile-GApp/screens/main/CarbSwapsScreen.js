@@ -7,26 +7,25 @@ import { Colors } from '../../constants/Colors';
 
 const SWAPS = {
   rice: ['Cauliflower rice', 'Quinoa (small portion)', 'Konjac rice', 'Brown rice (small portion)'],
-  bread: ['Whole grain bread (1 slice)', 'Low‑carb wrap', 'Lettuce wrap', 'Sourdough (small portion)'],
+  bread: ['Whole grain bread (1 slice)', 'Low-carb wrap', 'Lettuce wrap', 'Sourdough (small portion)'],
   pasta: ['Zucchini noodles', 'Shirataki noodles', 'Spaghetti squash', 'Lentil pasta (small portion)'],
   potato: ['Sweet potato (small portion)', 'Roasted cauliflower', 'Turnips', 'Mixed veggies'],
-  fries: ['Air‑fried zucchini', 'Roasted carrots (small portion)', 'Side salad', 'Roasted broccoli'],
-  cereal: ['Chia pudding', 'Greek yogurt + berries', 'Steel‑cut oats (small portion)', 'Eggs + veg'],
-  noodles: ['Shirataki noodles', 'Zucchini noodles', 'Bean sprouts', 'Cabbage stir‑fry base'],
-  tortillas: ['Low‑carb wrap', 'Lettuce wrap', 'Cabbage wrap', 'Corn tortilla (small portion)'],
+  fries: ['Air-fried zucchini', 'Roasted carrots (small portion)', 'Side salad', 'Roasted broccoli'],
+  cereal: ['Chia pudding', 'Greek yogurt + berries', 'Steel-cut oats (small portion)', 'Eggs + veg'],
+  noodles: ['Shirataki noodles', 'Zucchini noodles', 'Bean sprouts', 'Cabbage stir-fry base'],
+  tortillas: ['Low-carb wrap', 'Lettuce wrap', 'Cabbage wrap', 'Corn tortilla (small portion)'],
   pizza: ['Cauliflower crust', 'Thin crust + extra veg', 'Chicken crust', 'Pizza bowl (no crust)'],
   sugar: ['Stevia/erythritol (sparingly)', 'Cinnamon', 'Vanilla + berries', 'Unsweetened yogurt'],
   soda: ['Sparkling water', 'Diet soda (occasionally)', 'Unsweetened iced tea', 'Water + lemon'],
   juice: ['Water + fruit slices', 'Unsweetened tea', 'Diluted juice (small)', 'Eat whole fruit instead'],
-  oats: ['Steel‑cut oats (small portion)', 'Chia pudding', 'Greek yogurt bowl', 'Eggs + veg'],
-  banana: ['½ banana + nut butter', 'Berries', 'Apple slices (small)', 'Kiwi'],
+  oats: ['Steel-cut oats (small portion)', 'Chia pudding', 'Greek yogurt bowl', 'Eggs + veg'],
+  banana: ['1/2 banana + nut butter', 'Berries', 'Apple slices (small)', 'Kiwi'],
   crackers: ['Nuts', 'Cheese', 'Cucumber slices', 'Seed crackers'],
   chips: ['Roasted chickpeas (small)', 'Nuts (portion)', 'Popcorn (small)', 'Veg + dip'],
-  icecream: ['Greek yogurt + berries', 'Sugar‑free popsicle', 'Chia pudding', 'Dark chocolate (small)'],
+  icecream: ['Greek yogurt + berries', 'Sugar-free popsicle', 'Chia pudding', 'Dark chocolate (small)'],
 };
 
-const normalizeKey = (value) =>
-  `${value || ''}`.trim().toLowerCase().replace(/\s+/g, ' ');
+const normalizeKey = (value) => `${value || ''}`.trim().toLowerCase().replace(/\s+/g, ' ');
 
 export default function CarbSwapsScreen() {
   const navigation = useNavigation();
@@ -35,9 +34,19 @@ export default function CarbSwapsScreen() {
   const contentBottomPadding = Math.max(insets.bottom + 12, 12);
   const [query, setQuery] = useState('');
 
+  const suggestions = useMemo(
+    () => ['rice', 'pasta', 'bread', 'potato', 'cereal', 'pizza', 'soda', 'juice', 'ice cream'],
+    []
+  );
+
   const matches = useMemo(() => {
     const key = normalizeKey(query);
     if (!key) return null;
+
+    const keyNoSpaces = key.replace(/\s+/g, '');
+    if (keyNoSpaces === 'icecream') return { key: 'ice cream', items: SWAPS.icecream };
+    if (key.includes('ice cream')) return { key: 'ice cream', items: SWAPS.icecream };
+
     if (SWAPS[key]) return { key, items: SWAPS[key] };
     const direct = Object.keys(SWAPS).find((k) => key.includes(k));
     if (direct) return { key: direct, items: SWAPS[direct] };
@@ -47,23 +56,32 @@ export default function CarbSwapsScreen() {
   return (
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} activeOpacity={0.85}>
           <Ionicons name="arrow-back" size={22} color={Colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Swaps</Text>
+        <Text style={styles.headerTitle}>Food swaps</Text>
         <View style={styles.headerRight} />
       </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: contentBottomPadding }}
-      >
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: contentBottomPadding }}>
+        <View style={styles.hero}>
+          <View style={styles.heroIcon}>
+            <Ionicons name="swap-horizontal-outline" size={20} color={Colors.secondary} />
+          </View>
+          <View style={styles.heroText}>
+            <Text style={styles.heroTitle}>Find a diabetes-friendlier alternative</Text>
+            <Text style={styles.heroSub}>
+              Type a food and get quick swap ideas. These are general suggestions - portion size still matters.
+            </Text>
+          </View>
+        </View>
+
         <View style={styles.searchWrap}>
           <Ionicons name="search-outline" size={18} color={Colors.textLight} />
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="Search a food (e.g. rice, bread, pasta)"
+            placeholder="Search a food (e.g. rice, bread, soda)"
             placeholderTextColor={Colors.textLight}
             style={styles.input}
             autoCapitalize="none"
@@ -71,46 +89,54 @@ export default function CarbSwapsScreen() {
             returnKeyType="search"
           />
           {query ? (
-            <TouchableOpacity onPress={() => setQuery('')} style={styles.clearButton}>
+            <TouchableOpacity onPress={() => setQuery('')} style={styles.clearButton} activeOpacity={0.85}>
               <Ionicons name="close" size={18} color={Colors.textLight} />
             </TouchableOpacity>
           ) : null}
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Better options</Text>
+          <View style={styles.cardAccent} pointerEvents="none" />
+          <Text style={styles.cardTitle}>Swap ideas</Text>
+
           {!query ? (
             <>
-              <Text style={styles.cardSub}>Try: rice, pasta, bread, potato, cereal…</Text>
+              <Text style={styles.cardSub}>Popular searches</Text>
               <View style={styles.pills}>
-                {['rice', 'pasta', 'bread', 'potato', 'cereal', 'pizza'].map((item) => (
-                  <TouchableOpacity key={item} style={styles.pill} onPress={() => setQuery(item)}>
+                {suggestions.map((item) => (
+                  <TouchableOpacity
+                    key={item}
+                    style={styles.pill}
+                    onPress={() => setQuery(item)}
+                    activeOpacity={0.85}
+                  >
                     <Text style={styles.pillText}>{item}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
+              <Text style={styles.disclaimer}>Tip: start with a general word (e.g. "bread" instead of a brand name).</Text>
             </>
           ) : matches ? (
             <>
               <Text style={styles.cardSub}>
                 Swaps for <Text style={styles.bold}>{matches.key}</Text>
               </Text>
-              {matches.items.map((item) => (
-                <View key={item} style={styles.row}>
-                  <Ionicons name="swap-horizontal-outline" size={16} color={Colors.primary} />
-                  <Text style={styles.rowText}>{item}</Text>
-                </View>
-              ))}
-              <Text style={styles.disclaimer}>
-                These are general suggestions. Portion size and your body’s response matter.
-              </Text>
+              <View style={styles.rows}>
+                {matches.items.map((item) => (
+                  <View key={item} style={styles.row}>
+                    <View style={styles.rowIcon}>
+                      <Ionicons name="sparkles-outline" size={16} color={Colors.secondary} />
+                    </View>
+                    <Text style={styles.rowText}>{item}</Text>
+                  </View>
+                ))}
+              </View>
+              <Text style={styles.disclaimer}>These are general suggestions. Portion size and your body's response matter.</Text>
             </>
           ) : (
             <>
               <Text style={styles.cardSub}>No swaps found yet for that term.</Text>
-              <Text style={styles.disclaimer}>
-                Try a more general word (e.g. “bread” instead of a brand name).
-              </Text>
+              <Text style={styles.disclaimer}>Try a more general word (e.g. "bread" instead of a brand name).</Text>
             </>
           )}
         </View>
@@ -142,8 +168,29 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: Colors.text,
   },
+  hero: {
+    marginTop: 10,
+    marginHorizontal: 20,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: `${Colors.secondary}10`,
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'flex-start',
+  },
+  heroIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: `${Colors.secondary}18`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroText: { flex: 1 },
+  heroTitle: { fontSize: 15, fontWeight: '900', color: Colors.text },
+  heroSub: { marginTop: 6, fontSize: 13, lineHeight: 18, color: Colors.textLight, fontWeight: '600' },
   searchWrap: {
-    marginTop: 8,
+    marginTop: 10,
     marginHorizontal: 20,
     borderRadius: 16,
     backgroundColor: Colors.surface,
@@ -152,11 +199,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   input: {
     flex: 1,
@@ -179,27 +223,45 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderRadius: 16,
     padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    position: 'relative',
+  },
+  cardAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 14,
+    bottom: 14,
+    width: 4,
+    borderTopRightRadius: 6,
+    borderBottomRightRadius: 6,
+    backgroundColor: Colors.secondary,
+    opacity: 0.9,
   },
   cardTitle: { fontSize: 18, fontWeight: '900', color: Colors.text },
-  cardSub: { marginTop: 6, fontSize: 13, color: Colors.textLight, fontWeight: '600' },
+  cardSub: { marginTop: 6, fontSize: 13, color: Colors.textLight, fontWeight: '700' },
   bold: { color: Colors.text, fontWeight: '900' },
-  row: { marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  rowText: { flex: 1, fontSize: 14, color: Colors.text, fontWeight: '700' },
+  rows: { marginTop: 12, gap: 10 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  rowIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    backgroundColor: `${Colors.secondary}14`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowText: { flex: 1, fontSize: 14, color: Colors.text, fontWeight: '800' },
   pills: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 12, gap: 10 },
   pill: {
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: `${Colors.primary}12`,
+    backgroundColor: `${Colors.secondary}12`,
     borderWidth: 1,
-    borderColor: `${Colors.primary}24`,
+    borderColor: `${Colors.secondary}24`,
   },
-  pillText: { color: Colors.primary, fontWeight: '800', fontSize: 12 },
-  disclaimer: { marginTop: 14, fontSize: 12, lineHeight: 18, color: Colors.textLight },
+  pillText: { color: Colors.secondary, fontWeight: '900', fontSize: 12 },
+  disclaimer: { marginTop: 14, fontSize: 12, lineHeight: 18, color: Colors.textLight, fontWeight: '600' },
 });
 
