@@ -39,6 +39,8 @@ export default function CarbSwapsScreen() {
   const [isFocused, setIsFocused] = useState(false);
   const [aiResult, setAiResult] = useState(null);
   const [aiError, setAiError] = useState(null);
+  const [aiErrorCode, setAiErrorCode] = useState(null);
+  const [shouldUpgrade, setShouldUpgrade] = useState(false);
   const [loading, setLoading] = useState(false);
   const lastRequestIdRef = useRef(0);
 
@@ -68,6 +70,8 @@ export default function CarbSwapsScreen() {
     lastRequestIdRef.current = requestId;
     setLoading(true);
     setAiError(null);
+    setAiErrorCode(null);
+    setShouldUpgrade(false);
 
     try {
       const token = await AsyncStorage.getItem('userToken');
@@ -91,7 +95,16 @@ export default function CarbSwapsScreen() {
       if (lastRequestIdRef.current !== requestId) return;
       if (!response.ok) {
         const data = await response.json();
-        setAiError(data?.detail || 'Swaps request failed.');
+        const detail = data?.detail;
+        if (detail && typeof detail === 'object') {
+          setAiError(String(detail.message || 'Swaps request failed.'));
+          setAiErrorCode(String(detail.code || 'request_failed'));
+          setShouldUpgrade(Boolean(detail.upgrade));
+        } else {
+          setAiError(detail || 'Swaps request failed.');
+          setAiErrorCode('request_failed');
+          setShouldUpgrade(false);
+        }
         setAiResult(null);
         return;
       }
@@ -115,6 +128,8 @@ export default function CarbSwapsScreen() {
     const trimmed = String(query || '').trim();
     setAiResult(null);
     setAiError(null);
+    setAiErrorCode(null);
+    setShouldUpgrade(false);
     if (!trimmed) {
       setLoading(false);
       return;
@@ -293,6 +308,16 @@ export default function CarbSwapsScreen() {
               <Text style={styles.disclaimer}>
                 Try a more general word (e.g. "bread" instead of a brand name).
               </Text>
+              {shouldUpgrade ? (
+                <TouchableOpacity
+                  style={styles.upgradeButton}
+                  onPress={() => navigation.getParent()?.navigate('Profile')}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.upgradeButtonText}>Upgrade to Premium</Text>
+                  <Ionicons name="chevron-forward" size={16} color="white" />
+                </TouchableOpacity>
+              ) : null}
             </>
           )}
         </View>
@@ -455,4 +480,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   secondaryButtonText: { fontSize: 14, fontWeight: '900', color: Colors.secondary },
+  upgradeButton: {
+    marginTop: 12,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    backgroundColor: Colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  upgradeButtonText: { fontSize: 14, fontWeight: '900', color: 'white' },
 });
