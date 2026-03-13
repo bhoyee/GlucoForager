@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from ..admin_dependencies import get_current_admin
 from ...database import get_db
+from ...models.user import User
 from ...models.user_daily_challenge import UserDailyChallenge
 from ...services.daily_challenge_service import get_catalog, save_catalog
 
@@ -24,6 +25,16 @@ class ChallengeTaskUpsert(BaseModel):
 
 class ChallengeCatalogPayload(BaseModel):
     items: list[ChallengeTaskUpsert]
+
+
+def _parse_json_list(value: str) -> list:
+    if not value:
+        return []
+    try:
+        data = json.loads(value)
+    except Exception:
+        return []
+    return data if isinstance(data, list) else []
 
 
 @router.get("/tasks")
@@ -71,7 +82,7 @@ def seed_challenge_tasks(
     if mode_norm not in {"replace", "upsert"}:
         raise HTTPException(status_code=422, detail="mode must be replace or upsert")
 
-    data_path = Path(__file__).resolve().parent.parent / "data" / "challenge_tasks.json"
+    data_path = Path(__file__).resolve().parents[2] / "data" / "challenge_tasks.json"
     if not data_path.exists():
         raise HTTPException(status_code=500, detail="challenge_tasks.json not found")
     try:
@@ -130,6 +141,92 @@ def seed_challenge_tasks(
 
     save_catalog(db, existing)
     return {"mode": mode_norm, "added": added, "updated": updated, "total": len(existing)}
+
+
+@router.get("/snapshots")
+def list_daily_challenge_snapshots(
+    date_iso: str | None = None,
+    user_id: int | None = None,
+    completed_only: bool = False,
+    page: int = 1,
+    page_size: int = 50,
+    include_tasks: bool = False,
+    db: Session = Depends(get_db),
+    admin=Depends(get_current_admin),  # noqa: ARG001
+):
+    """List user daily challenge snapshots with basic progress.
+
+    Use date_iso to filter snapshots for a given UTC date (YYYY-MM-DD).
+    """
+    page = max(1, int(page))
+    page_size = max(1, min(int(page_size), 200))
+
+    day = None
+    if date_iso:
+        try:
+            day = datetime.strptime(date_iso.strip(), "%Y-%m-%d").date()
+        except Exception:
+            raise HTTPException(status_code=422, detail="date_iso must be YYYY-MM-DD") from None
+
+    q = db.query(UserDailyChallenge, User.email).join(User, User.id == UserDailyChallenge.user_id)
+    if day is not None:
+        q = q.filter(UserDailyChallenge.date == day)
+    if user_id is not None:
+        q = q.filter(UserDailyChallenge.user_id == int(user_id))
+    if completed_only:
+        q = q.filter(UserDailyChallenge.completed_at.isnot(None))
+
+    total = q.count()
+    rows = (
+        q.order_by(UserDailyChallenge.date.desc(), UserDailyChallenge.updated_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+
+    items: list[dict] = []
+    for snapshot, email in rows:
+        tasks = _parse_json_list(snapshot.tasks_json)
+        completed_ids = {str(x) for x in _parse_json_list(snapshot.completed_task_ids_json) if isinstance(x, str)}
+        task_ids = [str(t.get("id") or "").strip() for t in tasks if isinstance(t, dict)]
+        task_ids = [t for t in task_ids if t]
+        total_tasks = len(task_ids)
+        completed_count = sum(1 for t in task_ids if t in completed_ids)
+
+        payload: dict = {
+            "id": snapshot.id,
+            "user_id": snapshot.user_id,
+            "user_email": email,
+            "date": snapshot.date.isoformat(),
+            "completed_count": completed_count,
+            "total_tasks": total_tasks,
+            "completed_today": bool(total_tasks and completed_count == total_tasks),
+            "completed_at": snapshot.completed_at.isoformat() if snapshot.completed_at else None,
+            "updated_at": snapshot.updated_at.isoformat() if snapshot.updated_at else None,
+        }
+
+        if include_tasks:
+            detailed: list[dict] = []
+            for t in tasks:
+                if not isinstance(t, dict):
+                    continue
+                tid = str(t.get("id") or "").strip()
+                text = str(t.get("text") or t.get("task_text") or "").strip()
+                if not tid or not text:
+                    continue
+                detailed.append(
+                    {
+                        "id": tid,
+                        "text": text,
+                        "category": str(t.get("category") or "general").strip() or "general",
+                        "completed": tid in completed_ids,
+                    }
+                )
+            payload["tasks"] = detailed
+
+        items.append(payload)
+
+    return {"page": page, "page_size": page_size, "total": total, "items": items}
 
 
 @router.post("/reset-snapshots")
