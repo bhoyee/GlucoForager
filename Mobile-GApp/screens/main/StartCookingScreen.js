@@ -230,7 +230,7 @@ const StartCookingScreen = ({ navigation, route }) => {
       <View style={styles.timeContainer}>
         <View style={styles.timeBadge}>
           <Ionicons name="time-outline" size={16} color="#4CAF50" />
-          <Text style={styles.timeText}>{currentStepData.duration} min</Text>
+          <Text style={styles.timeText}>{currentStepData.duration}mins</Text>
         </View>
         
         {currentStepData.duration > 2 && (
