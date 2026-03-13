@@ -81,7 +81,7 @@ export default function TodayTipScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={22} color={Colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Today&apos;s tip</Text>
+        <Text style={styles.headerTitle}>Daily guidance</Text>
         <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
           <Ionicons name="share-social-outline" size={20} color={Colors.text} />
         </TouchableOpacity>

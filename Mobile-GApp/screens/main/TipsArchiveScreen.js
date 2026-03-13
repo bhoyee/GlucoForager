@@ -105,7 +105,7 @@ export default function TipsArchiveScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={22} color={Colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>More tips</Text>
+        <Text style={styles.headerTitle}>More guidance</Text>
         <View style={{ width: 44 }} />
       </View>
 
@@ -318,4 +318,3 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 14, fontWeight: '900', color: Colors.text },
   emptyText: { marginTop: 8, fontSize: 13, color: Colors.textLight, lineHeight: 18 },
 });
-
