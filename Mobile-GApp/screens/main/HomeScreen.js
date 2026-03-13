@@ -1,4 +1,4 @@
-// screens/main/HomeScreen.js - UPDATED PRODUCTION VERSION
+﻿// screens/main/HomeScreen.js - UPDATED PRODUCTION VERSION
 import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
@@ -569,7 +569,7 @@ export default function HomeScreen() {
         {isRefreshing && (
           <View style={styles.refreshRow}>
             <ActivityIndicator size="small" color={Colors.primary} />
-            <Text style={styles.refreshText}>Refreshing data…</Text>
+            <Text style={styles.refreshText}>Refreshing dataâ€¦</Text>
           </View>
         )}
         {networkError && (
@@ -632,7 +632,7 @@ export default function HomeScreen() {
               <Ionicons name="bulb-outline" size={20} color={Colors.primary} />
             </View>
             <View style={styles.tipText}>
-              <Text style={styles.tipLabel}>Today</Text>
+              <Text style={styles.tipLabel}>Today's tip</Text>
               <Text style={styles.tipTitle} numberOfLines={2}>
                 {todayTip.title}
               </Text>
@@ -655,12 +655,14 @@ export default function HomeScreen() {
                 <Ionicons name="trophy-outline" size={20} color={Colors.primary} />
               </View>
               <View style={styles.challengeText}>
-                <Text style={styles.tipLabel}>Today</Text>
+                <Text style={styles.tipLabel}>Today's diabetes challenge</Text>
                 <Text style={styles.tipTitle} numberOfLines={2}>
-                  {dailyChallenge.completed_today ? 'Challenge complete' : "Today's Diabetes Challenge"}
+                  {dailyChallenge.completed_today
+                    ? 'Challenge complete'
+                    : `Progress ${Number(dailyChallenge?.progress?.completed || 0)} / ${Number(dailyChallenge?.progress?.total || 0)}`}
                 </Text>
                 <Text style={styles.tipSnippet} numberOfLines={1}>
-                  Progress {Number(dailyChallenge?.progress?.completed || 0)} / {Number(dailyChallenge?.progress?.total || 0)} • Streak {Number(dailyChallenge?.streak_days || 0)} days
+                  Streak {Number(dailyChallenge?.streak_days || 0)} days
                 </Text>
                 <View style={styles.challengeRows}>
                   {dailyChallenge.tasks.slice(0, 3).map((t) => (
@@ -1347,3 +1349,4 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
 });
+
