@@ -13,6 +13,7 @@ router = APIRouter(prefix="/app", tags=["app"])
 
 class SwapsRequest(BaseModel):
     food: str = Field(..., min_length=1, max_length=80)
+    force_swaps: bool = False
 
 
 @router.post("/swaps")
@@ -23,16 +24,15 @@ def generate_food_swaps(
 ):
     try:
         service = AISwapsService()
-        result = service.generate_swaps(food=payload.food, timeout_seconds=12.0)
+        result = service.generate_swaps(food=payload.food, force_swaps=bool(payload.force_swaps), timeout_seconds=12.0)
         # Do not expose model/provider in the app response.
         return {
             "food": result.get("food"),
-            "better_options": result.get("better_options"),
-            "why_these_are_better": result.get("why_these_are_better"),
-            "portion_tip": result.get("portion_tip"),
+            "assessment": result.get("assessment"),
+            "should_show_swaps": result.get("should_show_swaps"),
+            "swaps": result.get("swaps"),
         }
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
     except Exception:
         raise HTTPException(status_code=502, detail="Swaps generation failed")
-
