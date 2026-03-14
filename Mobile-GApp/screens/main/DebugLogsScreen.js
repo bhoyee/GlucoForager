@@ -8,6 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
 import { clearDebugLogs, getDebugLogs, subscribeDebugLogs } from '../../utils/debugLogger';
+import { devInspectScheduledNotifications, devSendTestDailyGuidanceNotification } from '../../utils/mealReminders';
 
 export default function DebugLogsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -82,6 +83,16 @@ export default function DebugLogsScreen({ navigation }) {
     }
   };
 
+  const handleTestDailyGuidance = async () => {
+    try {
+      await devSendTestDailyGuidanceNotification();
+      await devInspectScheduledNotifications();
+      Alert.alert('Scheduled', 'A test Daily Guidance notification should appear in ~2 seconds.');
+    } catch {
+      Alert.alert('Failed', 'Unable to schedule a test notification.');
+    }
+  };
+
   const handleClose = () => {
     if (navigation?.canGoBack && navigation.canGoBack()) {
       navigation.goBack();
@@ -111,6 +122,11 @@ export default function DebugLogsScreen({ navigation }) {
           <TouchableOpacity style={styles.actionButton} onPress={handleShare} disabled={!logText}>
             <Ionicons name="share-social-outline" size={20} color={logText ? Colors.text : Colors.textLight} />
           </TouchableOpacity>
+          {__DEV__ ? (
+            <TouchableOpacity style={styles.actionButton} onPress={handleTestDailyGuidance}>
+              <Ionicons name="notifications-outline" size={20} color={Colors.text} />
+            </TouchableOpacity>
+          ) : null}
           <TouchableOpacity
             style={styles.actionButton}
             onPress={() => clearDebugLogs()}
