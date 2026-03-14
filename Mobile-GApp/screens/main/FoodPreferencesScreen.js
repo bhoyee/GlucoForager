@@ -511,21 +511,27 @@ export default function FoodPreferencesScreen({ navigation }) {
             </View>
           ) : null}
 
-          <View style={styles.footer}>
-            <TouchableOpacity
-              style={[styles.primaryButton, saving ? { opacity: 0.7 } : null]}
-              onPress={handleNext}
-              disabled={saving}
-            >
-              {saving ? <ActivityIndicator size="small" color="white" /> : null}
-              <Text style={styles.primaryButtonText}>{step === steps.length - 1 ? 'Finish' : 'Next'}</Text>
-            </TouchableOpacity>
-            {!forced ? (
-              <TouchableOpacity style={styles.secondaryButton} onPress={() => saveProfile(false)} disabled={saving}>
-                <Text style={styles.secondaryButtonText}>Save</Text>
+          {step >= 0 ? (
+            <View style={styles.footer}>
+              <TouchableOpacity
+                style={[styles.primaryButton, saving ? { opacity: 0.7 } : null]}
+                onPress={handleNext}
+                disabled={saving}
+              >
+                {saving ? <ActivityIndicator size="small" color="white" /> : null}
+                <Text style={styles.primaryButtonText}>{step === steps.length - 1 ? 'Finish' : 'Next'}</Text>
               </TouchableOpacity>
-            ) : null}
-          </View>
+              {!forced ? (
+                <TouchableOpacity
+                  style={styles.secondaryButton}
+                  onPress={() => saveProfile(false)}
+                  disabled={saving}
+                >
+                  <Text style={styles.secondaryButtonText}>Save</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          ) : null}
         </ScrollView>
       )}
 
