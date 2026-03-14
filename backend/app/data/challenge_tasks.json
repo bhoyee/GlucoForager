@@ -11,7 +11,7 @@
   { "id": "challenge-choose-whole-food", "task_text": "Choose one minimally processed food today", "category": "food_choice", "active": true },
   { "id": "challenge-choose-whole-grain", "task_text": "Choose a higher-fiber carb (beans, oats, whole grains)", "category": "food_choice", "active": true },
   { "id": "challenge-add-healthy-fat", "task_text": "Add a healthy fat to a meal (olive oil, avocado, nuts)", "category": "food_choice", "active": true },
-  { "id": "challenge-walk-10-min-after-meal", "task_text": "Walk for 10 minutes after eating", "category": "activity", "active": true },
+  { "id": "challenge-walk-10-min-after-meal", "task_text": "Walk for 10 - 30 minutes after eating", "category": "activity", "active": true },
   { "id": "challenge-move-15-min", "task_text": "Move for 15 minutes today (walk, chores, stairs)", "category": "activity", "active": true },
   { "id": "challenge-short-afternoon-walk", "task_text": "Take a short afternoon walk", "category": "activity", "active": true },
   { "id": "challenge-stand-stretch", "task_text": "Stand up and stretch for 2 minutes", "category": "activity", "active": true },
