@@ -54,7 +54,7 @@ const DIETARY_PATTERN_OPTIONS = [
 
 const ALLERGEN_OPTIONS = [
   { value: 'none', label: 'None' },
-  { value: 'dairy', label: 'Dairy' },
+  { value: 'dairy', label: 'Dairy / lactose' },
   { value: 'eggs', label: 'Eggs' },
   { value: 'fish', label: 'Fish' },
   { value: 'shellfish', label: 'Shellfish' },
@@ -72,8 +72,11 @@ const EXCLUSION_OPTIONS = [
   { value: 'beef', label: 'Beef' },
   { value: 'chicken', label: 'Chicken' },
   { value: 'seafood', label: 'Seafood' },
+  { value: 'onion_garlic', label: 'Onion & garlic' },
   { value: 'spicy_food', label: 'Spicy food' },
   { value: 'mushrooms', label: 'Mushrooms' },
+  { value: 'alcohol', label: 'Alcohol' },
+  { value: 'caffeine', label: 'Caffeine' },
   { value: 'other', label: 'Other' },
 ];
 
