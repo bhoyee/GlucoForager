@@ -25,7 +25,7 @@ import { getTodayTip } from '../../utils/todayTips';
 
 export default function HomeScreen() {
   const navigation = useNavigation();
-  const { signOut } = useAuth();
+  const { signOut, foodProfileCompleted } = useAuth();
   const insets = useSafeAreaInsets();
   const headerPaddingTop = Math.max(insets.top, 16);
   const contentBottomPadding = Math.max(insets.bottom + 4, 6);
@@ -569,7 +569,7 @@ export default function HomeScreen() {
         {isRefreshing && (
           <View style={styles.refreshRow}>
             <ActivityIndicator size="small" color={Colors.primary} />
-            <Text style={styles.refreshText}>Refreshing dataâ€¦</Text>
+            <Text style={styles.refreshText}>Refreshing data...</Text>
           </View>
         )}
         {networkError && (
@@ -622,6 +622,28 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Daily guidance</Text>
           <Text style={styles.sectionSubtitle}>Small daily actions to support steadier blood sugar.</Text>
+
+          {foodProfileCompleted === true ? null : (
+            <Pressable
+              style={({ pressed }) => [styles.tipCard, pressed && styles.cardPressed]}
+              android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
+              onPress={() => navigation.navigate('Profile', { screen: 'FoodPreferences' })}
+            >
+              <View style={styles.tipIcon}>
+                <Ionicons name="sparkles-outline" size={20} color={Colors.primary} />
+              </View>
+              <View style={styles.tipText}>
+                <Text style={styles.tipLabel}>Personalize</Text>
+                <Text style={styles.tipTitle} numberOfLines={2}>
+                  Personalize your meals (30 seconds)
+                </Text>
+                <Text style={styles.tipSnippet} numberOfLines={1}>
+                  Set goals, avoids, and cooking preferences.
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
+            </Pressable>
+          )}
 
           <Pressable
             style={({ pressed }) => [styles.tipCard, pressed && styles.cardPressed]}

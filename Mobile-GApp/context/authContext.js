@@ -12,6 +12,8 @@ export function AuthProvider({ children }) {
   const [userToken, setUserToken] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
+  const [foodProfileCompleted, setFoodProfileCompleted] = useState(null); // true | false | null
+  const [needsFoodProfileOnboarding, setNeedsFoodProfileOnboarding] = useState(false);
 
   const devLog = (...args) => {
     if (!__DEV__) return;
@@ -51,10 +53,16 @@ export function AuthProvider({ children }) {
             }
             resolvedEmail = profile?.email || null;
             resolvedName = profile?.full_name || null;
+            const completed = profile?.profile_completed;
+            setFoodProfileCompleted(completed === true ? true : completed === false ? false : null);
+            setNeedsFoodProfileOnboarding(completed === false);
           } else {
             const profile = await fetchProfile(token);
             resolvedEmail = profile?.email || null;
             resolvedName = profile?.full_name || null;
+            const completed = profile?.profile_completed;
+            setFoodProfileCompleted(completed === true ? true : completed === false ? false : null);
+            setNeedsFoodProfileOnboarding(completed === false);
           }
           await configureRevenueCat({
             token,
@@ -80,6 +88,8 @@ export function AuthProvider({ children }) {
     await AsyncStorage.removeItem('refreshToken');
     await AsyncStorage.removeItem('publicUserId');
     setUserToken(null);
+    setFoodProfileCompleted(null);
+    setNeedsFoodProfileOnboarding(false);
     await configureRevenueCat({});
   };
 
@@ -154,6 +164,9 @@ export function AuthProvider({ children }) {
       }
       setUserToken(token);
       const profile = await fetchProfile(token);
+      const completed = profile?.profile_completed;
+      setFoodProfileCompleted(completed === true ? true : completed === false ? false : null);
+      setNeedsFoodProfileOnboarding(completed === false);
       await configureRevenueCat({
         token,
         publicId,
@@ -184,12 +197,19 @@ export function AuthProvider({ children }) {
       await AsyncStorage.removeItem('refreshToken');
       await AsyncStorage.removeItem('publicUserId');
       setUserToken(null);
+      setFoodProfileCompleted(null);
+      setNeedsFoodProfileOnboarding(false);
       await configureRevenueCat({});
       devLog('User signed out');
     } catch (error) {
       console.error('Error signing out:', error);
       throw error;
     }
+  };
+
+  const completeFoodProfileOnboarding = async () => {
+    setFoodProfileCompleted(true);
+    setNeedsFoodProfileOnboarding(false);
   };
 
   const completeOnboarding = async () => {
@@ -209,9 +229,12 @@ export function AuthProvider({ children }) {
         userToken,
         isLoading,
         hasCompletedOnboarding,
+        foodProfileCompleted,
+        needsFoodProfileOnboarding,
         signIn,
         signOut,
         completeOnboarding,
+        completeFoodProfileOnboarding,
         checkAuthStatus,
       }}>
       {children}

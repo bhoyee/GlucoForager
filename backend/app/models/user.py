@@ -1,6 +1,6 @@
 from datetime import datetime, date
 
-from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Integer, JSON, String
 from sqlalchemy.orm import relationship
 
 from ..database import Base
@@ -28,6 +28,18 @@ class User(Base):
     suspended_at = Column(DateTime, nullable=True)
     suspended_reason = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Food profile (onboarding-driven). All fields are optional so existing users are not forced.
+    blood_sugar_profile = Column(String, nullable=True)
+    country_code = Column(String, nullable=True)
+    preferred_cuisines = Column(JSON, nullable=True)
+    meal_goals = Column(JSON, nullable=True)
+    dietary_pattern = Column(String, nullable=True)
+    allergens = Column(JSON, nullable=True)
+    food_exclusions = Column(JSON, nullable=True)
+    available_equipment = Column(JSON, nullable=True)
+    cook_time_preference = Column(String, nullable=True)
+    profile_completed = Column(Boolean, nullable=True)
 
     searches = relationship("SearchLog", back_populates="user", cascade="all, delete-orphan")
     subscriptions = relationship("Subscription", back_populates="user")
