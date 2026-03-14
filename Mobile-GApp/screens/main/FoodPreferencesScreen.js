@@ -137,6 +137,7 @@ export default function FoodPreferencesScreen({ navigation }) {
   const forced = Boolean(route?.params?.forced);
   const insets = useSafeAreaInsets();
   const { signOut, completeFoodProfileOnboarding } = useAuth();
+  const goalsMax = forced ? 2 : 3;
 
   const [step, setStep] = useState(-1);
   const [busy, setBusy] = useState(true);
@@ -156,17 +157,17 @@ export default function FoodPreferencesScreen({ navigation }) {
   const headerPaddingTop = Math.max(insets.top, 16);
   const contentBottomPadding = Math.max(insets.bottom + 10, 16);
 
-  const steps = useMemo(
-    () => [
+  const steps = useMemo(() => {
+    const goalSubtitle = forced ? 'Pick up to 2.' : 'Pick up to 3.';
+    return [
       { title: 'Your blood sugar profile', subtitle: 'This helps tailor suggestions.' },
-      { title: 'Meal goals', subtitle: 'Pick up to 2.' },
+      { title: 'Meal goals', subtitle: goalSubtitle },
       { title: 'Dietary pattern', subtitle: 'Optional.' },
       { title: 'Avoids', subtitle: 'Allergies and foods to avoid.' },
       { title: 'Cooking reality', subtitle: 'Equipment and time.' },
       { title: 'Cuisine + country', subtitle: 'Pick up to 3 cuisines.' },
-    ],
-    []
-  );
+    ];
+  }, [forced]);
 
   useEffect(() => {
     addDebugLog({
@@ -392,15 +393,15 @@ export default function FoodPreferencesScreen({ navigation }) {
 
           {step === 1 ? (
             <View style={styles.card}>
-              <Text style={styles.helper}>Selected: {goals.length}/2</Text>
+              <Text style={styles.helper}>Selected: {goals.length}/{goalsMax}</Text>
               <View style={styles.chipWrap}>
                 {GOAL_OPTIONS.map((opt) => (
                   <Chip
                     key={opt.value}
                     label={opt.label}
                     selected={goals.includes(opt.value)}
-                    disabled={!goals.includes(opt.value) && goals.length >= 2}
-                    onPress={() => setGoals((prev) => limitMultiSelect(prev, opt.value, 2))}
+                    disabled={!goals.includes(opt.value) && goals.length >= goalsMax}
+                    onPress={() => setGoals((prev) => limitMultiSelect(prev, opt.value, goalsMax))}
                   />
                 ))}
               </View>
