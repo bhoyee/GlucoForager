@@ -437,14 +437,58 @@ class AIRecipeGenerator:
                 model_chain = [*other_models, *deepseek_models]
 
         if mode_norm in ("surprise", "quick"):
-            cuisine_sets = [
-                ("Mediterranean", "Mexican-inspired", "Asian-inspired"),
-                ("West African-inspired", "Indian-inspired", "American comfort (healthy)"),
-                ("Middle Eastern-inspired", "Italian-inspired (low-carb)", "Caribbean-inspired"),
-            ]
-            cuisines = random.choice(cuisine_sets)
+            preferred_cuisines: list[str] = []
+            country_code = None
+            if isinstance(food_profile, dict):
+                preferred_cuisines = [
+                    str(x).strip().lower()
+                    for x in (food_profile.get("preferred_cuisines") or [])
+                    if isinstance(x, str) and str(x).strip()
+                ]
+                cc = food_profile.get("country_code")
+                country_code = str(cc).strip().upper() if isinstance(cc, str) and str(cc).strip() else None
+
+            def _cuisine_label(key: str) -> str:
+                mapping = {
+                    "west_african": "West African",
+                    "east_african": "East African",
+                    "mena": "North African / Middle Eastern",
+                    "british_irish": "British / Irish",
+                    "american_canadian": "American / Canadian",
+                    "caribbean": "Caribbean",
+                    "mediterranean": "Mediterranean",
+                    "south_asian": "South Asian",
+                    "east_asian": "East Asian",
+                    "southeast_asian": "Southeast Asian",
+                    "latin_american": "Latin American",
+                    "european": "European",
+                }
+                return mapping.get(key, key.replace("_", " ").title())
+
+            theme: str | None = None
+            if preferred_cuisines:
+                primary = preferred_cuisines[0]
+                if primary == "west_african" and country_code == "NG":
+                    theme = "Nigerian-style West African"
+                else:
+                    theme = _cuisine_label(primary)
+
+            # If the user picked a cuisine preference, do NOT override it with random global cuisine sets.
+            cuisines = None
+            if not theme:
+                cuisine_sets = [
+                    ("Mediterranean", "Mexican-inspired", "Asian-inspired"),
+                    ("West African-inspired", "Indian-inspired", "American comfort (healthy)"),
+                    ("Middle Eastern-inspired", "Italian-inspired (low-carb)", "Caribbean-inspired"),
+                ]
+                cuisines = random.choice(cuisine_sets)
             mode_parts = [
-                f"Theme the three recipes across these cuisines: {', '.join(cuisines)}.",
+                (
+                    f"All three recipes must be {theme} style. Do not output recipes from other regional cuisines "
+                    f"(e.g., Caribbean, Mexican, Italian, Mediterranean, East Asian) unless the user asked for them."
+                    if theme
+                    else f"Theme the three recipes across these cuisines: {', '.join(cuisines)}."
+                ),
                 "Ensure all three recipes are clearly different from each other (protein + method + flavor).",
                 f"Variation token: {random.randint(1000, 9999)}.",
                 "Instructions must be beginner-friendly: write 6-8 steps per recipe. Each step should include at least one concrete detail (time in minutes, heat level, visual cue, or exact action). Avoid vague steps like 'cook until done' without guidance.",
