@@ -465,21 +465,70 @@ class AIRecipeGenerator:
                 }
                 return mapping.get(key, key.replace("_", " ").title())
 
-            theme: str | None = None
-            if preferred_cuisines:
-                primary = preferred_cuisines[0]
-                if primary == "west_african" and country_code == "NG":
-                    theme = "Nigerian-style West African"
-                else:
-                    theme = _cuisine_label(primary)
+            def _infer_default_cuisines(cc: str | None) -> list[str]:
+                """Best-effort country->cuisine fallback when the user didn't choose cuisines."""
+                if not cc:
+                    return []
+                # Very broad regional mapping; user selection always overrides this.
+                west_africa = {"NG", "GH"}
+                east_africa = {"KE", "TZ", "UG"}
+                mena = {"EG", "SA", "AE", "QA", "KW", "OM", "BH", "JO", "LB", "MA", "TN", "DZ"}
+                south_asia = {"IN", "PK", "BD", "LK", "NP"}
+                east_asia = {"CN", "JP", "KR", "TW", "HK"}
+                se_asia = {"PH", "TH", "VN", "ID", "MY", "SG"}
+                latin = {"MX", "BR", "CO", "AR", "CL", "PE"}
+                caribbean = {"JM", "TT", "BB", "BS", "GD", "LC"}
+                if cc in west_africa:
+                    return ["west_african"]
+                if cc in east_africa:
+                    return ["east_african"]
+                if cc in mena:
+                    return ["mena"]
+                if cc in south_asia:
+                    return ["south_asian"]
+                if cc in east_asia:
+                    return ["east_asian"]
+                if cc in se_asia:
+                    return ["southeast_asian"]
+                if cc in latin:
+                    return ["latin_american"]
+                if cc in caribbean:
+                    return ["caribbean"]
+                if cc in {"GB", "IE"}:
+                    return ["british_irish"]
+                if cc in {"US", "CA"}:
+                    return ["american_canadian"]
+                # Default: no strong guess.
+                return []
 
-            # If the user picked a cuisine preference, do NOT override it with random global cuisine sets.
+            allowed_keys = preferred_cuisines or _infer_default_cuisines(country_code)
+            allowed_keys = [k for k in allowed_keys if k]  # defensive
+
+            cuisine_labels: list[str] = []
+            for key in allowed_keys:
+                if key == "west_african" and country_code == "NG":
+                    cuisine_labels.append("Nigerian-style West African")
+                else:
+                    cuisine_labels.append(_cuisine_label(key))
+
+            # If we have an explicit preference (or inferred default), keep cuisine within that set.
             cuisines = None
-            if not theme:
+            theme: str | None = None
+            if cuisine_labels:
+                if len(cuisine_labels) == 1:
+                    theme = cuisine_labels[0]
+                else:
+                    # Use up to 3 of the user's cuisines to keep "surprise" variety without leaving their comfort zone.
+                    sample = cuisine_labels[:]
+                    random.shuffle(sample)
+                    cuisines = tuple(sample[:3])
+            else:
+                # No preference and no country: use a broad, global rotation (include British / Irish too).
                 cuisine_sets = [
                     ("Mediterranean", "Mexican-inspired", "Asian-inspired"),
-                    ("West African-inspired", "Indian-inspired", "American comfort (healthy)"),
-                    ("Middle Eastern-inspired", "Italian-inspired (low-carb)", "Caribbean-inspired"),
+                    ("British / Irish-inspired", "American comfort (healthy)", "Indian-inspired"),
+                    ("West African-inspired", "Middle Eastern-inspired", "Caribbean-inspired"),
+                    ("Italian-inspired (low-carb)", "Latin American-inspired", "Southeast Asian-inspired"),
                 ]
                 cuisines = random.choice(cuisine_sets)
             mode_parts = [
@@ -487,7 +536,11 @@ class AIRecipeGenerator:
                     f"All three recipes must be {theme} style. Do not output recipes from other regional cuisines "
                     f"(e.g., Caribbean, Mexican, Italian, Mediterranean, East Asian) unless the user asked for them."
                     if theme
-                    else f"Theme the three recipes across these cuisines: {', '.join(cuisines)}."
+                    else (
+                        f"Theme the three recipes across these cuisines (ONLY): {', '.join(cuisines)}."
+                        if cuisines
+                        else "Theme the three recipes across cuisines the user prefers."
+                    )
                 ),
                 "Ensure all three recipes are clearly different from each other (protein + method + flavor).",
                 f"Variation token: {random.randint(1000, 9999)}.",
