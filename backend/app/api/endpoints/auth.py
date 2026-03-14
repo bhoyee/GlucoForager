@@ -149,6 +149,7 @@ def signup(payload: UserCreate, background_tasks: BackgroundTasks, request: Requ
             gender=payload.gender,
             country=payload.country,
             public_id=str(uuid.uuid4()),
+            profile_completed=False,
             registered_platform=client.platform if client else None,
             registered_app_version=client.app_version if client else None,
             registered_build_number=client.build_number if client else None,
