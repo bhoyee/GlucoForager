@@ -474,11 +474,54 @@ export async function devInspectScheduledNotifications() {
       const title = item?.content?.title || '';
       return typeof title === 'string' && title.toLowerCase().startsWith('time to scan for ');
     });
+    const guidance = (scheduled || []).filter((item) => item?.content?.data?.kind === 'daily_guidance');
 
     const now = new Date();
     const tzOffsetMinutes = now.getTimezoneOffset();
     const mealNext = await Promise.all(
       meal.map(async (item) => {
+        const contentData = item?.content?.data || {};
+        const scheduledFor = typeof contentData?.scheduledFor === 'string' ? contentData.scheduledFor : null;
+        const trigger = item?.trigger;
+        const triggerType = trigger?.type != null ? String(trigger.type) : null;
+
+        try {
+          let nextDate = null;
+
+          if (triggerType && triggerType.toLowerCase() === 'date') {
+            const raw = trigger?.date || scheduledFor;
+            nextDate = raw ? new Date(raw) : null;
+          } else {
+            const next = await Notifications.getNextTriggerDateAsync(trigger);
+            nextDate = next ? new Date(next) : null;
+          }
+
+          return {
+            id: item?.identifier,
+            title: item?.content?.title,
+            next_iso: nextDate ? nextDate.toISOString() : null,
+            next_local: nextDate ? nextDate.toLocaleString() : null,
+            scheduled_for: scheduledFor,
+            trigger_type: triggerType,
+            trigger_date: trigger?.date ? String(trigger.date) : null,
+          };
+        } catch (error) {
+          return {
+            id: item?.identifier,
+            title: item?.content?.title,
+            next_iso: null,
+            next_local: null,
+            scheduled_for: scheduledFor,
+            trigger_type: triggerType,
+            trigger_date: trigger?.date ? String(trigger.date) : null,
+            error: `${error?.message || error}`,
+          };
+        }
+      })
+    );
+
+    const guidanceNext = await Promise.all(
+      guidance.map(async (item) => {
         const contentData = item?.content?.data || {};
         const scheduledFor = typeof contentData?.scheduledFor === 'string' ? contentData.scheduledFor : null;
         const trigger = item?.trigger;
@@ -526,8 +569,10 @@ export async function devInspectScheduledNotifications() {
       meal_count: meal.length,
       meal_titles: meal.map((m) => m?.content?.title).filter(Boolean),
       meal_next: mealNext,
+      daily_guidance_count: guidance.length,
+      daily_guidance_next: guidanceNext,
     });
-    return { total: scheduled?.length || 0, mealCount: meal.length };
+    return { total: scheduled?.length || 0, mealCount: meal.length, dailyGuidanceCount: guidance.length };
   } catch (error) {
     debugLog('Inspect scheduled notifications failed', { error: `${error?.message || error}` });
     return null;
@@ -561,5 +606,36 @@ export async function devSendTestMealNotification() {
     debugLog('Scheduled test notification', { id });
   } catch (error) {
     debugLog('Test notification failed', { error: `${error?.message || error}` });
+  }
+}
+
+export async function devSendTestDailyGuidanceNotification() {
+  if (!__DEV__) return;
+  try {
+    await ensureAndroidDailyGuidanceChannel();
+    const id = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'Test: Daily Guidance',
+        body: "Your daily tip + challenge are ready. Tap to start.",
+        ...(Platform.OS === 'android' ? { channelId: DAILY_GUIDANCE_ANDROID_CHANNEL_ID } : {}),
+        data: { kind: 'daily_guidance_test' },
+      },
+      trigger:
+        Platform.OS === 'android'
+          ? {
+              type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+              seconds: 2,
+              repeats: false,
+              channelId: DAILY_GUIDANCE_ANDROID_CHANNEL_ID,
+            }
+          : {
+              type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+              seconds: 2,
+              repeats: false,
+            },
+    });
+    debugLog('Scheduled test daily guidance', { id });
+  } catch (error) {
+    debugLog('Test daily guidance failed', { error: `${error?.message || error}` });
   }
 }
