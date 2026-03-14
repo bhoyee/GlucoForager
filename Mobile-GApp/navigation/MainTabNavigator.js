@@ -176,10 +176,20 @@ export default function MainTabNavigator() {
         component={ProfileStackNavigator}
         options={{
           tabBarLabel: 'Profile',
+          popToTopOnBlur: true,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="person-outline" size={size} color={color} />
           ),
         }}
+        listeners={({ navigation, route }) => ({
+          tabPress: (e) => {
+            const state = route?.state;
+            if (state && typeof state.index === 'number' && state.index > 0) {
+              e.preventDefault();
+              navigation.navigate('Profile', { screen: 'ProfileMain' });
+            }
+          },
+        })}
       />
     </Tab.Navigator>
   );
