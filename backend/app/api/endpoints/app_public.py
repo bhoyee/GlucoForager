@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from ...database import get_db
 from ...models.app_setting import AppSetting
 from ...models.user import User
-from ...services.tip_catalog_service import get_tip_for_user
+from ...services.tip_catalog_service import get_tip_for_user, personalize_tip_for_user
 from ...core.security import decode_access_token
 from ...services.settings_service import (
     AppUpdateSettings,
@@ -89,4 +89,6 @@ def get_tip_today(request: Request, db: Session = Depends(get_db)):
     tip = get_tip_for_user(db, user)
     if not tip:
         return {"tip": None}
+    if user:
+        tip = personalize_tip_for_user(tip, user)
     return {"tip": tip}
