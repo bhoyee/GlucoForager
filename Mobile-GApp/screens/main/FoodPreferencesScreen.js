@@ -9,6 +9,7 @@ import {
   Pressable,
   ActivityIndicator,
   Alert,
+  Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -302,15 +303,21 @@ export default function FoodPreferencesScreen({ navigation }) {
     setStep((s) => Math.max(0, s - 1));
   };
 
-  const StepHeader = () => (
-    <View style={styles.stepHeader}>
-      <Text style={styles.stepKicker}>
-        Step {step + 1} of {steps.length}
-      </Text>
-      <Text style={styles.stepTitle}>{steps[step].title}</Text>
-      <Text style={styles.stepSubtitle}>{steps[step].subtitle}</Text>
-    </View>
-  );
+  const StepHeader = () => {
+    const progress = Math.max(0, Math.min(1, (step + 1) / steps.length));
+    return (
+      <View style={styles.stepHeader}>
+        <View style={styles.progressTrack}>
+          <View style={[styles.progressFill, { width: `${Math.round(progress * 100)}%` }]} />
+        </View>
+        <Text style={styles.stepKicker}>
+          Step {step + 1} of {steps.length}
+        </Text>
+        <Text style={styles.stepTitle}>{steps[step].title}</Text>
+        <Text style={styles.stepSubtitle}>{steps[step].subtitle}</Text>
+      </View>
+    );
+  };
 
   const Chip = ({ label, selected, onPress, disabled }) => (
     <TouchableOpacity
@@ -425,17 +432,18 @@ export default function FoodPreferencesScreen({ navigation }) {
                     label={opt.label}
                     selected={allergens.includes(opt.value)}
                     onPress={() => {
-                      if (opt.value === 'none') {
-                        setAllergens([]);
-                        return;
-                      }
-                      setAllergens((prev) => prev.filter((x) => x !== 'none'));
-                      setAllergens((prev) => toggleInList(prev, opt.value));
+                      setAllergens((prev) => {
+                        if (opt.value === 'none') return [];
+                        const withoutNone = prev.filter((x) => x !== 'none');
+                        return toggleInList(withoutNone, opt.value);
+                      });
                     }}
                   />
                 ))}
               </View>
 
+              <View style={{ height: 14 }} />
+              <View style={styles.divider} />
               <View style={{ height: 14 }} />
               <Text style={styles.sectionTitle}>Foods to avoid</Text>
               <View style={styles.chipWrap}>
@@ -445,12 +453,11 @@ export default function FoodPreferencesScreen({ navigation }) {
                     label={opt.label}
                     selected={exclusions.includes(opt.value)}
                     onPress={() => {
-                      if (opt.value === 'none') {
-                        setExclusions([]);
-                        return;
-                      }
-                      setExclusions((prev) => prev.filter((x) => x !== 'none'));
-                      setExclusions((prev) => toggleInList(prev, opt.value));
+                      setExclusions((prev) => {
+                        if (opt.value === 'none') return [];
+                        const withoutNone = prev.filter((x) => x !== 'none');
+                        return toggleInList(withoutNone, opt.value);
+                      });
                     }}
                   />
                 ))}
@@ -584,23 +591,39 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   headerButton: { width: 56, height: 44, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: Colors.text },
+  headerTitle: { fontSize: 19, fontWeight: '800', color: Colors.text },
   headerSubtitle: { marginTop: 2, fontSize: 12, color: Colors.textLight },
   skipText: { fontWeight: '700', color: Colors.primary },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 },
   loadingText: { color: Colors.textLight },
-  content: { paddingHorizontal: 16 },
-  stepHeader: { marginTop: 6, marginBottom: 12 },
+  content: { paddingHorizontal: 16, paddingTop: 6 },
+  stepHeader: { marginTop: 6, marginBottom: 14 },
+  progressTrack: {
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: '#E9EEF5',
+    overflow: 'hidden',
+    marginBottom: 10,
+  },
+  progressFill: { height: 6, borderRadius: 999, backgroundColor: Colors.primary },
   stepKicker: { color: Colors.textLight, fontSize: 12, fontWeight: '600' },
   stepTitle: { marginTop: 6, fontSize: 22, fontWeight: '800', color: Colors.text },
   stepSubtitle: { marginTop: 6, color: Colors.textLight, lineHeight: 18 },
   card: {
     backgroundColor: Colors.surface,
     borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    padding: 16,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOpacity: 0.06,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 6 },
+      },
+      android: { elevation: 2 },
+    }),
   },
+  divider: { height: 1, backgroundColor: '#EEF1F5' },
   helper: { color: Colors.textLight, fontSize: 12, marginBottom: 10 },
   sectionTitle: { fontSize: 13, fontWeight: '700', color: Colors.text, marginBottom: 8 },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
@@ -608,25 +631,21 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 999,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: '#FFFFFF',
-    marginBottom: 10,
+    backgroundColor: '#F2F4F7',
+    marginBottom: 8,
   },
-  chipSelected: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  chipSelected: { backgroundColor: Colors.primary },
   chipText: { color: Colors.text, fontWeight: '600', fontSize: 13 },
   chipTextSelected: { color: 'white' },
   select: {
     marginTop: 6,
-    borderWidth: 1,
-    borderColor: Colors.border,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F2F4F7',
   },
   selectText: { color: Colors.text, fontWeight: '600' },
   footer: { marginTop: 16, gap: 10 },
@@ -645,9 +664,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: '#F2F4F7',
   },
   secondaryButtonText: { color: Colors.text, fontWeight: '800' },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', padding: 18 },
