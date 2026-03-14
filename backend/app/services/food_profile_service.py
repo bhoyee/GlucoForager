@@ -5,6 +5,105 @@ from typing import Any, Literal
 from ..models.user import User
 
 
+_BLOOD_SUGAR_LABELS: dict[str, str] = {
+    "type_2": "Type 2 diabetes",
+    "prediabetes": "Prediabetes",
+    "type_1": "Type 1 diabetes",
+    "gestational": "Gestational diabetes",
+    "managing": "Managing blood sugar",
+    "prefer_not": "Prefer not to say",
+}
+
+_GOAL_LABELS: dict[str, str] = {
+    "lower_carb": "Lower carb",
+    "high_protein": "High protein",
+    "balanced": "Balanced",
+    "weight_loss": "Weight loss friendly",
+    "quick_meals": "Quick meals",
+    "simple_ingredients": "Simple ingredients",
+    "budget_friendly": "Budget friendly",
+    "family_friendly": "Family friendly",
+}
+
+_DIET_LABELS: dict[str, str] = {
+    "none": "None / No preference",
+    "vegetarian": "Vegetarian",
+    "vegan": "Vegan",
+    "pescatarian": "Pescatarian",
+    "halal": "Halal",
+    "kosher": "Kosher",
+    "other": "Other",
+}
+
+_CUISINE_LABELS: dict[str, str] = {
+    "west_african": "West African",
+    "east_african": "East African",
+    "mena": "North African / Middle Eastern",
+    "british_irish": "British / Irish",
+    "american_canadian": "American / Canadian",
+    "caribbean": "Caribbean",
+    "mediterranean": "Mediterranean",
+    "south_asian": "South Asian",
+    "east_asian": "East Asian",
+    "southeast_asian": "Southeast Asian",
+    "latin_american": "Latin American",
+    "european": "European",
+    "other": "Other",
+}
+
+_COOK_TIME_LABELS: dict[str, str] = {
+    "under_15": "Under 15 minutes",
+    "15_30": "15-30 minutes",
+    "30_45": "30-45 minutes",
+    "any": "Any time",
+}
+
+# Keep this short; it's only used to make prompts more explicit when a country is selected.
+_COUNTRY_LABELS: dict[str, str] = {
+    "NG": "Nigeria",
+    "GH": "Ghana",
+    "KE": "Kenya",
+    "ZA": "South Africa",
+    "GB": "United Kingdom",
+    "US": "United States",
+    "CA": "Canada",
+    "IE": "Ireland",
+    "IN": "India",
+    "PK": "Pakistan",
+    "BD": "Bangladesh",
+    "PH": "Philippines",
+    "TH": "Thailand",
+    "VN": "Vietnam",
+    "MX": "Mexico",
+    "BR": "Brazil",
+}
+
+
+def _humanize(value: Any, mapping: dict[str, str]) -> str | None:
+    if not isinstance(value, str):
+        return None
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    key = cleaned.lower()
+    return mapping.get(key) or mapping.get(cleaned)  # allow already-normalized keys
+
+
+def _humanize_list(values: Any, mapping: dict[str, str], *, max_items: int) -> list[str]:
+    if not isinstance(values, list):
+        return []
+    out: list[str] = []
+    for item in values:
+        label = _humanize(item, mapping)
+        if label:
+            out.append(label)
+        elif isinstance(item, str) and item.strip():
+            out.append(item.strip().replace("_", " "))
+        if len(out) >= max_items:
+            break
+    return out
+
+
 def extract_food_profile(user: User) -> dict[str, Any]:
     """Extract only the preference fields used for personalization.
 
@@ -83,19 +182,19 @@ def build_food_profile_instructions(
 
     bsp = profile.get("blood_sugar_profile")
     if isinstance(bsp, str) and bsp.strip():
-        lines.append(f"- Blood sugar profile: {bsp.strip()}")
+        lines.append(f"- Blood sugar profile: {_BLOOD_SUGAR_LABELS.get(bsp.strip(), bsp.strip())}")
 
-    goals = profile.get("meal_goals") or []
-    if isinstance(goals, list) and goals:
-        lines.append(f"- Goals: {', '.join(goals[:4])}")
+    goals = _humanize_list(profile.get("meal_goals") or [], _GOAL_LABELS, max_items=4)
+    if goals:
+        lines.append(f"- Goals: {', '.join(goals)}")
 
     diet = profile.get("dietary_pattern")
     if isinstance(diet, str) and diet.strip() and diet.strip().lower() not in {"none", "no preference"}:
-        lines.append(f"- Dietary pattern: {diet.strip()}")
+        lines.append(f"- Dietary pattern: {_DIET_LABELS.get(diet.strip(), diet.strip())}")
 
-    cuisines = profile.get("preferred_cuisines") or []
-    if isinstance(cuisines, list) and cuisines:
-        lines.append(f"- Preferred cuisines: {', '.join(cuisines[:3])}")
+    cuisine_labels = _humanize_list(profile.get("preferred_cuisines") or [], _CUISINE_LABELS, max_items=3)
+    if cuisine_labels:
+        lines.append(f"- Preferred cuisines: {', '.join(cuisine_labels)}")
 
     avoid_allergens = profile.get("allergens") or []
     if isinstance(avoid_allergens, list) and avoid_allergens:
@@ -111,11 +210,23 @@ def build_food_profile_instructions(
 
     cook_time = profile.get("cook_time_preference")
     if isinstance(cook_time, str) and cook_time.strip() and cook_time.strip().lower() != "any":
-        lines.append(f"- Cooking time preference: {cook_time.strip()}")
+        lines.append(f"- Cooking time preference: {_COOK_TIME_LABELS.get(cook_time.strip(), cook_time.strip())}")
 
     country_code = profile.get("country_code")
     if isinstance(country_code, str) and country_code.strip():
-        lines.append(f"- Country: {country_code.strip().upper()}")
+        cc = country_code.strip().upper()
+        country_name = _COUNTRY_LABELS.get(cc)
+        if country_name:
+            lines.append(f"- Country: {country_name} ({cc})")
+        else:
+            lines.append(f"- Country: {cc}")
+
+    # Add one explicit nudge for regional/cuisine focus in text-only modes.
+    if mode in ("surprise", "quick") and cuisine_labels:
+        if "West African" in cuisine_labels and (country_code or "").strip().upper() == "NG":
+            lines.append("- Regional focus: Nigerian-style West African meals when possible.")
+        else:
+            lines.append(f"- Regional focus: {', '.join(cuisine_labels)} style when possible.")
 
     if strength == "soft" and has_ingredients:
         lines.append(
