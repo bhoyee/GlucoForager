@@ -54,6 +54,7 @@ class TieredAIService:
         mode: str | None = None,
         timeout_seconds: float | None = None,
         generate_images: bool = True,
+        food_profile: Dict[str, Any] | None = None,
     ) -> List[Dict[str, Any]]:
         payload = {
             "ingredients": ingredients,
@@ -62,6 +63,7 @@ class TieredAIService:
             "exclude_titles": exclude_titles or [],
             "variety_mode": bool(variety_mode),
             "mode": (mode or ""),
+            "food_profile": food_profile or {},
         }
         key = self._cache_key("recipes", payload)
         should_cache = self._should_cache(tier) and not (exclude_titles or variety_mode)
@@ -81,6 +83,7 @@ class TieredAIService:
             mode=mode,
             timeout_seconds=timeout_seconds,
             generate_images=generate_images,
+            food_profile=food_profile,
         )
         if should_cache:
             self.cache.set(key, json.dumps(result), ttl_seconds=300)
