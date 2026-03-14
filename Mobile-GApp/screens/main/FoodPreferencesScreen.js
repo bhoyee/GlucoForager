@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
 import { useAuth } from '../../context/authContext';
 import { countries } from '../../utils/countries';
+import { addDebugLog } from '../../utils/debugLogger';
 
 const BLOOD_SUGAR_OPTIONS = [
   { value: 'type_2', label: 'Type 2 diabetes' },
@@ -51,6 +52,7 @@ const DIETARY_PATTERN_OPTIONS = [
 ];
 
 const ALLERGEN_OPTIONS = [
+  { value: 'none', label: 'None' },
   { value: 'dairy', label: 'Dairy' },
   { value: 'eggs', label: 'Eggs' },
   { value: 'fish', label: 'Fish' },
@@ -64,12 +66,14 @@ const ALLERGEN_OPTIONS = [
 ];
 
 const EXCLUSION_OPTIONS = [
+  { value: 'none', label: 'None' },
   { value: 'pork', label: 'Pork' },
   { value: 'beef', label: 'Beef' },
   { value: 'chicken', label: 'Chicken' },
   { value: 'seafood', label: 'Seafood' },
   { value: 'spicy_food', label: 'Spicy food' },
   { value: 'mushrooms', label: 'Mushrooms' },
+  { value: 'other', label: 'Other' },
 ];
 
 const EQUIPMENT_OPTIONS = [
@@ -133,7 +137,7 @@ export default function FoodPreferencesScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { signOut, completeFoodProfileOnboarding } = useAuth();
 
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(-1);
   const [busy, setBusy] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showCountries, setShowCountries] = useState(false);
@@ -162,6 +166,15 @@ export default function FoodPreferencesScreen({ navigation }) {
     ],
     []
   );
+
+  useEffect(() => {
+    addDebugLog({
+      source: 'FoodPreferences',
+      level: 'info',
+      message: 'Onboarding opened',
+      details: JSON.stringify({ forced }),
+    });
+  }, [forced]);
 
   const loadProfile = useCallback(async () => {
     try {
@@ -209,8 +222,8 @@ export default function FoodPreferencesScreen({ navigation }) {
         blood_sugar_profile: bloodSugarProfile,
         meal_goals: goals,
         dietary_pattern: dietaryPattern,
-        allergens,
-        food_exclusions: exclusions,
+        allergens: allergens.includes('none') ? [] : allergens.filter((x) => x !== 'none'),
+        food_exclusions: exclusions.includes('none') ? [] : exclusions.filter((x) => x !== 'none'),
         available_equipment: equipment,
         cook_time_preference: cookTime,
         preferred_cuisines: cuisines,
@@ -234,6 +247,12 @@ export default function FoodPreferencesScreen({ navigation }) {
       await response.json().catch(() => null);
       if (markCompleted) {
         await completeFoodProfileOnboarding();
+        addDebugLog({
+          source: 'FoodPreferences',
+          level: 'info',
+          message: 'Onboarding completed',
+          details: JSON.stringify({ forced }),
+        });
       }
       return true;
     } finally {
@@ -242,9 +261,18 @@ export default function FoodPreferencesScreen({ navigation }) {
   };
 
   const handleSkip = async () => {
+    addDebugLog({
+      source: 'FoodPreferences',
+      level: 'info',
+      message: 'Onboarding skipped',
+      details: JSON.stringify({ forced }),
+    });
     const ok = await saveProfile(true);
     if (!ok) return;
-    if (forced) return;
+    if (forced) {
+      navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+      return;
+    }
     navigation.goBack();
   };
 
@@ -255,12 +283,15 @@ export default function FoodPreferencesScreen({ navigation }) {
     }
     const ok = await saveProfile(true);
     if (!ok) return;
-    if (forced) return;
+    if (forced) {
+      navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+      return;
+    }
     navigation.goBack();
   };
 
   const handleBack = () => {
-    if (step === 0) {
+    if (step <= -1) {
       if (forced) {
         Alert.alert('Almost there', 'You can skip for now, or continue to finish setup.');
         return;
@@ -313,11 +344,31 @@ export default function FoodPreferencesScreen({ navigation }) {
       {busy ? (
         <View style={styles.loading}>
           <ActivityIndicator size="small" color={Colors.primary} />
-          <Text style={styles.loadingText}>Loading…</Text>
+          <Text style={styles.loadingText}>Loading...</Text>
         </View>
       ) : (
         <ScrollView contentContainerStyle={[styles.content, { paddingBottom: contentBottomPadding }]}>
-          <StepHeader />
+          {step >= 0 ? <StepHeader /> : null}
+
+          {step === -1 ? (
+            <View style={styles.card}>
+              <Text style={[styles.stepTitle, { marginTop: 0 }]}>Personalize your meals</Text>
+              <Text style={styles.stepSubtitle}>
+                Takes about 30 seconds. You can change this anytime in Profile.
+              </Text>
+              <View style={{ height: 14 }} />
+              <TouchableOpacity
+                style={[styles.primaryButton, saving ? { opacity: 0.7 } : null]}
+                onPress={() => setStep(0)}
+                disabled={saving}
+              >
+                <Text style={styles.primaryButtonText}>Start</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.secondaryButton} onPress={handleSkip} disabled={saving}>
+                <Text style={styles.secondaryButtonText}>Skip for now</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
 
           {step === 0 ? (
             <View style={styles.card}>
@@ -373,7 +424,14 @@ export default function FoodPreferencesScreen({ navigation }) {
                     key={opt.value}
                     label={opt.label}
                     selected={allergens.includes(opt.value)}
-                    onPress={() => setAllergens((prev) => toggleInList(prev, opt.value))}
+                    onPress={() => {
+                      if (opt.value === 'none') {
+                        setAllergens([]);
+                        return;
+                      }
+                      setAllergens((prev) => prev.filter((x) => x !== 'none'));
+                      setAllergens((prev) => toggleInList(prev, opt.value));
+                    }}
                   />
                 ))}
               </View>
@@ -386,7 +444,14 @@ export default function FoodPreferencesScreen({ navigation }) {
                     key={opt.value}
                     label={opt.label}
                     selected={exclusions.includes(opt.value)}
-                    onPress={() => setExclusions((prev) => toggleInList(prev, opt.value))}
+                    onPress={() => {
+                      if (opt.value === 'none') {
+                        setExclusions([]);
+                        return;
+                      }
+                      setExclusions((prev) => prev.filter((x) => x !== 'none'));
+                      setExclusions((prev) => toggleInList(prev, opt.value));
+                    }}
                   />
                 ))}
               </View>
