@@ -404,6 +404,7 @@ class AIRecipeGenerator:
         mode: str | None = None,
         timeout_seconds: float | None = None,
         generate_images: bool = True,
+        food_profile: dict[str, Any] | None = None,
     ) -> List[Dict[str, Any]]:
         filters = filters or []
         exclude_titles = [str(t).strip() for t in (exclude_titles or []) if str(t).strip()]
@@ -463,6 +464,23 @@ class AIRecipeGenerator:
                     ]
                 )
             extra_instructions = f"{(extra_instructions or '').strip()} {' '.join(mode_parts)}".strip()
+
+        # Profile-driven personalization (Phase 3). Keep it compact to protect latency/cost.
+        try:
+            from .food_profile_service import build_food_profile_instructions
+
+            strength = "strong" if mode_norm in ("surprise", "quick") else "soft"
+            profile_instructions = build_food_profile_instructions(
+                food_profile,
+                strength=strength,  # type: ignore[arg-type]
+                mode=mode_norm or "ingredients",
+                has_ingredients=bool(ingredients),
+            )
+            if profile_instructions:
+                extra_instructions = f"{(extra_instructions or '').strip()}\n\n{profile_instructions}".strip()
+        except Exception:
+            # Never fail recipe generation due to profile formatting errors.
+            pass
 
         def parse_content(raw: str) -> List[Dict[str, Any]]:
             import json, re

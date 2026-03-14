@@ -10,6 +10,7 @@ from ...database import get_db
 from ...models.ai_request import AIRequest
 from ...models.user import User
 from ...services.ai_swaps_service import AISwapsService
+from ...services.food_profile_service import extract_food_profile
 from ...services.cache_service import CacheService
 from ...services.cost_tracker import record_ai_request
 from ...services.subscription_service import get_effective_subscription_tier
@@ -138,7 +139,12 @@ def generate_food_swaps(
 
     try:
         service = AISwapsService()
-        result = service.generate_swaps(food=food, force_swaps=bool(payload.force_swaps), timeout_seconds=12.0)
+        result = service.generate_swaps(
+            food=food,
+            force_swaps=bool(payload.force_swaps),
+            timeout_seconds=12.0,
+            food_profile=extract_food_profile(user),
+        )
         assessment = result.get("assessment") or {}
         if not isinstance(assessment, dict):
             _http_error(status_code=502, code="swaps_failed", message="Couldn't generate swaps right now. Please try again.")
