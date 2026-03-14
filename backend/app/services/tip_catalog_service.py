@@ -2,11 +2,13 @@ import json
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
+import re
 
 from sqlalchemy.orm import Session
 
 from ..models.app_setting import AppSetting
 from ..models.user import User
+from ..services.food_profile_service import extract_food_profile
 
 
 CATALOG_KEY = "tips.catalog.v1"
@@ -231,3 +233,182 @@ def get_tip_for_user(db: Session, user: User | None, *, on_date: date | None = N
                 if str(tip.get("id") or "") not in blocked:
                     return tip
     return get_tip_of_the_day(db, on_date=on_date)
+
+
+def _is_meaningful_profile(profile: dict[str, Any] | None) -> bool:
+    if not profile or not isinstance(profile, dict):
+        return False
+    return any(
+        profile.get(k)
+        for k in (
+            "blood_sugar_profile",
+            "country_code",
+            "preferred_cuisines",
+            "meal_goals",
+            "dietary_pattern",
+            "allergens",
+            "food_exclusions",
+            "available_equipment",
+            "cook_time_preference",
+        )
+    )
+
+
+def _carb_examples_for_cuisines(cuisines: list[str]) -> list[str]:
+    normalized = {c.strip().lower() for c in cuisines if isinstance(c, str) and c.strip()}
+    if "west_african" in normalized:
+        return ["rice", "yam", "bread", "swallow"]
+    if "south_asian" in normalized:
+        return ["rice", "roti", "naan", "chapati"]
+    if "east_asian" in normalized or "southeast_asian" in normalized:
+        return ["rice", "noodles", "dumplings", "bread"]
+    if "latin_american" in normalized:
+        return ["tortillas", "rice", "plantain", "bread"]
+    if "caribbean" in normalized:
+        return ["rice", "plantain", "dumplings", "bread"]
+    if "mena" in normalized:
+        return ["bread", "rice", "potatoes", "pita"]
+    if "mediterranean" in normalized:
+        return ["bread", "pasta", "potatoes", "rice"]
+    # Default (broadly understandable)
+    return ["bread", "rice", "pasta", "potatoes"]
+
+
+def _build_protein_examples(profile: dict[str, Any]) -> list[str]:
+    diet = str(profile.get("dietary_pattern") or "").strip().lower()
+    allergens = {a.strip().lower() for a in (profile.get("allergens") or []) if isinstance(a, str)}
+    excludes = {e.strip().lower() for e in (profile.get("food_exclusions") or []) if isinstance(e, str)}
+
+    def allowed(item: str) -> bool:
+        key = item.lower()
+        if key in {"yogurt", "greek yogurt", "cheese", "milk"} and "dairy" in allergens:
+            return False
+        if key in {"eggs", "egg"} and "eggs" in allergens:
+            return False
+        if key in {"peanut butter", "peanuts"} and "peanuts" in allergens:
+            return False
+        if key in {"fish", "seafood"} and ("fish" in allergens or "shellfish" in allergens):
+            return False
+        if key == "chicken" and "chicken" in excludes:
+            return False
+        if key == "beef" and "beef" in excludes:
+            return False
+        if key == "pork" and "pork" in excludes:
+            return False
+        if key in {"fish", "seafood"} and "seafood" in excludes:
+            return False
+        return True
+
+    # Diet pattern constraints (very conservative).
+    if diet == "vegan":
+        base = ["tofu", "beans", "lentils", "chickpeas", "edamame"]
+    elif diet == "vegetarian":
+        base = ["eggs", "Greek yogurt", "beans", "lentils", "tofu"]
+    elif diet == "pescatarian":
+        base = ["fish", "Greek yogurt", "eggs", "beans", "tofu"]
+    else:
+        base = ["eggs", "Greek yogurt", "chicken", "beans", "fish"]
+
+    out: list[str] = []
+    for item in base:
+        if allowed(item):
+            out.append(item)
+    if not out:
+        # Safe fallback.
+        out = ["beans", "lentils", "tofu"]
+    return out[:4]
+
+
+def _replace_phrase(text: str, phrase: str, replacement: str) -> str:
+    # Works for both single words and multi-word phrases.
+    pattern = rf"(?<!\\w){re.escape(phrase)}(?!\\w)"
+    return re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+
+
+def personalize_tip_for_user(tip: dict[str, Any], user: User | None) -> dict[str, Any]:
+    """Personalize *only* the 'try_today' example line using a user's profile.
+
+    Do not change the medical substance (title/tip/why). Keep this rule-based and safe.
+    """
+    if not tip or not isinstance(tip, dict) or not user:
+        return tip
+
+    try:
+        profile = extract_food_profile(user)
+    except Exception:
+        return tip
+
+    if not _is_meaningful_profile(profile):
+        return tip
+
+    try_today = tip.get("try_today")
+    if not isinstance(try_today, str) or not try_today.strip():
+        return tip
+
+    tip_id = str(tip.get("id") or "").strip().lower()
+    title = str(tip.get("title") or "").strip().lower()
+
+    cuisines = profile.get("preferred_cuisines") or []
+    if not isinstance(cuisines, list):
+        cuisines = []
+
+    carbs = _carb_examples_for_cuisines([c for c in cuisines if isinstance(c, str)])
+    proteins = _build_protein_examples(profile)
+
+    allergens = {a.strip().lower() for a in (profile.get("allergens") or []) if isinstance(a, str)}
+    excludes = {e.strip().lower() for e in (profile.get("food_exclusions") or []) if isinstance(e, str)}
+    diet = str(profile.get("dietary_pattern") or "").strip().lower()
+
+    new_try = try_today
+
+    # Strong personalization for common "first-week" onboarding tips and similar patterns.
+    if (
+        "protein" in title
+        and "before" in new_try.lower()
+        or tip_id in {"protein-first", "onboarding-day-1-protein-first"}
+    ):
+        new_try = f"Eat {proteins[0]}, {proteins[1]}, or {proteins[2]} before {carbs[0]} or {carbs[1]}."
+    elif tip_id in {"onboarding-day-3-pair-carbs"} or ("carbs" in title and "alone" in title):
+        spread = "peanut butter"
+        if "peanuts" in allergens:
+            spread = "sunflower seed butter"
+
+        protein_side = "a handful of nuts"
+        if "tree_nuts" in allergens or "peanuts" in allergens:
+            protein_side = "roasted chickpeas"
+        if diet == "vegan" and "soy" not in allergens:
+            protein_side = "edamame"
+
+        if "dairy" in allergens or diet == "vegan":
+            new_try = f"Pair fruit with a protein: try apple slices with {spread} or {protein_side}."
+        else:
+            new_try = f"Pair fruit with a protein: try apple slices with {spread} or plain Greek yogurt."
+    elif tip_id in {"onboarding-day-6-protein-snacks"} or ("snack" in title and "protein" in new_try.lower()):
+        snack = proteins[0] if proteins else "nuts"
+        if diet == "vegan" and snack.lower() in {"eggs", "greek yogurt", "fish", "chicken"}:
+            snack = "nuts"
+        if snack == "nuts" and ("tree_nuts" in allergens or "peanuts" in allergens):
+            snack = "roasted chickpeas"
+        new_try = f"Choose a protein snack today: try {snack} with veggies or fruit."
+
+    # Conservative safety passes for exclusions/allergens in the example line.
+    if "peanuts" in allergens:
+        new_try = _replace_phrase(new_try, "peanut butter", "sunflower seed butter")
+    if "dairy" in allergens:
+        new_try = _replace_phrase(new_try, "Greek yogurt", "unsweetened dairy-free yogurt")
+        new_try = _replace_phrase(new_try, "yogurt", "unsweetened dairy-free yogurt")
+        new_try = _replace_phrase(new_try, "cheese", "a protein option")
+    if diet in {"vegetarian", "vegan", "pescatarian"} or any(x in excludes for x in ("pork", "beef", "chicken", "seafood")):
+        if diet in {"vegetarian", "vegan"}:
+            for meat in ("chicken", "beef", "pork", "fish", "seafood"):
+                new_try = _replace_phrase(new_try, meat, "beans")
+        elif diet == "pescatarian":
+            for meat in ("chicken", "beef", "pork"):
+                new_try = _replace_phrase(new_try, meat, "fish")
+
+    if new_try.strip() == try_today.strip():
+        return tip
+
+    out = dict(tip)
+    out["try_today"] = new_try.strip()
+    return out
