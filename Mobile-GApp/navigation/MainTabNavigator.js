@@ -27,6 +27,7 @@ import CarbSwapsScreen from '../screens/main/CarbSwapsScreen';
 import ChallengeScreen from '../screens/main/ChallengeScreen';
 import TodayTipScreen from '../screens/main/TodayTipScreen';
 import TipsArchiveScreen from '../screens/main/TipsArchiveScreen';
+import FoodPreferencesScreen from '../screens/main/FoodPreferencesScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -106,6 +107,7 @@ function ProfileStackNavigator() {
     >
       <ProfileStack.Screen name="ProfileMain" component={ProfileScreen} />
       <ProfileStack.Screen name="PersonalInfo" component={PersonalInfoScreen} />
+      <ProfileStack.Screen name="FoodPreferences" component={FoodPreferencesScreen} />
       <ProfileStack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
       <ProfileStack.Screen name="Terms" component={TermsScreen} />
       <ProfileStack.Screen name="DebugLogs" component={DebugLogsScreen} />

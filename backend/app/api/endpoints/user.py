@@ -30,6 +30,16 @@ def profile(
         "full_name": current_user.full_name,
         "gender": current_user.gender,
         "country": current_user.country,
+        "blood_sugar_profile": getattr(current_user, "blood_sugar_profile", None),
+        "country_code": getattr(current_user, "country_code", None),
+        "preferred_cuisines": getattr(current_user, "preferred_cuisines", None),
+        "meal_goals": getattr(current_user, "meal_goals", None),
+        "dietary_pattern": getattr(current_user, "dietary_pattern", None),
+        "allergens": getattr(current_user, "allergens", None),
+        "food_exclusions": getattr(current_user, "food_exclusions", None),
+        "available_equipment": getattr(current_user, "available_equipment", None),
+        "cook_time_preference": getattr(current_user, "cook_time_preference", None),
+        "profile_completed": getattr(current_user, "profile_completed", None),
         "subscription_tier": effective_tier,
         "is_premium": effective_tier == "premium",
         "premium_access_blocked": bool(getattr(current_user, "premium_access_blocked_at", None)),
@@ -43,6 +53,40 @@ class ProfileUpdate(BaseModel):
     country: str | None = None
     email: EmailStr | None = None
     password: str | None = None
+    blood_sugar_profile: str | None = None
+    country_code: str | None = None
+    preferred_cuisines: list[str] | None = None
+    meal_goals: list[str] | None = None
+    dietary_pattern: str | None = None
+    allergens: list[str] | None = None
+    food_exclusions: list[str] | None = None
+    available_equipment: list[str] | None = None
+    cook_time_preference: str | None = None
+    profile_completed: bool | None = None
+
+
+def _clean_string_list(value: list[str] | None, *, max_items: int = 24, max_len: int = 40) -> list[str] | None:
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        return None
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        if not isinstance(item, str):
+            continue
+        cleaned = item.strip()
+        if not cleaned:
+            continue
+        cleaned = cleaned[:max_len]
+        key = cleaned.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(cleaned)
+        if len(out) >= max_items:
+            break
+    return out
 
 
 @router.patch("/profile")
@@ -77,6 +121,29 @@ def update_profile(
             )
         current_user.hashed_password = get_password_hash(payload.password)
 
+    # Food profile fields (optional; onboarding).
+    if payload.blood_sugar_profile is not None:
+        current_user.blood_sugar_profile = payload.blood_sugar_profile.strip() or None
+    if payload.country_code is not None:
+        cc = payload.country_code.strip().upper()
+        current_user.country_code = (cc[:2] if cc else None)
+    if payload.preferred_cuisines is not None:
+        current_user.preferred_cuisines = _clean_string_list(payload.preferred_cuisines, max_items=6, max_len=48) or []
+    if payload.meal_goals is not None:
+        current_user.meal_goals = _clean_string_list(payload.meal_goals, max_items=4, max_len=48) or []
+    if payload.dietary_pattern is not None:
+        current_user.dietary_pattern = payload.dietary_pattern.strip() or None
+    if payload.allergens is not None:
+        current_user.allergens = _clean_string_list(payload.allergens, max_items=24, max_len=48) or []
+    if payload.food_exclusions is not None:
+        current_user.food_exclusions = _clean_string_list(payload.food_exclusions, max_items=24, max_len=48) or []
+    if payload.available_equipment is not None:
+        current_user.available_equipment = _clean_string_list(payload.available_equipment, max_items=12, max_len=32) or []
+    if payload.cook_time_preference is not None:
+        current_user.cook_time_preference = payload.cook_time_preference.strip() or None
+    if payload.profile_completed is not None:
+        current_user.profile_completed = bool(payload.profile_completed)
+
     db.add(current_user)
     db.commit()
     db.refresh(current_user)
@@ -88,6 +155,16 @@ def update_profile(
         "full_name": current_user.full_name,
         "gender": current_user.gender,
         "country": current_user.country,
+        "blood_sugar_profile": getattr(current_user, "blood_sugar_profile", None),
+        "country_code": getattr(current_user, "country_code", None),
+        "preferred_cuisines": getattr(current_user, "preferred_cuisines", None),
+        "meal_goals": getattr(current_user, "meal_goals", None),
+        "dietary_pattern": getattr(current_user, "dietary_pattern", None),
+        "allergens": getattr(current_user, "allergens", None),
+        "food_exclusions": getattr(current_user, "food_exclusions", None),
+        "available_equipment": getattr(current_user, "available_equipment", None),
+        "cook_time_preference": getattr(current_user, "cook_time_preference", None),
+        "profile_completed": getattr(current_user, "profile_completed", None),
         "subscription_tier": effective_tier,
         "is_premium": effective_tier == "premium",
         "premium_access_blocked": bool(getattr(current_user, "premium_access_blocked_at", None)),

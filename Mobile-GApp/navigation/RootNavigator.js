@@ -1,4 +1,3 @@
-import React, { useContext, useEffect, useState } from "react";
 import React, { useContext, useEffect, useState } from 'react';
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -15,9 +14,10 @@ import ForgotPasswordScreen from "../screens/auth/ForgotPasswordScreen";
 import TermsScreen from "../screens/main/TermsScreen";
 import PrivacyPolicyScreen from "../screens/main/PrivacyPolicyScreen";
 import MainTabNavigator from "./MainTabNavigator";
+import FoodPreferencesScreen from "../screens/main/FoodPreferencesScreen";
 
 export function RootNavigatorContent() {
-  const { userToken, isLoading } = useContext(AuthContext);
+  const { userToken, isLoading, needsFoodProfileOnboarding } = useContext(AuthContext);
 
   const devLog = (...args) => {
     if (!__DEV__) return;
@@ -90,13 +90,21 @@ export function RootNavigatorContent() {
   return (
     <NavigationContainer>
       <Stack.Navigator>
-        {userToken ? ( // CHECK USERTOKEN FIRST - THIS IS THE KEY FIX!
-          // Logged in users: Main app with TABS
-          <Stack.Screen
-            name="MainTabs"
-            component={MainTabNavigator}
-            options={{ headerShown: false }}
-          />
+        {userToken ? (
+          needsFoodProfileOnboarding ? (
+            <Stack.Screen
+              name="FoodPreferencesOnboarding"
+              component={FoodPreferencesScreen}
+              initialParams={{ forced: true }}
+              options={{ headerShown: false }}
+            />
+          ) : (
+            <Stack.Screen
+              name="MainTabs"
+              component={MainTabNavigator}
+              options={{ headerShown: false }}
+            />
+          )
         ) : showOnboarding ? (
           // First time users (no token): Onboarding flow
           <>

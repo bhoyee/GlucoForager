@@ -17,7 +17,7 @@ import { disableMealReminders, enableMealRemindersAndSchedule, getMealRemindersE
 export default function ProfileScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-  const { signOut } = useContext(AuthContext);
+  const { signOut, foodProfileCompleted } = useContext(AuthContext);
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const headerPaddingTop = Math.max(insets.top, 16);
@@ -625,6 +625,19 @@ export default function ProfileScreen() {
           <View style={styles.menuItemLeft}>
             <Ionicons name="person-outline" size={22} color={Colors.text} />
             <Text style={styles.menuText}>Edit Personal Info</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('FoodPreferences')}>
+          <View style={styles.menuItemLeft}>
+            <Ionicons name="options-outline" size={22} color={Colors.text} />
+            <View style={styles.menuTextStack}>
+              <Text style={[styles.menuText, { marginLeft: 0, flex: 0 }]}>Food preferences</Text>
+              <Text style={styles.menuSubtext}>
+                {foodProfileCompleted === true ? 'Update your preferences' : 'Personalize your meals (30 seconds)'}
+              </Text>
+            </View>
           </View>
           <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
         </TouchableOpacity>
