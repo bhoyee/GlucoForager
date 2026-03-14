@@ -177,14 +177,34 @@ class AISwapsService:
         self._openai = OpenAI(api_key=settings.openai_api_key, organization=settings.openai_organization)
         self._model = getattr(settings, "swaps_model", None) or "gpt-4o-mini-2024-07-18"
 
-    def generate_swaps(self, *, food: str, force_swaps: bool = False, timeout_seconds: float = 12.0) -> Dict[str, Any]:
+    def generate_swaps(
+        self,
+        *,
+        food: str,
+        force_swaps: bool = False,
+        timeout_seconds: float = 12.0,
+        food_profile: dict[str, Any] | None = None,
+    ) -> Dict[str, Any]:
         food_clean = _clean_food(food)
         if not food_clean:
             raise ValueError("food is required")
 
         force_line = "User explicitly asked for substitutions: YES" if force_swaps else "User explicitly asked for substitutions: NO"
+        profile_text = None
+        try:
+            from .food_profile_service import build_food_profile_instructions
+
+            profile_text = build_food_profile_instructions(
+                food_profile,
+                strength="soft",
+                mode="swaps",
+                has_ingredients=True,
+            )
+        except Exception:
+            profile_text = None
         user_prompt = f"""User food: {food_clean}
 {force_line}
+{(profile_text + chr(10)) if profile_text else ""}
 
 Suggest 5 diabetes-friendly alternatives that may have lower blood sugar impact.
 Return ONLY the required JSON.

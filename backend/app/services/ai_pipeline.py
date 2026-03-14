@@ -7,9 +7,11 @@ from sqlalchemy.orm import Session
 from ..core.config import settings
 from ..services.tiered_ai_service import TieredAIService
 from ..models.recipe_history import RecipeHistory
+from ..models.user import User
 from .diabetes_friendly_classifier import DiabetesFriendlyClassifier
 from .ingredient_classifier import IngredientClassifier
 from .cost_tracker import record_ai_request
+from .food_profile_service import extract_food_profile
 
 
 logger = logging.getLogger(__name__)
@@ -68,6 +70,8 @@ class AIPipeline:
         filters: list[str] | None = None,
         device_id: str | None = None,
     ) -> Dict[str, Any]:
+        user = db.query(User).filter(User.id == user_id).first()
+        food_profile = extract_food_profile(user) if user else None
         analysis = self.ai.analyze_vision(image_base64, tier)
         ingredients = self._clean_ingredients(analysis.get("ingredients", []))
         self._validate_ingredients(ingredients)
@@ -89,6 +93,7 @@ class AIPipeline:
             filters=filters,
             timeout_seconds=55,
             generate_images=False,
+            food_profile=food_profile,
         )
         recipes = self._validated_recipes_or_none(recipes)
         if recipes is None:
@@ -99,6 +104,7 @@ class AIPipeline:
                 variety_mode=True,
                 timeout_seconds=55,
                 generate_images=False,
+                food_profile=food_profile,
             )
             recipes = self._validated_recipes_or_none(recipes_retry)
         if recipes is None:
@@ -124,6 +130,8 @@ class AIPipeline:
         filters: list[str] | None = None,
         device_id: str | None = None,
     ) -> Dict[str, Any]:
+        user = db.query(User).filter(User.id == user_id).first()
+        food_profile = extract_food_profile(user) if user else None
         all_ingredients: list[str] = []
         for image in images_base64:
             analysis = self.ai.analyze_vision(image, tier)
@@ -160,6 +168,7 @@ class AIPipeline:
             filters=filters,
             timeout_seconds=55,
             generate_images=False,
+            food_profile=food_profile,
         )
         recipes = self._validated_recipes_or_none(recipes)
         if recipes is None:
@@ -170,6 +179,7 @@ class AIPipeline:
                 variety_mode=True,
                 timeout_seconds=55,
                 generate_images=False,
+                food_profile=food_profile,
             )
             recipes = self._validated_recipes_or_none(recipes_retry)
         if recipes is None:
@@ -197,6 +207,21 @@ class AIPipeline:
         mode: str = "ingredients",
         device_id: str | None = None,
     ) -> List[Dict[str, Any]]:
+        user = db.query(User).filter(User.id == user_id).first()
+        food_profile = extract_food_profile(user) if user else None
+        if settings.ai_debug_logging and mode in ("surprise", "quick") and food_profile:
+            try:
+                logger.info(
+                    "AI food profile applied mode=%s goals=%s cuisines=%s dietary=%s equipment=%s cook_time=%s",
+                    mode,
+                    (food_profile.get("meal_goals") or [])[:4],
+                    (food_profile.get("preferred_cuisines") or [])[:3],
+                    food_profile.get("dietary_pattern"),
+                    (food_profile.get("available_equipment") or [])[:6],
+                    food_profile.get("cook_time_preference"),
+                )
+            except Exception:
+                pass
         started = time.time()
         # Mobile polling stops at ~60s; Surprise/Quick should complete within that window.
         overall_budget_seconds = (
@@ -212,6 +237,7 @@ class AIPipeline:
             mode=mode,
             timeout_seconds=overall_budget_seconds,
             generate_images=False,
+            food_profile=food_profile,
         )
         recipes = self._validated_recipes_or_none(recipes, mode=mode)
         if recipes is None:
@@ -228,6 +254,7 @@ class AIPipeline:
                 mode=mode,
                 timeout_seconds=max(8, remaining),
                 generate_images=False,
+                food_profile=food_profile,
             )
             recipes = self._validated_recipes_or_none(recipes_retry, mode=mode)
 
