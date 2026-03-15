@@ -7,10 +7,16 @@ from sqlalchemy.orm import Session
 from ...database import get_db
 from ...core.security import get_password_hash
 from ...models.ai_request import AIRequest
+from ...models.ai_job import AIJob
 from ...models.favorite import Favorite
+from ...models.meal_plan import MealPlan
+from ...models.password_reset import PasswordResetToken
+from ...models.refresh_token import RefreshToken
 from ...models.recipe_history import RecipeHistory
+from ...models.shopping_item import ShoppingItem
 from ...models.subscription import Subscription
 from ...models.user import SearchLog, User
+from ...models.user_daily_challenge import UserDailyChallenge
 from ..dependencies import check_user_access, get_current_user
 from ...services.subscription_service import get_effective_subscription_tier
 
@@ -278,11 +284,22 @@ def delete_account(
     current_user: User = Depends(get_current_user),
 ):
     user_id = current_user.id
-    db.query(AIRequest).filter(AIRequest.user_id == user_id).delete(synchronize_session=False)
-    db.query(SearchLog).filter(SearchLog.user_id == user_id).delete(synchronize_session=False)
-    db.query(Favorite).filter(Favorite.user_id == user_id).delete(synchronize_session=False)
-    db.query(RecipeHistory).filter(RecipeHistory.user_id == user_id).delete(synchronize_session=False)
-    db.query(Subscription).filter(Subscription.user_id == user_id).delete(synchronize_session=False)
-    db.delete(current_user)
-    db.commit()
-    return {"detail": "Account deleted"}
+    try:
+        # Delete dependent records first to avoid FK constraint errors.
+        db.query(AIJob).filter(AIJob.user_id == user_id).delete(synchronize_session=False)
+        db.query(AIRequest).filter(AIRequest.user_id == user_id).delete(synchronize_session=False)
+        db.query(SearchLog).filter(SearchLog.user_id == user_id).delete(synchronize_session=False)
+        db.query(Favorite).filter(Favorite.user_id == user_id).delete(synchronize_session=False)
+        db.query(RecipeHistory).filter(RecipeHistory.user_id == user_id).delete(synchronize_session=False)
+        db.query(Subscription).filter(Subscription.user_id == user_id).delete(synchronize_session=False)
+        db.query(RefreshToken).filter(RefreshToken.user_id == user_id).delete(synchronize_session=False)
+        db.query(PasswordResetToken).filter(PasswordResetToken.user_id == user_id).delete(synchronize_session=False)
+        db.query(MealPlan).filter(MealPlan.user_id == user_id).delete(synchronize_session=False)
+        db.query(UserDailyChallenge).filter(UserDailyChallenge.user_id == user_id).delete(synchronize_session=False)
+        db.query(ShoppingItem).filter(ShoppingItem.user_id == user_id).delete(synchronize_session=False)
+        db.delete(current_user)
+        db.commit()
+        return {"detail": "Account deleted"}
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Delete failed")
