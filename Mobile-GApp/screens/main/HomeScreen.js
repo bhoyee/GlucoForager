@@ -618,32 +618,34 @@ export default function HomeScreen() {
           )}
         </View>
 
-        {/* Daily guidance */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Daily guidance</Text>
-          <Text style={styles.sectionSubtitle}>Small daily actions to support steadier blood sugar.</Text>
-
-          {foodProfileCompleted === true ? null : (
+        {foodProfileCompleted === true ? null : (
+          <View style={styles.section}>
             <Pressable
-              style={({ pressed }) => [styles.tipCard, pressed && styles.cardPressed]}
+              style={({ pressed }) => [styles.urgentCard, pressed && styles.cardPressed]}
               android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
               onPress={() => navigation.navigate('Profile', { screen: 'FoodPreferences' })}
             >
-              <View style={styles.tipIcon}>
-                <Ionicons name="sparkles-outline" size={20} color={Colors.primary} />
+              <View style={styles.urgentIcon}>
+                <Ionicons name="alert-circle-outline" size={20} color={Colors.error} />
               </View>
-              <View style={styles.tipText}>
-                <Text style={styles.tipLabel}>Personalize</Text>
-                <Text style={styles.tipTitle} numberOfLines={2}>
+              <View style={styles.urgentText}>
+                <Text style={styles.urgentLabel}>Action needed</Text>
+                <Text style={styles.urgentTitle} numberOfLines={2}>
                   Personalize your meals (30 seconds)
                 </Text>
-                <Text style={styles.tipSnippet} numberOfLines={1}>
-                  Set goals, avoids, and cooking preferences.
+                <Text style={styles.urgentSnippet} numberOfLines={1}>
+                  Get recipes that match your cuisine and goals.
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
             </Pressable>
-          )}
+          </View>
+        )}
+
+        {/* Daily guidance */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Daily guidance</Text>
+          <Text style={styles.sectionSubtitle}>Small daily actions to support steadier blood sugar.</Text>
 
           <Pressable
             style={({ pressed }) => [styles.tipCard, pressed && styles.cardPressed]}
@@ -1081,6 +1083,27 @@ const styles = StyleSheet.create({
   tipLabel: { fontSize: 12, fontWeight: '900', color: Colors.primary, textTransform: 'uppercase' },
   tipTitle: { marginTop: 2, fontSize: 14, fontWeight: '800', color: Colors.text },
   tipSnippet: { marginTop: 4, fontSize: 12, fontWeight: '700', color: Colors.textLight },
+  urgentCard: {
+    marginTop: 12,
+    backgroundColor: '#FFF5F5',
+    borderRadius: 16,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  urgentIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#FED7D7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  urgentText: { flex: 1 },
+  urgentLabel: { fontSize: 12, fontWeight: '900', color: Colors.error, textTransform: 'uppercase' },
+  urgentTitle: { marginTop: 2, fontSize: 14, fontWeight: '900', color: Colors.text },
+  urgentSnippet: { marginTop: 4, fontSize: 12, fontWeight: '700', color: Colors.textLight },
   challengeCard: {
     marginTop: 12,
     backgroundColor: `${Colors.primary}10`,
