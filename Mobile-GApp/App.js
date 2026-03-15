@@ -179,8 +179,7 @@ function AppNavigator() {
           >
             <Text style={{ fontSize: 18, fontWeight: '700', color: '#0C1824' }}>Enable notifications?</Text>
             <Text style={{ marginTop: 8, color: '#374151', lineHeight: 20 }}>
-              Get gentle reminders for daily guidance (tips + challenges) and meal scans. You can change this anytime in
-              Profile.
+              Get helpful reminders and updates from GlucoForager. You can change this anytime in Profile.
             </Text>
 
             <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
