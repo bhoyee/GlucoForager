@@ -85,7 +85,7 @@ export default function SignUpScreen() {
         throw new Error(data?.detail || data?.message || 'Signup failed. Please try again.');
       }
 
-      await signIn(data.access_token, data.public_id, data.refresh_token);
+      await signIn(data.access_token, data.public_id, data.refresh_token, data.profile_completed);
       Alert.alert("Success!", data.message || "Account created successfully!");
     } catch (error) {
       Alert.alert("Error", error.message || "Signup failed. Please try again.");
