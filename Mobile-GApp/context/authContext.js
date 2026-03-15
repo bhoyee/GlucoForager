@@ -108,11 +108,16 @@ export function AuthProvider({ children }) {
       if (data.refresh_token) {
         await AsyncStorage.setItem('refreshToken', data.refresh_token);
       }
-      // Update profile flags so navigation can route correctly after refresh.
-      const profile = await fetchProfile(data.access_token);
-      const completed = profile?.profile_completed;
-      setFoodProfileCompleted(completed === true ? true : completed === false ? false : null);
-      setNeedsFoodProfileOnboarding(completed === false);
+      // Prefer hint from refresh response; fall back to fetching profile.
+      if (data.profile_completed === true || data.profile_completed === false) {
+        setFoodProfileCompleted(data.profile_completed);
+        setNeedsFoodProfileOnboarding(data.profile_completed === false);
+      } else {
+        const profile = await fetchProfile(data.access_token);
+        const completed = profile?.profile_completed;
+        setFoodProfileCompleted(completed === true ? true : completed === false ? false : null);
+        setNeedsFoodProfileOnboarding(completed === false);
+      }
       setUserToken(data.access_token);
       return data.access_token;
     } catch (error) {
@@ -152,7 +157,7 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const signIn = async (token, publicId, refreshToken) => {
+  const signIn = async (token, publicId, refreshToken, profileCompletedHint) => {
     try {
       await AsyncStorage.setItem('userToken', token);
       if (refreshToken) {
@@ -161,11 +166,20 @@ export function AuthProvider({ children }) {
       if (publicId) {
         await AsyncStorage.setItem('publicUserId', publicId);
       }
-      // Fetch profile BEFORE setting `userToken` so RootNavigator can route correctly on first render.
+
+      // Use auth response hint when available to avoid timing/routing issues on first login.
+      if (profileCompletedHint === true || profileCompletedHint === false) {
+        setFoodProfileCompleted(profileCompletedHint);
+        setNeedsFoodProfileOnboarding(profileCompletedHint === false);
+      }
+
+      // Fetch profile BEFORE setting `userToken` (best-effort) so RootNavigator can route correctly.
       const profile = await fetchProfile(token);
-      const completed = profile?.profile_completed;
-      setFoodProfileCompleted(completed === true ? true : completed === false ? false : null);
-      setNeedsFoodProfileOnboarding(completed === false);
+      if (profile) {
+        const completed = profile?.profile_completed;
+        setFoodProfileCompleted(completed === true ? true : completed === false ? false : null);
+        setNeedsFoodProfileOnboarding(completed === false);
+      }
       setUserToken(token);
       await configureRevenueCat({
         token,
