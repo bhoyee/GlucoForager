@@ -28,6 +28,7 @@ import ForgotPasswordScreen from './screens/auth/ForgotPasswordScreen';
 import PremiumDetailsScreen from './screens/auth/PremiumDetailsScreen';
 import TermsScreen from './screens/main/TermsScreen';
 import PrivacyPolicyScreen from './screens/main/PrivacyPolicyScreen';
+import FoodPreferencesScreen from './screens/main/FoodPreferencesScreen';
 
 // Import main app
 import MainTabNavigator from './navigation/MainTabNavigator';
@@ -78,7 +79,7 @@ function AppNavigator() {
     );
   }
 
-  const { userToken, isLoading } = authContext || {};
+  const { userToken, isLoading, needsFoodProfileOnboarding } = authContext || {};
   const [minimumSplashDone, setMinimumSplashDone] = useState(false);
   const [updatePrompt, setUpdatePrompt] = useState(null);
   const [mealPromptVisible, setMealPromptVisible] = useState(false);
@@ -322,11 +323,24 @@ function AppNavigator() {
       </Modal>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {userToken ? (
-          <>
-            <Stack.Screen name="MainTabs" component={MainTabNavigator} />
-            <Stack.Screen name="Terms" component={TermsScreen} />
-            <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
-          </>
+          needsFoodProfileOnboarding ? (
+            <>
+              <Stack.Screen
+                name="FoodPreferencesOnboarding"
+                component={FoodPreferencesScreen}
+                initialParams={{ forced: true }}
+              />
+              <Stack.Screen name="MainTabs" component={MainTabNavigator} />
+              <Stack.Screen name="Terms" component={TermsScreen} />
+              <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
+            </>
+          ) : (
+            <>
+              <Stack.Screen name="MainTabs" component={MainTabNavigator} />
+              <Stack.Screen name="Terms" component={TermsScreen} />
+              <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
+            </>
+          )
         ) : (
           <Stack.Screen name="Auth" component={AuthStack} />
         )}
