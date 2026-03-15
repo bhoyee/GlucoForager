@@ -100,8 +100,12 @@ export default function LoginScreen() {
             <Ionicons name="arrow-back" size={24} color={Colors.text} />
           </TouchableOpacity>
           
-          <TouchableOpacity onPress={() => navigation.navigate('SignUp')}>
-            <Text style={styles.signUpText}>Sign Up</Text>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('SignUp')}
+            style={styles.headerActionButton}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.headerActionText}>Sign Up</Text>
           </TouchableOpacity>
         </View>
 
@@ -270,10 +274,18 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  signUpText: {
+  headerActionButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    backgroundColor: '#F2F4F7',
+    borderWidth: 1,
+    borderColor: '#EEF1F5',
+  },
+  headerActionText: {
     color: Colors.primary,
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '800',
   },
   logoContainer: {
     alignItems: 'center',
@@ -401,6 +413,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: 18,
   },
   premiumDetailsLink: {
     marginTop: 14,
@@ -414,11 +427,11 @@ const styles = StyleSheet.create({
   signUpPrompt: {
     color: Colors.textLight,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   signUpLink: {
     color: Colors.primary,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '900',
   },
 });
