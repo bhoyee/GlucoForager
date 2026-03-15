@@ -34,7 +34,6 @@ export default function SignUpScreen() {
     email: "",
     password: "",
     confirmPassword: "",
-    hasDiabetes: false,
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -54,11 +53,6 @@ export default function SignUpScreen() {
     // Validation
     if (!fullName || !email || !password || !confirmPassword) {
       Alert.alert("Error", "Please fill in all fields");
-      return;
-    }
-
-    if (!formData.hasDiabetes) {
-      Alert.alert("Required", "Please confirm if you have diabetes or pre-diabetes.");
       return;
     }
 
@@ -238,31 +232,6 @@ export default function SignUpScreen() {
                 />
               </TouchableOpacity>
             </View>
-          </View>
-
-          {/* Diabetes Status */}
-          <View style={styles.diabetesContainer}>
-            <TouchableOpacity 
-              style={styles.diabetesOption}
-              onPress={() => handleChange("hasDiabetes", !formData.hasDiabetes)}
-              disabled={isLoading}
-            >
-              <View style={[styles.checkbox, formData.hasDiabetes && styles.checkboxChecked]}>
-                <Ionicons
-                  name={formData.hasDiabetes ? "checkmark" : "ellipse-outline"}
-                  size={16}
-                  color={formData.hasDiabetes ? "white" : Colors.textMuted}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.diabetesText, isLoading && { opacity: 0.5 }]}>
-                  I have diabetes or prediabetes
-                </Text>
-                <Text style={styles.diabetesHintInline}>
-                  Required to personalize your meal guidance.
-                </Text>
-              </View>
-            </TouchableOpacity>
           </View>
 
           {/* Terms */}
@@ -461,39 +430,6 @@ const styles = StyleSheet.create({
     marginTop: 6,
     marginLeft: 4,
   },
-  diabetesContainer: {
-    marginBottom: 24,
-  },
-  diabetesOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 12,
-    borderRadius: 14,
-    backgroundColor: "#F2F4F7",
-    borderWidth: 1,
-    borderColor: "#EEF1F5",
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    marginRight: 12,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "white",
-  },
-  checkboxChecked: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  diabetesText: {
-    fontSize: 15,
-    color: Colors.text,
-    fontWeight: "800",
-  },
-  diabetesHintInline: { marginTop: 4, fontSize: 12, color: Colors.textLight, lineHeight: 18, fontWeight: "600" },
   termsContainer: {
     marginBottom: 24,
     paddingHorizontal: 4,
