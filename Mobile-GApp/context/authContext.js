@@ -41,29 +41,23 @@ export function AuthProvider({ children }) {
       if (token) {
         const isValid = await validateToken(token);
         if (isValid) {
-          setUserToken(token);
           let resolvedPublicId = publicId;
           let resolvedEmail = null;
           let resolvedName = null;
-          if (!resolvedPublicId) {
-            const profile = await fetchProfile(token);
-            if (profile?.public_id) {
-              resolvedPublicId = profile.public_id;
-              await AsyncStorage.setItem('publicUserId', profile.public_id);
-            }
-            resolvedEmail = profile?.email || null;
-            resolvedName = profile?.full_name || null;
-            const completed = profile?.profile_completed;
-            setFoodProfileCompleted(completed === true ? true : completed === false ? false : null);
-            setNeedsFoodProfileOnboarding(completed === false);
-          } else {
-            const profile = await fetchProfile(token);
-            resolvedEmail = profile?.email || null;
-            resolvedName = profile?.full_name || null;
-            const completed = profile?.profile_completed;
-            setFoodProfileCompleted(completed === true ? true : completed === false ? false : null);
-            setNeedsFoodProfileOnboarding(completed === false);
+
+          // Fetch profile BEFORE setting `userToken` so RootNavigator can route correctly on first render.
+          const profile = await fetchProfile(token);
+          if (!resolvedPublicId && profile?.public_id) {
+            resolvedPublicId = profile.public_id;
+            await AsyncStorage.setItem('publicUserId', profile.public_id);
           }
+          resolvedEmail = profile?.email || null;
+          resolvedName = profile?.full_name || null;
+          const completed = profile?.profile_completed;
+          setFoodProfileCompleted(completed === true ? true : completed === false ? false : null);
+          setNeedsFoodProfileOnboarding(completed === false);
+
+          setUserToken(token);
           await configureRevenueCat({
             token,
             publicId: resolvedPublicId,
@@ -114,6 +108,11 @@ export function AuthProvider({ children }) {
       if (data.refresh_token) {
         await AsyncStorage.setItem('refreshToken', data.refresh_token);
       }
+      // Update profile flags so navigation can route correctly after refresh.
+      const profile = await fetchProfile(data.access_token);
+      const completed = profile?.profile_completed;
+      setFoodProfileCompleted(completed === true ? true : completed === false ? false : null);
+      setNeedsFoodProfileOnboarding(completed === false);
       setUserToken(data.access_token);
       return data.access_token;
     } catch (error) {
@@ -162,11 +161,12 @@ export function AuthProvider({ children }) {
       if (publicId) {
         await AsyncStorage.setItem('publicUserId', publicId);
       }
-      setUserToken(token);
+      // Fetch profile BEFORE setting `userToken` so RootNavigator can route correctly on first render.
       const profile = await fetchProfile(token);
       const completed = profile?.profile_completed;
       setFoodProfileCompleted(completed === true ? true : completed === false ? false : null);
       setNeedsFoodProfileOnboarding(completed === false);
+      setUserToken(token);
       await configureRevenueCat({
         token,
         publicId,
