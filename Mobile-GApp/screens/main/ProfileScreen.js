@@ -653,14 +653,14 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.menuSection}>
-        <Text style={styles.sectionTitle}>Reminders</Text>
+        <Text style={styles.sectionTitle}>Notifications</Text>
 
         <View style={styles.menuItem}>
           <View style={styles.menuItemLeft}>
             <Ionicons name="alarm-outline" size={22} color={Colors.text} />
             <View style={styles.menuTextStack}>
-              <Text style={[styles.menuText, { marginLeft: 0, flex: 0 }]}>Meal reminders</Text>
-              <Text style={styles.menuSubtext}>Breakfast, lunch & dinner</Text>
+              <Text style={[styles.menuText, { marginLeft: 0, flex: 0 }]}>Enable notifications</Text>
+              <Text style={styles.menuSubtext}>Reminders and updates</Text>
             </View>
           </View>
           <Switch
