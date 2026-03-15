@@ -106,8 +106,12 @@ export default function SignUpScreen() {
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </TouchableOpacity>
         
-        <TouchableOpacity onPress={() => navigation.navigate("Login")}>
-          <Text style={styles.loginText}>Sign In</Text>
+        <TouchableOpacity
+          onPress={() => navigation.navigate("Login")}
+          style={styles.headerActionButton}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.headerActionText}>Sign In</Text>
         </TouchableOpacity>
       </View>
       <ScrollView
@@ -330,10 +334,18 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  loginText: {
+  headerActionButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    backgroundColor: "#F2F4F7",
+    borderWidth: 1,
+    borderColor: "#EEF1F5",
+  },
+  headerActionText: {
     color: Colors.primary,
-    fontSize: 16,
-    fontWeight: "600",
+    fontSize: 14,
+    fontWeight: "800",
   },
   logoContainer: {
     alignItems: "center",
