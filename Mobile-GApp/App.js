@@ -177,10 +177,10 @@ function AppNavigator() {
               alignSelf: 'center',
             }}
           >
-            <Text style={{ fontSize: 18, fontWeight: '700', color: '#0C1824' }}>Enable meal reminders?</Text>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#0C1824' }}>Enable notifications?</Text>
             <Text style={{ marginTop: 8, color: '#374151', lineHeight: 20 }}>
-              Get gentle, silent reminders at breakfast, lunch, and dinner to scan your fridge or ingredients.
-              You can change this anytime in Profile.
+              Get gentle reminders for daily guidance (tips + challenges) and meal scans. You can change this anytime in
+              Profile.
             </Text>
 
             <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
@@ -210,7 +210,7 @@ function AppNavigator() {
                     if (!result?.scheduled) {
                       Alert.alert(
                         'Notifications disabled',
-                        'Please allow notifications in your device Settings to enable meal reminders.',
+                        'Please allow notifications in your device Settings to enable reminders.',
                         [
                           { text: 'Not now', style: 'cancel' },
                           {
