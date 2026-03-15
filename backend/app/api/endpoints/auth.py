@@ -37,6 +37,7 @@ class Token(BaseModel):
     message: str | None = None
     public_id: str | None = None
     refresh_token: str | None = None
+    profile_completed: bool | None = None
 
 
 class ClientInfo(BaseModel):
@@ -187,6 +188,7 @@ def signup(payload: UserCreate, background_tasks: BackgroundTasks, request: Requ
             refresh_token=refresh_token,
             message="Signup successful",
             public_id=user.public_id,
+            profile_completed=bool(getattr(user, "profile_completed", False)),
         )
     except HTTPException:
         # Bubble up expected API errors unchanged.
@@ -241,6 +243,7 @@ def login(
         refresh_token=refresh_token,
         message="Login successful",
         public_id=user.public_id,
+        profile_completed=bool(getattr(user, "profile_completed", False)),
     )
 
 
@@ -301,6 +304,7 @@ def login_alias(
         refresh_token=refresh_token,
         message="Login successful",
         public_id=user.public_id,
+        profile_completed=bool(getattr(user, "profile_completed", False)),
     )
 
 
@@ -334,7 +338,12 @@ def refresh_token(payload: RefreshTokenPayload, db: Session = Depends(get_db)):
 
     access_token = create_access_token({"sub": str(user.id)})
     new_refresh = _issue_refresh_token(db, user.id)
-    return Token(access_token=access_token, refresh_token=new_refresh, public_id=user.public_id)
+    return Token(
+        access_token=access_token,
+        refresh_token=new_refresh,
+        public_id=user.public_id,
+        profile_completed=bool(getattr(user, "profile_completed", False)),
+    )
 
 
 @router.post("/logout")

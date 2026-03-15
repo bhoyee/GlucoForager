@@ -55,7 +55,7 @@ export default function LoginScreen() {
         throw new Error(data?.detail || data?.message || 'Login failed. Please try again.');
       }
 
-      await signIn(data.access_token, data.public_id, data.refresh_token);
+      await signIn(data.access_token, data.public_id, data.refresh_token, data.profile_completed);
 
       Alert.alert('Success', data.message || 'Login successful!', [
         { text: 'OK' },
