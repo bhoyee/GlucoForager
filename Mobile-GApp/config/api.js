@@ -35,6 +35,10 @@ export const API_ENDPOINTS = {
   CAN_SCAN: '/api/user/can-scan',
   RECORD_SCAN: '/api/user/record-scan',
   UPGRADE: '/api/user/upgrade',
+  MOBILE_PUSH_TOKENS: '/api/mobile/push-tokens',
+  MOBILE_PUSH_TOKENS_DISABLE: '/api/mobile/push-tokens/disable',
+  DAILY_PLAN_TODAY: '/api/app/daily-plan/today',
+  DAILY_PLAN_GENERATE: '/api/app/daily-plan/generate',
 };
 
 // For development/testing without a backend, use mock functions

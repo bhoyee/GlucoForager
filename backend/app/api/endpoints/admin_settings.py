@@ -1,4 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+import json
+
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
@@ -8,12 +10,16 @@ from ...models.admin_user import AdminUser
 from ...services.email_service import send_admin_signup_alert
 from ...services.settings_service import (
     AppUpdateSettings,
+    RecipeImageSettings,
     SignupNotificationSettings,
     get_app_update_settings,
+    get_recipe_image_settings,
     get_signup_notification_settings,
     update_app_update_settings,
+    update_recipe_image_settings,
     update_signup_notification_settings,
 )
+from ...models.app_setting import AppSetting
 
 router = APIRouter(prefix="/admin/settings", tags=["admin-settings"])
 
@@ -29,6 +35,78 @@ class AppUpdatesPayload(BaseModel):
     ios_latest_version: str | None = Field(None, max_length=32)
     android_store_url: str | None = Field(None, max_length=500)
     ios_store_url: str | None = Field(None, max_length=500)
+
+
+class RecipeImagesPayload(BaseModel):
+    enabled: bool = False
+    size: int = Field(512, ge=256, le=2048)
+    free_daily_limit: int = Field(1, ge=0, le=500)
+    premium_daily_limit: int = Field(10, ge=-1, le=5000)
+    max_per_recipe: int = Field(1, ge=1, le=50)
+    cost_usd: float | None = Field(None, ge=0, le=10)
+
+class TipSettingsPayload(BaseModel):
+    blocked_tip_ids: list[str] = Field(default_factory=list, max_length=500)
+
+
+TIP_SETTINGS_KEY = "tips.settings.v1"
+
+def _read_tip_settings(db: Session) -> dict:
+    row = db.query(AppSetting).filter(AppSetting.key == TIP_SETTINGS_KEY).first()
+    if not row or not row.value:
+        return {"blocked_tip_ids": []}
+    try:
+        data = json.loads(row.value)
+    except Exception:
+        return {"blocked_tip_ids": []}
+    if not isinstance(data, dict):
+        return {"blocked_tip_ids": []}
+    blocked = data.get("blocked_tip_ids")
+    if not isinstance(blocked, list):
+        blocked = []
+    blocked_clean = []
+    for item in blocked:
+        if isinstance(item, str):
+            s = item.strip()
+            if s:
+                blocked_clean.append(s)
+    return {"blocked_tip_ids": blocked_clean}
+
+
+def _write_tip_settings(db: Session, blocked_tip_ids: list[str]) -> dict:
+    payload = {"blocked_tip_ids": blocked_tip_ids}
+    row = db.query(AppSetting).filter(AppSetting.key == TIP_SETTINGS_KEY).first()
+    if not row:
+        row = AppSetting(key=TIP_SETTINGS_KEY, value=json.dumps(payload))
+        db.add(row)
+    else:
+        row.value = json.dumps(payload)
+    db.commit()
+    return payload
+
+
+@router.get("/tips")
+def get_tip_settings(
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    return _read_tip_settings(db)
+
+
+@router.put("/tips")
+def put_tip_settings(
+    payload: TipSettingsPayload,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    blocked = []
+    for value in payload.blocked_tip_ids:
+        if isinstance(value, str):
+            s = value.strip()
+            if s:
+                blocked.append(s)
+    blocked = blocked[:500]
+    return _write_tip_settings(db, blocked)
 
 
 @router.get("/signup-notifications")
@@ -117,4 +195,45 @@ def put_app_updates(
         "ios_latest_version": settings.ios_latest_version,
         "android_store_url": settings.android_store_url,
         "ios_store_url": settings.ios_store_url,
+    }
+
+
+@router.get("/recipe-images")
+def get_recipe_images(
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    settings: RecipeImageSettings = get_recipe_image_settings(db)
+    return {
+        "enabled": settings.enabled,
+        "size": settings.size,
+        "free_daily_limit": settings.free_daily_limit,
+        "premium_daily_limit": settings.premium_daily_limit,
+        "max_per_recipe": settings.max_per_recipe,
+        "cost_usd": settings.cost_usd,
+    }
+
+
+@router.put("/recipe-images")
+def put_recipe_images(
+    payload: RecipeImagesPayload,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    settings: RecipeImageSettings = update_recipe_image_settings(
+        db,
+        enabled=payload.enabled,
+        size=payload.size,
+        free_daily_limit=payload.free_daily_limit,
+        premium_daily_limit=payload.premium_daily_limit,
+        max_per_recipe=payload.max_per_recipe,
+        cost_usd=payload.cost_usd,
+    )
+    return {
+        "enabled": settings.enabled,
+        "size": settings.size,
+        "free_daily_limit": settings.free_daily_limit,
+        "premium_daily_limit": settings.premium_daily_limit,
+        "max_per_recipe": settings.max_per_recipe,
+        "cost_usd": settings.cost_usd,
     }

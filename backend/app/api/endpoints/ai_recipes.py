@@ -1,8 +1,11 @@
 import hashlib
 import json
+from datetime import datetime, timezone
 import uuid
+import logging
+from urllib.parse import urlsplit
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -14,13 +17,21 @@ from ...services.ai_pipeline import AIPipeline, IngredientValidationError
 from ...services.ai_recipe_generator import AIRecipeGenerator
 from ...services.cache_service import CacheService
 from ...services.cost_tracker import record_ai_request
+from ...core.config import settings as core_settings
+from ...services.recipe_image_attach_service import attach_recipe_images
+from ...services.rate_limit_service import check_ai_rate_limit
+from ...services.recipe_fingerprint import recipe_fingerprint as stable_recipe_fingerprint
+from ...services.settings_service import get_recipe_image_settings
 from ...services.subscription_service import get_effective_subscription_tier
+from ...models.recipe_history import RecipeHistory
+from ...services.redis_ai_queue import RedisAIQueue
 
 router = APIRouter(prefix="/ai/recipes", tags=["ai"])
 pipeline = AIPipeline()
 cache = CacheService()
 image_helper = AIRecipeGenerator()
 VISION_CACHE_TTL_SECONDS = 21600
+logger = logging.getLogger(__name__)
 
 
 class VisionRecipeRequest(BaseModel):
@@ -70,6 +81,8 @@ def _run_vision_job(job_id: str) -> None:
         job = db.query(AIJob).filter(AIJob.id == job_id).first()
         if not job:
             return
+        if job.status not in {"pending", "queued"}:
+            return
         job.status = "running"
         db.commit()
 
@@ -78,6 +91,7 @@ def _run_vision_job(job_id: str) -> None:
         filters = payload.get("filters") or []
         device_id = payload.get("device_id")
         mode = payload.get("mode") or "single"
+        base_url = payload.get("base_url")
 
         user = db.query(User).filter(User.id == job.user_id).first()
         if not user:
@@ -119,6 +133,17 @@ def _run_vision_job(job_id: str) -> None:
             }
             db.commit()
             return
+
+        try:
+            attach_recipe_images(
+                db,
+                user=user,
+                recipes=result.get("recipes", []) or [],
+                ingredients=result.get("detected", []) or [],
+                base_url=base_url,
+            )
+        except Exception:
+            pass
 
         job.result = {
             "results": result.get("recipes", []),
@@ -316,6 +341,7 @@ def generate_from_vision_batch(
 
 @router.post("/vision/async")
 def generate_from_vision_async(
+    request: Request,
     payload: VisionRecipeRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
@@ -328,6 +354,20 @@ def generate_from_vision_async(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Daily limit reached. Scans left: {access['searches_left']}",
         )
+
+    tier = get_effective_subscription_tier(db, current_user) or "free"
+    rl = check_ai_rate_limit(user_id=current_user.id, tier=tier, kind="vision")
+    if not rl.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "code": "rate_limited",
+                "message": "Too many requests. Please wait a moment and try again.",
+                "retry_after_seconds": rl.retry_after_seconds,
+                "limit_per_minute": rl.limit_per_minute,
+            },
+            headers={"Retry-After": str(rl.retry_after_seconds)},
+        )
     job_id = str(uuid.uuid4())
     job = AIJob(
         id=job_id,
@@ -339,16 +379,32 @@ def generate_from_vision_async(
             "filters": payload.filters or [],
             "device_id": device_id,
             "mode": "single",
+            "base_url": str(request.base_url).rstrip("/"),
         },
     )
     db.add(job)
     db.commit()
-    background_tasks.add_task(_run_vision_job, job_id)
+    backend = (core_settings.ai_queue_backend or "db").strip().lower()
+    if backend == "redis":
+        queued = False
+        try:
+            q = RedisAIQueue.from_settings()
+            if q:
+                q.enqueue_vision(job_id)
+                queued = True
+        except Exception:
+            queued = False
+        if not queued:
+            background_tasks.add_task(_run_vision_job, job_id)
+    else:
+        if not core_settings.ai_job_runner_enabled:
+            background_tasks.add_task(_run_vision_job, job_id)
     return {"job_id": job_id, "status": job.status, "access": access}
 
 
 @router.post("/vision-batch/async")
 def generate_from_vision_batch_async(
+    request: Request,
     payload: VisionBatchRecipeRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
@@ -361,6 +417,20 @@ def generate_from_vision_batch_async(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Daily limit reached. Scans left: {access['searches_left']}",
         )
+
+    tier = get_effective_subscription_tier(db, current_user) or "free"
+    rl = check_ai_rate_limit(user_id=current_user.id, tier=tier, kind="vision_batch")
+    if not rl.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "code": "rate_limited",
+                "message": "Too many requests. Please wait a moment and try again.",
+                "retry_after_seconds": rl.retry_after_seconds,
+                "limit_per_minute": rl.limit_per_minute,
+            },
+            headers={"Retry-After": str(rl.retry_after_seconds)},
+        )
     job_id = str(uuid.uuid4())
     job = AIJob(
         id=job_id,
@@ -372,11 +442,26 @@ def generate_from_vision_batch_async(
             "filters": payload.filters or [],
             "device_id": device_id,
             "mode": "batch",
+            "base_url": str(request.base_url).rstrip("/"),
         },
     )
     db.add(job)
     db.commit()
-    background_tasks.add_task(_run_vision_job, job_id)
+    backend = (core_settings.ai_queue_backend or "db").strip().lower()
+    if backend == "redis":
+        queued = False
+        try:
+            q = RedisAIQueue.from_settings()
+            if q:
+                q.enqueue_vision(job_id)
+                queued = True
+        except Exception:
+            queued = False
+        if not queued:
+            background_tasks.add_task(_run_vision_job, job_id)
+    else:
+        if not core_settings.ai_job_runner_enabled:
+            background_tasks.add_task(_run_vision_job, job_id)
     return {"job_id": job_id, "status": job.status, "access": access}
 
 
@@ -412,18 +497,264 @@ def fridge_to_recipes_alias(
 
 @router.post("/image")
 def generate_recipe_image(
+    request: Request,
     payload: RecipeImageRequest,
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     tier = get_effective_subscription_tier(db, current_user) or "free"
+    settings = get_recipe_image_settings(db)
+    if not settings.enabled:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Recipe images are disabled.")
+
+    provider = (core_settings.recipe_image_provider or "").strip().lower() or "gemini"
+    provider_ready = False
+    if provider == "runware":
+        provider_ready = bool(core_settings.runware_api_key)
+    elif provider == "gemini":
+        provider_ready = bool(core_settings.gemini_api_key)
+    else:
+        # Backward/robust behavior: accept any configured provider, even if env is mis-set.
+        provider_ready = bool(core_settings.runware_api_key or core_settings.gemini_api_key)
+
+    if not provider_ready:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Recipe image provider is not configured.",
+        )
+
+    effective_tier = "premium" if tier == "premium" else "free"
+    daily_limit = settings.premium_daily_limit if effective_tier == "premium" else settings.free_daily_limit
+    if daily_limit == 0:
+        raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail="Image generation is not available.")
+
     recipe_payload = {
         "title": payload.title or "Diabetes-friendly meal",
         "description": payload.description or "",
         "ingredients": [{"name": name} for name in (payload.ingredients or []) if name],
     }
-    image_payload = image_helper.generate_image_for_recipe(
-        recipe_payload,
-        tier,
-        payload.ingredients or [],
+
+    today = datetime.now(timezone.utc).date().isoformat()
+    fingerprint = stable_recipe_fingerprint(
+        title=str(recipe_payload["title"] or ""),
+        ingredients=[str(item).strip() for item in (payload.ingredients or []) if item and str(item).strip()],
     )
+
+    per_recipe_key = f"imggen:{current_user.id}:{today}:{fingerprint}"
+    per_recipe_count_raw = cache.get(per_recipe_key)
+    per_recipe_count = 0
+    try:
+        per_recipe_count = int(per_recipe_count_raw) if per_recipe_count_raw is not None else 0
+    except Exception:  # noqa: BLE001
+        per_recipe_count = 0
+
+    if per_recipe_count >= settings.max_per_recipe:
+        cached_url = cache.get(f"{per_recipe_key}:url")
+        if cached_url and isinstance(cached_url, str):
+            base_url = str(request.base_url).rstrip("/")
+            path = urlsplit(cached_url).path if cached_url.startswith("http") else cached_url
+            if path.startswith("/uploads/"):
+                # Best-effort: persist to recipe history so lists/details reflect the image.
+                _persist_image_to_history(
+                    db,
+                    user_id=current_user.id,
+                    fingerprint=fingerprint,
+                    image_url=f"{base_url}{path}",
+                    title_norm=title_norm,
+                )
+                return {
+                    "image_url": f"{base_url}{path}",
+                    "image_source": "ai",
+                    "cached": True,
+                    "size": settings.size,
+                    "daily_limit": daily_limit,
+                }
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Image already generated for this recipe.",
+        )
+
+    if daily_limit != -1:
+        daily_key = f"imggen:{current_user.id}:{today}:count"
+        daily_raw = cache.get(daily_key)
+        daily_count = 0
+        try:
+            daily_count = int(daily_raw) if daily_raw is not None else 0
+        except Exception:  # noqa: BLE001
+            daily_count = 0
+        if daily_count >= daily_limit:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Daily image generation limit reached.",
+            )
+
+    try:
+        image_payload = image_helper.generate_image_for_recipe(
+            recipe_payload,
+            tier,
+            payload.ingredients or [],
+            size=settings.size,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "Recipe image generation failed (user_id=%s model=%s size=%s): %s",
+            getattr(current_user, "id", None),
+            getattr(image_helper, "gemini_image_model", None),
+            settings.size,
+            str(exc)[:400],
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Image generation failed. Please try again.",
+        ) from None
+
+    if image_payload.get("image_source") != "ai" or not image_payload.get("image_url"):
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Image generation failed. Please try again.",
+        )
+
+    # Normalize the returned URL to the same base URL the mobile client is hitting (LAN, proxy, etc.)
+    # This avoids misconfiguration where SITE_URL points to a different domain.
+    image_url = str(image_payload.get("image_url") or "")
+    base_url = str(request.base_url).rstrip("/")
+    if image_url:
+        path = urlsplit(image_url).path if image_url.startswith("http") else image_url
+        if path.startswith("/uploads/"):
+            image_payload["image_url"] = f"{base_url}{path}"
+            image_url = image_payload["image_url"]
+
+    # Only count successful generations.
+    cache.set(per_recipe_key, str(per_recipe_count + 1), ttl_seconds=24 * 60 * 60)
+    cache.set(f"{per_recipe_key}:url", str(image_url), ttl_seconds=24 * 60 * 60)
+    # Also store a longer-lived mapping so "recent recipes" can show images without relying on
+    # mutating recipe_history JSON (which can be brittle if the client-side recipe differs slightly).
+    cache.set(f"recipeimg:{fingerprint}:url", str(image_url), ttl_seconds=60 * 24 * 60 * 60)
+    if daily_limit != -1:
+        daily_key = f"imggen:{current_user.id}:{today}:count"
+        cache.incr(daily_key, ttl_seconds=24 * 60 * 60)
+
+    # Track successful image generations for admin cost/usage reporting.
+    try:
+        record_ai_request(
+            db,
+            current_user.id,
+            tier,
+            "recipe_image",
+            model_used=str(
+                core_settings.runware_image_model
+                if provider == "runware"
+                else core_settings.gemini_image_model
+                if provider == "gemini"
+                else (core_settings.runware_image_model or core_settings.gemini_image_model or provider or "unknown")
+            ),
+            tokens_used=0,
+            cost_estimate=float(settings.cost_usd or 0.0),
+            device_id=None,
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
+    _persist_image_to_history(
+        db,
+        user_id=current_user.id,
+        fingerprint=fingerprint,
+        image_url=str(image_url),
+        title_norm=title_norm,
+    )
+
+    image_payload["size"] = settings.size
+    image_payload["daily_limit"] = daily_limit
     return image_payload
+
+
+def _recipe_fingerprint_from_item(item: dict) -> str:
+    title = str(item.get("title") or item.get("name") or "").strip()
+    raw_ingredients = item.get("ingredients") or []
+    names: list[str] = []
+    if isinstance(raw_ingredients, list):
+        for ing in raw_ingredients:
+            if isinstance(ing, str):
+                if ing.strip():
+                    names.append(ing.strip())
+            elif isinstance(ing, dict):
+                name = str(ing.get("name") or ing.get("title") or "").strip()
+                if name:
+                    names.append(name)
+    return stable_recipe_fingerprint(title=title, ingredients=names)
+
+
+def _persist_image_to_history(
+    db: Session,
+    *,
+    user_id: int,
+    fingerprint: str,
+    image_url: str,
+    title_norm: str,
+) -> bool:
+    """
+    Update the most recent recipe_history entries so /api/recipes/recent returns the generated image.
+    Returns True if an entry was updated.
+    """
+    if not fingerprint or not image_url:
+        return False
+
+    histories = (
+        db.query(RecipeHistory)
+        .filter(RecipeHistory.user_id == user_id)
+        .order_by(RecipeHistory.created_at.desc())
+        .limit(10)
+        .all()
+    )
+    for idx, history in enumerate(histories):
+        recipes = history.recipes or []
+        if not isinstance(recipes, list):
+            continue
+        changed = False
+        for recipe in recipes:
+            if not isinstance(recipe, dict):
+                continue
+            if _recipe_fingerprint_from_item(recipe) != fingerprint:
+                continue
+            recipe["image_url"] = image_url
+            recipe["image_source"] = "ai"
+            changed = True
+        if changed:
+            history.recipes = recipes
+            db.add(history)
+            db.commit()
+            logger.info(
+                "Persisted generated image into recipe_history (user_id=%s history_id=%s)",
+                user_id,
+                getattr(history, "id", None),
+            )
+            return True
+
+        # Fallback: on the most recent history only, match by title if unique.
+        if idx == 0 and title_norm:
+            matches = []
+            for recipe in recipes:
+                if not isinstance(recipe, dict):
+                    continue
+                recipe_title_norm = str(recipe.get("title") or recipe.get("name") or "").strip().lower()
+                if recipe_title_norm == title_norm:
+                    matches.append(recipe)
+            if len(matches) == 1:
+                matches[0]["image_url"] = image_url
+                matches[0]["image_source"] = "ai"
+                history.recipes = recipes
+                db.add(history)
+                db.commit()
+                logger.info(
+                    "Persisted generated image into recipe_history by title fallback (user_id=%s history_id=%s)",
+                    user_id,
+                    getattr(history, "id", None),
+                )
+                return True
+
+    logger.warning(
+        "Did not find matching recipe in recent history to persist image (user_id=%s fingerprint=%s)",
+        user_id,
+        fingerprint[:12],
+    )
+    return False

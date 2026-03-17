@@ -8,7 +8,6 @@ import {
   Image,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
@@ -16,12 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { LinearGradient } from 'expo-linear-gradient';
-import {
-  enableMealRemindersAndSchedule,
-  getMealRemindersEnabled,
-  getMealRemindersPrompted,
-  setMealRemindersPrompted,
-} from '../../utils/mealReminders';
+import { getCachedRecipeImageUrl } from '../../utils/recipeImageCache';
 
 export default function RecipeResultsScreen() {
   const navigation = useNavigation();
@@ -43,7 +37,6 @@ export default function RecipeResultsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [detectedIngredients, setDetectedIngredients] = useState([]);
   const [recipes, setRecipes] = useState([]);
-  const [remindersPromptHandled, setRemindersPromptHandled] = useState(false);
 
   useEffect(() => {
     const ingredientSource = source === 'text' ? 'Input' : 'Detected';
@@ -64,57 +57,26 @@ export default function RecipeResultsScreen() {
     });
 
     setDetectedIngredients(normalizedIngredients);
-    setRecipes(recipesFromParams || []);
-    setIsLoading(false);
-  }, [detectedFromParams, recipesFromParams, selectedIngredients, source]);
+    const baseRecipes = recipesFromParams || [];
 
-  useEffect(() => {
-    const maybePrompt = async () => {
-      if (isLoading || remindersPromptHandled) return;
-      if (!Array.isArray(recipes) || recipes.length === 0) return;
-
-      const [enabled, prompted] = await Promise.all([
-        getMealRemindersEnabled(),
-        getMealRemindersPrompted(),
-      ]);
-
-      if (enabled || prompted) {
-        setRemindersPromptHandled(true);
-        return;
-      }
-
-      setRemindersPromptHandled(true);
-
-      Alert.alert(
-        'Meal reminders',
-        'Want a gentle reminder at breakfast, lunch, and dinner to scan ingredients?',
-        [
-          {
-            text: 'Not now',
-            style: 'cancel',
-            onPress: () => {
-              setMealRemindersPrompted();
-            },
-          },
-          {
-            text: 'Enable',
-            onPress: async () => {
-              await setMealRemindersPrompted();
-              const result = await enableMealRemindersAndSchedule();
-              if (!result?.scheduled) {
-                Alert.alert(
-                  'Notifications disabled',
-                  'Please allow notifications in your device Settings to enable meal reminders.'
-                );
-              }
-            },
-          },
-        ]
+    const hydrateImages = async () => {
+      const next = await Promise.all(
+        baseRecipes.map(async (recipe) => {
+          const hasImage =
+            (typeof recipe?.image_url === 'string' && recipe.image_url.trim()) ||
+            (typeof recipe?.image === 'string' && recipe.image.trim());
+          if (hasImage) return recipe;
+          const cached = await getCachedRecipeImageUrl(recipe);
+          if (!cached) return recipe;
+          return { ...recipe, image_url: cached, image: cached, image_source: 'ai' };
+        })
       );
+      setRecipes(next);
+      setIsLoading(false);
     };
 
-    maybePrompt();
-  }, [isLoading, recipes, remindersPromptHandled]);
+    hydrateImages();
+  }, [detectedFromParams, recipesFromParams, selectedIngredients, source]);
 
   if (isLoading) {
     return (
@@ -136,16 +98,20 @@ export default function RecipeResultsScreen() {
 
   const heroImage = photoUri || images?.[0]?.uri;
   const hasRecipes = recipes.length > 0;
+  const hasDetectedIngredients = detectedIngredients.length > 0;
 
   const formatTime = (recipe) => {
     const total = recipe?.total_time ?? recipe?.time ?? 0;
     if (typeof total === 'number' && total > 0) {
-      return `${total} min`;
+      return `${total} mins`;
     }
     const prep = recipe?.prep_time ?? 0;
     const cook = recipe?.cook_time ?? 0;
     const sum = prep + cook;
-    return sum > 0 ? `${sum} min` : 'N/A';
+    if (sum > 0) {
+      return `${sum} mins`;
+    }
+    return 'N/A';
   };
 
   const getMatchText = (recipe) => {
@@ -200,11 +166,13 @@ export default function RecipeResultsScreen() {
             <Text style={styles.sectionTitle}>Your Scan</Text>
             <View style={styles.imageContainer}>
               <Image source={{ uri: heroImage }} style={styles.image} resizeMode="cover" />
-              <View style={styles.imageOverlay}>
-                <Text style={styles.imageOverlayText}>
-                  {detectedIngredients.length} ingredients detected
-                </Text>
-              </View>
+              {hasDetectedIngredients && (
+                <View style={styles.imageOverlay}>
+                  <Text style={styles.imageOverlayText}>
+                    {detectedIngredients.length} ingredients detected
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
         )}
@@ -216,38 +184,40 @@ export default function RecipeResultsScreen() {
           </View>
         )}
 
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Detected Ingredients</Text>
-            <Text style={styles.ingredientCount}>{detectedIngredients.length} items</Text>
-          </View>
+        {hasDetectedIngredients ? (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Detected Ingredients</Text>
+              <Text style={styles.ingredientCount}>{detectedIngredients.length} items</Text>
+            </View>
 
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.ingredientsScroll}
-          >
-            {detectedIngredients.map((item) => (
-              <View key={item.id} style={styles.ingredientCard}>
-                <View style={styles.ingredientIconContainer}>
-                  {toIngredientImageUrl(item.name) ? (
-                    <Image
-                      source={{ uri: toIngredientImageUrl(item.name) }}
-                      style={styles.ingredientImage}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <Ionicons name="nutrition-outline" size={26} color={Colors.primary} />
-                  )}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.ingredientsScroll}
+            >
+              {detectedIngredients.map((item) => (
+                <View key={item.id} style={styles.ingredientCard}>
+                  <View style={styles.ingredientIconContainer}>
+                    {toIngredientImageUrl(item.name) ? (
+                      <Image
+                        source={{ uri: toIngredientImageUrl(item.name) }}
+                        style={styles.ingredientImage}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <Ionicons name="nutrition-outline" size={26} color={Colors.primary} />
+                    )}
+                  </View>
+                  <Text style={styles.ingredientName} numberOfLines={1}>{item.name}</Text>
+                  <View style={styles.confidenceBadge}>
+                    <Text style={styles.confidenceText}>{item.confidence}</Text>
+                  </View>
                 </View>
-                <Text style={styles.ingredientName} numberOfLines={1}>{item.name}</Text>
-                <View style={styles.confidenceBadge}>
-                  <Text style={styles.confidenceText}>{item.confidence}</Text>
-                </View>
-              </View>
-            ))}
-          </ScrollView>
-        </View>
+              ))}
+            </ScrollView>
+          </View>
+        ) : null}
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -255,16 +225,27 @@ export default function RecipeResultsScreen() {
             <Text style={styles.recipeCount}>{recipes.length} recipes</Text>
           </View>
           <Text style={styles.sectionSubtitle}>
-            Low glycemic recipes based on your ingredients
+            {hasDetectedIngredients ? 'Low glycemic recipes based on your ingredients' : 'Diabetes-friendly ideas you can try today'}
           </Text>
 
           {hasRecipes ? recipes.map((recipe, index) => {
             const nutrition = recipe?.nutritional_info || {};
             const calories = nutrition.calories ?? recipe?.calories ?? 'N/A';
-            const carbs = nutrition.carbs ?? recipe?.carbs ?? 'N/A';
+            const protein = nutrition.protein ?? recipe?.protein ?? 'N/A';
+            const fiber = nutrition.fiber ?? recipe?.fiber ?? 'N/A';
             const title = recipe?.title || recipe?.name || `Recipe ${index + 1}`;
             const matchText = getMatchText(recipe);
             const imageKey = recipe.id || `${title}-${index}`;
+            const recipeImageUrl =
+              typeof recipe?.image_url === 'string' && recipe.image_url.trim()
+                ? recipe.image_url.trim()
+                : null;
+            const macroText = (label, value, unit = '') => {
+              const text = `${value ?? ''}`.trim();
+              if (!text || text.toLowerCase() === 'n/a') return `${label} --`;
+              if (unit && text.toLowerCase().endsWith(unit.toLowerCase())) return `${label} ${text}`;
+              return `${label} ${text}${unit}`;
+            };
             return (
               <TouchableOpacity
                 key={imageKey}
@@ -277,24 +258,24 @@ export default function RecipeResultsScreen() {
                   })
                 }
               >
+                {recipeImageUrl ? (
+                  <View style={styles.recipeThumbWrap}>
+                    <Image source={{ uri: recipeImageUrl }} style={styles.recipeThumb} resizeMode="cover" />
+                  </View>
+                ) : null}
                 <View style={styles.recipeInfo}>
                   <View style={styles.recipeHeader}>
                     <Text style={styles.recipeName} numberOfLines={2}>{title}</Text>
                   </View>
 
                   <View style={styles.recipeMeta}>
-                    <View style={styles.metaItem}>
-                      <Ionicons name="time-outline" size={14} color={Colors.textLight} />
-                      <Text style={styles.metaText}>{formatTime(recipe)}</Text>
-                    </View>
-                    <View style={styles.metaItem}>
-                      <Ionicons name="flame-outline" size={14} color={Colors.textLight} />
-                      <Text style={styles.metaText}>{calories} cal</Text>
-                    </View>
-                    <View style={styles.metaItem}>
-                      <Ionicons name="nutrition-outline" size={14} color={Colors.textLight} />
-                      <Text style={styles.metaText}>{carbs} carbs</Text>
-                    </View>
+                    <Text style={styles.metaText}>{formatTime(recipe)}</Text>
+                    <Text style={styles.recipeMetaDivider}>|</Text>
+                    <Text style={[styles.recipeMetaValue, styles.recipeCal]}>{macroText('Cal', calories)}</Text>
+                    <Text style={styles.recipeMetaDivider}>|</Text>
+                    <Text style={[styles.recipeMetaValue, styles.recipePro]}>{macroText('Pro', protein, 'g')}</Text>
+                    <Text style={styles.recipeMetaDivider}>|</Text>
+                    <Text style={[styles.recipeMetaValue, styles.recipeFib]}>{macroText('Fib', fiber, 'g')}</Text>
                   </View>
 
                   <View style={styles.matchContainer}>
@@ -538,6 +519,18 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginBottom: 12,
   },
+  recipeThumbWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: '#F2F4F7',
+    marginRight: 14,
+  },
+  recipeThumb: {
+    width: '100%',
+    height: '100%',
+  },
   recipeInfo: {
     flex: 1,
   },
@@ -557,17 +550,32 @@ const styles = StyleSheet.create({
   },
   recipeMeta: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
     marginBottom: 12,
   },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 16,
-  },
   metaText: {
-    marginLeft: 4,
     fontSize: 13,
     color: Colors.textLight,
+    fontWeight: '600',
+  },
+  recipeMetaDivider: {
+    marginHorizontal: 8,
+    fontSize: 12,
+    color: Colors.textMuted,
+  },
+  recipeMetaValue: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  recipeCal: {
+    color: Colors.accent,
+  },
+  recipePro: {
+    color: Colors.secondary,
+  },
+  recipeFib: {
+    color: Colors.primary,
   },
   matchContainer: {
     flexDirection: 'row',

@@ -1,6 +1,7 @@
 import json
 
-from pydantic import BaseSettings, Field, validator
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -24,16 +25,54 @@ class Settings(BaseSettings):
     resend_api_key: str | None = Field(None, env="RESEND_API_KEY")
     uploads_dir: str = Field("uploads", env="UPLOADS_DIR")
     openai_api_key: str | None = Field(None, env="OPENAI_API_KEY")
+    openai_organization: str | None = Field(None, env="OPENAI_ORG_ID")
     # Use available models by default; can be overridden via env.
     openai_model: str = Field("gpt-4o-mini", env="OPENAI_MODEL")
     # Default vision-capable model; can be overridden in .env
     openai_vision_model: str = Field("gpt-4o-2024-11-20", env="OPENAI_VISION_MODEL")
     deepseek_api_key: str | None = Field(None, env="DEEPSEEK_API_KEY")
     # DeepSeek text fallback (no vision support)
-    deepseek_base_url: str = Field("https://api.deepseek.com", env="DEEPSEEK_BASE_URL")
+    deepseek_base_url: str = Field("https://api.deepseek.com/v1", env="DEEPSEEK_BASE_URL")
     deepseek_model: str = Field("deepseek-chat", env="DEEPSEEK_MODEL")
     deepseek_vision_model: str = Field("deepseek-chat", env="DEEPSEEK_VISION_MODEL")
+    gemini_api_key: str | None = Field(None, env="GEMINI_API_KEY")
+    gemini_image_model: str = Field("imagen-4.0-generate-001", env="GEMINI_IMAGE_MODEL")
+    # Optional Gemini text model for recipe generation fallback (e.g. "gemini-2.5-flash").
+    gemini_text_model: str | None = Field(None, env="GEMINI_TEXT_MODEL")
+    # Recipe image generation provider ("gemini" or "runware"). Defaults to Gemini for backward-compat.
+    recipe_image_provider: str = Field("gemini", env="RECIPE_IMAGE_PROVIDER")
+    # Runware (https://runware.ai) image generation (e.g. FLUX Schnell).
+    runware_api_key: str | None = Field(None, env="RUNWARE_API_KEY")
+    runware_api_url: str = Field("https://api.runware.ai/v1", env="RUNWARE_API_URL")
+    runware_image_model: str = Field("runware:100@1", env="RUNWARE_IMAGE_MODEL")
+    ai_disable_emergency_fallback: bool = Field(False, env="AI_DISABLE_EMERGENCY_FALLBACK")
+    ai_debug_logging: bool = Field(False, env="AI_DEBUG_LOGGING")
+    # When debugging recipe generation failures, allow logging model outputs (truncated) to server logs.
+    ai_log_raw_output: bool = Field(False, env="AI_LOG_RAW_OUTPUT")
+    # Mobile polls for ~60s; keep "Eat now" flows within that by default, but allow override for debugging.
+    ai_eat_now_budget_seconds: float = Field(60.0, env="AI_EAT_NOW_BUDGET_SECONDS")
+
+    # AI job runner (lightweight server-side queue) - protects the API under bursts.
+    ai_job_runner_enabled: bool = Field(True, env="AI_JOB_RUNNER_ENABLED")
+    ai_job_runner_poll_seconds: float = Field(0.8, env="AI_JOB_RUNNER_POLL_SECONDS")
+    ai_job_runner_text_workers: int = Field(6, env="AI_JOB_RUNNER_TEXT_WORKERS")
+    ai_job_runner_vision_workers: int = Field(3, env="AI_JOB_RUNNER_VISION_WORKERS")
+
+    # AI queue backend: "db" (in-process runner) or "redis" (recommended).
+    ai_queue_backend: str = Field("db", env="AI_QUEUE_BACKEND")
+    ai_queue_redis_stream_text: str = Field("ai:jobs:text", env="AI_QUEUE_REDIS_STREAM_TEXT")
+    ai_queue_redis_stream_vision: str = Field("ai:jobs:vision", env="AI_QUEUE_REDIS_STREAM_VISION")
+    ai_queue_redis_group: str = Field("glucoforager", env="AI_QUEUE_REDIS_GROUP")
+    ai_queue_redis_block_ms: int = Field(5000, env="AI_QUEUE_REDIS_BLOCK_MS")
+    ai_queue_redis_claim_idle_ms: int = Field(60000, env="AI_QUEUE_REDIS_CLAIM_IDLE_MS")
     redis_url: str | None = Field(None, env="REDIS_URL")
+
+    # Per-user burst rate limits for AI endpoints (protects cost + latency under abuse).
+    # Limits are "requests per minute" per user.
+    ai_rate_limit_free_text_per_min: int = Field(4, env="AI_RATE_LIMIT_FREE_TEXT_PER_MIN")
+    ai_rate_limit_free_vision_per_min: int = Field(2, env="AI_RATE_LIMIT_FREE_VISION_PER_MIN")
+    ai_rate_limit_premium_text_per_min: int = Field(12, env="AI_RATE_LIMIT_PREMIUM_TEXT_PER_MIN")
+    ai_rate_limit_premium_vision_per_min: int = Field(6, env="AI_RATE_LIMIT_PREMIUM_VISION_PER_MIN")
     revenuecat_webhook_secret: str | None = Field(None, env="REVENUECAT_WEBHOOK_SECRET")
     revenuecat_secret_api_key: str | None = Field(None, env="REVENUECAT_SECRET_API_KEY")
     revenuecat_project_id: str | None = Field(None, env="REVENUECAT_PROJECT_ID")
@@ -41,12 +80,14 @@ class Settings(BaseSettings):
     admin_bootstrap_token: str | None = Field(None, env="ADMIN_BOOTSTRAP_TOKEN")
     site_url: str = Field("https://www.glucoforager.com", env="SITE_URL")
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+    # Push notifications (Expo push gateway)
+    expo_push_access_token: str | None = Field(None, env="EXPO_PUSH_ACCESS_TOKEN")
+    expo_push_endpoint: str = Field("https://exp.host/--/api/v2/push/send", env="EXPO_PUSH_ENDPOINT")
 
-    @validator("cors_origins", pre=True)
-    def assemble_cors_origins(cls, v):
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
+
+    @field_validator("cors_origins", mode="before")
+    def assemble_cors_origins(cls, v):  # noqa: N805
         if isinstance(v, str):
             value = v.strip()
             if not value:
@@ -58,6 +99,16 @@ class Settings(BaseSettings):
                     return ["*"]
             return [item.strip() for item in value.split(",") if item.strip()]
         return v
+
+    @field_validator("deepseek_base_url", mode="before")
+    def normalize_deepseek_base_url(cls, v):  # noqa: N805
+        if not isinstance(v, str):
+            return v
+        value = v.strip().rstrip("/")
+        # DeepSeek OpenAI-compatible endpoints live under /v1.
+        if value == "https://api.deepseek.com":
+            return "https://api.deepseek.com/v1"
+        return value
 
 
 settings = Settings()

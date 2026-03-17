@@ -12,7 +12,11 @@ class AIVisionService:
     """Wrapper for GPT-5 Vision primary with DeepSeek fallback."""
 
     def __init__(self) -> None:
-        self.primary_client = OpenAI(api_key=settings.openai_api_key) if settings.openai_api_key else None
+        self.primary_client = (
+            OpenAI(api_key=settings.openai_api_key, organization=settings.openai_organization)
+            if settings.openai_api_key
+            else None
+        )
         self.primary_model = settings.openai_vision_model
         # DeepSeek currently does not support image_url content; disable fallback for vision to avoid 400s.
         self.fallback_client = None

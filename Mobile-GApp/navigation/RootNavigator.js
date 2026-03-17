@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext, useEffect, useState } from 'react';
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { AuthContext } from "../context/authContext";
@@ -14,14 +14,20 @@ import ForgotPasswordScreen from "../screens/auth/ForgotPasswordScreen";
 import TermsScreen from "../screens/main/TermsScreen";
 import PrivacyPolicyScreen from "../screens/main/PrivacyPolicyScreen";
 import MainTabNavigator from "./MainTabNavigator";
+import FoodPreferencesScreen from "../screens/main/FoodPreferencesScreen";
 
 export function RootNavigatorContent() {
-  const { userToken, isLoading } = useContext(AuthContext);
-  
-  console.log("🔥 RootNavigator RENDER - Auth State:", { 
-    isLoading, 
-    userToken, 
-    hasToken: !!userToken 
+  const { userToken, isLoading, needsFoodProfileOnboarding } = useContext(AuthContext);
+
+  const devLog = (...args) => {
+    if (!__DEV__) return;
+    // eslint-disable-next-line no-console
+    console.log(...args);
+  };
+
+  devLog('RootNavigator render', {
+    isLoading,
+    hasToken: Boolean(userToken),
   });
   
   const [showOnboarding, setShowOnboarding] = useState(null);
@@ -42,17 +48,20 @@ export function RootNavigatorContent() {
       try {
         // If user is logged in, skip onboarding
         if (userToken) {
-          console.log("✅ User is logged in, skipping onboarding check");
+          devLog('User is logged in, skipping onboarding check');
           setShowOnboarding(false);
           return;
         }
         
         // Only check onboarding for non-logged-in users
         const hasSeenOnboarding = await AsyncStorage.getItem('hasSeenOnboarding');
-        console.log("📋 Onboarding check:", { hasSeenOnboarding });
+        devLog('Onboarding check', { hasSeenOnboarding });
         setShowOnboarding(hasSeenOnboarding !== 'true');
       } catch (error) {
-        console.error(error);
+        if (__DEV__) {
+          // eslint-disable-next-line no-console
+          console.error(error);
+        }
         setShowOnboarding(true);
       }
     };
@@ -64,33 +73,38 @@ export function RootNavigatorContent() {
 
   // Show splash while loading auth state OR minimum time not passed
   if (isLoading || !minimumSplashDone || showOnboarding === null) {
-    console.log("⏳ Showing splash:", { 
-      isLoading, 
-      minimumSplashDone, 
+    devLog('Showing splash', {
+      isLoading,
+      minimumSplashDone,
       showOnboarding,
-      userToken: userToken ? "YES" : "NO" 
+      hasToken: Boolean(userToken),
     });
     return <SplashScreen />;
   }
 
-  console.log("🚀 Navigation decision:", { 
-    userToken: userToken ? "YES" : "NO", 
+  devLog('Navigation decision', {
+    hasToken: Boolean(userToken),
     showOnboarding,
-    shouldShowHome: !!userToken,
-    shouldShowOnboarding: !userToken && showOnboarding,
-    shouldShowLogin: !userToken && !showOnboarding
   });
 
   return (
     <NavigationContainer>
       <Stack.Navigator>
-        {userToken ? ( // CHECK USERTOKEN FIRST - THIS IS THE KEY FIX!
-          // Logged in users: Main app with TABS
-          <Stack.Screen
-            name="MainTabs"
-            component={MainTabNavigator}
-            options={{ headerShown: false }}
-          />
+        {userToken ? (
+          needsFoodProfileOnboarding ? (
+            <Stack.Screen
+              name="FoodPreferencesOnboarding"
+              component={FoodPreferencesScreen}
+              initialParams={{ forced: true }}
+              options={{ headerShown: false }}
+            />
+          ) : (
+            <Stack.Screen
+              name="MainTabs"
+              component={MainTabNavigator}
+              options={{ headerShown: false }}
+            />
+          )
         ) : showOnboarding ? (
           // First time users (no token): Onboarding flow
           <>

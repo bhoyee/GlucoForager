@@ -16,7 +16,7 @@ class IngredientClassifier:
 
     def __init__(self) -> None:
         if settings.openai_api_key:
-            self.client = OpenAI(api_key=settings.openai_api_key)
+            self.client = OpenAI(api_key=settings.openai_api_key, organization=settings.openai_organization)
             self.model = settings.openai_model
             self.base_url = str(getattr(self.client, "base_url", ""))
         elif settings.deepseek_api_key:

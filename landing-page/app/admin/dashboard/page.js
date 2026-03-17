@@ -25,6 +25,23 @@ export default function AdminDashboard() {
     metrics: {},
     message: '',
   });
+  const [imageUsage, setImageUsage] = useState({
+    currency: 'USD',
+    today: { count: 0, cost_usd: 0 },
+    week: { count: 0, cost_usd: 0 },
+    month: { count: 0, cost_usd: 0 },
+  });
+  const [queueMetrics, setQueueMetrics] = useState({
+    backend: 'db',
+    db: { counts: {} },
+    redis: {
+      available: false,
+      streams: {
+        text: { name: 'ai:jobs:text', length: null, group: null },
+        vision: { name: 'ai:jobs:vision', length: null, group: null },
+      },
+    },
+  });
   const token = typeof window !== 'undefined' ? localStorage.getItem('adminToken') : null;
 
   const fetchCount = useCallback(
@@ -85,6 +102,79 @@ export default function AdminDashboard() {
       : { available: false, currency: 'USD', metrics: {}, message: '' };
   }, [router, token]);
 
+  const fetchImageUsage = useCallback(async () => {
+    const response = await fetch(`${API_URL}/api/admin/ai/recipe-image-usage`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (response.status === 401) {
+      localStorage.removeItem('adminToken');
+      router.push('/admin');
+      return null;
+    }
+    const data = await response.json().catch(() => ({}));
+    return data && typeof data === 'object'
+      ? {
+          currency: data.currency || 'USD',
+          today: data.today || { count: 0, cost_usd: 0 },
+          week: data.week || { count: 0, cost_usd: 0 },
+          month: data.month || { count: 0, cost_usd: 0 },
+        }
+      : {
+          currency: 'USD',
+          today: { count: 0, cost_usd: 0 },
+          week: { count: 0, cost_usd: 0 },
+          month: { count: 0, cost_usd: 0 },
+        };
+  }, [router, token]);
+
+  const fetchQueueMetrics = useCallback(async () => {
+    const response = await fetch(`${API_URL}/api/admin/ai/queue-metrics`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (response.status === 401) {
+      localStorage.removeItem('adminToken');
+      router.push('/admin');
+      return null;
+    }
+    const data = await response.json().catch(() => ({}));
+    if (!data || typeof data !== 'object') {
+      return {
+        backend: 'db',
+        db: { counts: {} },
+        redis: {
+          available: false,
+          streams: {
+            text: { name: 'ai:jobs:text', length: null, group: null },
+            vision: { name: 'ai:jobs:vision', length: null, group: null },
+          },
+        },
+      };
+    }
+
+    const textStream = data.redis?.streams?.text && typeof data.redis.streams.text === 'object' ? data.redis.streams.text : {};
+    const visionStream = data.redis?.streams?.vision && typeof data.redis.streams.vision === 'object' ? data.redis.streams.vision : {};
+
+    return {
+      backend: typeof data.backend === 'string' ? data.backend : 'db',
+      db: data.db && typeof data.db === 'object' ? data.db : { counts: {} },
+      redis: {
+        available: Boolean(data.redis?.available),
+        streams: {
+          text: {
+            name: typeof textStream.name === 'string' ? textStream.name : 'ai:jobs:text',
+            length: Number.isFinite(Number(textStream.length)) ? Number(textStream.length) : null,
+            group: textStream.group && typeof textStream.group === 'object' ? textStream.group : null,
+          },
+          vision: {
+            name: typeof visionStream.name === 'string' ? visionStream.name : 'ai:jobs:vision',
+            length: Number.isFinite(Number(visionStream.length)) ? Number(visionStream.length) : null,
+            group: visionStream.group && typeof visionStream.group === 'object' ? visionStream.group : null,
+          },
+        },
+      },
+    };
+  }, [router, token]);
+
   const loadStats = useCallback(async () => {
     if (!token) {
       router.push('/admin');
@@ -100,6 +190,8 @@ export default function AdminDashboard() {
         totalRecipes,
         totalBlogPosts,
         salesData,
+        imageUsageData,
+        queueMetricsData,
       ] = await Promise.all([
         fetchCount(),
         fetchCount('free'),
@@ -121,6 +213,23 @@ export default function AdminDashboard() {
           .catch(() => 0),
         fetchBlogPostCount().catch(() => 0),
         fetchSales().catch(() => ({ available: false, currency: 'USD', metrics: {}, message: '' })),
+        fetchImageUsage().catch(() => ({
+          currency: 'USD',
+          today: { count: 0, cost_usd: 0 },
+          week: { count: 0, cost_usd: 0 },
+          month: { count: 0, cost_usd: 0 },
+        })),
+        fetchQueueMetrics().catch(() => ({
+          backend: 'db',
+          db: { counts: {} },
+          redis: {
+            available: false,
+            streams: {
+              text: { name: 'ai:jobs:text', length: null, group: null },
+              vision: { name: 'ai:jobs:vision', length: null, group: null },
+            },
+          },
+        })),
       ]);
       if (
         totalUsers === null
@@ -131,6 +240,8 @@ export default function AdminDashboard() {
         || totalRecipes === null
         || totalBlogPosts === null
         || salesData === null
+        || imageUsageData === null
+        || queueMetricsData === null
       ) {
         return;
       }
@@ -144,6 +255,8 @@ export default function AdminDashboard() {
         totalBlogPosts,
       });
       setSales(salesData);
+      setImageUsage(imageUsageData);
+      setQueueMetrics(queueMetricsData);
     } catch (error) {
       setStats({
         totalUsers: 0,
@@ -155,16 +268,35 @@ export default function AdminDashboard() {
         totalBlogPosts: 0,
       });
       setSales({ available: false, currency: 'USD', metrics: {}, message: '' });
+      setImageUsage({
+        currency: 'USD',
+        today: { count: 0, cost_usd: 0 },
+        week: { count: 0, cost_usd: 0 },
+        month: { count: 0, cost_usd: 0 },
+      });
+      setQueueMetrics({
+        backend: 'db',
+        db: { counts: {} },
+        redis: {
+          available: false,
+          streams: {
+            text: { name: 'ai:jobs:text', length: null, group: null },
+            vision: { name: 'ai:jobs:vision', length: null, group: null },
+          },
+        },
+      });
     }
-  }, [fetchBlogPostCount, fetchCount, fetchSales, router, token]);
+  }, [fetchBlogPostCount, fetchCount, fetchQueueMetrics, fetchSales, fetchImageUsage, router, token]);
 
   const formatMoney = useCallback((value, currency) => {
     const numeric = typeof value === 'number' ? value : Number(value);
     if (!Number.isFinite(numeric)) return '—';
     try {
-      return new Intl.NumberFormat(undefined, {
+      return new Intl.NumberFormat('en-US', {
         style: 'currency',
         currency: currency || 'USD',
+        currencyDisplay: 'narrowSymbol',
+        minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       }).format(numeric);
     } catch (error) {
@@ -233,11 +365,15 @@ export default function AdminDashboard() {
           <div className="admin-inline admin-subcards" style={{ marginTop: 0 }}>
             <div className="admin-subcard">
               <span>This month</span>
-              <strong>{sales.available ? formatMoney(sales.metrics?.revenue, sales.currency) : '—'}</strong>
+              <strong suppressHydrationWarning>
+                {sales.available ? formatMoney(sales.metrics?.revenue, sales.currency) : '—'}
+              </strong>
             </div>
             <div className="admin-subcard">
               <span>Total sales</span>
-              <strong>{sales.available ? formatMoney(sales.metrics?.revenue_total, sales.currency) : '—'}</strong>
+              <strong suppressHydrationWarning>
+                {sales.available ? formatMoney(sales.metrics?.revenue_total, sales.currency) : '—'}
+              </strong>
             </div>
           </div>
           {!sales.available && (
@@ -251,6 +387,75 @@ export default function AdminDashboard() {
               may require data export.
             </p>
           )}
+        </div>
+        <div className="admin-card">
+          <h3>Recipe images</h3>
+          <p className="admin-subtitle">AI recipe image generations (estimated spend).</p>
+          <div className="admin-inline admin-subcards" style={{ marginTop: 0 }}>
+            <div className="admin-subcard">
+              <span>Today</span>
+              <strong>
+                {imageUsage.today?.count} /{' '}
+                <span suppressHydrationWarning>{formatMoney(imageUsage.today?.cost_usd, imageUsage.currency)}</span>
+              </strong>
+            </div>
+            <div className="admin-subcard">
+              <span>This week</span>
+              <strong>
+                {imageUsage.week?.count} /{' '}
+                <span suppressHydrationWarning>{formatMoney(imageUsage.week?.cost_usd, imageUsage.currency)}</span>
+              </strong>
+            </div>
+            <div className="admin-subcard">
+              <span>This month</span>
+              <strong>
+                {imageUsage.month?.count} /{' '}
+                <span suppressHydrationWarning>{formatMoney(imageUsage.month?.cost_usd, imageUsage.currency)}</span>
+              </strong>
+            </div>
+          </div>
+          <p className="admin-help" style={{ marginTop: 10 }}>
+            Cost is estimated using your configured per-image cost in Admin → Settings → Recipe images.
+          </p>
+        </div>
+        <div className="admin-card">
+          <h3>AI queue</h3>
+          <p className="admin-subtitle">
+            Pending work snapshot. Backend: <strong>{queueMetrics.backend}</strong>
+            {queueMetrics.redis?.available ? '' : ' (Redis not available)'}
+          </p>
+          <div className="admin-inline admin-subcards" style={{ marginTop: 0 }}>
+            <div className="admin-subcard">
+              <span>Text stream</span>
+              <strong>
+                {queueMetrics.redis?.streams?.text?.length ?? '—'} / pending{' '}
+                {queueMetrics.redis?.streams?.text?.group?.pending ?? '—'}
+              </strong>
+            </div>
+            <div className="admin-subcard">
+              <span>Vision stream</span>
+              <strong>
+                {queueMetrics.redis?.streams?.vision?.length ?? '—'} / pending{' '}
+                {queueMetrics.redis?.streams?.vision?.group?.pending ?? '—'}
+              </strong>
+            </div>
+            <div className="admin-subcard">
+              <span>DB pending</span>
+              <strong>{queueMetrics.db?.counts?.pending ?? 0}</strong>
+            </div>
+            <div className="admin-subcard">
+              <span>DB queued</span>
+              <strong>{queueMetrics.db?.counts?.queued ?? 0}</strong>
+            </div>
+            <div className="admin-subcard">
+              <span>DB running</span>
+              <strong>{queueMetrics.db?.counts?.running ?? 0}</strong>
+            </div>
+            <Link className="admin-subcard" href="/admin/system-health?failureView=operational#failed-jobs">
+              <span>DB failed</span>
+              <strong>{queueMetrics.db?.counts?.failed ?? 0}</strong>
+            </Link>
+          </div>
         </div>
       </div>
     </div>
