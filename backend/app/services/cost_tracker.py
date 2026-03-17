@@ -1,5 +1,7 @@
 from datetime import datetime
 
+from datetime import datetime
+
 from sqlalchemy.orm import Session
 
 from ..models.ai_request import AIRequest

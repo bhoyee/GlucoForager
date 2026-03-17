@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -72,21 +72,24 @@ export default function AdminShell({ children }) {
   }
 
   const navItems = [
-    { href: '/admin/dashboard', label: 'Dashboard', icon: '📊' },
-    { href: '/admin/users', label: 'Users', icon: '👤' },
-    { href: '/admin/recipes', label: 'Recipes', icon: '🍲' },
-    { href: '/admin/recipes/new', label: 'New Recipe', icon: '➕' },
-    { href: '/admin/blog', label: 'Blog', icon: '📝' },
-    { href: '/admin/blog/new', label: 'New Post', icon: '➕' },
-    { href: '/admin/blog/comments', label: 'Comments', icon: '💬' },
-    { href: '/admin/newsletter', label: 'Newsletter', icon: '✉️' },
-    { href: '/admin/newsletter/send', label: 'Send Email', icon: '📨' },
-    { href: '/admin/user-email', label: 'User Email', icon: '📬' },
-    { href: '/admin/notifications', label: 'Notifications', icon: '🔔' },
-    { href: '/admin/system-health', label: 'System Health', icon: '❤️' },
-    { href: '/admin/system-logs', label: 'System Logs', icon: '🧾' },
-    { href: '/admin/mobile-logs', label: 'Mobile Logs', icon: '📱' },
-    { href: '/admin/db-backups', label: 'Database Backups', icon: '🗄️' },
+    { href: '/admin/dashboard', label: 'Dashboard', icon: 'D' },
+    { href: '/admin/users', label: 'Users', icon: 'U' },
+    { href: '/admin/recipes', label: 'Recipes', icon: 'R' },
+    { href: '/admin/recipes/new', label: 'New Recipe', icon: '+' },
+    { href: '/admin/tips', label: 'Daily Tips', icon: 'T' },
+    { href: '/admin/challenge', label: 'Daily Challenge', icon: 'C' },
+    { href: '/admin/blog', label: 'Blog', icon: 'B' },
+    { href: '/admin/blog/new', label: 'New Post', icon: '+' },
+    { href: '/admin/blog/comments', label: 'Comments', icon: 'M' },
+    { href: '/admin/newsletter', label: 'Newsletter', icon: 'N' },
+    { href: '/admin/newsletter/send', label: 'Send Email', icon: 'S' },
+    { href: '/admin/user-email', label: 'User Email', icon: 'E' },
+    { href: '/admin/notifications', label: 'Notifications', icon: '!' },
+    { href: '/admin/push-campaigns', label: 'Push Campaigns', icon: 'PN' },
+    { href: '/admin/system-health', label: 'System Health', icon: 'H' },
+    { href: '/admin/system-logs', label: 'System Logs', icon: 'L' },
+    { href: '/admin/mobile-logs', label: 'Mobile Logs', icon: 'P' },
+    { href: '/admin/db-backups', label: 'Database Backups', icon: 'DB' },
   ];
 
   return (
@@ -115,7 +118,7 @@ export default function AdminShell({ children }) {
               aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >
-              {sidebarCollapsed ? '»' : '«'}
+              {sidebarCollapsed ? '>>' : '<<'}
             </button>
             <button
               className="admin-mobile-close"
@@ -193,3 +196,4 @@ export default function AdminShell({ children }) {
     </div>
   );
 }
+

@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.orm import Session
 
 from ...core.config import settings
@@ -37,6 +37,7 @@ class Token(BaseModel):
     message: str | None = None
     public_id: str | None = None
     refresh_token: str | None = None
+    profile_completed: bool | None = None
 
 
 class ClientInfo(BaseModel):
@@ -46,8 +47,8 @@ class ClientInfo(BaseModel):
     os_version: str | None = Field(None, max_length=64)
     device_model: str | None = Field(None, max_length=120)
 
-    @validator("platform", "app_version", "build_number", "os_version", "device_model", pre=True)
-    def normalize_text(cls, value: str | None) -> str | None:
+    @field_validator("platform", "app_version", "build_number", "os_version", "device_model", mode="before")
+    def normalize_text(cls, value: str | None) -> str | None:  # noqa: N805
         if value is None:
             return None
         cleaned = str(value).strip()
@@ -62,15 +63,15 @@ class UserCreate(BaseModel):
     country: str | None = Field(None, max_length=120)
     client: ClientInfo | None = None
 
-    @validator("full_name")
-    def validate_full_name(cls, value: str) -> str:
+    @field_validator("full_name")
+    def validate_full_name(cls, value: str) -> str:  # noqa: N805
         cleaned = value.strip()
         if not cleaned:
             raise ValueError("Full name is required")
         return cleaned
 
-    @validator("gender")
-    def validate_gender(cls, value: str | None) -> str | None:
+    @field_validator("gender")
+    def validate_gender(cls, value: str | None) -> str | None:  # noqa: N805
         if value is None:
             return None
         cleaned = value.strip().lower()
@@ -79,8 +80,8 @@ class UserCreate(BaseModel):
             raise ValueError("Invalid gender")
         return cleaned
 
-    @validator("country")
-    def validate_country(cls, value: str | None) -> str | None:
+    @field_validator("country")
+    def validate_country(cls, value: str | None) -> str | None:  # noqa: N805
         if value is None:
             return None
         cleaned = value.strip()
@@ -149,6 +150,7 @@ def signup(payload: UserCreate, background_tasks: BackgroundTasks, request: Requ
             gender=payload.gender,
             country=payload.country,
             public_id=str(uuid.uuid4()),
+            profile_completed=False,
             registered_platform=client.platform if client else None,
             registered_app_version=client.app_version if client else None,
             registered_build_number=client.build_number if client else None,
@@ -186,6 +188,7 @@ def signup(payload: UserCreate, background_tasks: BackgroundTasks, request: Requ
             refresh_token=refresh_token,
             message="Signup successful",
             public_id=user.public_id,
+            profile_completed=bool(getattr(user, "profile_completed", False)),
         )
     except HTTPException:
         # Bubble up expected API errors unchanged.
@@ -240,6 +243,7 @@ def login(
         refresh_token=refresh_token,
         message="Login successful",
         public_id=user.public_id,
+        profile_completed=bool(getattr(user, "profile_completed", False)),
     )
 
 
@@ -300,6 +304,7 @@ def login_alias(
         refresh_token=refresh_token,
         message="Login successful",
         public_id=user.public_id,
+        profile_completed=bool(getattr(user, "profile_completed", False)),
     )
 
 
@@ -333,7 +338,12 @@ def refresh_token(payload: RefreshTokenPayload, db: Session = Depends(get_db)):
 
     access_token = create_access_token({"sub": str(user.id)})
     new_refresh = _issue_refresh_token(db, user.id)
-    return Token(access_token=access_token, refresh_token=new_refresh, public_id=user.public_id)
+    return Token(
+        access_token=access_token,
+        refresh_token=new_refresh,
+        public_id=user.public_id,
+        profile_completed=bool(getattr(user, "profile_completed", False)),
+    )
 
 
 @router.post("/logout")

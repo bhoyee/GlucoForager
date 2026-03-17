@@ -1,10 +1,11 @@
-// screens/main/HomeScreen.js - UPDATED PRODUCTION VERSION
-import React, { useState, useCallback } from 'react';
+﻿// screens/main/HomeScreen.js - UPDATED PRODUCTION VERSION
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
+  Pressable,
   TouchableOpacity,
   StatusBar,
   Alert,
@@ -19,12 +20,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
-
-import RecipePlaceholder from '../../assets/images/recipe-placeholder.jpeg';
+import { getRecipeImageSettings } from '../../utils/recipeImageSettings';
+import { getTodayTip } from '../../utils/todayTips';
+import { scheduleDailyPlanNotifications } from '../../utils/mealReminders';
 
 export default function HomeScreen() {
   const navigation = useNavigation();
-  const { signOut } = useAuth();
+  const { signOut, foodProfileHasPreferences } = useAuth();
   const insets = useSafeAreaInsets();
   const headerPaddingTop = Math.max(insets.top, 16);
   const contentBottomPadding = Math.max(insets.bottom + 4, 6);
@@ -35,8 +37,16 @@ export default function HomeScreen() {
   const [dailyLimit, setDailyLimit] = useState(3);
   const [isLoading, setIsLoading] = useState(true);
   const [suggestedRecipes, setSuggestedRecipes] = useState([]);
+  const [recipeImagesEnabled, setRecipeImagesEnabled] = useState(true);
   const [recentRecipes, setRecentRecipes] = useState([]);
   const [isFetchingRecipes, setIsFetchingRecipes] = useState(false);
+  const [blockedTipIds, setBlockedTipIds] = useState([]);
+  const [serverTodayTip, setServerTodayTip] = useState(null);
+  const [dailyChallenge, setDailyChallenge] = useState(null);
+  const todayTip = useMemo(() => {
+    if (serverTodayTip?.title && (serverTodayTip?.tip || serverTodayTip?.body)) return serverTodayTip;
+    return getTodayTip(new Date(), { blockedTipIds });
+  }, [blockedTipIds, serverTodayTip]);
   const [showSuggestions, setShowSuggestions] = useState(true);
   const [networkError, setNetworkError] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -46,6 +56,76 @@ export default function HomeScreen() {
     scansToday: 0,
     favoritesSaved: 0,
   });
+  const loadTipConfig = async () => {
+    try {
+      const cached = await AsyncStorage.getItem('tips_blocked_ids_v1');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) {
+          setBlockedTipIds(parsed.filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim()));
+        }
+      }
+    } catch {
+      // ignore cache errors
+    }
+
+    try {
+      const response = await apiFetch(
+        `${API_URL}/api/app/tips/config`,
+        { method: 'GET' },
+        { timeoutMs: 5000 }
+      );
+      if (!response.ok) return;
+      const data = await response.json();
+      const raw = data?.blocked_tip_ids;
+      const blocked = Array.isArray(raw) ? raw.filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim()) : [];
+      setBlockedTipIds(blocked);
+      await AsyncStorage.setItem('tips_blocked_ids_v1', JSON.stringify(blocked));
+    } catch {
+      // ignore network errors
+    }
+  };
+
+  const loadTodayTip = async () => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      const response = await apiFetch(
+        `${API_URL}/api/app/tips/today`,
+        { method: 'GET', headers: token ? { Authorization: `Bearer ${token}` } : undefined },
+        { timeoutMs: 5000 }
+      );
+      if (!response.ok) return;
+      const data = await response.json();
+      const tip = data?.tip;
+      if (tip?.title) {
+        setServerTodayTip(tip);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const loadDailyChallenge = async () => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        setDailyChallenge(null);
+        return;
+      }
+      const response = await apiFetch(
+        `${API_URL}/api/app/challenge/today`,
+        { method: 'GET', headers: { Authorization: `Bearer ${token}` } },
+        { timeoutMs: 5000 }
+      );
+      if (!response.ok) return;
+      const data = await response.json();
+      if (data?.challenge?.tasks?.length) {
+        setDailyChallenge(data.challenge);
+      }
+    } catch {
+      // ignore network errors
+    }
+  };
 
   const getDeviceId = async () => {
     const existing = await AsyncStorage.getItem('deviceId');
@@ -115,10 +195,19 @@ export default function HomeScreen() {
 
       await loadCachedData();
 
+      const loadRecipeImagesFlag = async () => {
+        const settings = await getRecipeImageSettings();
+        setRecipeImagesEnabled(Boolean(settings?.enabled));
+      };
+
       const results = await Promise.allSettled([
         loadScanStatus(),
         loadUserStats(),
         loadRecipes(),
+        loadRecipeImagesFlag(),
+        loadTipConfig(),
+        loadTodayTip(),
+        loadDailyChallenge(),
       ]);
 
       const allFailed = results.every((result) => result.status === 'rejected');
@@ -197,6 +286,13 @@ export default function HomeScreen() {
         dailyLimit: typeof data.daily_limit === 'number' ? data.daily_limit : 3,
       })
     );
+
+    // Premium-only: schedule the Daily Plan reminder once we know the user's tier.
+    try {
+      await scheduleDailyPlanNotifications({ isPremium });
+    } catch {
+      // Ignore scheduling failures.
+    }
   };
 
   const getMealType = () => {
@@ -306,6 +402,11 @@ export default function HomeScreen() {
       setIsFetchingRecipes(false);
     }
   };
+
+  const handleOpenEatNow = () => navigation.navigate('EatNow');
+  const handleOpenSwaps = () => navigation.navigate('CarbSwaps');
+  const handleOpenChallenge = () => navigation.navigate('Challenge');
+  const handleOpenTip = () => navigation.navigate('TodayTip', { tip: todayTip });
 
   const getRecipeTimeLabel = (recipe) => {
     const prepRaw = recipe.prep_time_minutes ?? recipe.prepTime ?? recipe.prep_time;
@@ -476,7 +577,7 @@ export default function HomeScreen() {
         {isRefreshing && (
           <View style={styles.refreshRow}>
             <ActivityIndicator size="small" color={Colors.primary} />
-            <Text style={styles.refreshText}>Refreshing data…</Text>
+            <Text style={styles.refreshText}>Refreshing data...</Text>
           </View>
         )}
         {networkError && (
@@ -514,10 +615,10 @@ export default function HomeScreen() {
             </View>
           )}
           
-          {!userIsPremium && Number(remainingScans) <= 0 && (
-            <TouchableOpacity 
-              style={styles.upgradePrompt}
-              onPress={handleUpgradePaywall}
+        {!userIsPremium && Number(remainingScans) <= 0 && (
+          <TouchableOpacity 
+            style={styles.upgradePrompt}
+            onPress={handleUpgradePaywall}
             >
               <Text style={styles.upgradeText}>Upgrade to Premium</Text>
               <Ionicons name="arrow-forward" size={16} color={Colors.primary} />
@@ -525,15 +626,120 @@ export default function HomeScreen() {
           )}
         </View>
 
+        {foodProfileHasPreferences === true ? null : (
+          <View style={styles.section}>
+            <Pressable
+              style={({ pressed }) => [styles.urgentCard, pressed && styles.cardPressed]}
+              android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
+              onPress={() => navigation.navigate('Profile', { screen: 'FoodPreferences' })}
+            >
+              <View style={styles.urgentIcon}>
+                <Ionicons name="alert-circle-outline" size={20} color={Colors.error} />
+              </View>
+              <View style={styles.urgentText}>
+                <Text style={styles.urgentLabel}>Action needed</Text>
+                <Text style={styles.urgentTitle} numberOfLines={2}>
+                  Personalize your meals (30 seconds)
+                </Text>
+                <Text style={styles.urgentSnippet} numberOfLines={1}>
+                  Get recipes that match your cuisine and goals.
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
+            </Pressable>
+          </View>
+        )}
+
+        {/* Daily guidance */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Daily guidance</Text>
+          <Text style={styles.sectionSubtitle}>Small daily actions to support steadier blood sugar.</Text>
+
+          <Pressable
+            style={({ pressed }) => [styles.tipCard, pressed && styles.cardPressed]}
+            android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
+            onPress={handleOpenTip}
+          >
+            <View style={styles.tipIcon}>
+              <Ionicons name="bulb-outline" size={20} color={Colors.primary} />
+            </View>
+            <View style={styles.tipText}>
+              <Text style={styles.tipLabel}>Today's tip</Text>
+              <Text style={styles.tipTitle} numberOfLines={2}>
+                {todayTip.title}
+              </Text>
+              <Text style={styles.tipSnippet} numberOfLines={1}>
+                {todayTip.tip || todayTip.body || 'Small daily actions to support steadier blood sugar.'}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
+          </Pressable>
+        </View>
+
+        {dailyChallenge?.tasks?.length ? (
+          <View style={styles.section}>
+            <Pressable
+              style={({ pressed }) => [styles.challengeCard, pressed && styles.cardPressed]}
+              android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
+              onPress={handleOpenChallenge}
+            >
+              <View style={styles.challengeIcon}>
+                <Ionicons name="trophy-outline" size={20} color={Colors.primary} />
+              </View>
+              <View style={styles.challengeText}>
+                <Text style={styles.tipLabel}>Challenge</Text>
+                <Text style={styles.tipTitle} numberOfLines={2}>
+                  {dailyChallenge.completed_today
+                    ? 'Challenge complete'
+                    : "Today's Diabetes Challenge"}
+                </Text>
+                <Text style={styles.tipSnippet} numberOfLines={1}>
+                  Progress {Number(dailyChallenge?.progress?.completed || 0)} / {Number(dailyChallenge?.progress?.total || 0)} | Streak {Number(dailyChallenge?.streak_days || 0)} days
+                </Text>
+                <View style={styles.challengeRows}>
+                  {dailyChallenge.tasks.slice(0, 2).map((t) => (
+                    <View key={t.id} style={styles.challengeRow}>
+                      <Ionicons
+                        name={t.completed ? 'checkmark-circle' : 'ellipse-outline'}
+                        size={14}
+                        color={t.completed ? Colors.success : Colors.textLight}
+                      />
+                      <Text style={styles.challengeRowText} numberOfLines={1}>
+                        {t.text}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
+            </Pressable>
+          </View>
+        ) : null}
+
         {/* Main Actions */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Find Recipes</Text>
+
+          {/* Eat now */}
+          <TouchableOpacity style={styles.eatNowCard} activeOpacity={0.9} onPress={handleOpenEatNow}>
+            <View style={styles.eatNowLeft}>
+              <View style={styles.eatNowIcon}>
+                <Ionicons name="sparkles-outline" size={22} color="white" />
+              </View>
+              <View style={styles.eatNowText}>
+                <Text style={styles.eatNowTitle}>Eat now</Text>
+                <Text style={styles.eatNowSub}>3 ideas in seconds - use what you have or surprise me.</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={22} color="rgba(255,255,255,0.9)" />
+          </TouchableOpacity>
           
           {/* Camera Scan Card */}
           <TouchableOpacity 
-            style={styles.actionCard}
+            style={[styles.actionCard, styles.actionCardPrimary]}
             onPress={handleScanPress}
           >
+            <View style={[styles.cardAccent, { backgroundColor: Colors.primary }]} pointerEvents="none" />
             <View style={styles.actionContent}>
               <View style={[styles.actionIcon, { backgroundColor: `${Colors.primary}15` }]}>
                 <Ionicons name="camera-outline" size={28} color={Colors.primary} />
@@ -553,9 +759,10 @@ export default function HomeScreen() {
 
           {/* Manual Input Card */}
           <TouchableOpacity 
-            style={styles.actionCard}
+            style={[styles.actionCard, styles.actionCardSecondary]}
             onPress={handleManualInputPress}
           >
+            <View style={[styles.cardAccent, { backgroundColor: Colors.secondary }]} pointerEvents="none" />
             <View style={styles.actionContent}>
               <View style={[styles.actionIcon, { backgroundColor: `${Colors.secondary}15` }]}>
                 <Ionicons name="create-outline" size={28} color={Colors.secondary} />
@@ -577,6 +784,7 @@ export default function HomeScreen() {
               style={styles.recentRow}
               onPress={handleViewRecentRecipes}
             >
+              <View style={[styles.cardAccent, { backgroundColor: Colors.primary }]} pointerEvents="none" />
               <View style={styles.recentRowContent}>
                 <Ionicons name="time-outline" size={18} color={Colors.primary} />
                 <Text style={styles.recentRowText}>Last Recipes</Text>
@@ -589,11 +797,38 @@ export default function HomeScreen() {
           )}
         </View>
 
-        {/* Suggest Me 3 Recipes */}
+        {/* Tools */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Tools</Text>
+          <Text style={styles.sectionSubtitle}>Quick helpers for smarter choices.</Text>
+
+          <View style={styles.miniRow}>
+            <Pressable
+              style={({ pressed }) => [styles.miniCard, styles.miniCardSwaps, pressed && styles.cardPressed]}
+              android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
+              onPress={handleOpenSwaps}
+            >
+              <View style={styles.miniRowContent}>
+                <View style={styles.miniLeft}>
+                  <Ionicons name="swap-horizontal-outline" size={20} color={Colors.secondary} />
+                  <View style={styles.miniText}>
+                    <Text style={styles.miniTitle}>Food swaps</Text>
+                    <Text style={styles.miniSub} numberOfLines={1}>
+                      Carbs, desserts, drinks
+                    </Text>
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={Colors.textLight} />
+              </View>
+            </Pressable>
+          </View>
+        </View>
+
+        {/* Suggested Recipes */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>
-              Suggest me 3 recipes
+              3 picks for you
             </Text>
           </View>
           
@@ -608,11 +843,9 @@ export default function HomeScreen() {
                 style={styles.recipeCard}
                 onPress={() => handleViewRecipeDetail(recipe)}
               >
-                {recipe.image_url && recipe.image_source !== 'placeholder' ? (
+                {recipeImagesEnabled && recipe.image_url && recipe.image_source !== 'placeholder' ? (
                   <Image source={{ uri: recipe.image_url }} style={styles.recipeImage} />
-                ) : (
-                  <Image source={RecipePlaceholder} style={styles.recipeImage} />
-                )}
+                ) : null}
                 <View style={styles.recipeInfo}>
                   <View style={styles.recipeHeader}>
                     <View style={styles.badge}>
@@ -629,7 +862,7 @@ export default function HomeScreen() {
                       return (
                         <Text style={styles.recipeTime}>
                           {timeValue}
-                          <Text style={styles.recipeTimeUnit}>min</Text>
+                          <Text style={styles.recipeTimeUnit}>mins</Text>
                         </Text>
                       );
                     })()}
@@ -650,35 +883,21 @@ export default function HomeScreen() {
           </ScrollView>
 
           <TouchableOpacity
-            style={styles.shuffleButton}
+            style={[styles.shuffleButton, isFetchingRecipes && styles.shuffleButtonDisabled]}
             onPress={handleShuffleSuggestions}
             disabled={isFetchingRecipes}
           >
-            <Ionicons name="shuffle" size={18} color={Colors.primary} />
+            {isFetchingRecipes ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <Ionicons name="shuffle" size={18} color="white" />
+            )}
             <Text style={styles.shuffleText}>
               {isFetchingRecipes ? 'Refreshing...' : 'Shuffle recipes'}
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Quick Stats */}
-        <View style={styles.statsSection}>
-          <Text style={styles.sectionTitle}>Your Stats</Text>
-          <View style={styles.statsGrid}>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{userStats.recipesGenerated}</Text>
-              <Text style={styles.statLabel}>Recipes today</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{userStats.scansToday}</Text>
-              <Text style={styles.statLabel}>Scans today</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{userStats.favoritesSaved}</Text>
-              <Text style={styles.statLabel}>Favorites today</Text>
-            </View>
-          </View>
-        </View>
       </ScrollView>
 
     </View>
@@ -852,6 +1071,138 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: Colors.text,
   },
+  sectionSubtitle: {
+    marginTop: 6,
+    fontSize: 13,
+    color: Colors.textLight,
+    fontWeight: '600',
+  },
+  cardPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.99 }],
+  },
+  tipCard: {
+    marginTop: 12,
+    backgroundColor: `${Colors.primary}12`,
+    borderRadius: 16,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  tipIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: `${Colors.primary}14`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tipText: { flex: 1 },
+  tipLabel: { fontSize: 12, fontWeight: '900', color: Colors.primary, textTransform: 'uppercase' },
+  tipTitle: { marginTop: 2, fontSize: 14, fontWeight: '800', color: Colors.text },
+  tipSnippet: { marginTop: 4, fontSize: 12, fontWeight: '700', color: Colors.textLight },
+  urgentCard: {
+    marginTop: 12,
+    backgroundColor: '#FFF5F5',
+    borderRadius: 16,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  urgentIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#FED7D7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  urgentText: { flex: 1 },
+  urgentLabel: { fontSize: 12, fontWeight: '900', color: Colors.error, textTransform: 'uppercase' },
+  urgentTitle: { marginTop: 2, fontSize: 14, fontWeight: '900', color: Colors.text },
+  urgentSnippet: { marginTop: 4, fontSize: 12, fontWeight: '700', color: Colors.textLight },
+  challengeCard: {
+    marginTop: 12,
+    backgroundColor: `${Colors.primary}10`,
+    borderRadius: 16,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  challengeIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: `${Colors.primary}14`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  challengeText: { flex: 1 },
+  challengeRows: { marginTop: 10, gap: 6 },
+  challengeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  challengeRowText: { flex: 1, fontSize: 12, color: Colors.textLight, fontWeight: '700' },
+  eatNowCard: {
+    marginTop: 12,
+    borderRadius: 18,
+    padding: 16,
+    backgroundColor: Colors.primary,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    elevation: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  eatNowLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  eatNowIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  eatNowText: { flex: 1 },
+  eatNowTitle: { fontSize: 16, fontWeight: '900', color: 'white' },
+  eatNowSub: { marginTop: 4, fontSize: 12, lineHeight: 17, color: 'rgba(255,255,255,0.92)', fontWeight: '600' },
+  miniRow: { flexDirection: 'row', gap: 12, marginTop: 12 },
+  miniCard: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    overflow: 'hidden',
+  },
+  miniRowContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  miniLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    paddingRight: 10,
+    gap: 10,
+  },
+  miniText: {
+    flex: 1,
+    marginRight: 10,
+  },
+  miniCardSwaps: {
+    backgroundColor: 'rgba(49, 130, 206, 0.08)',
+  },
+  miniCardChallenge: {
+    backgroundColor: `${Colors.primary}14`,
+  },
+  miniTitle: { fontSize: 16, fontWeight: '900', color: Colors.text },
+  miniSub: { marginTop: 3, fontSize: 13, color: Colors.textLight, fontWeight: '600' },
   seeAllText: {
     color: Colors.primary,
     fontSize: 14,
@@ -866,11 +1217,28 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     marginBottom: 12,
+    position: 'relative',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
+  },
+  actionCardPrimary: {
+    backgroundColor: `${Colors.primary}08`,
+  },
+  actionCardSecondary: {
+    backgroundColor: `${Colors.secondary}08`,
+  },
+  cardAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 12,
+    bottom: 12,
+    width: 4,
+    borderTopRightRadius: 6,
+    borderBottomRightRadius: 6,
+    opacity: 0.9,
   },
   actionContent: {
     flexDirection: 'row',
@@ -901,13 +1269,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: `${Colors.primary}12`,
+    backgroundColor: `${Colors.primary}08`,
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 16,
     marginTop: 4,
-    borderWidth: 1,
-    borderColor: `${Colors.primary}30`,
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
   recentRowContent: {
     flexDirection: 'row',
@@ -1020,50 +1392,30 @@ const styles = StyleSheet.create({
   shuffleButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'center',
-    marginTop: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 16,
-    backgroundColor: `${Colors.primary}15`,
+    justifyContent: 'center',
+    alignSelf: 'stretch',
+    marginTop: 22,
+    marginHorizontal: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: Colors.primary,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.16,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  shuffleButtonDisabled: {
+    opacity: 0.7,
   },
   shuffleText: {
-    marginLeft: 8,
-    color: Colors.primary,
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  statsSection: {
-    paddingHorizontal: 20,
-    paddingBottom: 4,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    padding: 16,
-    marginHorizontal: 4,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: Colors.primary,
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: Colors.textLight,
-    textAlign: 'center',
+    marginLeft: 10,
+    color: 'white',
+    fontWeight: '700',
+    fontSize: 15,
   },
   devResetButton: {
     position: 'absolute',
@@ -1082,3 +1434,4 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
 });
+

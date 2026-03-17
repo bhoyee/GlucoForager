@@ -184,8 +184,8 @@ def admin_health(
                 "operational": dict(sorted(operational_reason_counts.items(), key=lambda item: item[1], reverse=True)[:8]),
             },
             "cleanup": cleanup,
-            "failed_operational_items": operational_items[:15],
-            "failed_invalid_input_items": invalid_input_items[:15],
+            "failed_operational_items": operational_items[:50],
+            "failed_invalid_input_items": invalid_input_items[:50],
             "note": "AI jobs run inside the API container. If pending jobs keep increasing, check API CPU/memory and recent errors.",
         }
     except Exception as exc:  # noqa: BLE001

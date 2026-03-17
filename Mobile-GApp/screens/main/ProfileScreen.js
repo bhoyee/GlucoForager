@@ -5,22 +5,28 @@ import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/nativ
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
+import * as Application from 'expo-application';
 import { Colors } from '../../constants/Colors';
 import { AuthContext } from '../../context/authContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
 import { configureRevenueCat, getCustomerInfo, getOfferings, getPaywallOffering, isPremiumEntitled, isRevenueCatConfigured, presentCustomerCenter, presentPaywall, restorePurchases } from '../../utils/revenuecat';
-import { disableMealReminders, enableMealRemindersAndSchedule, getMealRemindersEnabled, setMealRemindersPrompted, devInspectScheduledNotifications, devSendTestMealNotification } from '../../utils/mealReminders';
+import { disableMealReminders, enableMealRemindersAndSchedule, getMealRemindersEnabled, setMealRemindersPrompted } from '../../utils/mealReminders';
+import { disableExpoPushTokens, registerExpoPushToken } from '../../utils/pushToken';
+import { addDebugLog } from '../../utils/debugLogger';
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-  const { signOut } = useContext(AuthContext);
+  const { signOut, foodProfileHasPreferences } = useContext(AuthContext);
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const headerPaddingTop = Math.max(insets.top, 16);
-  const contentBottomPadding = Math.max(insets.bottom + 4, 4);
+  // Ensure the last items (including version) aren't hidden behind the bottom tab bar.
+  const contentBottomPadding = Math.max(insets.bottom + tabBarHeight + 12, 24);
+  // Modal overlays the tab bar, so we only need to respect safe-area inset.
   const premiumModalBottomPadding = Math.max(insets.bottom, 14) + 14;
   const appStoreUrl = 'https://apps.apple.com/us/app/glucoforager/id6758808427?action=write-review';
   const playStoreUrl = 'market://details?id=com.glucoforager.app';
@@ -52,6 +58,50 @@ export default function ProfileScreen() {
   const debugTapThreshold = 7;
   const revenueCatReady = isRevenueCatConfigured();
   const premiumPriceCacheKey = 'premium_price_line_cache_v1';
+  const normalizeVersion = (value) => {
+    if (typeof value !== 'string') return '';
+    return value.trim().replace(/\.+$/, '');
+  };
+
+  const expoVersion = normalizeVersion(
+    Constants?.expoConfig?.version || Constants?.manifest?.version
+  );
+  const nativeVersion = normalizeVersion(
+    Application?.nativeApplicationVersion || Constants?.nativeAppVersion
+  );
+
+  // Pick the most specific semantic version we can.
+  // - Prefer x.y.z over x.y (common mismatch if app.json wasn't bumped).
+  // - Avoid showing Expo Go host versions in dev by preferring expoVersion when it already has x.y.z.
+  const isSemver2 = (v) => /^\d+\.\d+$/.test(v);
+  const isSemver3 = (v) => /^\d+\.\d+\.\d+/.test(v);
+
+  const appVersion = (() => {
+    if (isSemver3(expoVersion)) return expoVersion;
+    if (isSemver3(nativeVersion) && isSemver2(expoVersion)) return nativeVersion;
+    return nativeVersion || expoVersion || 'unknown';
+  })();
+
+  if (__DEV__) {
+    try {
+      addDebugLog({
+        source: 'Profile',
+        level: 'info',
+        message: 'Resolved app version',
+        details: JSON.stringify({
+          expoVersion,
+          nativeVersion,
+          appVersion,
+          raw_expo_config_version: Constants?.expoConfig?.version || null,
+          raw_manifest_version: Constants?.manifest?.version || null,
+          raw_native_application_version: Application?.nativeApplicationVersion || null,
+          raw_constants_native_app_version: Constants?.nativeAppVersion || null,
+        }),
+      });
+    } catch {
+      // Ignore.
+    }
+  }
 
   const openExternalLink = async (url) => {
     try {
@@ -113,6 +163,25 @@ export default function ProfileScreen() {
         return;
       }
       const data = await response.json();
+
+      if (__DEV__) {
+        try {
+          addDebugLog({
+            source: 'Profile',
+            level: 'info',
+            message: 'Loaded user profile',
+            details: JSON.stringify({
+              email: data?.email || null,
+              subscription_tier: data?.subscription_tier || null,
+              is_premium: data?.is_premium ?? null,
+              premium_access_blocked: data?.premium_access_blocked ?? null,
+              premium_access_blocked_until: data?.premium_access_blocked_until ?? null,
+            }),
+          });
+        } catch {
+          // Ignore debug logger errors.
+        }
+      }
       const nextProfile = {
         fullName: data.full_name || '',
         email: data.email || '',
@@ -161,6 +230,24 @@ export default function ProfileScreen() {
   const loadMealReminders = useCallback(async () => {
     const enabled = await getMealRemindersEnabled();
     setMealRemindersEnabled(enabled);
+
+    // Best-effort: if notifications are enabled already, ensure we have a remote push token
+    // for admin broadcasts (does not change local reminder scheduling).
+    if (enabled) {
+      try {
+        const result = await registerExpoPushToken();
+        if (!result?.ok) {
+          addDebugLog({
+            source: 'PushToken',
+            level: 'warn',
+            message: 'Push token registration failed',
+            details: JSON.stringify(result),
+          });
+        }
+      } catch {
+        // Ignore.
+      }
+    }
   }, []);
 
   const toggleMealReminders = useCallback(
@@ -175,15 +262,59 @@ export default function ProfileScreen() {
             setMealRemindersEnabled(false);
             Alert.alert(
               'Notifications disabled',
-              'Please allow notifications in your device Settings to enable meal reminders.'
+              'Please allow notifications in your device Settings to enable meal reminders.',
+              [
+                { text: 'Not now', style: 'cancel' },
+                {
+                  text: 'Open settings',
+                  onPress: () => {
+                    try {
+                      Linking.openSettings();
+                    } catch {
+                      // Ignore.
+                    }
+                  },
+                },
+              ]
             );
             return;
           }
+
+          // Best-effort: register remote push token for admin broadcasts (does not affect local reminders).
+          try {
+            const result = await registerExpoPushToken();
+            if (!result?.ok) {
+              addDebugLog({
+                source: 'PushToken',
+                level: 'warn',
+                message: 'Push token registration failed',
+                details: JSON.stringify(result),
+              });
+              if (__DEV__) {
+                const helpText =
+                  result?.reason === 'fcm_not_configured'
+                    ? 'This Android development build is missing Firebase (FCM) setup required for push tokens. Local reminders still work. To enable admin broadcasts, configure FCM for this app and rebuild, or test with Expo Go.'
+                    : 'Notifications are enabled, but the app could not register a push token for admin broadcasts. Open Debug Logs for details.';
+                Alert.alert(
+                  'Push token not registered',
+                  helpText
+                );
+              }
+            }
+          } catch {
+            // Ignore: user still has local reminders enabled.
+          }
+
           setMealRemindersEnabled(true);
           return;
         }
 
         await disableMealReminders();
+        try {
+          await disableExpoPushTokens();
+        } catch {
+          // Ignore.
+        }
         setMealRemindersEnabled(false);
       } catch (error) {
         Alert.alert('Error', 'Unable to update reminders right now.');
@@ -426,6 +557,7 @@ export default function ProfileScreen() {
   };
 
   const handleDebugTap = () => {
+    if (!__DEV__) return;
     if (debugTapTimer) {
       clearTimeout(debugTapTimer);
     }
@@ -463,70 +595,79 @@ export default function ProfileScreen() {
         onRequestClose={() => setPremiumModalVisible(false)}
       >
         <View style={styles.premiumModalBackdrop}>
-          <View style={[styles.premiumModalCard, { paddingBottom: premiumModalBottomPadding }]}>
-            <View style={styles.premiumModalHeader}>
-              <Text style={styles.premiumModalTitle}>GlucoForager Premium</Text>
-              <Pressable onPress={() => setPremiumModalVisible(false)} accessibilityLabel="Close">
-                <Ionicons name="close" size={24} color={Colors.text} />
-              </Pressable>
-            </View>
+          <View style={styles.premiumModalCard}>
+            <ScrollView
+              style={{ flex: 1 }}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={[
+                styles.premiumModalScrollContent,
+                { paddingBottom: premiumModalBottomPadding + 140 },
+              ]}
+            >
+              <View style={styles.premiumModalHeader}>
+                <Text style={styles.premiumModalTitle}>GlucoForager Premium</Text>
+                <Pressable onPress={() => setPremiumModalVisible(false)} accessibilityLabel="Close">
+                  <Ionicons name="close" size={24} color={Colors.text} />
+                </Pressable>
+              </View>
 
-            <Text style={styles.premiumModalSubtitle}>Monthly auto-renewable subscription</Text>
+              <Text style={styles.premiumModalSubtitle}>Monthly auto-renewable subscription</Text>
 
-            <View style={styles.premiumInfoRow}>
-              <Text style={styles.premiumInfoLabel}>Price (per month)</Text>
-              <Text
-                style={[
-                  styles.premiumInfoValue,
-                  !premiumPriceLine && styles.premiumInfoValuePlaceholder,
-                ]}
-              >
-                {premiumPriceLine
-                  ? `${premiumPriceLine} per month`
-                  : Platform.OS === 'ios'
-                    ? 'Price shown in App Store during purchase'
-                    : 'Price shown in Google Play during purchase'}
+              <View style={styles.premiumInfoRow}>
+                <Text style={styles.premiumInfoLabel}>Price (per month)</Text>
+                <Text
+                  style={[
+                    styles.premiumInfoValue,
+                    !premiumPriceLine && styles.premiumInfoValuePlaceholder,
+                  ]}
+                >
+                  {premiumPriceLine
+                    ? `${premiumPriceLine} per month`
+                    : Platform.OS === 'ios'
+                      ? 'Price shown in App Store during purchase'
+                      : 'Price shown in Google Play during purchase'}
+                </Text>
+              </View>
+              <View style={styles.premiumInfoRow}>
+                <Text style={styles.premiumInfoLabel}>Length</Text>
+                <Text style={styles.premiumInfoValue}>1 month</Text>
+              </View>
+
+              <View style={styles.premiumBenefits}>
+                <Text style={styles.premiumBenefitsTitle}>What you get:</Text>
+                <Text style={styles.premiumBenefitItem}>- Unlimited ingredient scans & searches</Text>
+                <Text style={styles.premiumBenefitItem}>- Daily meal planner</Text>
+                <Text style={styles.premiumBenefitItem}>- Detailed nutrition insights</Text>
+                <Text style={styles.premiumBenefitItem}>- Unlimited favorites</Text>
+              </View>
+
+              <Text style={styles.premiumLegalText}>
+                {Platform.OS === 'ios'
+                  ? 'Payment will be charged to your Apple ID account at confirmation of purchase.'
+                  : 'Payment will be charged to your Google Play account at confirmation of purchase.'}{' '}
+                Subscription automatically renews unless canceled at least 24 hours before the end of the current period.
+                Your account will be charged for renewal within 24 hours prior to the end of the current period.
               </Text>
-            </View>
-            <View style={styles.premiumInfoRow}>
-              <Text style={styles.premiumInfoLabel}>Length</Text>
-              <Text style={styles.premiumInfoValue}>1 month</Text>
-            </View>
+              <Text style={styles.premiumLegalText}>
+                {Platform.OS === 'ios'
+                  ? 'Manage or cancel your subscription in Apple ID settings at any time.'
+                  : 'Manage or cancel your subscription in Google Play subscriptions at any time.'}
+              </Text>
 
-            <View style={styles.premiumBenefits}>
-              <Text style={styles.premiumBenefitsTitle}>What you get:</Text>
-              <Text style={styles.premiumBenefitItem}>- Unlimited ingredient scans & searches</Text>
-              <Text style={styles.premiumBenefitItem}>- Diabetes-friendly recipe suggestions</Text>
-              <Text style={styles.premiumBenefitItem}>- Detailed nutrition insights</Text>
-              <Text style={styles.premiumBenefitItem}>- Unlimited favorites</Text>
-            </View>
+              <View style={styles.premiumLinksRow}>
+                <Pressable onPress={() => openExternalLink(privacyPolicyUrl)}>
+                  <Text style={styles.premiumLink}>Privacy Policy</Text>
+                </Pressable>
+                <Text style={styles.premiumLinkSeparator}>|</Text>
+                <Pressable onPress={() => openExternalLink(eulaUrl)}>
+                  <Text style={styles.premiumLink}>Terms (EULA)</Text>
+                </Pressable>
+              </View>
 
-            <Text style={styles.premiumLegalText}>
-              {Platform.OS === 'ios'
-                ? 'Payment will be charged to your Apple ID account at confirmation of purchase.'
-                : 'Payment will be charged to your Google Play account at confirmation of purchase.'}{' '}
-              Subscription automatically renews unless canceled at least 24 hours before the end of the current period.
-              Your account will be charged for renewal within 24 hours prior to the end of the current period.
-            </Text>
-            <Text style={styles.premiumLegalText}>
-              {Platform.OS === 'ios'
-                ? 'Manage or cancel your subscription in Apple ID settings at any time.'
-                : 'Manage or cancel your subscription in Google Play subscriptions at any time.'}
-            </Text>
+              {!!premiumModalError && <Text style={styles.premiumErrorText}>{premiumModalError}</Text>}
+            </ScrollView>
 
-            <View style={styles.premiumLinksRow}>
-              <Pressable onPress={() => openExternalLink(privacyPolicyUrl)}>
-                <Text style={styles.premiumLink}>Privacy Policy</Text>
-              </Pressable>
-              <Text style={styles.premiumLinkSeparator}>|</Text>
-              <Pressable onPress={() => openExternalLink(eulaUrl)}>
-                <Text style={styles.premiumLink}>Terms (EULA)</Text>
-              </Pressable>
-            </View>
-
-            {!!premiumModalError && <Text style={styles.premiumErrorText}>{premiumModalError}</Text>}
-
-            <View style={styles.premiumActions}>
+            <View style={[styles.premiumActions, { paddingBottom: premiumModalBottomPadding }]}>
               <TouchableOpacity
                 style={[styles.premiumButton, styles.premiumButtonPrimary]}
                 onPress={handleStartPurchase}
@@ -610,6 +751,19 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
         </TouchableOpacity>
 
+        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('FoodPreferences')}>
+          <View style={styles.menuItemLeft}>
+            <Ionicons name="options-outline" size={22} color={Colors.text} />
+            <View style={styles.menuTextStack}>
+              <Text style={[styles.menuText, { marginLeft: 0, flex: 0 }]}>Food preferences</Text>
+              <Text style={styles.menuSubtext}>
+                {foodProfileHasPreferences === true ? 'Update your preferences' : 'Personalize your meals (30 seconds)'}
+              </Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
+        </TouchableOpacity>
+
         <TouchableOpacity style={styles.menuItem} onPress={handleManageSubscription}>
           <View style={styles.menuItemLeft}>
             <Ionicons name="card-outline" size={22} color={Colors.text} />
@@ -621,14 +775,14 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.menuSection}>
-        <Text style={styles.sectionTitle}>Reminders</Text>
+        <Text style={styles.sectionTitle}>Notifications</Text>
 
         <View style={styles.menuItem}>
           <View style={styles.menuItemLeft}>
             <Ionicons name="alarm-outline" size={22} color={Colors.text} />
             <View style={styles.menuTextStack}>
-              <Text style={[styles.menuText, { marginLeft: 0, flex: 0 }]}>Meal reminders</Text>
-              <Text style={styles.menuSubtext}>Breakfast, lunch & dinner</Text>
+              <Text style={[styles.menuText, { marginLeft: 0, flex: 0 }]}>Enable notifications</Text>
+              <Text style={styles.menuSubtext}>Reminders and updates</Text>
             </View>
           </View>
           <Switch
@@ -639,25 +793,6 @@ export default function ProfileScreen() {
             thumbColor={mealRemindersEnabled ? Colors.primary : '#FFFFFF'}
           />
         </View>
-
-        {__DEV__ ? (
-          <>
-            <TouchableOpacity
-              style={styles.devReminderButton}
-              onPress={() => void devSendTestMealNotification()}
-            >
-              <Ionicons name="notifications-outline" size={18} color={Colors.primary} />
-              <Text style={styles.devReminderButtonText}>Send test notification</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.devReminderButton}
-              onPress={() => void devInspectScheduledNotifications()}
-            >
-              <Ionicons name="list-outline" size={18} color={Colors.primary} />
-              <Text style={styles.devReminderButtonText}>Inspect scheduled notifications</Text>
-            </TouchableOpacity>
-          </>
-        ) : null}
       </View>
 
       <View style={styles.menuSection}>
@@ -733,12 +868,10 @@ export default function ProfileScreen() {
       <TouchableOpacity
         style={styles.versionContainer}
         activeOpacity={0.8}
-        onPress={handleDebugTap}
+        onPress={__DEV__ ? handleDebugTap : undefined}
       >
-        <View style={styles.versionRow}>
-          <Text style={styles.versionText}>GlucoForager</Text>
-          <Text style={styles.versionSubText}>v1.0</Text>
-        </View>
+        <Text style={styles.versionText}>GlucoForager</Text>
+        <Text style={styles.versionSubText}>v{String(appVersion)}</Text>
       </TouchableOpacity>
       </ScrollView>
     </View>
@@ -851,10 +984,14 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
     paddingHorizontal: 18,
     paddingTop: 18,
-    paddingBottom: 14,
+    paddingBottom: 0,
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
-    maxHeight: '85%',
+    height: '90%',
+    position: 'relative',
+  },
+  premiumModalScrollContent: {
+    paddingBottom: 10,
   },
   premiumModalHeader: {
     flexDirection: 'row',
@@ -948,7 +1085,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   premiumActions: {
-    marginTop: 14,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    backgroundColor: Colors.background,
   },
   premiumButton: {
     borderRadius: 14,
@@ -1044,39 +1189,20 @@ const styles = StyleSheet.create({
     color: Colors.textLight,
     fontWeight: '500',
   },
-  devReminderButton: {
-    marginTop: 10,
-    marginHorizontal: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    backgroundColor: `${Colors.primary}10`,
-    borderWidth: 1,
-    borderColor: `${Colors.primary}22`,
-  },
-  devReminderButtonText: {
-    fontSize: 13,
-    color: Colors.primary,
-    fontWeight: '600',
-  },
   versionContainer: {
     alignItems: 'center',
     paddingVertical: 12,
   },
-  versionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
   versionText: {
     fontSize: 14,
     color: Colors.textLight,
+    textAlign: 'center',
+    paddingHorizontal: 18,
   },
   versionSubText: {
-    marginLeft: 6,
     fontSize: 12,
     color: Colors.textMuted,
+    textAlign: 'center',
+    paddingHorizontal: 18,
   },
 });
