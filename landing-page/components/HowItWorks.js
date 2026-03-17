@@ -2,35 +2,35 @@ export default function HowItWorks() {
   const steps = [
     {
       number: "1",
-      title: "Scan or Type Ingredients",
-      description: "Scan your fridge/pantry or type what you have",
+      title: "Snap Your Fridge",
+      description: "Take a clear photo of everything in your fridge or pantry",
       icon: "\u{1F4F7}",
       color: "from-blue-400 to-teal-400",
-      details: "Works with real pantry and fridge items",
+      details: "Capture all your available ingredients",
     },
     {
       number: "2",
-      title: "Confirm & Personalise",
-      description: "Select what you want to use and your preferences",
-      icon: "\u{1F4DD}",
+      title: "Select Ingredients",
+      description: "Choose which items you want to use in your recipes",
+      icon: "\u{1F446}",
       color: "from-purple-400 to-pink-400",
-      details: "Built around your profile and goals",
+      details: "Pick your favorites to use first",
     },
     {
       number: "3",
-      title: "Get 3 Recipes",
-      description: "See practical recipes with simple nutrition context",
-      icon: "\u{1F373}",
+      title: "AI Analysis",
+      description: "AI analyzes ingredients for diabetes safety",
+      icon: "\u{1F916}",
       color: "from-teal-400 to-emerald-400",
-      details: "Clear steps you can cook today",
+      details: "Checks glycemic index & nutrition",
     },
     {
       number: "4",
-      title: "Save or Plan Your Day",
-      description: "Save favourites or generate a full-day meal plan (Premium)",
-      icon: "\u{1F4C5}",
+      title: "Get 3 Recipes",
+      description: "Instantly receive diabetes-friendly recipes",
+      icon: "\u{1F373}",
       color: "from-amber-400 to-orange-400",
-      details: "Build repeatable routines",
+      details: "Complete cooking instructions",
     },
   ];
 
@@ -95,4 +95,3 @@ export default function HowItWorks() {
     </div>
   );
 }
-

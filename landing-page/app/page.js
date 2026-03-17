@@ -40,7 +40,7 @@ export default function HomePage() {
               How It Works in 60 Seconds
             </h2>
             <p className="text-base sm:text-lg md:text-xl text-gray-300 px-2 sm:px-0">
-              Turn your ingredients into 3 practical recipes (plus swaps and a daily plan with Premium) in 4 simple steps
+              Transform your fridge contents into diabetes-friendly meals in just 4 simple steps
             </p>
           </div>
           
