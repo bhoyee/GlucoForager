@@ -128,10 +128,11 @@ export default function HeroSection({ onDownloadClick }) {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
           <div className="text-center lg:text-left">
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900 mb-6">
-              Diabetes-Friendly Recipes From Your Fridge in <span className="text-teal-600">60 Seconds</span>
+              Diabetes-Friendly Meal Ideas, Swaps & Daily Plans in <span className="text-teal-600">60 Seconds</span>
             </h1>
             <p className="text-lg md:text-xl text-gray-600 mb-10 max-w-2xl mx-auto lg:mx-0">
-              Snap a photo of your fridge &rarr; AI analyzes ingredients &rarr; Get 3 safe, diabetes-friendly recipes instantly.
+              Scan ingredients or type what you have &rarr; get practical recipes with simple nutrition guidance, food swaps,
+              and a Premium daily meal plan.
             </p>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start mb-10">
@@ -165,7 +166,7 @@ export default function HeroSection({ onDownloadClick }) {
             </div>
             
             <div className="text-gray-500 text-sm bg-white/80 backdrop-blur-sm rounded-lg py-3 px-6 inline-block border border-white/20 shadow-lg z-10">
-              Start with 3 free AI scans daily - No credit card required
+              Start free - no credit card required. Premium unlocks the Daily Meal Planner and higher usage limits.
             </div>
           </div>
 

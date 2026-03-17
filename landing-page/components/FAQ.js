@@ -32,7 +32,7 @@ export default function FAQ() {
     },
     {
       question: "How many recipes can I get for free?",
-      answer: "Free users get 3 AI scans per day, each generating diabetes-safe recipe suggestions. Premium users enjoy unlimited scans and additional features.",
+      answer: "Free users can generate a limited number of AI recipes and scans. Premium users get higher usage limits plus Premium-only features like the Daily Meal Planner.",
       category: "Pricing"
     },
     {
@@ -77,7 +77,7 @@ export default function FAQ() {
     },
     {
       question: "Do you offer nutritional information?",
-      answer: "Our AI provides general guidance on diabetes-friendly meals. For detailed nutritional analysis, we recommend using dedicated nutrition tracking apps in conjunction with our recipe suggestions.",
+      answer: "Yes. GlucoForager includes per-meal nutrition estimates (e.g., calories, carbs, protein, and fibre) to help you compare options. For medical or highly precise nutrition tracking, use a dedicated nutrition app.",
       category: "Features"
     }
   ];

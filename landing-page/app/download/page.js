@@ -1,6 +1,7 @@
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.glucoforager.com').replace(/\/+$/, '');
 const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.glucoforager.app';
-const APP_STORE_URL = process.env.NEXT_PUBLIC_IOS_APP_STORE_URL || '';
+const APP_STORE_URL =
+  process.env.NEXT_PUBLIC_IOS_APP_STORE_URL || 'https://apps.apple.com/us/app/glucoforager/id6758808427';
 
 export const metadata = {
   title: 'Download',
@@ -34,20 +35,14 @@ export default function DownloadPage() {
             Choose your platform below. If a store page is still processing, try again later.
           </p>
           <div className="mt-5 flex flex-wrap gap-3">
-            {hasIos ? (
-              <a
-                className="inline-flex items-center justify-center rounded-xl bg-black px-5 py-3 text-white font-semibold"
-                href={APP_STORE_URL}
-                rel="noreferrer"
-                target="_blank"
-              >
-                App Store
-              </a>
-            ) : (
-              <span className="inline-flex items-center justify-center rounded-xl bg-gray-100 px-5 py-3 text-gray-600 font-semibold">
-                App Store (coming soon)
-              </span>
-            )}
+            <a
+              className="inline-flex items-center justify-center rounded-xl bg-black px-5 py-3 text-white font-semibold"
+              href={hasIos ? APP_STORE_URL : SITE_URL}
+              rel="noreferrer"
+              target="_blank"
+            >
+              App Store
+            </a>
 
             <a
               className="inline-flex items-center justify-center rounded-xl bg-black px-5 py-3 text-white font-semibold"
@@ -63,9 +58,11 @@ export default function DownloadPage() {
         <section className="rounded-2xl border border-gray-200 bg-white p-6 space-y-3">
           <h2 className="text-xl font-bold text-gray-900">What you can do with GlucoForager</h2>
           <ul className="list-disc pl-6 text-gray-700 space-y-1">
-            <li>Search recipes using ingredients you already have.</li>
-            <li>Get diabetes-friendly suggestions and practical meal ideas.</li>
-            <li>See nutrition details to help you compare options confidently.</li>
+            <li>Scan or type ingredients to get diabetes-friendly recipe ideas.</li>
+            <li>See clear steps and per-meal nutrition estimates.</li>
+            <li>Use food swaps and portion tips to reduce carb load.</li>
+            <li>Get daily tips and challenges to build healthier habits.</li>
+            <li>Premium: generate a full-day meal plan (breakfast, lunch, dinner, snack).</li>
           </ul>
           <p className="text-sm text-gray-500">
             Note: GlucoForager provides informational recipe suggestions and is not medical advice.
