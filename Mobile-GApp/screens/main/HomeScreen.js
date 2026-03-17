@@ -808,11 +808,18 @@ export default function HomeScreen() {
               android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
               onPress={handleOpenSwaps}
             >
-              <View style={[styles.miniIcon, { backgroundColor: `${Colors.secondary}18` }]}>
-                <Ionicons name="swap-horizontal-outline" size={18} color={Colors.secondary} />
+              <View style={styles.miniRowContent}>
+                <View style={styles.miniLeft}>
+                  <Ionicons name="swap-horizontal-outline" size={20} color={Colors.secondary} />
+                  <View style={styles.miniText}>
+                    <Text style={styles.miniTitle}>Food swaps</Text>
+                    <Text style={styles.miniSub} numberOfLines={1}>
+                      Carbs, desserts, drinks
+                    </Text>
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={Colors.textLight} />
               </View>
-              <Text style={styles.miniTitle}>Food swaps</Text>
-              <Text style={styles.miniSub} numberOfLines={1}>Carbs, desserts, drinks</Text>
             </Pressable>
           </View>
         </View>
@@ -876,11 +883,15 @@ export default function HomeScreen() {
           </ScrollView>
 
           <TouchableOpacity
-            style={styles.shuffleButton}
+            style={[styles.shuffleButton, isFetchingRecipes && styles.shuffleButtonDisabled]}
             onPress={handleShuffleSuggestions}
             disabled={isFetchingRecipes}
           >
-            <Ionicons name="shuffle" size={18} color={Colors.primary} />
+            {isFetchingRecipes ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <Ionicons name="shuffle" size={18} color="white" />
+            )}
             <Text style={styles.shuffleText}>
               {isFetchingRecipes ? 'Refreshing...' : 'Shuffle recipes'}
             </Text>
@@ -1166,23 +1177,32 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 14,
+    overflow: 'hidden',
   },
-  miniIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
+  miniRowContent: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
+    justifyContent: 'space-between',
+  },
+  miniLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    paddingRight: 10,
+    gap: 10,
+  },
+  miniText: {
+    flex: 1,
+    marginRight: 10,
   },
   miniCardSwaps: {
-    backgroundColor: `${Colors.secondary}14`,
+    backgroundColor: 'rgba(49, 130, 206, 0.08)',
   },
   miniCardChallenge: {
     backgroundColor: `${Colors.primary}14`,
   },
-  miniTitle: { fontSize: 14, fontWeight: '900', color: Colors.text },
-  miniSub: { marginTop: 2, fontSize: 12, color: Colors.textLight, fontWeight: '700' },
+  miniTitle: { fontSize: 16, fontWeight: '900', color: Colors.text },
+  miniSub: { marginTop: 3, fontSize: 13, color: Colors.textLight, fontWeight: '600' },
   seeAllText: {
     color: Colors.primary,
     fontSize: 14,
@@ -1372,18 +1392,30 @@ const styles = StyleSheet.create({
   shuffleButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'center',
-    marginTop: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 16,
-    backgroundColor: `${Colors.primary}15`,
+    justifyContent: 'center',
+    alignSelf: 'stretch',
+    marginTop: 22,
+    marginHorizontal: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: Colors.primary,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.16,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  shuffleButtonDisabled: {
+    opacity: 0.7,
   },
   shuffleText: {
-    marginLeft: 8,
-    color: Colors.primary,
-    fontWeight: '600',
-    fontSize: 14,
+    marginLeft: 10,
+    color: 'white',
+    fontWeight: '700',
+    fontSize: 15,
   },
   devResetButton: {
     position: 'absolute',
