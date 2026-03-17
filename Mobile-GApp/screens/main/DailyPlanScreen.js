@@ -188,9 +188,30 @@ export default function DailyPlanScreen() {
         Alert.alert('Premium required', 'Daily Meal Planner is available for Premium users.');
         return;
       }
-      const data = await response.json();
+
+      let data = null;
+      try {
+        data = await response.json();
+      } catch {
+        data = null;
+      }
+
       if (!response.ok) {
-        Alert.alert('Could not generate plan', data?.detail || 'Please try again.');
+        const detail = data?.detail;
+        const message =
+          typeof detail === 'string'
+            ? detail
+            : typeof detail?.message === 'string'
+              ? detail.message
+              : response.status === 429
+                ? 'Limit reached. Upgrade to Premium to generate more meal plans.'
+                : 'Please try again.';
+
+        if (response.status === 429) {
+          Alert.alert('Upgrade to Premium', String(message));
+        } else {
+          Alert.alert('Could not generate plan', String(message));
+        }
         return;
       }
       setPlan(data?.plan || null);
