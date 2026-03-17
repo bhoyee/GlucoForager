@@ -68,7 +68,7 @@ export default function HomePage() {
       <section className="py-16 bg-white" id="features">
         <div className="container mx-auto px-4">
           <h2 className="text-3xl font-bold text-center mb-12">
-            AI-Powered Diabetes Management
+            What you can do with GlucoForager
           </h2>
           <Features />
         </div>
