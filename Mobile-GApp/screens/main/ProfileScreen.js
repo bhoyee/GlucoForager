@@ -24,7 +24,8 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const headerPaddingTop = Math.max(insets.top, 16);
-  const contentBottomPadding = Math.max(insets.bottom + 4, 4);
+  // Ensure the last items (including version) aren't hidden behind the bottom tab bar.
+  const contentBottomPadding = Math.max(insets.bottom + tabBarHeight + 12, 24);
   // Modal overlays the tab bar, so we only need to respect safe-area inset.
   const premiumModalBottomPadding = Math.max(insets.bottom, 14) + 14;
   const appStoreUrl = 'https://apps.apple.com/us/app/glucoforager/id6758808427?action=write-review';
