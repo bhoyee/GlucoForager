@@ -365,11 +365,15 @@ export default function AdminDashboard() {
           <div className="admin-inline admin-subcards" style={{ marginTop: 0 }}>
             <div className="admin-subcard">
               <span>This month</span>
-              <strong>{sales.available ? formatMoney(sales.metrics?.revenue, sales.currency) : '—'}</strong>
+              <strong suppressHydrationWarning>
+                {sales.available ? formatMoney(sales.metrics?.revenue, sales.currency) : '—'}
+              </strong>
             </div>
             <div className="admin-subcard">
               <span>Total sales</span>
-              <strong>{sales.available ? formatMoney(sales.metrics?.revenue_total, sales.currency) : '—'}</strong>
+              <strong suppressHydrationWarning>
+                {sales.available ? formatMoney(sales.metrics?.revenue_total, sales.currency) : '—'}
+              </strong>
             </div>
           </div>
           {!sales.available && (
@@ -391,19 +395,22 @@ export default function AdminDashboard() {
             <div className="admin-subcard">
               <span>Today</span>
               <strong>
-                {imageUsage.today?.count} / {formatMoney(imageUsage.today?.cost_usd, imageUsage.currency)}
+                {imageUsage.today?.count} /{' '}
+                <span suppressHydrationWarning>{formatMoney(imageUsage.today?.cost_usd, imageUsage.currency)}</span>
               </strong>
             </div>
             <div className="admin-subcard">
               <span>This week</span>
               <strong>
-                {imageUsage.week?.count} / {formatMoney(imageUsage.week?.cost_usd, imageUsage.currency)}
+                {imageUsage.week?.count} /{' '}
+                <span suppressHydrationWarning>{formatMoney(imageUsage.week?.cost_usd, imageUsage.currency)}</span>
               </strong>
             </div>
             <div className="admin-subcard">
               <span>This month</span>
               <strong>
-                {imageUsage.month?.count} / {formatMoney(imageUsage.month?.cost_usd, imageUsage.currency)}
+                {imageUsage.month?.count} /{' '}
+                <span suppressHydrationWarning>{formatMoney(imageUsage.month?.cost_usd, imageUsage.currency)}</span>
               </strong>
             </div>
           </div>
