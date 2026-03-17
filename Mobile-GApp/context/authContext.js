@@ -14,6 +14,42 @@ export function AuthProvider({ children }) {
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
   const [foodProfileCompleted, setFoodProfileCompleted] = useState(null); // true | false | null
   const [needsFoodProfileOnboarding, setNeedsFoodProfileOnboarding] = useState(false);
+  const [foodProfileHasPreferences, setFoodProfileHasPreferences] = useState(null); // boolean | null
+
+  const hasMeaningfulFoodProfile = (profile) => {
+    if (!profile || typeof profile !== 'object') return false;
+
+    const normalizeArray = (value) => (Array.isArray(value) ? value.filter(Boolean) : []);
+    const normalizeString = (value) => (typeof value === 'string' ? value.trim() : '');
+
+    const bloodSugar = normalizeString(profile.blood_sugar_profile).toLowerCase();
+    const mealGoals = normalizeArray(profile.meal_goals);
+    const dietaryPattern = normalizeString(profile.dietary_pattern).toLowerCase();
+    const allergens = normalizeArray(profile.allergens);
+    const exclusions = normalizeArray(profile.food_exclusions);
+    const equipment = normalizeArray(profile.available_equipment);
+    const cookTime = normalizeString(profile.cook_time_preference).toLowerCase();
+    const cuisines = normalizeArray(profile.preferred_cuisines);
+    const country = normalizeString(profile.country_code);
+
+    if (bloodSugar && bloodSugar !== 'prefer_not') return true;
+    if (mealGoals.length > 0) return true;
+    if (dietaryPattern && dietaryPattern !== 'none') return true;
+    if (allergens.length > 0) return true;
+    if (exclusions.length > 0) return true;
+    if (equipment.length > 0) return true;
+    if (cookTime && cookTime !== 'any') return true;
+    if (cuisines.length > 0) return true;
+    if (country) return true;
+    return false;
+  };
+
+  const applyFoodProfileFlags = (profile) => {
+    const completed = profile?.profile_completed;
+    setFoodProfileCompleted(completed === true ? true : completed === false ? false : null);
+    setNeedsFoodProfileOnboarding(completed === false);
+    setFoodProfileHasPreferences(hasMeaningfulFoodProfile(profile));
+  };
 
   const devLog = (...args) => {
     if (!__DEV__) return;
@@ -53,9 +89,7 @@ export function AuthProvider({ children }) {
           }
           resolvedEmail = profile?.email || null;
           resolvedName = profile?.full_name || null;
-          const completed = profile?.profile_completed;
-          setFoodProfileCompleted(completed === true ? true : completed === false ? false : null);
-          setNeedsFoodProfileOnboarding(completed === false);
+          applyFoodProfileFlags(profile);
 
           setUserToken(token);
           await configureRevenueCat({
@@ -84,6 +118,7 @@ export function AuthProvider({ children }) {
     setUserToken(null);
     setFoodProfileCompleted(null);
     setNeedsFoodProfileOnboarding(false);
+    setFoodProfileHasPreferences(null);
     await configureRevenueCat({});
   };
 
@@ -114,9 +149,7 @@ export function AuthProvider({ children }) {
         setNeedsFoodProfileOnboarding(data.profile_completed === false);
       } else {
         const profile = await fetchProfile(data.access_token);
-        const completed = profile?.profile_completed;
-        setFoodProfileCompleted(completed === true ? true : completed === false ? false : null);
-        setNeedsFoodProfileOnboarding(completed === false);
+        applyFoodProfileFlags(profile);
       }
       setUserToken(data.access_token);
       return data.access_token;
@@ -176,9 +209,7 @@ export function AuthProvider({ children }) {
       // Fetch profile BEFORE setting `userToken` (best-effort) so RootNavigator can route correctly.
       const profile = await fetchProfile(token);
       if (profile) {
-        const completed = profile?.profile_completed;
-        setFoodProfileCompleted(completed === true ? true : completed === false ? false : null);
-        setNeedsFoodProfileOnboarding(completed === false);
+        applyFoodProfileFlags(profile);
       }
       setUserToken(token);
       await configureRevenueCat({
@@ -213,6 +244,7 @@ export function AuthProvider({ children }) {
       setUserToken(null);
       setFoodProfileCompleted(null);
       setNeedsFoodProfileOnboarding(false);
+      setFoodProfileHasPreferences(null);
       await configureRevenueCat({});
       devLog('User signed out');
     } catch (error) {
@@ -244,11 +276,13 @@ export function AuthProvider({ children }) {
         isLoading,
         hasCompletedOnboarding,
         foodProfileCompleted,
+        foodProfileHasPreferences,
         needsFoodProfileOnboarding,
         signIn,
         signOut,
         completeOnboarding,
         completeFoodProfileOnboarding,
+        applyFoodProfileFlags,
         checkAuthStatus,
       }}>
       {children}

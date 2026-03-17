@@ -85,6 +85,7 @@ export default function AdminShell({ children }) {
     { href: '/admin/newsletter/send', label: 'Send Email', icon: 'S' },
     { href: '/admin/user-email', label: 'User Email', icon: 'E' },
     { href: '/admin/notifications', label: 'Notifications', icon: '!' },
+    { href: '/admin/push-campaigns', label: 'Push Campaigns', icon: 'PN' },
     { href: '/admin/system-health', label: 'System Health', icon: 'H' },
     { href: '/admin/system-logs', label: 'System Logs', icon: 'L' },
     { href: '/admin/mobile-logs', label: 'Mobile Logs', icon: 'P' },

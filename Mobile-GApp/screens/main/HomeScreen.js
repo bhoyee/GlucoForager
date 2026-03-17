@@ -22,10 +22,11 @@ import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
 import { getRecipeImageSettings } from '../../utils/recipeImageSettings';
 import { getTodayTip } from '../../utils/todayTips';
+import { scheduleDailyPlanNotifications } from '../../utils/mealReminders';
 
 export default function HomeScreen() {
   const navigation = useNavigation();
-  const { signOut, foodProfileCompleted } = useAuth();
+  const { signOut, foodProfileHasPreferences } = useAuth();
   const insets = useSafeAreaInsets();
   const headerPaddingTop = Math.max(insets.top, 16);
   const contentBottomPadding = Math.max(insets.bottom + 4, 6);
@@ -285,6 +286,13 @@ export default function HomeScreen() {
         dailyLimit: typeof data.daily_limit === 'number' ? data.daily_limit : 3,
       })
     );
+
+    // Premium-only: schedule the Daily Plan reminder once we know the user's tier.
+    try {
+      await scheduleDailyPlanNotifications({ isPremium });
+    } catch {
+      // Ignore scheduling failures.
+    }
   };
 
   const getMealType = () => {
@@ -618,7 +626,7 @@ export default function HomeScreen() {
           )}
         </View>
 
-        {foodProfileCompleted === true ? null : (
+        {foodProfileHasPreferences === true ? null : (
           <View style={styles.section}>
             <Pressable
               style={({ pressed }) => [styles.urgentCard, pressed && styles.cardPressed]}
@@ -689,7 +697,7 @@ export default function HomeScreen() {
                   Progress {Number(dailyChallenge?.progress?.completed || 0)} / {Number(dailyChallenge?.progress?.total || 0)} | Streak {Number(dailyChallenge?.streak_days || 0)} days
                 </Text>
                 <View style={styles.challengeRows}>
-                  {dailyChallenge.tasks.slice(0, 3).map((t) => (
+                  {dailyChallenge.tasks.slice(0, 2).map((t) => (
                     <View key={t.id} style={styles.challengeRow}>
                       <Ionicons
                         name={t.completed ? 'checkmark-circle' : 'ellipse-outline'}
@@ -809,11 +817,11 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Suggest Me 3 Recipes */}
+        {/* Suggested Recipes */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>
-              Suggest me 3 recipes
+              3 picks for you
             </Text>
           </View>
           

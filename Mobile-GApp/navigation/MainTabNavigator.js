@@ -1,10 +1,13 @@
 // navigation/MainTabNavigator.js - PRODUCTION FIXED VERSION
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/Colors';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { apiFetch } from '../utils/api';
+import { API_URL } from '../config/api';
 
 // Import all screens
 import HomeScreen from '../screens/main/HomeScreen';
@@ -28,6 +31,7 @@ import ChallengeScreen from '../screens/main/ChallengeScreen';
 import TodayTipScreen from '../screens/main/TodayTipScreen';
 import TipsArchiveScreen from '../screens/main/TipsArchiveScreen';
 import FoodPreferencesScreen from '../screens/main/FoodPreferencesScreen';
+import DailyPlanScreen from '../screens/main/DailyPlanScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -117,6 +121,35 @@ function ProfileStackNavigator() {
 
 export default function MainTabNavigator() {
   const insets = useSafeAreaInsets();
+  const [isPremium, setIsPremium] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadTier = async () => {
+      try {
+        const token = await AsyncStorage.getItem('userToken');
+        if (!token) return;
+        const response = await apiFetch(
+          `${API_URL}/api/subscriptions/me`,
+          { method: 'GET', headers: { Authorization: `Bearer ${token}` } },
+          { timeoutMs: 6000 }
+        );
+        if (!response.ok) return;
+        const data = await response.json();
+        const premiumNow = data?.plan === 'premium' && data?.status === 'active';
+        if (!cancelled) {
+          setIsPremium(Boolean(premiumNow));
+        }
+      } catch {
+        // Ignore.
+      }
+    };
+    loadTier();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -170,6 +203,19 @@ export default function MainTabNavigator() {
           ),
         }}
       />
+
+      {isPremium ? (
+        <Tab.Screen
+          name="DailyPlan"
+          component={DailyPlanScreen}
+          options={{
+            tabBarLabel: 'Plan',
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="calendar-outline" size={size} color={color} />
+            ),
+          }}
+        />
+      ) : null}
       
       <Tab.Screen 
         name="Profile" 

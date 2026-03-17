@@ -1448,14 +1448,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
+    paddingHorizontal: 10,
     borderRadius: 12,
     backgroundColor: '#4CAF50',
   },
   primaryActionText: {
     marginLeft: 8,
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '600',
     color: '#FFF',
+    flexShrink: 1,
+    textAlign: 'center',
   },
   modalContainer: {
     flex: 1,

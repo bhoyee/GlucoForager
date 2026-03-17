@@ -46,6 +46,9 @@ from .api.endpoints import (
     admin_newsletter,
     admin_tips,
     app_swaps,
+    app_daily_plan,
+    admin_push_campaigns,
+    mobile_push_tokens,
 )
 from .core.config import settings
 from .database import Base, engine
@@ -63,6 +66,9 @@ from .models import (  # ensure models are registered with SQLAlchemy
     newsletter_signup,
     app_setting,
     user_daily_challenge,
+    push_token,
+    admin_push_campaign,
+    admin_push_send,
 )
 from .services.abuse_detector import AbuseDetector
 from .services.system_log_service import log_system_event
@@ -274,9 +280,11 @@ app.include_router(admin_challenge.router, prefix="/api")
 app.include_router(admin_revenuecat.router, prefix="/api")
 app.include_router(admin_user_email.router, prefix="/api")
 app.include_router(admin_email_campaigns.router, prefix="/api")
+app.include_router(admin_push_campaigns.router, prefix="/api")
 app.include_router(app_public.router, prefix="/api")
 app.include_router(app_challenge.router, prefix="/api")
 app.include_router(app_swaps.router, prefix="/api")
+app.include_router(app_daily_plan.router, prefix="/api")
 app.include_router(ingredients.router, prefix="/api")
 app.include_router(recipes.router, prefix="/api")
 app.include_router(subscriptions.router, prefix="/api")
@@ -289,6 +297,7 @@ app.include_router(meal_plan.router, prefix="/api")
 app.include_router(shopping_list.router, prefix="/api")
 app.include_router(revenuecat.router, prefix="/api")
 app.include_router(mobile_logs.router, prefix="/api")
+app.include_router(mobile_push_tokens.router, prefix="/api")
 app.include_router(system_logs.router, prefix="/api")
 app.include_router(admin_health.router, prefix="/api")
 app.include_router(admin_backups.router, prefix="/api")

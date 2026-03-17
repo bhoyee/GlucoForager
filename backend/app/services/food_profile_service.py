@@ -222,7 +222,7 @@ def build_food_profile_instructions(
             lines.append(f"- Country: {cc}")
 
     # Add one explicit nudge for regional/cuisine focus in text-only modes.
-    if mode in ("surprise", "quick") and cuisine_labels:
+    if mode in ("surprise", "quick", "swaps") and cuisine_labels:
         if "West African" in cuisine_labels and (country_code or "").strip().upper() == "NG":
             lines.append("- Regional focus: Nigerian-style West African meals when possible.")
         else:
@@ -234,9 +234,12 @@ def build_food_profile_instructions(
             "instead adapt style/seasoning and choose recipes that fit the user's constraints."
         )
     else:
-        # Surprise/quick modes have no ingredients and should follow the profile strongly.
-        if mode in ("surprise", "quick"):
-            lines.append("Prioritize these preferences strongly for all recipes.")
+        # Surprise/quick/swaps modes have no ingredients and should follow the profile strongly.
+        if mode in ("surprise", "quick", "swaps"):
+            if mode == "swaps":
+                lines.append("Prioritize these preferences strongly for swaps.")
+            else:
+                lines.append("Prioritize these preferences strongly for all recipes.")
         else:
             lines.append("Prioritize these preferences when possible, while still respecting provided ingredients.")
 

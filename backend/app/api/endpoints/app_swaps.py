@@ -1,4 +1,5 @@
 import json
+import hashlib
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -74,6 +75,31 @@ def generate_food_swaps(
     per_minute_limit = 3 if tier != "premium" else 8
     per_day_limit = 10 if tier != "premium" else 50
 
+    food_profile = extract_food_profile(user)
+    # Cache key must include the user's profile; otherwise different users can see each other's personalized swaps.
+    profile_hash = "none"
+    try:
+        meaningful = any(
+            food_profile.get(k)
+            for k in (
+                "blood_sugar_profile",
+                "country_code",
+                "preferred_cuisines",
+                "meal_goals",
+                "dietary_pattern",
+                "allergens",
+                "food_exclusions",
+                "available_equipment",
+                "cook_time_preference",
+            )
+        )
+        if meaningful:
+            profile_hash = hashlib.sha256(
+                json.dumps(food_profile, sort_keys=True, ensure_ascii=False).encode("utf-8")
+            ).hexdigest()[:16]
+    except Exception:
+        profile_hash = "none"
+
     cache = CacheService()
     # Burst limit (per minute).
     minute_key = f"swaps:rl:v1:user:{user.id}"
@@ -116,7 +142,7 @@ def generate_food_swaps(
         )
 
     # Cache identical requests (shared by tier + food + force flag).
-    cache_key = f"swaps:cache:v1:tier:{tier}:force:{int(bool(payload.force_swaps))}:q:{food.lower()}"
+    cache_key = f"swaps:cache:v2:tier:{tier}:profile:{profile_hash}:force:{int(bool(payload.force_swaps))}:q:{food.lower()}"
     cached = cache.get(cache_key)
     if cached:
         try:
@@ -143,7 +169,7 @@ def generate_food_swaps(
             food=food,
             force_swaps=bool(payload.force_swaps),
             timeout_seconds=12.0,
-            food_profile=extract_food_profile(user),
+            food_profile=food_profile,
         )
         assessment = result.get("assessment") or {}
         if not isinstance(assessment, dict):

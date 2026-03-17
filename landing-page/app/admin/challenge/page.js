@@ -16,11 +16,22 @@ const DEFAULT_CATEGORIES = [
   { value: 'custom', label: 'Custom...' },
 ];
 
+const PROFILE_OPTIONS = [
+  { key: 'type_2', label: 'Type 2' },
+  { key: 'prediabetes', label: 'Prediabetes' },
+  { key: 'type_1', label: 'Type 1' },
+  { key: 'gestational', label: 'Gestational' },
+  { key: 'managing', label: 'Managing' },
+  { key: 'prefer_not', label: 'Prefer not' },
+];
+
 const emptyTask = {
   id: '',
   task_text: '',
   category: 'meal_structure',
   active: true,
+  audience_profiles: [],
+  exclude_profiles: [],
 };
 
 const parseJsonSafe = (text) => {
@@ -149,6 +160,8 @@ export default function AdminChallengePage() {
       task_text: String(task?.task_text || ''),
       category: mapped,
       active: task?.active !== false,
+      audience_profiles: Array.isArray(task?.audience_profiles) ? task.audience_profiles : [],
+      exclude_profiles: Array.isArray(task?.exclude_profiles) ? task.exclude_profiles : [],
     });
     setCustomCategory(mapped === 'custom' ? cat : '');
     setShowEditor(true);
@@ -170,11 +183,29 @@ export default function AdminChallengePage() {
     if (!id) throw new Error('Task id is required.');
     if (!String(taskForm.task_text || '').trim()) throw new Error('Task text is required.');
 
+    const cleanProfileList = (values) => {
+      if (!Array.isArray(values)) return [];
+      const allowed = new Set(PROFILE_OPTIONS.map((x) => x.key));
+      const out = [];
+      const seen = new Set();
+      for (const raw of values) {
+        const s = String(raw || '').trim().toLowerCase();
+        if (!s || !allowed.has(s)) continue;
+        if (seen.has(s)) continue;
+        seen.add(s);
+        out.push(s);
+        if (out.length >= 6) break;
+      }
+      return out;
+    };
+
     const nextItem = {
       id,
       task_text: String(taskForm.task_text || '').trim(),
       category: finalCategory,
       active: Boolean(taskForm.active),
+      audience_profiles: cleanProfileList(taskForm.audience_profiles),
+      exclude_profiles: cleanProfileList(taskForm.exclude_profiles),
     };
 
     setTasks((prev) => {
@@ -395,6 +426,8 @@ export default function AdminChallengePage() {
                       <th style={{ width: 220 }}>ID</th>
                       <th>Task</th>
                       <th style={{ width: 160 }}>Category</th>
+                      <th style={{ width: 160 }}>Audience</th>
+                      <th style={{ width: 160 }}>Exclude</th>
                       <th style={{ width: 90 }}>Active</th>
                       <th style={{ width: 160 }} />
                     </tr>
@@ -405,6 +438,12 @@ export default function AdminChallengePage() {
                         <td className="admin-mono">{t.id}</td>
                         <td>{t.task_text}</td>
                         <td className="admin-mono">{t.category || 'general'}</td>
+                        <td className="admin-mono admin-muted">
+                          {Array.isArray(t.audience_profiles) && t.audience_profiles.length ? t.audience_profiles.join(', ') : 'All'}
+                        </td>
+                        <td className="admin-mono admin-muted">
+                          {Array.isArray(t.exclude_profiles) && t.exclude_profiles.length ? t.exclude_profiles.join(', ') : ''}
+                        </td>
                         <td>{t.active === false ? 'No' : 'Yes'}</td>
                         <td style={{ textAlign: 'right' }}>
                           <button className="admin-link" type="button" onClick={() => openEdit(t)}>
@@ -419,7 +458,7 @@ export default function AdminChallengePage() {
                     ))}
                     {pageItems.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="admin-muted">
+                        <td colSpan={7} className="admin-muted">
                           No tasks found.
                         </td>
                       </tr>
@@ -526,6 +565,64 @@ export default function AdminChallengePage() {
                         Active
                       </label>
                       <p className="admin-help">Inactive tasks won't be selected for new daily challenges.</p>
+                    </div>
+
+                    <div className="admin-field">
+                      <label>Audience profiles (optional)</label>
+                      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                        {PROFILE_OPTIONS.map((p) => {
+                          const selected = Array.isArray(taskForm.audience_profiles)
+                            ? taskForm.audience_profiles.includes(p.key)
+                            : false;
+                          return (
+                            <label key={p.key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <input
+                                type="checkbox"
+                                checked={selected}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  setTaskForm((f) => {
+                                    const current = Array.isArray(f.audience_profiles) ? [...f.audience_profiles] : [];
+                                    const next = checked ? [...current, p.key] : current.filter((x) => x !== p.key);
+                                    return { ...f, audience_profiles: next };
+                                  });
+                                }}
+                              />
+                              {p.label}
+                            </label>
+                          );
+                        })}
+                      </div>
+                      <p className="admin-help">
+                        If empty, the task is universal. If selected, only those profiles see it (unless excluded).
+                      </p>
+                    </div>
+
+                    <div className="admin-field">
+                      <label>Exclude profiles (optional)</label>
+                      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                        {PROFILE_OPTIONS.map((p) => {
+                          const selected = Array.isArray(taskForm.exclude_profiles) ? taskForm.exclude_profiles.includes(p.key) : false;
+                          return (
+                            <label key={p.key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <input
+                                type="checkbox"
+                                checked={selected}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  setTaskForm((f) => {
+                                    const current = Array.isArray(f.exclude_profiles) ? [...f.exclude_profiles] : [];
+                                    const next = checked ? [...current, p.key] : current.filter((x) => x !== p.key);
+                                    return { ...f, exclude_profiles: next };
+                                  });
+                                }}
+                              />
+                              {p.label}
+                            </label>
+                          );
+                        })}
+                      </div>
+                      <p className="admin-help">Exclude always wins. Use this to block tasks for specific profiles.</p>
                     </div>
                   </div>
                 </div>

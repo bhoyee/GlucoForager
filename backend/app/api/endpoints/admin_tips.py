@@ -40,6 +40,31 @@ class TipUpsertPayload(BaseModel):
     try_today: str = Field(..., min_length=2, max_length=260)
     category: str | None = Field(None, max_length=40)
     active: bool = True
+    audience_profiles: list[str] = Field(default_factory=list, max_length=20)
+    exclude_profiles: list[str] = Field(default_factory=list, max_length=20)
+
+
+_PROFILE_KEYS = {"type_2", "prediabetes", "type_1", "gestational", "managing", "prefer_not"}
+
+
+def _clean_profile_list(values: list[str] | None, *, max_items: int = 6) -> list[str]:
+    if not values or not isinstance(values, list):
+        return []
+    out: list[str] = []
+    seen = set()
+    for raw in values:
+        if not isinstance(raw, str):
+            continue
+        s = raw.strip().lower()
+        if not s or s not in _PROFILE_KEYS:
+            continue
+        if s in seen:
+            continue
+        seen.add(s)
+        out.append(s)
+        if len(out) >= max_items:
+            break
+    return out
 
 
 def _slugify(value: str) -> str:
@@ -80,6 +105,8 @@ def create_tip(
         "try_today": payload.try_today.strip(),
         "category": (payload.category or "").strip() or "general",
         "active": bool(payload.active),
+        "audience_profiles": _clean_profile_list(payload.audience_profiles, max_items=6),
+        "exclude_profiles": _clean_profile_list(payload.exclude_profiles, max_items=6),
     }
     catalog.append(item)
     save_catalog(db, catalog)
@@ -109,6 +136,8 @@ def update_tip(
         item["try_today"] = payload.try_today.strip()
         item["category"] = (payload.category or "").strip() or item.get("category") or "general"
         item["active"] = bool(payload.active)
+        item["audience_profiles"] = _clean_profile_list(payload.audience_profiles, max_items=6)
+        item["exclude_profiles"] = _clean_profile_list(payload.exclude_profiles, max_items=6)
         updated = item
         break
     if not updated:
@@ -172,6 +201,8 @@ def seed_tips(
                 "try_today": str(item.get("try_today") or "").strip(),
                 "category": str(item.get("category") or "general").strip() or "general",
                 "active": bool(item.get("active", True)),
+                "audience_profiles": _clean_profile_list(item.get("audience_profiles") if isinstance(item.get("audience_profiles"), list) else [], max_items=6),
+                "exclude_profiles": _clean_profile_list(item.get("exclude_profiles") if isinstance(item.get("exclude_profiles"), list) else [], max_items=6),
             }
         )
 
@@ -201,6 +232,8 @@ def seed_tips(
             # Update in place to keep any unknown fields, but normalize core fields.
             target = by_id[tid]
             for k in ("title", "tip", "why", "try_today", "category", "active"):
+                target[k] = item.get(k)
+            for k in ("audience_profiles", "exclude_profiles"):
                 target[k] = item.get(k)
             updated += 1
         else:
