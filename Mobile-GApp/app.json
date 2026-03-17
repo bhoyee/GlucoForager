@@ -23,8 +23,7 @@
       "bundleIdentifier": "com.glucoforager.app"
     },
     "android": {
-      "appName": "GlucoForager",
-      "versionCode": 44,
+      "versionCode": 46,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
