@@ -5,6 +5,22 @@ const MAX_ITEMS = 250;
 
 const normalizeText = (value) => `${value || ''}`.trim().toLowerCase();
 
+const normalizeIngredientForFingerprint = (value) => {
+  const text = normalizeText(value);
+  if (!text) return '';
+  // Strip leading quantities/units to keep keys stable across formatting.
+  // Examples: "2 eggs" -> "eggs", "1/2 cup spinach" -> "spinach"
+  return text
+    .replace(/^\s*(\d+\s*\/\s*\d+|\d+(?:\.\d+)?)\s*(x|×)?\s*/i, '')
+    .replace(
+      /^\s*(cup|cups|tbsp|tablespoon|tablespoons|tsp|teaspoon|teaspoons|g|kg|mg|ml|l|oz|lb|lbs|pound|pounds)\b\s*/i,
+      ''
+    )
+    .replace(/\([^)]*\)/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
 const recipeFingerprint = (recipe) => {
   if (!recipe || typeof recipe !== 'object') return null;
   const title = normalizeText(recipe.title || recipe.name || '');
@@ -12,7 +28,7 @@ const recipeFingerprint = (recipe) => {
   const names = rawIngredients
     .map((item) => (typeof item === 'string' ? item : item?.name || item?.title))
     .filter(Boolean)
-    .map((item) => normalizeText(item))
+    .map((item) => normalizeIngredientForFingerprint(item))
     .filter(Boolean);
   names.sort();
   const normalized = Array.from(new Set(names)).join(',');
@@ -82,4 +98,3 @@ export const setCachedRecipeImageUrl = async (recipe, url) => {
 
   await saveCache(cache);
 };
-
