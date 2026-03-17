@@ -1,10 +1,13 @@
 // navigation/MainTabNavigator.js - PRODUCTION FIXED VERSION
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/Colors';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { apiFetch } from '../utils/api';
+import { API_URL } from '../config/api';
 
 // Import all screens
 import HomeScreen from '../screens/main/HomeScreen';
@@ -22,6 +25,13 @@ import ScanResultsScreen from '../screens/main/ScanResultsScreen';
 import ScanProcessingScreen from '../screens/main/ScanProcessingScreen';
 import StartCookingScreen from '../screens/main/StartCookingScreen';
 import RecentRecipesScreen from '../screens/main/RecentRecipesScreen';
+import EatNowScreen from '../screens/main/EatNowScreen';
+import CarbSwapsScreen from '../screens/main/CarbSwapsScreen';
+import ChallengeScreen from '../screens/main/ChallengeScreen';
+import TodayTipScreen from '../screens/main/TodayTipScreen';
+import TipsArchiveScreen from '../screens/main/TipsArchiveScreen';
+import FoodPreferencesScreen from '../screens/main/FoodPreferencesScreen';
+import DailyPlanScreen from '../screens/main/DailyPlanScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -43,6 +53,11 @@ function HomeStackNavigator() {
       <HomeStack.Screen name="RecipeDetail" component={RecipeDetailScreen} />
       <HomeStack.Screen name="StartCooking" component={StartCookingScreen} />
       <HomeStack.Screen name="RecentRecipes" component={RecentRecipesScreen} />
+      <HomeStack.Screen name="EatNow" component={EatNowScreen} />
+      <HomeStack.Screen name="CarbSwaps" component={CarbSwapsScreen} />
+      <HomeStack.Screen name="Challenge" component={ChallengeScreen} />
+      <HomeStack.Screen name="TodayTip" component={TodayTipScreen} />
+      <HomeStack.Screen name="TipsArchive" component={TipsArchiveScreen} />
     </HomeStack.Navigator>
   );
 }
@@ -96,6 +111,7 @@ function ProfileStackNavigator() {
     >
       <ProfileStack.Screen name="ProfileMain" component={ProfileScreen} />
       <ProfileStack.Screen name="PersonalInfo" component={PersonalInfoScreen} />
+      <ProfileStack.Screen name="FoodPreferences" component={FoodPreferencesScreen} />
       <ProfileStack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
       <ProfileStack.Screen name="Terms" component={TermsScreen} />
       <ProfileStack.Screen name="DebugLogs" component={DebugLogsScreen} />
@@ -105,6 +121,35 @@ function ProfileStackNavigator() {
 
 export default function MainTabNavigator() {
   const insets = useSafeAreaInsets();
+  const [isPremium, setIsPremium] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadTier = async () => {
+      try {
+        const token = await AsyncStorage.getItem('userToken');
+        if (!token) return;
+        const response = await apiFetch(
+          `${API_URL}/api/subscriptions/me`,
+          { method: 'GET', headers: { Authorization: `Bearer ${token}` } },
+          { timeoutMs: 6000 }
+        );
+        if (!response.ok) return;
+        const data = await response.json();
+        const premiumNow = data?.plan === 'premium' && data?.status === 'active';
+        if (!cancelled) {
+          setIsPremium(Boolean(premiumNow));
+        }
+      } catch {
+        // Ignore.
+      }
+    };
+    loadTier();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -158,16 +203,39 @@ export default function MainTabNavigator() {
           ),
         }}
       />
+
+      {isPremium ? (
+        <Tab.Screen
+          name="DailyPlan"
+          component={DailyPlanScreen}
+          options={{
+            tabBarLabel: 'Plan',
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="calendar-outline" size={size} color={color} />
+            ),
+          }}
+        />
+      ) : null}
       
       <Tab.Screen 
         name="Profile" 
         component={ProfileStackNavigator}
         options={{
           tabBarLabel: 'Profile',
+          popToTopOnBlur: true,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="person-outline" size={size} color={color} />
           ),
         }}
+        listeners={({ navigation, route }) => ({
+          tabPress: (e) => {
+            const state = route?.state;
+            if (state && typeof state.index === 'number' && state.index > 0) {
+              e.preventDefault();
+              navigation.navigate('Profile', { screen: 'ProfileMain' });
+            }
+          },
+        })}
       />
     </Tab.Navigator>
   );

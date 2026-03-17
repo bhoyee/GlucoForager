@@ -1,5 +1,5 @@
 // screens/auth/ForgotPasswordScreen.js
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -27,6 +27,11 @@ export default function ForgotPasswordScreen() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [step, setStep] = useState('request');
+  const [focusedField, setFocusedField] = useState(null);
+
+  const inputWrapperStyleFor = useMemo(() => {
+    return (field) => [styles.inputWrapper, focusedField === field ? styles.inputWrapperFocused : null];
+  }, [focusedField]);
 
   const requestResetCode = async () => {
     if (!email) {
@@ -154,22 +159,31 @@ export default function ForgotPasswordScreen() {
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
 
         {/* Illustration & Title */}
         <View style={styles.illustrationContainer}>
           <View style={styles.illustration}>
-            <Ionicons name="key-outline" size={60} color={Colors.primary} />
+            <Ionicons name="key-outline" size={48} color={Colors.primary} />
           </View>
+          <Text style={styles.kicker}>Account recovery</Text>
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.subtitle}>{subtitle}</Text>
         </View>
 
         {/* Form */}
         <View style={styles.form}>
+          <View style={styles.formCard}>
+            <View style={styles.formHeader}>
+              <Text style={styles.formTitle}>{step === 'request' ? 'Send a code' : 'Set a new password'}</Text>
+              <Text style={styles.formSubtitle}>
+                {step === 'request' ? 'We’ll email you an 8-digit code.' : 'Use the code we emailed you.'}
+              </Text>
+            </View>
           <View style={styles.inputContainer}>
             <Text style={styles.inputLabel}>Email Address</Text>
-            <View style={styles.inputWrapper}>
+            <View style={inputWrapperStyleFor('email')}>
               <Ionicons name="mail-outline" size={20} color={Colors.textLight} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
@@ -181,6 +195,8 @@ export default function ForgotPasswordScreen() {
                 autoCapitalize="none"
                 autoCorrect={false}
                 editable={!isLoading && step === 'request'}
+                onFocus={() => setFocusedField('email')}
+                onBlur={() => setFocusedField(null)}
               />
             </View>
           </View>
@@ -189,7 +205,7 @@ export default function ForgotPasswordScreen() {
             <>
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>8-digit Code</Text>
-                <View style={styles.inputWrapper}>
+                <View style={inputWrapperStyleFor('code')}>
                   <Ionicons name="keypad-outline" size={20} color={Colors.textLight} style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
@@ -200,13 +216,15 @@ export default function ForgotPasswordScreen() {
                     keyboardType="number-pad"
                     maxLength={8}
                     editable={!isLoading}
+                    onFocus={() => setFocusedField('code')}
+                    onBlur={() => setFocusedField(null)}
                   />
                 </View>
               </View>
 
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>New Password</Text>
-                <View style={styles.inputWrapper}>
+                <View style={inputWrapperStyleFor('newPassword')}>
                   <Ionicons name="lock-closed-outline" size={20} color={Colors.textLight} style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
@@ -216,6 +234,8 @@ export default function ForgotPasswordScreen() {
                     onChangeText={setNewPassword}
                     secureTextEntry={!showPassword}
                     editable={!isLoading}
+                    onFocus={() => setFocusedField('newPassword')}
+                    onBlur={() => setFocusedField(null)}
                   />
                   <TouchableOpacity onPress={() => setShowPassword(!showPassword)} disabled={isLoading}>
                     <Ionicons
@@ -229,7 +249,7 @@ export default function ForgotPasswordScreen() {
 
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>Confirm New Password</Text>
-                <View style={styles.inputWrapper}>
+                <View style={inputWrapperStyleFor('confirmPassword')}>
                   <Ionicons name="lock-closed-outline" size={20} color={Colors.textLight} style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
@@ -239,6 +259,8 @@ export default function ForgotPasswordScreen() {
                     onChangeText={setConfirmPassword}
                     secureTextEntry={!showConfirmPassword}
                     editable={!isLoading}
+                    onFocus={() => setFocusedField('confirmPassword')}
+                    onBlur={() => setFocusedField(null)}
                   />
                   <TouchableOpacity
                     onPress={() => setShowConfirmPassword(!showConfirmPassword)}
@@ -262,7 +284,7 @@ export default function ForgotPasswordScreen() {
             disabled={isLoading}
           >
             <LinearGradient
-              colors={isLoading ? [Colors.textMuted, Colors.textMuted] : Colors.gradientPrimary || ['#2E8B57', '#48BB78']}
+              colors={isLoading ? [Colors.textMuted, Colors.textMuted] : ['#2E8B57', '#48BB78']}
               style={styles.resetButtonGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
@@ -291,6 +313,7 @@ export default function ForgotPasswordScreen() {
             <Ionicons name="arrow-back" size={16} color={Colors.primary} />
             <Text style={styles.backToLoginText}>Back to Sign In</Text>
           </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -327,22 +350,30 @@ const styles = StyleSheet.create({
   },
   illustrationContainer: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 18,
   },
   illustration: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: `${Colors.primary}15`,
+    width: 86,
+    height: 86,
+    borderRadius: 43,
+    backgroundColor: `${Colors.primary}12`,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 14,
+  },
+  kicker: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: Colors.textLight,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
   },
   title: {
-    fontSize: 32,
-    fontWeight: 'bold',
+    fontSize: 30,
+    fontWeight: '800',
     color: Colors.text,
-    marginBottom: 12,
+    marginTop: 4,
+    marginBottom: 10,
     textAlign: 'center',
   },
   subtitle: {
@@ -351,28 +382,46 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 24,
     paddingHorizontal: 20,
+    fontWeight: '600',
   },
   form: {
     marginTop: 20,
   },
+  formCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 18,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    elevation: 3,
+  },
+  formHeader: { marginBottom: 12 },
+  formTitle: { fontSize: 16, fontWeight: '800', color: Colors.text },
+  formSubtitle: { marginTop: 4, fontSize: 12, fontWeight: '700', color: Colors.textLight },
   inputContainer: {
-    marginBottom: 24,
+    marginBottom: 14,
   },
   inputLabel: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '700',
     color: Colors.text,
     marginBottom: 8,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
+    backgroundColor: '#F2F4F7',
+    borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: Platform.OS === 'ios' ? 16 : 12,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#EEF1F5',
+  },
+  inputWrapperFocused: {
+    borderColor: Colors.primary,
+    backgroundColor: '#EFFAF3',
   },
   inputIcon: {
     marginRight: 12,
@@ -384,9 +433,14 @@ const styles = StyleSheet.create({
     padding: 0,
   },
   resetButton: {
-    borderRadius: 12,
+    borderRadius: 14,
     overflow: 'hidden',
     marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.10,
+    shadowRadius: 16,
+    elevation: 4,
   },
   resetButtonDisabled: {
     opacity: 0.7,
@@ -400,7 +454,7 @@ const styles = StyleSheet.create({
   resetButtonText: {
     color: 'white',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '800',
   },
   resendLink: {
     alignItems: 'center',
@@ -409,7 +463,7 @@ const styles = StyleSheet.create({
   resendText: {
     color: Colors.primary,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   backToLogin: {
     flexDirection: 'row',
@@ -419,7 +473,7 @@ const styles = StyleSheet.create({
   backToLoginText: {
     color: Colors.primary,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     marginLeft: 8,
   },
 });

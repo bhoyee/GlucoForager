@@ -14,6 +14,11 @@ TIER_CONFIG = {
             "gpt-4o-mini-2024-07-18",
             "deepseek-chat",
         ],
+        # "Surprise me" / "Quick meal" should be fast and cheap.
+        "recipe_models_fast": [
+            "gpt-4o-mini-2024-07-18",
+            "deepseek-chat",
+        ],
         "cache_priority": "high",
     },
     "premium": {
@@ -23,6 +28,14 @@ TIER_CONFIG = {
             "gpt-5.2-2025-12-11",
             "gpt-5.1-2025-11-13",
             "gpt-5-2025-08-07",
+            "gpt-4o-2024-11-20",
+            "gpt-4o-mini-2024-07-18",
+            "deepseek-chat",
+        ],
+        # "Surprise me" / "Quick meal" should be fast and cheap even for premium.
+        "recipe_models_fast": [
+            "gpt-4o-2024-11-20",
+            "gpt-4o-mini-2024-07-18",
             "deepseek-chat",
         ],
         "cache_priority": "low",
@@ -91,6 +104,47 @@ FORMAT: Return VALID JSON with this EXACT structure:
 }
 
 IMPORTANT: Return ONLY the JSON object. No additional text before or after.
+"""
+
+# Lightweight schema for "Eat now" flows (Surprise me / Low-carb quick meal).
+# This avoids long responses that get truncated and become invalid JSON.
+EAT_NOW_PROMPT = """Create 3 diabetes-friendly meal ideas. Use common, easy-to-find ingredients.
+
+RULES:
+- Return ONLY a single valid JSON object. No markdown, no code fences, no commentary.
+- Provide exactly 3 recipes.
+- Follow the schema EXACTLY. Do not add extra keys like "tips", "diabetes_analysis", "sodium", etc.
+- All string values must be single-line (no newline characters). Use spaces instead.
+- Keep it concise but usable:
+  - max 10 ingredients per recipe
+  - 6-8 instruction steps per recipe, with concrete details (minutes/heat/action)
+
+FORMAT (VALID JSON):
+{
+  "recipes": [
+    {
+      "title": "Recipe title",
+      "description": "1 sentence why diabetes-friendly",
+      "prep_time": 10,
+      "cook_time": 10,
+      "total_time": 20,
+      "servings": 2,
+      "ingredients": [
+        {"name": "ingredient", "quantity": 1, "unit": "cup"}
+      ],
+      "instructions": ["Step 1", "Step 2"],
+      "nutritional_info": {
+        "calories": 320,
+        "carbs": 18,
+        "protein": 28,
+        "fat": 12,
+        "fiber": 7,
+        "sugar": 4
+      },
+      "tags": ["diabetes-friendly", "low-carb"]
+    }
+  ]
+}
 """
 
 # Nutrition defaults keep structure consistent even when upstream data is sparse.

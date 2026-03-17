@@ -1,0 +1,1948 @@
+[
+  {
+    "id": "water-before-one-meal",
+    "title": "Drink water before one meal",
+    "tip": "Have a glass of water before one meal today.",
+    "why": "Hydration can support better eating decisions and may reduce mindless snacking or overeating.",
+    "try_today": "Drink a glass of water 10 minutes before lunch or dinner.",
+    "category": "drinks",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "swap-fries-for-veg",
+    "title": "Swap the side",
+    "tip": "Replace one starchy side with vegetables today.",
+    "why": "Reducing the starch load of a meal may help reduce a large post-meal rise.",
+    "try_today": "Choose extra vegetables instead of fries or extra rice.",
+    "category": "portion_control",
+    "active": true,
+    "audience_profiles": [
+      "type_2",
+      "prediabetes",
+      "managing",
+      "gestational"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "berries-over-dessert",
+    "title": "Choose berries more often",
+    "tip": "Use berries as a lighter sweet option.",
+    "why": "Berries are often lower in sugar per serving than many desserts and sweet snacks.",
+    "try_today": "Add a small serving of berries to plain yogurt instead of having cake or biscuits.",
+    "category": "snacks",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "add-veg-to-eggs",
+    "title": "Add vegetables to eggs",
+    "tip": "Boost breakfast with vegetables if you are having eggs.",
+    "why": "Adding vegetables increases fiber and volume without adding many fast-digesting carbs.",
+    "try_today": "Add spinach, peppers, onions, or mushrooms to eggs.",
+    "category": "meal_balance",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "plain-yogurt-over-flavored",
+    "title": "Choose plain yogurt",
+    "tip": "Pick plain yogurt and add your own toppings.",
+    "why": "Flavored yogurts often contain added sugars that make the total carb load higher.",
+    "try_today": "Use plain yogurt with cinnamon and berries instead of sweetened yogurt.",
+    "category": "shopping_labels",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "protein-at-lunch",
+    "title": "Prioritize protein at lunch",
+    "tip": "Make sure lunch includes a meaningful protein source.",
+    "why": "A balanced lunch may reduce afternoon cravings and energy swings.",
+    "try_today": "Add chicken, tuna, tofu, eggs, yogurt, or beans to lunch.",
+    "category": "meal_balance",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "add-fiber-breakfast",
+    "title": "Add fiber at breakfast",
+    "tip": "Start the day with extra fiber.",
+    "why": "Fiber can slow digestion and help keep breakfast more balanced.",
+    "try_today": "Add chia, flax, berries, or vegetables to breakfast.",
+    "category": "meal_balance",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "oats-with-protein",
+    "title": "Boost oats with protein",
+    "tip": "If you eat oats, add protein or healthy fat.",
+    "why": "This can help make the meal steadier than oats alone.",
+    "try_today": "Add Greek yogurt, nuts, seeds, or peanut butter to oats.",
+    "category": "meal_balance",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "carb-last",
+    "title": "Leave the starch until later in the meal",
+    "tip": "Eat the starchier part of the meal after protein and vegetables.",
+    "why": "Meal order may affect the speed of post-meal glucose rise.",
+    "try_today": "Eat your protein and vegetables before the rice, bread, or pasta.",
+    "category": "meal_order",
+    "active": true,
+    "audience_profiles": [
+      "type_2",
+      "prediabetes",
+      "managing",
+      "gestational"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "protein-with-coffee",
+    "title": "Pair coffee with food",
+    "tip": "If coffee leaves you shaky or hungry, have it with food.",
+    "why": "Some people feel better when caffeine is paired with a balanced meal.",
+    "try_today": "Have coffee with breakfast instead of by itself.",
+    "category": "meal_timing",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "check-bread-fiber",
+    "title": "Check the bread label",
+    "tip": "Choose bread with more fiber and less added sugar when possible.",
+    "why": "Higher-fiber bread is often a gentler choice than very refined bread.",
+    "try_today": "Compare two bread labels and choose the higher-fiber option.",
+    "category": "shopping_labels",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "watch-sweet-breakfasts",
+    "title": "Watch sweet breakfasts",
+    "tip": "Avoid making breakfast mostly sugar and refined carbs.",
+    "why": "Sweet breakfasts can lead to a sharper early glucose rise and earlier hunger.",
+    "try_today": "Swap pastry or sweet cereal for eggs, yogurt, oats with protein, or toast with eggs.",
+    "category": "meal_balance",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "add-beans-to-rice",
+    "title": "Pair rice with beans",
+    "tip": "If you are having rice, pair it with beans or another protein source.",
+    "why": "Mixing starch with protein and fiber may make the meal more balanced.",
+    "try_today": "Add beans, lentils, fish, chicken, or tofu to a rice-based meal.",
+    "category": "meal_balance",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "salad-before-dinner",
+    "title": "Start dinner with a salad",
+    "tip": "Have salad or vegetables before the rest of dinner.",
+    "why": "Starting with fiber can help shift the meal toward a steadier glucose response.",
+    "try_today": "Eat salad, cucumber, or lightly cooked vegetables before the main course.",
+    "category": "meal_order",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "avoid-eating-rushed",
+    "title": "Do not eat in a rush",
+    "tip": "Try not to rush through one meal today.",
+    "why": "Rushed eating can make portion awareness harder.",
+    "try_today": "Sit down and give one meal your full attention for 15 minutes.",
+    "category": "mindful_eating",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "veg-with-sandwich",
+    "title": "Add vegetables to sandwiches",
+    "tip": "Make sandwiches and wraps more balanced by adding vegetables.",
+    "why": "Vegetables add fiber and volume, which can improve the meal balance.",
+    "try_today": "Add lettuce, cucumber, tomato, cabbage, or peppers to a sandwich or wrap.",
+    "category": "meal_balance",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "sauce-on-side",
+    "title": "Ask for sauce on the side",
+    "tip": "Keep sweet or creamy sauces under your control.",
+    "why": "Sauces can quietly add sugar and calories without much fullness.",
+    "try_today": "Request dressing or sauce on the side for one meal.",
+    "category": "shopping_labels",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "frozen-veg-shortcut",
+    "title": "Use frozen vegetables",
+    "tip": "Use frozen vegetables as a quick shortcut.",
+    "why": "Frozen vegetables make it easier to add fiber and volume without extra prep.",
+    "try_today": "Add frozen broccoli, spinach, or mixed vegetables to one meal.",
+    "category": "cooking_habits",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "prep-one-veg",
+    "title": "Prep one vegetable ahead",
+    "tip": "Prepare one vegetable now to make the next meal easier.",
+    "why": "Prepared healthy food is more likely to be used.",
+    "try_today": "Wash and cut cucumber, peppers, salad greens, or cabbage for later.",
+    "category": "cooking_habits",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "protein-forward-salad",
+    "title": "Make salads filling",
+    "tip": "Do not let salad be only leaves and dressing.",
+    "why": "Salads with protein and healthy fat are more satisfying and more balanced.",
+    "try_today": "Add eggs, beans, chicken, tuna, tofu, nuts, or avocado to a salad.",
+    "category": "meal_balance",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "fruit-not-alone",
+    "title": "Do not let fruit be the whole snack",
+    "tip": "If fruit leaves you hungry quickly, pair it with something else.",
+    "why": "Adding protein or fat may make a fruit snack more balanced.",
+    "try_today": "Pair fruit with yogurt, nuts, seeds, or cheese.",
+    "category": "snacks",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "reduce-sugary-condiments",
+    "title": "Reduce sugary condiments",
+    "tip": "Look out for ketchup, sweet chili sauce, BBQ sauce, and sweet dressings.",
+    "why": "These can add sugar quickly without changing how full the meal feels.",
+    "try_today": "Use a smaller amount or choose a less sweet option.",
+    "category": "shopping_labels",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "choose-grilled-when-out",
+    "title": "Choose grilled when eating out",
+    "tip": "When possible, choose grilled or baked options instead of fried.",
+    "why": "This often makes the meal easier to balance and reduces extra fat and breading.",
+    "try_today": "Choose grilled chicken or fish instead of fried for one meal.",
+    "category": "cooking_habits",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "watch-late-snacking",
+    "title": "Be careful with late-night snacking",
+    "tip": "Avoid automatic late-evening snacks if you are not truly hungry.",
+    "why": "Unplanned evening snacking can add extra glucose load to the day.",
+    "try_today": "If you want a snack late at night, choose something small and balanced.",
+    "category": "meal_timing",
+    "active": true,
+    "audience_profiles": [
+      "type_2",
+      "prediabetes",
+      "managing",
+      "gestational"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "smaller-rice-scoop",
+    "title": "Use a smaller scoop of rice",
+    "tip": "Reduce the portion of one starch you eat often.",
+    "why": "Portion size still matters, even when the food itself is not \"bad.\"",
+    "try_today": "Use a smaller scoop of rice, then add extra vegetables and protein.",
+    "category": "portion_control",
+    "active": true,
+    "audience_profiles": [
+      "type_2",
+      "prediabetes",
+      "managing",
+      "gestational"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "balanced-smoothie",
+    "title": "Balance smoothies carefully",
+    "tip": "If you drink smoothies, build them around protein and fiber, not juice.",
+    "why": "Smoothies can become high-sugar drinks if they are mostly fruit and juice.",
+    "try_today": "Use plain yogurt, unsweetened milk, berries, chia, and a protein source instead of juice.",
+    "category": "drinks",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "mindful-second-helping",
+    "title": "Pause before a second helping",
+    "tip": "Do not automatically go back for more food.",
+    "why": "A short pause can help you decide whether you are still hungry or just eating from habit.",
+    "try_today": "Wait 10 minutes before deciding on a second serving.",
+    "category": "mindful_eating",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "protein-dinner",
+    "title": "Lead dinner with protein",
+    "tip": "Make protein one of the anchors of dinner.",
+    "why": "Protein helps make dinner more satisfying and balanced.",
+    "try_today": "Start dinner with fish, chicken, eggs, tofu, Greek yogurt, or beans plus vegetables.",
+    "category": "meal_balance",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "water-default-drink",
+    "title": "Make water the default",
+    "tip": "Set up your environment so water is the easiest drink choice.",
+    "why": "Healthy defaults make better habits easier to repeat.",
+    "try_today": "Keep a filled bottle or glass of water nearby during the day.",
+    "category": "drinks",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "plan-one-balanced-meal",
+    "title": "Plan one balanced meal before you need it",
+    "tip": "Make one meal decision before hunger takes over.",
+    "why": "Planning ahead reduces reactive food choices.",
+    "try_today": "Decide now what you will have for dinner and how you will balance it.",
+    "category": "meal_timing",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "walk-after-largest-meal",
+    "title": "Walk after your largest meal",
+    "tip": "If you only walk once today, do it after the biggest meal.",
+    "why": "This is often when a post-meal walk has the most practical value.",
+    "try_today": "Take a 10-15 minute walk after the largest meal of the day.",
+    "category": "movement",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-watch-liquid-calories",
+    "title": "Watch liquid calories",
+    "tip": "Be especially careful with drinks that contain sugar and calories.",
+    "why": "For many people with type 2 diabetes, sugary drinks can drive large, fast glucose rises.",
+    "try_today": "Skip soda, sweet coffee, juice, and sweet tea today.",
+    "category": "drinks",
+    "active": true,
+    "audience_profiles": [
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-starch-awareness",
+    "title": "Be aware of starch portions",
+    "tip": "Keep an eye on rice, bread, pasta, yam, plantain, and potatoes.",
+    "why": "Large portions of starch can push total glucose load up quickly.",
+    "try_today": "Keep the starch smaller and increase vegetables and protein.",
+    "category": "portion_control",
+    "active": true,
+    "audience_profiles": [
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-post-meal-walk-priority",
+    "title": "Prioritize the post-meal walk",
+    "tip": "A short walk after eating can be one of the highest-value daily habits.",
+    "why": "Post-meal movement is practical and often helpful for managing rises after meals.",
+    "try_today": "Walk after lunch or dinner today.",
+    "category": "movement",
+    "active": true,
+    "audience_profiles": [
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-swap-sugary-breakfast",
+    "title": "Swap sugary breakfast habits",
+    "tip": "Avoid starting the day with pastries, sweet cereal, or sugary drinks.",
+    "why": "A high-sugar breakfast can lead to a sharp early rise and more hunger later.",
+    "try_today": "Choose eggs, yogurt, oats with protein, or toast with eggs instead.",
+    "category": "meal_balance",
+    "active": true,
+    "audience_profiles": [
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-half-plate-rule",
+    "title": "Use the half-plate vegetable rule",
+    "tip": "Make vegetables the biggest part of one meal today.",
+    "why": "This is a practical way to lower the overall glucose load of the meal.",
+    "try_today": "Fill half your plate with non-starchy vegetables at lunch or dinner.",
+    "category": "portion_control",
+    "active": true,
+    "audience_profiles": [
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "prediabetes-prevention-pattern",
+    "title": "Build prevention habits now",
+    "tip": "Focus on small repeatable habits instead of trying to eat perfectly.",
+    "why": "Prediabetes often responds best to consistent daily habits, not short bursts of effort.",
+    "try_today": "Pick one habit to repeat today: vegetables first, fewer sugary drinks, or a post-meal walk.",
+    "category": "mindful_eating",
+    "active": true,
+    "audience_profiles": [
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "prediabetes-cut-sugary-drinks",
+    "title": "Cut sugary drinks first",
+    "tip": "If you change one thing, start with drinks.",
+    "why": "Removing liquid sugar is often one of the fastest ways to improve the overall pattern of eating.",
+    "try_today": "Replace all sweet drinks with water or unsweetened tea today.",
+    "category": "drinks",
+    "active": true,
+    "audience_profiles": [
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "prediabetes-breakfast-balance",
+    "title": "Balance breakfast early",
+    "tip": "Try not to let breakfast be mostly sugar or refined starch.",
+    "why": "A better-balanced breakfast can improve the rest of the day's food decisions.",
+    "try_today": "Choose eggs, yogurt, oats with seeds, or toast with eggs instead of pastries.",
+    "category": "meal_balance",
+    "active": true,
+    "audience_profiles": [
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "prediabetes-daily-movement",
+    "title": "Do some movement every day",
+    "tip": "Make movement a daily habit, even if it is short.",
+    "why": "Consistency matters more than intensity for many prevention-focused routines.",
+    "try_today": "Take one 10-15 minute walk after a meal.",
+    "category": "movement",
+    "active": true,
+    "audience_profiles": [
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "prediabetes-fiber-priority",
+    "title": "Make fiber a priority",
+    "tip": "Look for easy chances to add vegetables, beans, lentils, or seeds.",
+    "why": "Higher-fiber meals are often more supportive than refined, low-fiber meals.",
+    "try_today": "Add vegetables or beans to one meal today.",
+    "category": "carb_quality",
+    "active": true,
+    "audience_profiles": [
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "type1-carb-consistency",
+    "title": "Keep carb portions more predictable",
+    "tip": "Try to keep the carb load of meals more consistent.",
+    "why": "More predictable meals can make planning and matching insulin easier for many people with type 1 diabetes.",
+    "try_today": "Avoid making one meal extremely low carb and the next extremely high carb.",
+    "category": "portion_control",
+    "active": true,
+    "audience_profiles": [
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "type1-read-carb-labels",
+    "title": "Read carb labels carefully",
+    "tip": "Packaged foods can be surprisingly different in carb content.",
+    "why": "A quick label check can make meals easier to estimate and plan around.",
+    "try_today": "Check total carbs on one packaged food today before eating it.",
+    "category": "shopping_labels",
+    "active": true,
+    "audience_profiles": [
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "type1-avoid-huge-carb-only-meals",
+    "title": "Avoid very large carb-only meals",
+    "tip": "Try not to build a meal around a very large portion of fast carbs alone.",
+    "why": "Big carb-only meals are often harder to manage than meals that include protein and fiber.",
+    "try_today": "Add protein and vegetables if the meal includes bread, pasta, cereal, or rice.",
+    "category": "meal_balance",
+    "active": true,
+    "audience_profiles": [
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "type1-plan-snacks",
+    "title": "Plan snacks instead of guessing",
+    "tip": "If you snack, make it more intentional.",
+    "why": "Planned snacks are often easier to account for than random grazing.",
+    "try_today": "Decide your snack before you are extremely hungry, and keep it balanced.",
+    "category": "meal_timing",
+    "active": true,
+    "audience_profiles": [
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "type1-balanced-breakfast",
+    "title": "Balance breakfast for a steadier start",
+    "tip": "Avoid very sweet or carb-heavy breakfasts without balance.",
+    "why": "A balanced breakfast may be easier to manage than a high-sugar one.",
+    "try_today": "Add eggs, yogurt, nuts, or seeds to breakfast.",
+    "category": "meal_balance",
+    "active": true,
+    "audience_profiles": [
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gestational-regular-meals",
+    "title": "Keep meals regular",
+    "tip": "Avoid long gaps without eating if that does not work well for you.",
+    "why": "For many people with gestational diabetes, regular balanced meals and snacks are easier to manage.",
+    "try_today": "Plan your next meal or snack before you become overly hungry.",
+    "category": "meal_timing",
+    "active": true,
+    "audience_profiles": [
+      "gestational"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gestational-balanced-snack",
+    "title": "Balance snacks carefully",
+    "tip": "Choose snacks with protein and fiber rather than sweets alone.",
+    "why": "Balanced snacks are often more practical than sugary snacks for steadier readings.",
+    "try_today": "Try yogurt, nuts, cheese, fruit with nuts, or vegetables with hummus.",
+    "category": "snacks",
+    "active": true,
+    "audience_profiles": [
+      "gestational"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gestational-breakfast-awareness",
+    "title": "Pay extra attention to breakfast",
+    "tip": "Breakfast may need more care than other meals.",
+    "why": "Some people with gestational diabetes notice breakfast is one of the trickier meals for glucose control.",
+    "try_today": "Keep breakfast balanced with protein and a moderate carb portion.",
+    "category": "meal_balance",
+    "active": true,
+    "audience_profiles": [
+      "gestational"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gestational-drink-sugar-awareness",
+    "title": "Keep drinks low in sugar",
+    "tip": "Choose drinks that do not add a hidden sugar load.",
+    "why": "Liquid sugar can raise glucose quickly.",
+    "try_today": "Choose water, sparkling water, or unsweetened tea today.",
+    "category": "drinks",
+    "active": true,
+    "audience_profiles": [
+      "gestational"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gestational-balanced-plate",
+    "title": "Use a balanced plate at one meal",
+    "tip": "Build a meal around protein, vegetables, and a moderate carb portion.",
+    "why": "This is often a practical structure for steadier post-meal readings.",
+    "try_today": "Use the plate method for lunch or dinner today.",
+    "category": "meal_balance",
+    "active": true,
+    "audience_profiles": [
+      "gestational"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "support-stable-energy",
+    "title": "Eat for steadier energy",
+    "tip": "Choose meals that support steadier energy instead of quick spikes and crashes.",
+    "why": "Many people managing blood sugar feel better with balanced meals and lower-sugar drinks.",
+    "try_today": "Choose protein, vegetables, and a moderate carb portion at one meal.",
+    "category": "meal_balance",
+    "active": true,
+    "audience_profiles": [
+      "managing"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "support-reduce-sugary-drinks",
+    "title": "Cut back on sweet drinks",
+    "tip": "Reduce the drinks most likely to spike blood sugar quickly.",
+    "why": "This is one of the simplest high-impact changes for people trying to support better glucose habits.",
+    "try_today": "Choose water or unsweetened tea over juice, soda, or sweet coffee drinks.",
+    "category": "drinks",
+    "active": true,
+    "audience_profiles": [
+      "managing"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "support-balanced-snack",
+    "title": "Choose a steadier snack",
+    "tip": "Avoid snacks that are mostly sugar or refined starch.",
+    "why": "Balanced snacks tend to be more satisfying and steadier.",
+    "try_today": "Try a protein or fiber snack instead of biscuits, sweets, or crisps.",
+    "category": "snacks",
+    "active": true,
+    "audience_profiles": [
+      "managing"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "support-movement-after-meal",
+    "title": "Move after one meal",
+    "tip": "Use a short walk as part of your blood sugar support routine.",
+    "why": "Post-meal movement is a practical habit for many people working on glucose stability.",
+    "try_today": "Walk for 10 minutes after lunch or dinner.",
+    "category": "movement",
+    "active": true,
+    "audience_profiles": [
+      "managing"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "support-vegetable-priority",
+    "title": "Let vegetables lead",
+    "tip": "Make vegetables one of the first and biggest parts of the meal.",
+    "why": "This helps naturally reduce the room left for refined or sugary foods.",
+    "try_today": "Start one meal with vegetables and make them the biggest part of the plate.",
+    "category": "meal_order",
+    "active": true,
+    "audience_profiles": [
+      "managing"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-cinnamon-oatmeal",
+    "title": "Flavor with cinnamon",
+    "tip": "Use spices like cinnamon instead of sugar to flavor foods.",
+    "why": "Replacing added sugar with spices reduces carbohydrate load without losing flavor.",
+    "try_today": "Add cinnamon to oatmeal or yogurt instead of sugar.",
+    "category": "cooking_habits",
+    "active": true,
+    "audience_profiles": [
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-open-face-sandwich",
+    "title": "Try an open-face sandwich",
+    "tip": "Use one slice of bread instead of two.",
+    "why": "Reducing bread lowers the carbohydrate load of the meal.",
+    "try_today": "Make your sandwich open-face with vegetables and protein.",
+    "category": "portion_control",
+    "active": true,
+    "audience_profiles": [
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-start-meal-with-soup",
+    "title": "Start meals with broth soup",
+    "tip": "Have a broth-based soup before the main meal.",
+    "why": "Low-calorie soups add volume and may reduce overeating later in the meal.",
+    "try_today": "Begin dinner with vegetable or miso soup.",
+    "category": "meal_order",
+    "active": true,
+    "audience_profiles": [
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-eat-most-carbs-earlier",
+    "title": "Eat more carbs earlier in the day",
+    "tip": "Shift larger carbohydrate meals earlier instead of late evening.",
+    "why": "Many people with Type 2 process carbohydrates better earlier in the day.",
+    "try_today": "Make lunch the meal with more starch instead of dinner.",
+    "category": "meal_timing",
+    "active": true,
+    "audience_profiles": [
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-nuts-before-meal",
+    "title": "Small nut pre-meal snack",
+    "tip": "Eat a small portion of nuts before a carbohydrate-heavy meal.",
+    "why": "Healthy fats and protein may slow the meal's glucose response.",
+    "try_today": "Eat a small handful of almonds before dinner.",
+    "category": "meal_order",
+    "active": true,
+    "audience_profiles": [
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-choose-thicker-yogurt",
+    "title": "Choose thicker yogurt",
+    "tip": "Pick Greek or strained yogurt instead of thin sweet yogurt drinks.",
+    "why": "Thicker yogurt usually has more protein and less sugar.",
+    "try_today": "Choose plain Greek yogurt and add berries.",
+    "category": "carb_quality",
+    "active": true,
+    "audience_profiles": [
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-use-smaller-carb-bowl",
+    "title": "Use a smaller bowl for starch",
+    "tip": "Serve rice or pasta in a smaller bowl instead of on a full plate.",
+    "why": "Visual cues strongly influence portion size.",
+    "try_today": "Use a small bowl for rice rather than filling half a plate.",
+    "category": "portion_control",
+    "active": true,
+    "audience_profiles": [
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-vegetable-stirfry-base",
+    "title": "Use vegetables as the stir-fry base",
+    "tip": "Let vegetables make up most of the stir-fry.",
+    "why": "Vegetable-heavy dishes naturally reduce refined carb portions.",
+    "try_today": "Make stir-fry with mostly vegetables and a small rice portion.",
+    "category": "meal_balance",
+    "active": true,
+    "audience_profiles": [
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-avoid-eating-from-package",
+    "title": "Avoid eating from the package",
+    "tip": "Serve snacks into a bowl rather than eating directly from the bag.",
+    "why": "Portion awareness improves when food is plated.",
+    "try_today": "Put chips or crackers in a small bowl instead of the bag.",
+    "category": "mindful_eating",
+    "active": true,
+    "audience_profiles": [
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-veg-before-restaurant-meal",
+    "title": "Add vegetables when eating out",
+    "tip": "Order a vegetable side before the main dish.",
+    "why": "Starting with vegetables can help balance restaurant meals.",
+    "try_today": "Order a salad or steamed vegetables first.",
+    "category": "restaurant_strategy",
+    "active": true,
+    "audience_profiles": [
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-protein-salad-lunch",
+    "title": "Protein salad lunch",
+    "tip": "Choose a protein-based salad for lunch sometimes.",
+    "why": "Lower refined carbohydrate lunches may help afternoon glucose control.",
+    "try_today": "Try chicken, tuna, or bean salad instead of a sandwich.",
+    "category": "meal_balance",
+    "active": true,
+    "audience_profiles": [
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-meal-prep-protein",
+    "title": "Prep protein ahead",
+    "tip": "Prepare protein foods in advance.",
+    "why": "Prepared protein makes balanced meals easier to assemble quickly.",
+    "try_today": "Cook chicken, eggs, tofu, or beans for tomorrow.",
+    "category": "cooking_habits",
+    "active": true,
+    "audience_profiles": [
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-swap-dessert-routine",
+    "title": "Change dessert habits",
+    "tip": "Make dessert an occasional event instead of a daily routine.",
+    "why": "Frequent desserts increase daily sugar intake.",
+    "try_today": "Skip dessert tonight or choose fruit instead.",
+    "category": "mindful_eating",
+    "active": true,
+    "audience_profiles": [
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-breakfast-savory",
+    "title": "Try savory breakfasts",
+    "tip": "Choose savory breakfast foods more often than sweet ones.",
+    "why": "Savory breakfasts usually contain less sugar.",
+    "try_today": "Eat eggs, avocado, or tofu instead of pastries.",
+    "category": "meal_balance",
+    "active": true,
+    "audience_profiles": [
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-avoid-large-buffets",
+    "title": "Be careful with buffet meals",
+    "tip": "Buffets encourage overeating.",
+    "why": "Large food variety often leads to larger portions.",
+    "try_today": "Fill your plate once and avoid multiple trips.",
+    "category": "mindful_eating",
+    "active": true,
+    "audience_profiles": [
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-add-vinegar-dressing",
+    "title": "Use vinegar-based dressings",
+    "tip": "Choose vinegar or lemon-based dressings instead of sweet ones.",
+    "why": "Sweet dressings often contain added sugars.",
+    "try_today": "Use olive oil and vinegar on salad.",
+    "category": "cooking_habits",
+    "active": true,
+    "audience_profiles": [
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-reduce-takeout-frequency",
+    "title": "Reduce takeout frequency",
+    "tip": "Limit how often you rely on takeout meals.",
+    "why": "Takeout meals often contain larger carb portions and hidden sugar.",
+    "try_today": "Cook one meal at home instead.",
+    "category": "cooking_habits",
+    "active": true,
+    "audience_profiles": [
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-evening-walk-habit",
+    "title": "Create an evening walk habit",
+    "tip": "Add a short walk after dinner.",
+    "why": "Evening movement can help with post-meal glucose use.",
+    "try_today": "Walk for 10 minutes after dinner.",
+    "category": "movement",
+    "active": true,
+    "audience_profiles": [
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-reduce-snack-variety",
+    "title": "Reduce snack variety",
+    "tip": "Keep fewer snack options at home.",
+    "why": "Too many snack choices can lead to overeating.",
+    "try_today": "Keep one or two healthy snack options visible.",
+    "category": "mindful_eating",
+    "active": true,
+    "audience_profiles": [
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-use-meal-timer",
+    "title": "Use a meal timer",
+    "tip": "Space meals consistently throughout the day.",
+    "why": "Regular meal spacing can support steadier eating patterns.",
+    "try_today": "Aim for meals roughly 4-5 hours apart.",
+    "category": "meal_timing",
+    "active": true,
+    "audience_profiles": [
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-build-half-plate-veg",
+    "title": "Half plate vegetables",
+    "tip": "Fill half your plate with non-starchy vegetables at one meal.",
+    "why": "Vegetables increase fiber intake and reduce the overall carbohydrate load.",
+    "try_today": "Make half your dinner plate vegetables such as broccoli, spinach, or peppers.",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-walk-after-largest-meal",
+    "title": "Walk after your biggest meal",
+    "tip": "Take a short walk after your largest meal of the day.",
+    "why": "Muscle activity helps the body use circulating glucose.",
+    "try_today": "Walk 10 minutes after your biggest meal today.",
+    "category": "movement",
+    "active": true,
+    "audience_profiles": [
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-swap-sweet-breakfast",
+    "title": "Replace sugary breakfast foods",
+    "tip": "Swap sweet breakfast foods for protein-based options.",
+    "why": "Reducing morning sugar intake may prevent early glucose spikes.",
+    "try_today": "Choose eggs, yogurt, or nuts instead of pastries.",
+    "category": "meal_balance",
+    "active": true,
+    "audience_profiles": [
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-limit-juice-intake",
+    "title": "Limit fruit juice",
+    "tip": "Avoid drinking fruit juice regularly.",
+    "why": "Juice contains concentrated sugars without the fiber of whole fruit.",
+    "try_today": "Eat whole fruit instead of drinking juice.",
+    "category": "drinks",
+    "active": true,
+    "audience_profiles": [
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-choose-whole-fruit",
+    "title": "Choose whole fruit",
+    "tip": "Prefer whole fruit instead of fruit snacks or dried fruit.",
+    "why": "Whole fruit provides fiber which slows sugar absorption.",
+    "try_today": "Eat an apple, orange, or berries instead of fruit candy.",
+    "category": "carb_quality",
+    "active": true,
+    "audience_profiles": [
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-reduce-added-sugar-drinks",
+    "title": "Remove sugary beverages",
+    "tip": "Cut down on soda and sweetened drinks.",
+    "why": "Sugary drinks can rapidly increase glucose intake.",
+    "try_today": "Replace soda with sparkling water.",
+    "category": "drinks",
+    "active": true,
+    "audience_profiles": [
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-protein-with-carbs",
+    "title": "Add protein with carbs",
+    "tip": "Avoid eating carbohydrate foods alone.",
+    "why": "Protein can help slow digestion and improve meal balance.",
+    "try_today": "Add yogurt or nuts when eating fruit.",
+    "category": "meal_balance",
+    "active": true,
+    "audience_profiles": [
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-build-consistent-meal-times",
+    "title": "Keep consistent meal times",
+    "tip": "Try to eat meals around similar times each day.",
+    "why": "Consistent eating patterns support metabolic regulation.",
+    "try_today": "Eat breakfast and lunch at roughly the same time daily.",
+    "category": "meal_timing",
+    "active": true,
+    "audience_profiles": [
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-reduce-night-snacking",
+    "title": "Reduce late-night snacking",
+    "tip": "Avoid eating large snacks late at night.",
+    "why": "Late eating can increase overall daily calorie and carb intake.",
+    "try_today": "Stop eating at least 2 hours before bedtime.",
+    "category": "habits",
+    "active": true,
+    "audience_profiles": [
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-swap-refined-snacks",
+    "title": "Swap refined snacks",
+    "tip": "Replace refined snack foods with whole options.",
+    "why": "Refined snacks digest quickly and may increase glucose swings.",
+    "try_today": "Choose nuts or yogurt instead of cookies.",
+    "category": "snacks",
+    "active": true,
+    "audience_profiles": [
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-eat-more-home-meals",
+    "title": "Cook more meals at home",
+    "tip": "Prepare meals at home when possible.",
+    "why": "Home cooking allows better control over sugar and carb intake.",
+    "try_today": "Cook dinner instead of ordering takeout.",
+    "category": "cooking_habits",
+    "active": true,
+    "audience_profiles": [
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-choose-high-fiber-grains",
+    "title": "Choose higher-fiber grains",
+    "tip": "Pick grains with more fiber.",
+    "why": "Fiber can slow carbohydrate absorption.",
+    "try_today": "Choose brown rice or oats instead of refined grains.",
+    "category": "carb_quality",
+    "active": true,
+    "audience_profiles": [
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-read-sugar-labels",
+    "title": "Check added sugar labels",
+    "tip": "Look for added sugars on packaged foods.",
+    "why": "Many foods contain hidden sugars.",
+    "try_today": "Compare two cereal labels before buying.",
+    "category": "labels",
+    "active": true,
+    "audience_profiles": [
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-add-daily-steps",
+    "title": "Increase daily steps",
+    "tip": "Aim to increase your daily step count.",
+    "why": "Regular movement improves insulin sensitivity.",
+    "try_today": "Add an extra 2000 steps today.",
+    "category": "movement",
+    "active": true,
+    "audience_profiles": [
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-eat-slower",
+    "title": "Slow down meals",
+    "tip": "Eat meals more slowly.",
+    "why": "Slow eating improves satiety and portion control.",
+    "try_today": "Take at least 20 minutes to finish dinner.",
+    "category": "mindful_eating",
+    "active": true,
+    "audience_profiles": [
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-plan-weekly-meals",
+    "title": "Plan meals in advance",
+    "tip": "Plan a few meals ahead of time.",
+    "why": "Planning reduces reliance on fast food or snacks.",
+    "try_today": "Write down tomorrow's lunch plan.",
+    "category": "planning",
+    "active": true,
+    "audience_profiles": [
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-add-protein-breakfast",
+    "title": "Add protein to breakfast",
+    "tip": "Ensure breakfast contains protein.",
+    "why": "Protein supports satiety and balanced glucose response.",
+    "try_today": "Add eggs, yogurt, or nuts to breakfast.",
+    "category": "meal_balance",
+    "active": true,
+    "audience_profiles": [
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-use-smaller-portions",
+    "title": "Reduce portion sizes",
+    "tip": "Slightly reduce portion size of high-carb foods.",
+    "why": "Portion control reduces total glucose load.",
+    "try_today": "Serve a smaller portion of rice or pasta.",
+    "category": "portion_control",
+    "active": true,
+    "audience_profiles": [
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-vegetable-snack",
+    "title": "Try a vegetable snack",
+    "tip": "Snack on vegetables instead of processed snacks.",
+    "why": "Vegetables provide fiber with minimal sugars.",
+    "try_today": "Eat cucumber or carrot sticks with hummus.",
+    "category": "snacks",
+    "active": true,
+    "audience_profiles": [
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-build-active-breaks",
+    "title": "Add movement breaks",
+    "tip": "Break up long sitting periods with movement.",
+    "why": "Regular activity helps regulate blood sugar metabolism.",
+    "try_today": "Stand or walk for 2 minutes every hour.",
+    "category": "movement",
+    "active": true,
+    "audience_profiles": [
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-check-glucose-before-meal",
+    "title": "Check glucose before eating",
+    "tip": "Check your glucose level before meals when possible.",
+    "why": "Pre-meal readings help guide insulin and carbohydrate decisions.",
+    "try_today": "Check your glucose level before your next meal.",
+    "category": "monitoring",
+    "active": true,
+    "audience_profiles": [
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-carry-fast-acting-carb",
+    "title": "Carry fast-acting carbs",
+    "tip": "Keep a fast-acting carbohydrate source with you.",
+    "why": "Quick access helps treat unexpected hypoglycemia safely.",
+    "try_today": "Carry glucose tablets, juice, or candy when leaving home.",
+    "category": "hypoglycemia_safety",
+    "active": true,
+    "audience_profiles": [
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-double-check-carb-count",
+    "title": "Double-check carb estimates",
+    "tip": "Take an extra moment to estimate carbohydrates before eating.",
+    "why": "Accurate carb counting supports better insulin dosing decisions.",
+    "try_today": "Look up the carb count of one meal today.",
+    "category": "carb_counting",
+    "active": true,
+    "audience_profiles": [
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-monitor-after-new-food",
+    "title": "Observe response to new foods",
+    "tip": "Monitor glucose after trying unfamiliar meals.",
+    "why": "Different foods affect glucose levels differently.",
+    "try_today": "Check your glucose 1-2 hours after a new meal.",
+    "category": "monitoring",
+    "active": true,
+    "audience_profiles": [
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-check-before-exercise",
+    "title": "Check before exercise",
+    "tip": "Check glucose levels before starting physical activity.",
+    "why": "Exercise can significantly affect glucose levels.",
+    "try_today": "Check your glucose before your next workout or walk.",
+    "category": "movement",
+    "active": true,
+    "audience_profiles": [
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-keep-hypo-snack-near-bed",
+    "title": "Keep hypo snacks nearby",
+    "tip": "Keep fast-acting carbs near your bed.",
+    "why": "Night-time hypoglycemia requires quick access to treatment.",
+    "try_today": "Place juice or glucose tablets near your bed.",
+    "category": "hypoglycemia_safety",
+    "active": true,
+    "audience_profiles": [
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-avoid-skipping-meals",
+    "title": "Avoid skipping meals (Type 1)",
+    "tip": "Try to keep meals consistent when possible.",
+    "why": "Skipping meals may complicate insulin timing and glucose control.",
+    "try_today": "Eat balanced meals at regular intervals today.",
+    "category": "meal_timing",
+    "active": true,
+    "audience_profiles": [
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-track-patterns",
+    "title": "Track glucose patterns",
+    "tip": "Look for patterns in your glucose readings.",
+    "why": "Patterns help identify what affects glucose levels most.",
+    "try_today": "Review your readings from the past few days.",
+    "category": "monitoring",
+    "active": true,
+    "audience_profiles": [
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-plan-meals-before-insulin",
+    "title": "Plan meals before insulin",
+    "tip": "Know what you will eat before taking insulin when possible.",
+    "why": "Matching insulin to carbohydrates supports stable glucose levels.",
+    "try_today": "Decide your meal before taking your next dose.",
+    "category": "insulin_management",
+    "active": true,
+    "audience_profiles": [
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-carry-medical-id",
+    "title": "Wear medical identification",
+    "tip": "Carry a diabetes medical ID.",
+    "why": "Medical identification helps others assist you in emergencies.",
+    "try_today": "Wear a medical ID bracelet or carry a card.",
+    "category": "safety",
+    "active": true,
+    "audience_profiles": [
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-check-before-driving",
+    "title": "Check before driving",
+    "tip": "Check glucose before long drives.",
+    "why": "Low glucose while driving can be dangerous.",
+    "try_today": "Check your level before starting a long trip.",
+    "category": "safety",
+    "active": true,
+    "audience_profiles": [
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-keep-supplies-ready",
+    "title": "Keep supplies organized",
+    "tip": "Keep insulin and testing supplies easily accessible.",
+    "why": "Prepared supplies help maintain consistent management.",
+    "try_today": "Check that your kit is stocked for the day.",
+    "category": "daily_management",
+    "active": true,
+    "audience_profiles": [
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-review-carb-counting-skills",
+    "title": "Review carb counting",
+    "tip": "Refresh carb-counting knowledge regularly.",
+    "why": "Accurate carb counting supports insulin dosing decisions.",
+    "try_today": "Look up carbs for one meal you often eat.",
+    "category": "carb_counting",
+    "active": true,
+    "audience_profiles": [
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-check-bedtime-glucose",
+    "title": "Check bedtime glucose",
+    "tip": "Check glucose before going to sleep when possible.",
+    "why": "Bedtime readings help reduce overnight surprises.",
+    "try_today": "Check your glucose before bedtime tonight.",
+    "category": "monitoring",
+    "active": true,
+    "audience_profiles": [
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-plan-exercise-snack",
+    "title": "Plan exercise snacks",
+    "tip": "Consider snacks before long activity.",
+    "why": "Physical activity can lower glucose levels.",
+    "try_today": "Have a small carbohydrate snack before extended exercise.",
+    "category": "movement",
+    "active": true,
+    "audience_profiles": [
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-carry-extra-supplies",
+    "title": "Carry extra supplies",
+    "tip": "Bring backup supplies when leaving home.",
+    "why": "Unexpected situations may require additional testing or insulin.",
+    "try_today": "Carry extra strips or insulin when going out.",
+    "category": "daily_management",
+    "active": true,
+    "audience_profiles": [
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-rotate-injection-sites",
+    "title": "Rotate injection sites",
+    "tip": "Use different injection areas regularly.",
+    "why": "Rotation helps insulin absorb more consistently.",
+    "try_today": "Use a different injection site than yesterday.",
+    "category": "insulin_management",
+    "active": true,
+    "audience_profiles": [
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-learn-hypo-signals",
+    "title": "Know hypo symptoms",
+    "tip": "Be aware of signs of low glucose.",
+    "why": "Early recognition allows faster treatment.",
+    "try_today": "Review your personal low-glucose warning signs.",
+    "category": "hypoglycemia_safety",
+    "active": true,
+    "audience_profiles": [
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-check-technology-alerts",
+    "title": "Check device alerts",
+    "tip": "Ensure glucose alerts are active if using monitoring devices.",
+    "why": "Alerts help detect highs and lows quickly.",
+    "try_today": "Review alert settings on your glucose monitor.",
+    "category": "technology",
+    "active": true,
+    "audience_profiles": [
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-reflect-on-daily-management",
+    "title": "Reflect on daily management",
+    "tip": "Take a moment to review what worked today.",
+    "why": "Reflection helps improve daily diabetes management habits.",
+    "try_today": "Note one habit that helped you today.",
+    "category": "habits",
+    "active": true,
+    "audience_profiles": [
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-small-frequent-meals",
+    "title": "Eat smaller, frequent meals",
+    "tip": "Divide your food into smaller meals throughout the day.",
+    "why": "Smaller meals can help prevent large blood sugar spikes during pregnancy.",
+    "try_today": "Plan 3 meals and 2-3 small snacks spaced throughout the day.",
+    "category": "meal_timing",
+    "active": true,
+    "audience_profiles": [
+      "gestational"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-morning-carb-awareness",
+    "title": "Be mindful of morning carbs",
+    "tip": "Keep breakfast carbohydrates moderate.",
+    "why": "Many people experience higher insulin resistance in the morning during pregnancy.",
+    "try_today": "Choose eggs, yogurt, or nuts with a small portion of whole grains.",
+    "category": "meal_balance",
+    "active": true,
+    "audience_profiles": [
+      "gestational"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-bedtime-protein-snack",
+    "title": "Add a bedtime snack",
+    "tip": "Include a small snack before bedtime if recommended.",
+    "why": "A balanced snack may help maintain stable overnight glucose levels.",
+    "try_today": "Try yogurt with nuts or cheese with whole-grain crackers.",
+    "category": "meal_timing",
+    "active": true,
+    "audience_profiles": [
+      "gestational"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-choose-high-fiber-carbs",
+    "title": "Choose higher-fiber carbohydrates",
+    "tip": "Select whole grains instead of refined grains.",
+    "why": "Fiber slows carbohydrate absorption and supports steadier glucose levels.",
+    "try_today": "Swap white bread for whole-grain bread.",
+    "category": "carb_quality",
+    "active": true,
+    "audience_profiles": [
+      "gestational"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-balance-snacks",
+    "title": "Balance snacks with protein",
+    "tip": "Pair snacks with protein whenever possible.",
+    "why": "Balanced snacks help prevent rapid glucose changes.",
+    "try_today": "Combine fruit with yogurt or nuts.",
+    "category": "snacks",
+    "active": true,
+    "audience_profiles": [
+      "gestational"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-walk-after-meals",
+    "title": "Take a short walk after meals",
+    "tip": "Gentle walking after eating can be helpful.",
+    "why": "Light activity helps muscles use circulating glucose.",
+    "try_today": "Walk for 10-15 minutes after dinner.",
+    "category": "movement",
+    "active": true,
+    "audience_profiles": [
+      "gestational"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-limit-sugary-drinks",
+    "title": "Avoid sugary beverages",
+    "tip": "Limit drinks with added sugar.",
+    "why": "Liquid sugar can raise blood glucose quickly.",
+    "try_today": "Drink water, milk, or unsweetened tea instead of soda.",
+    "category": "drinks",
+    "active": true,
+    "audience_profiles": [
+      "gestational"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-include-protein-meals",
+    "title": "Include protein at meals",
+    "tip": "Add protein to each meal.",
+    "why": "Protein helps balance carbohydrate intake and supports pregnancy nutrition.",
+    "try_today": "Include eggs, chicken, tofu, beans, or fish in one meal.",
+    "category": "meal_balance",
+    "active": true,
+    "audience_profiles": [
+      "gestational"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-monitor-portion-size",
+    "title": "Watch carbohydrate portions",
+    "tip": "Pay attention to portion sizes for starchy foods.",
+    "why": "Large portions can increase glucose levels.",
+    "try_today": "Serve a smaller portion of rice or pasta and add extra vegetables.",
+    "category": "portion_control",
+    "active": true,
+    "audience_profiles": [
+      "gestational"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-add-vegetables-meals",
+    "title": "Add vegetables to meals",
+    "tip": "Increase vegetable portions during meals.",
+    "why": "Vegetables add fiber and nutrients with minimal glucose impact.",
+    "try_today": "Add an extra serving of vegetables at dinner.",
+    "category": "meal_balance",
+    "active": true,
+    "audience_profiles": [
+      "gestational"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-plan-meals-ahead",
+    "title": "Plan meals ahead",
+    "tip": "Plan meals and snacks for the day.",
+    "why": "Planning helps avoid sudden high-sugar food choices.",
+    "try_today": "Prepare tomorrow's snacks tonight.",
+    "category": "planning",
+    "active": true,
+    "audience_profiles": [
+      "gestational"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-check-labels-sugar",
+    "title": "Compare carbs on labels",
+    "tip": "Compare total carbs between similar packaged foods.",
+    "why": "A lower-carb option can reduce the size of a post-meal rise.",
+    "try_today": "Pick one snack and compare total carbs across two brands.",
+    "category": "labels",
+    "active": true,
+    "audience_profiles": [
+      "gestational"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-choose-whole-fruit",
+    "title": "Eat whole fruit",
+    "tip": "Choose whole fruit instead of fruit juice.",
+    "why": "Whole fruit contains fiber that slows sugar absorption.",
+    "try_today": "Snack on an apple or berries instead of juice.",
+    "category": "carb_quality",
+    "active": true,
+    "audience_profiles": [
+      "gestational"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-stay-hydrated",
+    "title": "Stay hydrated",
+    "tip": "Drink water regularly throughout the day.",
+    "why": "Proper hydration supports overall metabolic health.",
+    "try_today": "Keep a water bottle nearby.",
+    "category": "habits",
+    "active": true,
+    "audience_profiles": [
+      "gestational"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-avoid-skipping-meals",
+    "title": "Avoid skipping meals (Gestational)",
+    "tip": "Eat meals regularly instead of skipping them.",
+    "why": "Regular eating helps maintain stable energy and glucose levels.",
+    "try_today": "Eat breakfast, lunch, and dinner at consistent times.",
+    "category": "meal_timing",
+    "active": true,
+    "audience_profiles": [
+      "gestational"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-choose-healthy-fats",
+    "title": "Add healthy fats",
+    "tip": "Include sources of healthy fats in meals.",
+    "why": "Healthy fats support satiety and balanced meals.",
+    "try_today": "Add avocado, nuts, or olive oil to meals.",
+    "category": "meal_balance",
+    "active": true,
+    "audience_profiles": [
+      "gestational"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-reduce-sweet-desserts",
+    "title": "Limit sugary desserts",
+    "tip": "Reduce the frequency of desserts high in sugar.",
+    "why": "Frequent sugary desserts may increase glucose levels.",
+    "try_today": "Choose fruit or yogurt instead of cake.",
+    "category": "habits",
+    "active": true,
+    "audience_profiles": [
+      "gestational"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-build-balanced-plate",
+    "title": "Build a balanced plate",
+    "tip": "Combine vegetables, protein, and carbohydrates at meals.",
+    "why": "Balanced meals support steadier glucose levels.",
+    "try_today": "Fill half your plate with vegetables.",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "gestational"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-light-daily-activity",
+    "title": "Stay gently active",
+    "tip": "Include light activity in your day if approved by your provider.",
+    "why": "Gentle movement supports glucose control during pregnancy.",
+    "try_today": "Take a short walk or stretch break.",
+    "category": "movement",
+    "active": true,
+    "audience_profiles": [
+      "gestational"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-keep-food-journal",
+    "title": "Track meals and responses",
+    "tip": "Record meals and glucose readings.",
+    "why": "Tracking helps identify patterns and helpful habits.",
+    "try_today": "Write down what you ate at one meal today.",
+    "category": "monitoring",
+    "active": true,
+    "audience_profiles": [
+      "gestational"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gen-eat-real-foods",
+    "title": "Choose real foods",
+    "tip": "Focus on foods that are minimally processed.",
+    "why": "Whole foods often contain more fiber and fewer added sugars.",
+    "try_today": "Choose fresh vegetables or whole foods instead of packaged snacks.",
+    "category": "food_quality",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gen-add-color-to-plate",
+    "title": "Add color to your plate",
+    "tip": "Include colorful vegetables in meals.",
+    "why": "Colorful vegetables provide fiber and important nutrients.",
+    "try_today": "Add red peppers, spinach, or carrots to one meal.",
+    "category": "meal_balance",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gen-avoid-eating-too-fast",
+    "title": "Avoid eating too fast",
+    "tip": "Slow down your eating pace.",
+    "why": "Eating slowly helps your body recognize fullness signals.",
+    "try_today": "Put your fork down between bites during one meal.",
+    "category": "mindful_eating",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gen-add-vegetable-side",
+    "title": "Add a vegetable side",
+    "tip": "Include a vegetable side with meals.",
+    "why": "Vegetables add fiber and help balance meals.",
+    "try_today": "Add a side of broccoli or salad at dinner.",
+    "category": "meal_balance",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gen-eat-balanced-snacks",
+    "title": "Balance your snacks",
+    "tip": "Combine carbohydrates with protein or healthy fats.",
+    "why": "Balanced snacks help maintain steadier energy levels.",
+    "try_today": "Eat fruit with nuts or yogurt.",
+    "category": "snacks",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gen-cook-simple-meals",
+    "title": "Cook simple meals",
+    "tip": "Simple meals with fewer ingredients are often healthier.",
+    "why": "Simple cooking helps reduce added sugars and hidden ingredients.",
+    "try_today": "Prepare a basic meal with protein, vegetables, and grains.",
+    "category": "cooking_habits",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gen-eat-regularly",
+    "title": "Eat regularly",
+    "tip": "Avoid going too long without eating.",
+    "why": "Regular meals help maintain steady energy throughout the day.",
+    "try_today": "Plan consistent meal times.",
+    "category": "meal_timing",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gen-choose-fresh-ingredients",
+    "title": "Choose fresh ingredients",
+    "tip": "Use fresh ingredients when possible.",
+    "why": "Fresh foods often contain fewer additives.",
+    "try_today": "Add one fresh ingredient to your meal today.",
+    "category": "food_quality",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gen-prepare-food-at-home",
+    "title": "Prepare food at home",
+    "tip": "Cooking at home allows better control of ingredients.",
+    "why": "Restaurant meals often contain hidden sugars or fats.",
+    "try_today": "Prepare one meal at home.",
+    "category": "cooking_habits",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gen-eat-without-distractions",
+    "title": "Eat without distractions",
+    "tip": "Try to eat meals without screens.",
+    "why": "Mindful eating helps improve awareness of portion size.",
+    "try_today": "Eat one meal without using your phone.",
+    "category": "mindful_eating",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gen-add-healthy-fats",
+    "title": "Include healthy fats",
+    "tip": "Healthy fats help meals feel more satisfying.",
+    "why": "Fats slow digestion and support balanced meals.",
+    "try_today": "Add avocado, olive oil, or nuts to a meal.",
+    "category": "meal_balance",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gen-check-food-labels",
+    "title": "Check food labels",
+    "tip": "Review ingredient lists on packaged foods.",
+    "why": "Labels reveal added sugars and hidden ingredients.",
+    "try_today": "Read the label on one packaged food.",
+    "category": "labels",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gen-make-meals-colorful",
+    "title": "Build colorful meals",
+    "tip": "Combine different vegetables for variety.",
+    "why": "Variety improves nutrient intake.",
+    "try_today": "Add two different vegetables to dinner.",
+    "category": "meal_balance",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gen-use-herbs-for-flavor",
+    "title": "Use herbs for flavor",
+    "tip": "Flavor foods with herbs and spices instead of sugar.",
+    "why": "Herbs add flavor without extra carbohydrates.",
+    "try_today": "Season food with garlic, basil, or herbs.",
+    "category": "cooking_habits",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gen-keep-healthy-snacks-visible",
+    "title": "Keep healthy snacks visible",
+    "tip": "Place healthier snacks where you can see them.",
+    "why": "Convenience strongly influences food choices.",
+    "try_today": "Place fruit or nuts on the kitchen counter.",
+    "category": "environment",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gen-add-protein-to-meals",
+    "title": "Add protein to meals",
+    "tip": "Include protein sources in meals.",
+    "why": "Protein supports fullness and balanced nutrition.",
+    "try_today": "Add beans, eggs, fish, or chicken to a meal.",
+    "category": "meal_balance",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gen-limit-ultra-processed-foods",
+    "title": "Limit ultra-processed foods",
+    "tip": "Reduce foods with long ingredient lists.",
+    "why": "Highly processed foods often contain added sugars.",
+    "try_today": "Choose whole foods instead of packaged snacks.",
+    "category": "food_quality",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gen-prepare-snacks-ahead",
+    "title": "Prepare snacks ahead",
+    "tip": "Prepare healthy snacks in advance.",
+    "why": "Preparation reduces reliance on convenience foods.",
+    "try_today": "Cut vegetables or portion nuts for tomorrow.",
+    "category": "planning",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gen-add-fiber-foods",
+    "title": "Add fiber-rich foods",
+    "tip": "Include foods naturally high in fiber.",
+    "why": "Fiber supports digestion and balanced meals.",
+    "try_today": "Add beans, vegetables, or whole grains.",
+    "category": "nutrition",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gen-build-simple-plate",
+    "title": "Build a simple plate",
+    "tip": "Combine vegetables, protein, and carbohydrates.",
+    "why": "Balanced plates support steady energy levels.",
+    "try_today": "Build a meal with vegetables, protein, and grains.",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  }
+]

@@ -17,3 +17,7 @@ from .blog_comment import BlogComment  # noqa: F401
 from .newsletter_signup import NewsletterSignup  # noqa: F401
 from .app_setting import AppSetting  # noqa: F401
 from .admin_email_campaign import AdminEmailCampaign  # noqa: F401
+from .user_daily_challenge import UserDailyChallenge  # noqa: F401
+from .push_token import PushToken  # noqa: F401
+from .admin_push_campaign import AdminPushCampaign  # noqa: F401
+from .admin_push_send import AdminPushSend, AdminPushSendFailure  # noqa: F401

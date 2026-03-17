@@ -66,6 +66,15 @@ def get_effective_subscription_tier(db: Session, user: User, now: datetime | Non
     if is_subscription_active(comp, now=now):
         return "premium"
 
+    # Back-compat / manual overrides:
+    # Some flows set `users.subscription_tier` directly (e.g. admin tools or legacy upgrades).
+    # Treat it as a last-resort hint so the app UI matches admin intent.
+    try:
+        if (getattr(user, "subscription_tier", None) or "").lower() == "premium":
+            return "premium"
+    except Exception:
+        pass
+
     return "free"
 
 

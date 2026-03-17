@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
+  Image,
 } from 'react-native';
 import { useNavigation, useRoute, useIsFocused } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
@@ -19,6 +20,7 @@ import { Colors } from '../../constants/Colors';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
 import { useAuth } from '../../context/authContext';
+import { getRecipeImageSettings } from '../../utils/recipeImageSettings';
 
 export default function RecentRecipesScreen() {
   const navigation = useNavigation();
@@ -36,6 +38,21 @@ export default function RecentRecipesScreen() {
   const [recipes, setRecipes] = useState(initialRecipes);
   const [isLoading, setIsLoading] = useState(initialRecipes.length === 0);
   const [refreshing, setRefreshing] = useState(false);
+  const [recipeImagesEnabled, setRecipeImagesEnabled] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      const settings = await getRecipeImageSettings();
+      if (!cancelled) {
+        setRecipeImagesEnabled(Boolean(settings?.enabled));
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const getRecipeTimeValue = (recipe) => {
     const prepRaw =
@@ -48,22 +65,56 @@ export default function RecentRecipesScreen() {
     const cook = typeof cookRaw === 'number' ? cookRaw : parseFloat(cookRaw);
     if (Number.isFinite(prep) || Number.isFinite(cook)) {
       const total = (Number.isFinite(prep) ? prep : 0) + (Number.isFinite(cook) ? cook : 0);
-      return total ? `${total} min` : 'Time N/A';
+      if (!total) return 'Time N/A';
+      return `${total} mins`;
     }
     const totalRaw = recipe?.total_time ?? recipe?.totalTime ?? recipe?.time ?? null;
     const total = typeof totalRaw === 'number' ? totalRaw : parseFloat(totalRaw);
     if (Number.isFinite(total)) {
-      return `${total} min`;
+      return `${total} mins`;
     }
     return 'Time N/A';
   };
 
+  const getNutritionObject = (recipe) => {
+    return (
+      recipe?.nutritional_info ||
+      recipe?.nutrition ||
+      recipe?.nutrition_per_serving ||
+      recipe?.nutritionPerServing ||
+      recipe?.nutrition_per_serving ||
+      {}
+    );
+  };
+
   const getCaloriesValue = (recipe) => {
-    const nutrition = recipe?.nutrition || recipe?.nutrition_per_serving || {};
-    const raw = nutrition.calories ?? recipe?.calories ?? null;
-    if (raw === null || raw === undefined || raw === '') return 'N/A';
-    const numeric = typeof raw === 'number' ? raw : parseFloat(raw);
-    return Number.isFinite(numeric) ? `${numeric}` : `${raw}`;
+    const nutrition = getNutritionObject(recipe);
+    const value = nutrition?.calories ?? recipe?.calories;
+    return formatMacro('Cal', value);
+  };
+
+  const getProteinValue = (recipe) => {
+    const nutrition = getNutritionObject(recipe);
+    const value = nutrition?.protein ?? recipe?.protein;
+    return formatMacro('Pro', value, 'g');
+  };
+
+  const getFiberValue = (recipe) => {
+    const nutrition = getNutritionObject(recipe);
+    const value = nutrition?.fiber ?? recipe?.fiber;
+    return formatMacro('Fib', value, 'g');
+  };
+
+  const formatMacro = (label, value, unit = '') => {
+    const emptyLabel = `${label} --`;
+    if (value === undefined || value === null || value === '') return emptyLabel;
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return `${label} ${value}${unit ? unit : ''}`;
+    }
+    const match = `${value}`.match(/[-+]?\d*\.?\d+/);
+    if (!match) return emptyLabel;
+    const n = match[0];
+    return `${label} ${n}${unit ? unit : ''}`;
   };
 
   const loadRecent = useCallback(async () => {
@@ -178,27 +229,41 @@ export default function RecentRecipesScreen() {
       >
         {recipes.map((recipe, index) => {
           const title = recipe.name || recipe.title || `Recipe ${index + 1}`;
+          const showThumb =
+            recipeImagesEnabled &&
+            Boolean(recipe.image_url) &&
+            recipe.image_source !== 'placeholder';
           return (
             <TouchableOpacity
               key={recipe.id || `${title}-${index}`}
               style={styles.recipeCard}
-              onPress={() => navigation.navigate('RecipeDetail', { recipe, source: 'admin' })}
+              onPress={() => navigation.navigate('RecipeDetail', { recipe, source: 'ai' })}
               activeOpacity={0.7}
             >
+              {recipeImagesEnabled ? (
+                <View style={styles.thumb}>
+                  {showThumb ? (
+                    <Image source={{ uri: recipe.image_url }} style={styles.thumbImage} />
+                  ) : (
+                    <View style={styles.thumbPlaceholder}>
+                      <Ionicons name="image-outline" size={20} color={Colors.textLight} />
+                    </View>
+                  )}
+                </View>
+              ) : null}
               <View style={styles.recipeInfo}>
                 <Text style={styles.recipeName} numberOfLines={1}>{title}</Text>
                 <Text style={styles.recipeDescription} numberOfLines={2}>
                   {recipe.description || 'Diabetes-friendly recipe.'}
                 </Text>
-                <View style={styles.recipeMeta}>
-                  <View style={styles.metaItem}>
-                    <Ionicons name="time-outline" size={14} color={Colors.textLight} />
-                    <Text style={styles.metaText}>{getRecipeTimeValue(recipe)}</Text>
-                  </View>
-                  <View style={styles.metaItem}>
-                    <Ionicons name="flame-outline" size={14} color={Colors.textLight} />
-                    <Text style={styles.metaText}>{getCaloriesValue(recipe)} cal</Text>
-                  </View>
+                <View style={styles.recipeMetaRow}>
+                  <Text style={styles.metaText}>{getRecipeTimeValue(recipe)}</Text>
+                  <Text style={styles.recipeMetaDivider}>|</Text>
+                  <Text style={[styles.recipeMetaValue, styles.recipeCal]}>{getCaloriesValue(recipe)}</Text>
+                  <Text style={styles.recipeMetaDivider}>|</Text>
+                  <Text style={[styles.recipeMetaValue, styles.recipePro]}>{getProteinValue(recipe)}</Text>
+                  <Text style={styles.recipeMetaDivider}>|</Text>
+                  <Text style={[styles.recipeMetaValue, styles.recipeFib]}>{getFiberValue(recipe)}</Text>
                 </View>
               </View>
               <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
@@ -309,6 +374,24 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
+  thumb: {
+    width: 54,
+    height: 54,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#F3F4F6',
+    marginRight: 12,
+  },
+  thumbImage: {
+    width: '100%',
+    height: '100%',
+  },
+  thumbPlaceholder: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   recipeInfo: {
     flex: 1,
   },
@@ -323,19 +406,33 @@ const styles = StyleSheet.create({
     color: Colors.textLight,
     marginBottom: 8,
   },
-  recipeMeta: {
+  recipeMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
   },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 12,
-  },
   metaText: {
-    marginLeft: 4,
     fontSize: 12,
     color: Colors.textLight,
+    flexShrink: 0,
+    minWidth: 58,
+  },
+  recipeMetaValue: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  recipeMetaDivider: {
+    marginHorizontal: 8,
+    fontSize: 12,
+    color: Colors.textMuted,
+  },
+  recipeCal: {
+    color: Colors.accent,
+  },
+  recipePro: {
+    color: Colors.primary,
+  },
+  recipeFib: {
+    color: Colors.secondary,
   },
 });

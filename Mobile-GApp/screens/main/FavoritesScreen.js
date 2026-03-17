@@ -20,7 +20,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
 import { useAuth } from '../../context/authContext';
-import RecipePlaceholder from '../../assets/images/recipe-placeholder.jpeg';
+import { getRecipeImageSettings } from '../../utils/recipeImageSettings';
 
 export default function FavoritesScreen() {
   const navigation = useNavigation();
@@ -34,6 +34,7 @@ export default function FavoritesScreen() {
   const [favorites, setFavorites] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [recipeImagesEnabled, setRecipeImagesEnabled] = useState(true);
 
   const getRecipeTimeValue = (recipe) => {
     const prepRaw =
@@ -46,12 +47,12 @@ export default function FavoritesScreen() {
     const cook = typeof cookRaw === 'number' ? cookRaw : parseFloat(cookRaw);
     if (Number.isFinite(prep) || Number.isFinite(cook)) {
       const total = (Number.isFinite(prep) ? prep : 0) + (Number.isFinite(cook) ? cook : 0);
-      return total ? `${total} min` : 'Time N/A';
+      return total ? `${total} mins` : 'Time N/A';
     }
     const totalRaw = recipe?.total_time ?? recipe?.totalTime ?? recipe?.time ?? null;
     const total = typeof totalRaw === 'number' ? totalRaw : parseFloat(totalRaw);
     if (Number.isFinite(total)) {
-      return `${total} min`;
+      return `${total} mins`;
     }
     return 'Time N/A';
   };
@@ -62,6 +63,14 @@ export default function FavoritesScreen() {
     if (raw === null || raw === undefined || raw === '') return 'N/A';
     const numeric = typeof raw === 'number' ? raw : parseFloat(raw);
     return Number.isFinite(numeric) ? `${numeric}` : `${raw}`;
+  };
+
+  const formatNutrient = (value, suffix, emptyLabel) => {
+    if (value === undefined || value === null || value === '') return emptyLabel;
+    if (typeof value === 'number') return `${value}${suffix ? ` ${suffix}` : ''}`.trim();
+    const match = `${value}`.match(/[-+]?\d*\.?\d+/);
+    if (match) return `${match[0]}${suffix ? ` ${suffix}` : ''}`.trim();
+    return `${value}`.includes(suffix.trim()) ? `${value}` : `${value} ${suffix}`.trim();
   };
 
   const normalizeFavorite = (item, index) => {
@@ -77,7 +86,9 @@ export default function FavoritesScreen() {
       image: recipe.image_url || recipe.image || '',
       imageSource: recipe.image_source || 'unknown',
       time: getRecipeTimeValue(recipe),
-      calories: getCaloriesValue(nutrition),
+      calories: formatNutrient(nutrition.calories ?? nutrition.calorie, 'cal', 'Cal --'),
+      protein: formatNutrient(nutrition.protein, 'g pro', 'Pro --'),
+      fiber: formatNutrient(nutrition.fiber, 'g fib', 'Fib --'),
     };
   };
 
@@ -114,6 +125,20 @@ export default function FavoritesScreen() {
       loadFavorites();
     }
   }, [isFocused, loadFavorites]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      const settings = await getRecipeImageSettings();
+      if (!cancelled) {
+        setRecipeImagesEnabled(Boolean(settings?.enabled));
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -199,26 +224,36 @@ export default function FavoritesScreen() {
             onPress={() => navigateToRecipe(item)}
             activeOpacity={0.7}
           >
-            {/* Recipe Image */}
-            <View style={styles.imageContainer}>
-              {item.image && item.imageSource !== 'placeholder' ? (
+            {recipeImagesEnabled && item.image && item.imageSource !== 'placeholder' ? (
+              <View style={styles.imageContainer}>
                 <Image source={{ uri: item.image }} style={styles.recipeImage} />
-              ) : (
-                <Image source={RecipePlaceholder} style={styles.recipeImage} />
-              )}
-              <View style={styles.imageOverlay}>
-                <View style={styles.favoriteBadge}>
+                <View style={styles.imageOverlay}>
+                  <View style={styles.favoriteBadge}>
+                    <Ionicons name="heart" size={12} color="white" />
+                    <Text style={styles.favoriteBadgeText}>Saved</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.removeButton}
+                    onPress={() => removeFromFavorites(item.favoriteId)}
+                  >
+                    <Ionicons name="trash-outline" size={16} color="white" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.noImageHeader}>
+                <View style={styles.favoriteBadgeInline}>
                   <Ionicons name="heart" size={12} color="white" />
                   <Text style={styles.favoriteBadgeText}>Saved</Text>
                 </View>
-              <TouchableOpacity
-                style={styles.removeButton}
-                onPress={() => removeFromFavorites(item.favoriteId)}
-              >
-                <Ionicons name="trash-outline" size={16} color="white" />
-              </TouchableOpacity>
-            </View>
-          </View>
+                <TouchableOpacity
+                  style={styles.removeButtonInline}
+                  onPress={() => removeFromFavorites(item.favoriteId)}
+                >
+                  <Ionicons name="trash-outline" size={16} color={Colors.textMuted} />
+                </TouchableOpacity>
+              </View>
+            )}
 
             {/* Recipe Info */}
             <View style={styles.recipeInfo}>
@@ -230,16 +265,14 @@ export default function FavoritesScreen() {
                 {item.description}
               </Text>
               
-              <View style={styles.recipeMeta}>
-                <View style={styles.metaItem}>
-                  <Ionicons name="time-outline" size={14} color={Colors.textLight} />
-                  <Text style={styles.metaText}>{item.time}</Text>
-                </View>
-                
-                <View style={styles.metaItem}>
-                  <Ionicons name="flame-outline" size={14} color={Colors.textLight} />
-                  <Text style={styles.metaText}>{item.calories} cal</Text>
-                </View>
+              <View style={styles.recipeMetaRow}>
+                <Text style={styles.metaText}>{item.time}</Text>
+                <Text style={styles.recipeMetaDivider}>|</Text>
+                <Text style={[styles.recipeMetaValue, styles.recipeCal]}>{item.calories}</Text>
+                <Text style={styles.recipeMetaDivider}>|</Text>
+                <Text style={[styles.recipeMetaValue, styles.recipePro]}>{item.protein}</Text>
+                <Text style={styles.recipeMetaDivider}>|</Text>
+                <Text style={[styles.recipeMetaValue, styles.recipeFib]}>{item.fiber}</Text>
               </View>
             </View>
           </TouchableOpacity>
@@ -419,6 +452,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  noImageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 14,
+  },
+  favoriteBadgeInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  removeButtonInline: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   recipeInfo: {
     padding: 16,
   },
@@ -440,19 +496,34 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 12,
   },
-  recipeMeta: {
+  recipeMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
   },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 16,
-  },
   metaText: {
     fontSize: 13,
     color: Colors.textLight,
-    marginLeft: 4,
+    marginLeft: 0,
+    flexShrink: 0,
+    minWidth: 62,
+  },
+  recipeMetaValue: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  recipeMetaDivider: {
+    marginHorizontal: 8,
+    fontSize: 13,
+    color: Colors.textMuted,
+  },
+  recipeCal: {
+    color: Colors.accent,
+  },
+  recipePro: {
+    color: Colors.primary,
+  },
+  recipeFib: {
+    color: Colors.secondary,
   },
 });

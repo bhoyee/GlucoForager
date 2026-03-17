@@ -1,12 +1,20 @@
 from typing import Any, Dict, List
+import logging
+import time
 
 from sqlalchemy.orm import Session
 
+from ..core.config import settings
 from ..services.tiered_ai_service import TieredAIService
 from ..models.recipe_history import RecipeHistory
+from ..models.user import User
 from .diabetes_friendly_classifier import DiabetesFriendlyClassifier
 from .ingredient_classifier import IngredientClassifier
 from .cost_tracker import record_ai_request
+from .food_profile_service import extract_food_profile
+
+
+logger = logging.getLogger(__name__)
 
 
 class IngredientValidationError(ValueError):
@@ -62,6 +70,8 @@ class AIPipeline:
         filters: list[str] | None = None,
         device_id: str | None = None,
     ) -> Dict[str, Any]:
+        user = db.query(User).filter(User.id == user_id).first()
+        food_profile = extract_food_profile(user) if user else None
         analysis = self.ai.analyze_vision(image_base64, tier)
         ingredients = self._clean_ingredients(analysis.get("ingredients", []))
         self._validate_ingredients(ingredients)
@@ -81,8 +91,24 @@ class AIPipeline:
             food_only,
             tier,
             filters=filters,
+            timeout_seconds=55,
             generate_images=False,
+            food_profile=food_profile,
         )
+        recipes = self._validated_recipes_or_none(recipes)
+        if recipes is None:
+            recipes_retry = self.ai.generate_recipes(
+                food_only,
+                tier,
+                filters=filters,
+                variety_mode=True,
+                timeout_seconds=55,
+                generate_images=False,
+                food_profile=food_profile,
+            )
+            recipes = self._validated_recipes_or_none(recipes_retry)
+        if recipes is None:
+            raise RuntimeError("Recipe generation failed. Please try again.")
         record_ai_request(db, user_id, tier, "vision", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
         record_ai_request(db, user_id, tier, "recipes", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
         db.add(RecipeHistory(user_id=user_id, source="vision", recipes=recipes))
@@ -104,6 +130,8 @@ class AIPipeline:
         filters: list[str] | None = None,
         device_id: str | None = None,
     ) -> Dict[str, Any]:
+        user = db.query(User).filter(User.id == user_id).first()
+        food_profile = extract_food_profile(user) if user else None
         all_ingredients: list[str] = []
         for image in images_base64:
             analysis = self.ai.analyze_vision(image, tier)
@@ -138,8 +166,24 @@ class AIPipeline:
             food_only,
             tier,
             filters=filters,
+            timeout_seconds=55,
             generate_images=False,
+            food_profile=food_profile,
         )
+        recipes = self._validated_recipes_or_none(recipes)
+        if recipes is None:
+            recipes_retry = self.ai.generate_recipes(
+                food_only,
+                tier,
+                filters=filters,
+                variety_mode=True,
+                timeout_seconds=55,
+                generate_images=False,
+                food_profile=food_profile,
+            )
+            recipes = self._validated_recipes_or_none(recipes_retry)
+        if recipes is None:
+            raise RuntimeError("Recipe generation failed. Please try again.")
         record_ai_request(db, user_id, tier, "vision_batch", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
         record_ai_request(db, user_id, tier, "recipes", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
         db.add(RecipeHistory(user_id=user_id, source="vision", recipes=recipes))
@@ -158,15 +202,156 @@ class AIPipeline:
         tier: str,
         ingredients: List[str],
         filters: list[str] | None = None,
+        exclude_titles: list[str] | None = None,
+        variety_mode: bool = False,
+        mode: str = "ingredients",
         device_id: str | None = None,
     ) -> List[Dict[str, Any]]:
+        user = db.query(User).filter(User.id == user_id).first()
+        food_profile = extract_food_profile(user) if user else None
+        if settings.ai_debug_logging and mode in ("surprise", "quick") and food_profile:
+            try:
+                logger.info(
+                    "AI food profile applied mode=%s goals=%s cuisines=%s dietary=%s equipment=%s cook_time=%s",
+                    mode,
+                    (food_profile.get("meal_goals") or [])[:4],
+                    (food_profile.get("preferred_cuisines") or [])[:3],
+                    food_profile.get("dietary_pattern"),
+                    (food_profile.get("available_equipment") or [])[:6],
+                    food_profile.get("cook_time_preference"),
+                )
+            except Exception:
+                pass
+        started = time.time()
+        # Mobile polling stops at ~60s; Surprise/Quick should complete within that window.
+        overall_budget_seconds = (
+            float(settings.ai_eat_now_budget_seconds) if mode in ("surprise", "quick") else 55.0
+        )
+
         recipes = self.ai.generate_recipes(
             ingredients,
             tier,
             filters=filters,
+            exclude_titles=exclude_titles or [],
+            variety_mode=variety_mode,
+            mode=mode,
+            timeout_seconds=overall_budget_seconds,
             generate_images=False,
+            food_profile=food_profile,
         )
-        record_ai_request(db, user_id, tier, "text", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
+        recipes = self._validated_recipes_or_none(recipes, mode=mode)
+        if recipes is None:
+            remaining = overall_budget_seconds - (time.time() - started)
+            # One retry (variety on, cache bypassed) only if there is enough time left.
+            if remaining <= 8:
+                raise RuntimeError("Recipe generation failed. Please try again.")
+            recipes_retry = self.ai.generate_recipes(
+                ingredients,
+                tier,
+                filters=filters,
+                exclude_titles=exclude_titles or [],
+                variety_mode=True,
+                mode=mode,
+                timeout_seconds=max(8, remaining),
+                generate_images=False,
+                food_profile=food_profile,
+            )
+            recipes = self._validated_recipes_or_none(recipes_retry, mode=mode)
+
+        if recipes is None:
+            raise RuntimeError("Recipe generation failed. Please try again.")
+
+        record_ai_request(
+            db,
+            user_id,
+            tier,
+            "text",
+            model_used=tier,
+            tokens_used=0,
+            cost_estimate=0,
+            device_id=device_id,
+        )
         db.add(RecipeHistory(user_id=user_id, source="text", recipes=recipes))
         db.commit()
         return recipes
+
+    def _validated_recipes_or_none(
+        self,
+        recipes: List[Dict[str, Any]] | None,
+        *,
+        mode: str = "ingredients",
+    ) -> List[Dict[str, Any]] | None:
+        if not recipes or not isinstance(recipes, list):
+            return None
+        if len(recipes) < 3:
+            return None
+
+        cleaned: list[dict] = []
+        for recipe in recipes[:3]:
+            if not isinstance(recipe, dict):
+                if settings.ai_debug_logging and mode in ("surprise", "quick"):
+                    logger.info("AI validation failed mode=%s reason=recipe_not_dict", mode)
+                return None
+            title = (recipe.get("title") or recipe.get("name") or "").strip()
+            if not title or title.lower() == "ai-generated recipe":
+                if settings.ai_debug_logging and mode in ("surprise", "quick"):
+                    logger.info("AI validation failed mode=%s reason=bad_title title=%s", mode, title[:120])
+                return None
+            instructions = recipe.get("instructions") or []
+            if not isinstance(instructions, list) or len(instructions) < 3:
+                if settings.ai_debug_logging and mode in ("surprise", "quick"):
+                    logger.info(
+                        "AI validation failed mode=%s reason=bad_instructions_len len=%s",
+                        mode,
+                        (len(instructions) if isinstance(instructions, list) else "n/a"),
+                    )
+                return None
+            ingredients = recipe.get("ingredients") or []
+            if not isinstance(ingredients, list) or len(ingredients) < 3:
+                if settings.ai_debug_logging and mode in ("surprise", "quick"):
+                    logger.info(
+                        "AI validation failed mode=%s reason=bad_ingredients_len len=%s",
+                        mode,
+                        (len(ingredients) if isinstance(ingredients, list) else "n/a"),
+                    )
+                return None
+            ni = recipe.get("nutritional_info") or {}
+            calories = ni.get("calories")
+            carbs = ni.get("carbs")
+            protein = ni.get("protein")
+            # Treat missing/zero nutrition as invalid (this is what causes N/A in the UI).
+            try:
+                calories_n = int(calories or 0)
+                carbs_n = int(carbs or 0)
+                protein_n = int(protein or 0)
+            except Exception:  # noqa: BLE001
+                if settings.ai_debug_logging and mode in ("surprise", "quick"):
+                    logger.info("AI validation failed mode=%s reason=non_numeric_nutrition", mode)
+                return None
+            if calories_n <= 0 or (carbs_n <= 0 and protein_n <= 0):
+                if settings.ai_debug_logging and mode in ("surprise", "quick"):
+                    logger.info(
+                        "AI validation failed mode=%s reason=missing_nutrition cal=%s carbs=%s protein=%s",
+                        mode,
+                        calories_n,
+                        carbs_n,
+                        protein_n,
+                    )
+                return None
+            if mode == "quick":
+                total_time = recipe.get("total_time")
+                if total_time is None or total_time == 0:
+                    total_time = recipe.get("totalTime")
+                if total_time is None or total_time == 0:
+                    total_time = (recipe.get("prep_time") or 0) + (recipe.get("cook_time") or 0)
+                try:
+                    total_n = int(float(total_time or 0))
+                except Exception:  # noqa: BLE001
+                    total_n = 0
+                if total_n <= 0 or total_n > 20:
+                    if settings.ai_debug_logging:
+                        logger.info("AI validation failed mode=%s reason=total_time_out_of_range total=%s", mode, total_n)
+                    return None
+            cleaned.append(recipe)
+
+        return cleaned

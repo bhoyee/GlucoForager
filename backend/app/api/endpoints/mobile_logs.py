@@ -1,8 +1,10 @@
 from datetime import datetime, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from ...database import get_db
@@ -42,7 +44,11 @@ def get_optional_user(request: Request, db: Session) -> User | None:
     user_id = payload.get("sub")
     if not user_id:
         return None
-    return db.query(User).filter(User.id == int(user_id)).first()
+    try:
+        return db.query(User).filter(User.id == int(user_id)).first()
+    except OperationalError:
+        # Allow mobile logs to be ingested even if the database is temporarily down.
+        return None
 
 
 @router.post("/mobile/logs")

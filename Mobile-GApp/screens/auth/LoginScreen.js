@@ -1,5 +1,5 @@
 // screens/auth/LoginScreen.js - UPDATED WITH CORRECT IMPORT
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -28,6 +28,11 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [focusedField, setFocusedField] = useState(null);
+
+  const inputWrapperStyleFor = useMemo(() => {
+    return (field) => [styles.inputWrapper, focusedField === field ? styles.inputWrapperFocused : null];
+  }, [focusedField]);
 
   const handleLogin = async () => {
     // Validation
@@ -55,7 +60,7 @@ export default function LoginScreen() {
         throw new Error(data?.detail || data?.message || 'Login failed. Please try again.');
       }
 
-      await signIn(data.access_token, data.public_id, data.refresh_token);
+      await signIn(data.access_token, data.public_id, data.refresh_token, data.profile_completed);
 
       Alert.alert('Success', data.message || 'Login successful!', [
         { text: 'OK' },
@@ -84,6 +89,7 @@ export default function LoginScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         {/* Header */}
         <View style={styles.header}>
@@ -94,8 +100,12 @@ export default function LoginScreen() {
             <Ionicons name="arrow-back" size={24} color={Colors.text} />
           </TouchableOpacity>
           
-          <TouchableOpacity onPress={() => navigation.navigate('SignUp')}>
-            <Text style={styles.signUpText}>Sign Up</Text>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('SignUp')}
+            style={styles.headerActionButton}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.headerActionText}>Sign Up</Text>
           </TouchableOpacity>
         </View>
 
@@ -106,16 +116,22 @@ export default function LoginScreen() {
             style={styles.logoImage}
             resizeMode="contain"
           />
-          <Text style={styles.title}>Welcome Back</Text>
-          <Text style={styles.subtitle}>Sign in to continue to GlucoForager</Text>
+          <Text style={styles.kicker}>Welcome back</Text>
+          <Text style={styles.title}>GlucoForager</Text>
+          <Text style={styles.subtitle}>Sign in to continue.</Text>
         </View>
 
         {/* Form */}
         <View style={styles.form}>
+          <View style={styles.formCard}>
+            <View style={styles.formHeader}>
+              <Text style={styles.formTitle}>Sign in</Text>
+              <Text style={styles.formSubtitle}>Access your tips, challenges, and meals.</Text>
+            </View>
           {/* Email Input */}
           <View style={styles.inputContainer}>
             <Text style={styles.inputLabel}>Email Address</Text>
-            <View style={styles.inputWrapper}>
+            <View style={inputWrapperStyleFor('email')}>
               <Ionicons name="mail-outline" size={20} color={Colors.textLight} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
@@ -127,6 +143,8 @@ export default function LoginScreen() {
                 autoCapitalize="none"
                 autoCorrect={false}
                 editable={!isLoading}
+                onFocus={() => setFocusedField('email')}
+                onBlur={() => setFocusedField(null)}
               />
             </View>
           </View>
@@ -144,7 +162,7 @@ export default function LoginScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
-            <View style={styles.inputWrapper}>
+            <View style={inputWrapperStyleFor('password')}>
               <Ionicons name="lock-closed-outline" size={20} color={Colors.textLight} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
@@ -154,6 +172,8 @@ export default function LoginScreen() {
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
                 editable={!isLoading}
+                onFocus={() => setFocusedField('password')}
+                onBlur={() => setFocusedField(null)}
               />
               <TouchableOpacity 
                 onPress={() => setShowPassword(!showPassword)}
@@ -204,10 +224,7 @@ export default function LoginScreen() {
               See Premium details
             </Text>
           </TouchableOpacity>
-
-
-
-
+        </View>
         </View>
 
         {/* Sign Up Link */}
@@ -257,41 +274,71 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  signUpText: {
+  headerActionButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    backgroundColor: '#F2F4F7',
+    borderWidth: 1,
+    borderColor: '#EEF1F5',
+  },
+  headerActionText: {
     color: Colors.primary,
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '800',
   },
   logoContainer: {
     alignItems: 'center',
     paddingHorizontal: 20,
-    marginBottom: 40,
+    marginBottom: 18,
   },
   logoImage: {
-    width: 110,
-    height: 110,
-    marginBottom: 20,
+    width: 86,
+    height: 86,
+    marginBottom: 14,
+  },
+  kicker: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: Colors.textLight,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
   },
   title: {
-    fontSize: 32,
-    fontWeight: 'bold',
+    fontSize: 30,
+    fontWeight: '800',
     color: Colors.text,
-    marginBottom: 8,
+    marginTop: 4,
+    marginBottom: 6,
   },
   subtitle: {
     fontSize: 16,
     color: Colors.textLight,
     textAlign: 'center',
+    fontWeight: '600',
   },
   form: {
     paddingHorizontal: 20,
   },
+  formCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 18,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    elevation: 3,
+  },
+  formHeader: { marginBottom: 12 },
+  formTitle: { fontSize: 16, fontWeight: '800', color: Colors.text },
+  formSubtitle: { marginTop: 4, fontSize: 12, fontWeight: '700', color: Colors.textLight },
   inputContainer: {
-    marginBottom: 24,
+    marginBottom: 14,
   },
   inputLabel: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '700',
     color: Colors.text,
     marginBottom: 8,
   },
@@ -303,17 +350,21 @@ const styles = StyleSheet.create({
   forgotPasswordText: {
     color: Colors.primary,
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '700',
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
+    backgroundColor: '#F2F4F7',
+    borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: Platform.OS === 'ios' ? 16 : 12,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#EEF1F5',
+  },
+  inputWrapperFocused: {
+    borderColor: Colors.primary,
+    backgroundColor: '#EFFAF3',
   },
   inputIcon: {
     marginRight: 12,
@@ -325,15 +376,15 @@ const styles = StyleSheet.create({
     padding: 0,
   },
   loginButton: {
-    borderRadius: 12,
+    borderRadius: 14,
     overflow: 'hidden',
     marginTop: 8,
     marginBottom: 30,
-    shadowColor: '#2E8B57',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.10,
+    shadowRadius: 16,
+    elevation: 4,
   },
   loginButtonDisabled: {
     opacity: 0.7,
@@ -356,12 +407,13 @@ const styles = StyleSheet.create({
   loginButtonText: {
     color: 'white',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '800',
   },
   signUpContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: 18,
   },
   premiumDetailsLink: {
     marginTop: 14,
@@ -375,10 +427,11 @@ const styles = StyleSheet.create({
   signUpPrompt: {
     color: Colors.textLight,
     fontSize: 14,
+    fontWeight: '700',
   },
   signUpLink: {
     color: Colors.primary,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '900',
   },
 });

@@ -64,7 +64,8 @@ def generate_recipes(
     if not recipe_service.enabled:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Recipe AI not configured")
     try:
-        recipes = recipe_service.generate(payload.ingredients)
+        tier = get_effective_subscription_tier(db, current_user) or "free"
+        recipes = recipe_service.generate(payload.ingredients, tier=tier, generate_images=False)
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
     db.add(SearchLog(user_id=current_user.id, device_id=device_id, query=",".join(payload.ingredients)))

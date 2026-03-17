@@ -13,15 +13,18 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from sqlalchemy.exc import OperationalError
 
 from .api.endpoints import (
     auth,
     admin,
     admin_settings,
+    admin_challenge,
     admin_revenuecat,
     admin_user_email,
     admin_email_campaigns,
     app_public,
+    app_challenge,
     ingredients,
     recipes,
     subscriptions,
@@ -41,6 +44,11 @@ from .api.endpoints import (
     admin_blog,
     newsletter,
     admin_newsletter,
+    admin_tips,
+    app_swaps,
+    app_daily_plan,
+    admin_push_campaigns,
+    mobile_push_tokens,
 )
 from .core.config import settings
 from .database import Base, engine
@@ -57,10 +65,15 @@ from .models import (  # ensure models are registered with SQLAlchemy
     blog_comment,
     newsletter_signup,
     app_setting,
+    user_daily_challenge,
+    push_token,
+    admin_push_campaign,
+    admin_push_send,
 )
 from .services.abuse_detector import AbuseDetector
 from .services.system_log_service import log_system_event
 from .services.backup_scheduler import start_backup_scheduler
+from .services.ai_job_runner import runner as ai_job_runner
 
 logging.basicConfig(
     level=logging.INFO,
@@ -145,6 +158,12 @@ def on_startup():
         start_backup_scheduler()
     except Exception as exc:  # noqa: BLE001
         logger.warning("Backup scheduler start failed: %s", exc)
+    try:
+        # Only run the DB-backed in-process runner when configured.
+        if (settings.ai_queue_backend or "db").strip().lower() == "db":
+            ai_job_runner.start()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("AI job runner start failed: %s", exc)
 
 
 @app.middleware("http")
@@ -157,6 +176,19 @@ async def abuse_guard(request: Request, call_next):
     start = time.time()
     try:
         response = await call_next(request)
+    except OperationalError as exc:
+        logger.warning("Database unavailable: %s", exc)
+        log_system_event({
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "level": "warn",
+            "source": "api",
+            "message": "Database unavailable",
+            "details": str(exc),
+            "path": request.url.path,
+            "method": request.method,
+            "ip": request.client.host if request.client else None,
+        })
+        return JSONResponse(status_code=503, content={"detail": "Database temporarily unavailable"})
     except Exception as exc:  # noqa: BLE001
         logger.exception("Unhandled error: %s", exc)
         log_system_event({
@@ -251,10 +283,15 @@ except Exception as exc:  # noqa: BLE001
 app.include_router(auth.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 app.include_router(admin_settings.router, prefix="/api")
+app.include_router(admin_challenge.router, prefix="/api")
 app.include_router(admin_revenuecat.router, prefix="/api")
 app.include_router(admin_user_email.router, prefix="/api")
 app.include_router(admin_email_campaigns.router, prefix="/api")
+app.include_router(admin_push_campaigns.router, prefix="/api")
 app.include_router(app_public.router, prefix="/api")
+app.include_router(app_challenge.router, prefix="/api")
+app.include_router(app_swaps.router, prefix="/api")
+app.include_router(app_daily_plan.router, prefix="/api")
 app.include_router(ingredients.router, prefix="/api")
 app.include_router(recipes.router, prefix="/api")
 app.include_router(subscriptions.router, prefix="/api")
@@ -267,6 +304,7 @@ app.include_router(meal_plan.router, prefix="/api")
 app.include_router(shopping_list.router, prefix="/api")
 app.include_router(revenuecat.router, prefix="/api")
 app.include_router(mobile_logs.router, prefix="/api")
+app.include_router(mobile_push_tokens.router, prefix="/api")
 app.include_router(system_logs.router, prefix="/api")
 app.include_router(admin_health.router, prefix="/api")
 app.include_router(admin_backups.router, prefix="/api")
@@ -274,3 +312,4 @@ app.include_router(blog.router, prefix="/api")
 app.include_router(admin_blog.router, prefix="/api")
 app.include_router(newsletter.router, prefix="/api")
 app.include_router(admin_newsletter.router, prefix="/api")
+app.include_router(admin_tips.router, prefix="/api")

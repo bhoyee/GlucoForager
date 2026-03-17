@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -8,11 +8,12 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Keyboard,
   Alert,
   Modal,
   ActivityIndicator,
 } from 'react-native';
-import { useNavigation, useIsFocused } from '@react-navigation/native';
+import { useNavigation, useIsFocused, useRoute } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,15 +25,23 @@ import { apiFetch } from '../../utils/api';
 
 export default function ManualInputScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
   const isFocused = useIsFocused();
   const { signOut } = useAuth();
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const headerPaddingTop = Math.max(insets.top, 16);
-  const footerHeight = 68;
-  const contentBottomPadding = footerHeight + Math.max(insets.bottom, 12);
+  const footerSafePadding = Math.max(insets.bottom, 6);
+  // Keep enough room so the last input row isn't hidden behind the fixed footer.
+  const contentBottomPadding = 140;
+  const scrollRef = useRef(null);
+  const ingredientRowYRef = useRef({});
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [ingredients, setIngredients] = useState(['']);
   const [isLoading, setIsLoading] = useState(false);
+  const [longWait, setLongWait] = useState(false);
+  const [countdownSeconds, setCountdownSeconds] = useState(null);
+  const countdownDeadlineRef = useRef(null);
   const requestControllerRef = useRef(null);
   const pollingRef = useRef(null);
   const timeoutRef = useRef(null);
@@ -41,6 +50,7 @@ export default function ManualInputScreen() {
     remaining: null,
     isPremium: false,
   });
+  const lastPrefillTokenRef = useRef(null);
   const limitReached = !scanStatus.isPremium && scanStatus.remaining === 0;
   const allowedIngredientPattern = /^[A-Za-z0-9][A-Za-z0-9\s\-'/%%]*$/;
 
@@ -110,6 +120,43 @@ export default function ManualInputScreen() {
   }, [isFocused]);
 
   useEffect(() => {
+    if (!isFocused) return;
+    const prefill = route.params?.prefillIngredients;
+    if (!Array.isArray(prefill) || prefill.length === 0) return;
+    const cleaned = prefill
+      .map((item) => `${item || ''}`.trim())
+      .filter(Boolean)
+      .slice(0, 20);
+    if (!cleaned.length) return;
+
+    const token = `${route.params?.source || 'prefill'}|${cleaned.join('|')}`;
+    if (lastPrefillTokenRef.current === token) return;
+    lastPrefillTokenRef.current = token;
+
+    setIngredients(cleaned);
+    if (route.params?.autoSubmit) {
+      setTimeout(() => {
+        handleFindRecipes(cleaned);
+      }, 250);
+    }
+  }, [isFocused, route.params]);
+
+  useEffect(() => {
+    if (!isFocused) return;
+    if (!route.params?.autoSubmit) return;
+    const mode = route.params?.mode;
+    if (mode !== 'surprise' && mode !== 'quick') return;
+
+    const token = `mode|${mode}`;
+    if (lastPrefillTokenRef.current === token) return;
+    lastPrefillTokenRef.current = token;
+
+    setTimeout(() => {
+      handleFindRecipes([]);
+    }, 250);
+  }, [isFocused, route.params]);
+
+  useEffect(() => {
     return () => {
       if (pollingRef.current) {
         clearInterval(pollingRef.current);
@@ -117,6 +164,19 @@ export default function ManualInputScreen() {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    const showSub = Keyboard.addListener('keyboardWillShow', (event) => {
+      const height = event?.endCoordinates?.height;
+      setKeyboardHeight(Number.isFinite(height) ? height : 0);
+    });
+    const hideSub = Keyboard.addListener('keyboardWillHide', () => setKeyboardHeight(0));
+    return () => {
+      showSub?.remove?.();
+      hideSub?.remove?.();
     };
   }, []);
 
@@ -129,7 +189,39 @@ export default function ManualInputScreen() {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
+    setLongWait(false);
+    setCountdownSeconds(null);
+    countdownDeadlineRef.current = null;
   };
+
+  const scheduleLongWaitNotice = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    setLongWait(false);
+    timeoutRef.current = setTimeout(() => setLongWait(true), 45000);
+  };
+
+  useEffect(() => {
+    if (!isLoading) {
+      setCountdownSeconds(null);
+      countdownDeadlineRef.current = null;
+      return;
+    }
+    // Always show a 60s countdown for the loading modal (UX expectation for "Eat now" flows).
+    const deadline = Date.now() + 60_000;
+    countdownDeadlineRef.current = deadline;
+    setCountdownSeconds(60);
+    const id = setInterval(() => {
+      const currentDeadline = countdownDeadlineRef.current;
+      if (!currentDeadline) return;
+      const remainingMs = currentDeadline - Date.now();
+      const remaining = Math.max(0, Math.ceil(remainingMs / 1000));
+      setCountdownSeconds(remaining);
+    }, 250);
+    return () => clearInterval(id);
+  }, [isLoading]);
 
   const handleJobResult = (result, normalized) => {
     const recipes = result?.results || [];
@@ -179,38 +271,73 @@ export default function ManualInputScreen() {
     }
   };
 
-  const handleFindRecipes = async () => {
+  const handleFindRecipes = async (overrideIngredients) => {
     if (isLoading) return;
-    const normalized = ingredients
-      .map((ing) => ing.trim().replace(/\s+/g, ' '))
-      .filter((ing) => ing !== '');
+    const mode = route.params?.mode;
+    const sourceIngredients = Array.isArray(overrideIngredients) ? overrideIngredients : ingredients;
+    const normalized = sourceIngredients
+      .flatMap((ing) =>
+        `${ing || ''}`
+          .split(',')
+          .map((part) =>
+            part
+              .trim()
+              .replace(/^[,.;]+|[,.;]+$/g, '')
+              .replace(/\s+/g, ' ')
+          )
+          .filter(Boolean)
+      )
+      .slice(0, 50);
 
-    if (normalized.length > 20) {
+    // De-dupe while keeping order (and enforce 20 max after splitting).
+    const seen = new Set();
+    const normalizedUnique = [];
+    for (const item of normalized) {
+      const key = item.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      normalizedUnique.push(item);
+      if (normalizedUnique.length >= 20) break;
+    }
+
+    if (normalizedUnique.length > 20) {
       Alert.alert('Too many ingredients', 'Please enter 20 ingredients or fewer.');
       return;
     }
 
-    const invalid = normalized.find(
-      (item) => item.length < 2 || item.length > 30 || !allowedIngredientPattern.test(item)
-    );
-    
-    if (normalized.length === 0) {
-      Alert.alert('Error', 'Please enter at least one ingredient');
-      return;
+    if (normalizedUnique.length === 0) {
+      const allowEmpty = mode === 'surprise' || mode === 'quick';
+      if (!allowEmpty) {
+        Alert.alert('Error', 'Please enter at least one ingredient');
+        return;
+      }
+    } else {
+      try {
+        await AsyncStorage.setItem('last_used_ingredients_v1', JSON.stringify(normalizedUnique));
+      } catch {
+        // Ignore.
+      }
     }
 
-    if (invalid) {
-      Alert.alert(
-        'Invalid ingredient',
-        "Use letters, numbers, spaces, hyphens, apostrophes, slashes, or % only."
+    if (normalizedUnique.length) {
+      const invalid = normalizedUnique.find(
+        (item) => item.length < 2 || item.length > 30 || !allowedIngredientPattern.test(item)
       );
-      return;
+
+      if (invalid) {
+        Alert.alert(
+          'Invalid ingredient',
+          "Use letters, numbers, spaces, hyphens, apostrophes, slashes, or % only."
+        );
+        return;
+      }
     }
 
     const controller = new AbortController();
     requestControllerRef.current = controller;
     setIsLoading(true);
-    
+    setLongWait(false);
+     
     try {
       const token = await AsyncStorage.getItem('userToken');
       if (!token) {
@@ -219,6 +346,33 @@ export default function ManualInputScreen() {
         return;
       }
       const deviceId = await getDeviceId();
+      const shouldExcludeRecent =
+        Boolean(route.params?.excludeRecent) || route.params?.source === 'eat_now_have';
+      const varietyMode =
+        Boolean(route.params?.varietyMode) || route.params?.source === 'eat_now_have';
+
+      let excludeTitles;
+      if (shouldExcludeRecent) {
+        try {
+          const recentRes = await apiFetch(
+            `${API_URL}${API_ENDPOINTS.RECENT_RECIPES}`,
+            { headers: { Authorization: `Bearer ${token}` } },
+            { onUnauthorized: signOut, timeoutMs: 10000 }
+          );
+          if (recentRes.ok) {
+            const recentData = await recentRes.json();
+            const items = Array.isArray(recentData?.items) ? recentData.items : [];
+            const titles = items
+              .map((item) => (item?.title || item?.name || '').toString().trim())
+              .filter(Boolean);
+            if (titles.length) {
+              excludeTitles = titles.slice(0, 10);
+            }
+          }
+        } catch {
+          // Ignore recent fetch failures.
+        }
+      }
       const response = await apiFetch(
         `${API_URL}${API_ENDPOINTS.AI_TEXT_RECIPES_ASYNC}`,
         {
@@ -228,7 +382,13 @@ export default function ManualInputScreen() {
           'Content-Type': 'application/json',
           'X-Device-Id': deviceId,
         },
-        body: JSON.stringify({ ingredients: normalized }),
+        body: JSON.stringify({
+          ingredients: normalizedUnique,
+          filters: Array.isArray(route.params?.filters) ? route.params.filters : undefined,
+          mode: mode || undefined,
+          exclude_titles: excludeTitles,
+          variety_mode: varietyMode || undefined,
+        }),
         signal: controller.signal,
         },
         { onUnauthorized: signOut, timeoutMs: 45000 }
@@ -255,19 +415,11 @@ export default function ManualInputScreen() {
       }
       const jobId = data.job_id;
       setActiveJobId(jobId);
-      await pollJob(jobId, normalized);
+      await pollJob(jobId, normalizedUnique);
       pollingRef.current = setInterval(() => {
-        pollJob(jobId, normalized);
+        pollJob(jobId, normalizedUnique);
       }, 3000);
-      timeoutRef.current = setTimeout(() => {
-        stopPolling();
-        setIsLoading(false);
-        setActiveJobId(null);
-        Alert.alert(
-          'Taking longer than usual',
-          'Please try again in a moment. Your ingredients are still here.'
-        );
-      }, 120000);
+      scheduleLongWaitNotice();
     } catch (error) {
       if (error?.name === 'AbortError') {
         setIsLoading(false);
@@ -289,12 +441,11 @@ export default function ManualInputScreen() {
     setIsLoading(false);
   };
 
+  const modeParam = route.params?.mode;
+  const isEatNow = modeParam === 'surprise' || modeParam === 'quick';
+
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'position' : undefined}
-      keyboardVerticalOffset={headerPaddingTop}
-      style={styles.container}
-    >
+    <View style={styles.container}>
       <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
         <TouchableOpacity 
           style={styles.backButton}
@@ -305,11 +456,24 @@ export default function ManualInputScreen() {
         <Text style={styles.headerTitle}>Type Ingredients</Text>
         <View style={styles.headerRight} />
       </View>
-      <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
+
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        // Account for our custom header (and tab bar when present) so inputs can scroll above the keyboard.
+        keyboardVerticalOffset={headerPaddingTop + (Platform.OS === 'ios' ? 44 : 0) + (tabBarHeight || 0)}
+        style={{ flex: 1 }}
       >
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: contentBottomPadding + (Platform.OS === 'ios' ? keyboardHeight : 0) },
+          ]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+        >
 
         {/* Instructions */}
         <View style={styles.instructionsContainer}>
@@ -338,7 +502,13 @@ export default function ManualInputScreen() {
           <Text style={styles.sectionTitle}>Your Ingredients</Text>
           
           {ingredients.map((ingredient, index) => (
-            <View key={index} style={styles.ingredientRow}>
+            <View
+              key={index}
+              style={styles.ingredientRow}
+              onLayout={(event) => {
+                ingredientRowYRef.current[index] = event?.nativeEvent?.layout?.y ?? 0;
+              }}
+            >
               <TextInput
                 style={styles.ingredientInput}
                 placeholder={`Ingredient ${index + 1} (e.g., tomato)`}
@@ -347,6 +517,11 @@ export default function ManualInputScreen() {
                 onChangeText={(text) => handleIngredientChange(text, index)}
                 autoCapitalize="none"
                 editable={!isLoading}
+                onFocus={() => {
+                  const y = ingredientRowYRef.current[index];
+                  if (!Number.isFinite(y)) return;
+                  scrollRef.current?.scrollTo?.({ y: Math.max(0, y - 120), animated: true });
+                }}
               />
               {index === ingredients.length - 1 && (
                 <TouchableOpacity
@@ -387,10 +562,13 @@ export default function ManualInputScreen() {
       </View>
 
       </ScrollView>
+      </KeyboardAvoidingView>
       <View
         style={[
           styles.footerBar,
-          { paddingBottom: Math.max(insets.bottom, 8), height: footerHeight + Math.max(insets.bottom, 8) },
+          {
+            paddingBottom: footerSafePadding,
+          },
         ]}
       >
         <TouchableOpacity
@@ -418,7 +596,9 @@ export default function ManualInputScreen() {
             ) : (
               <>
                 <Ionicons name="search-outline" size={20} color="white" />
-                <Text style={styles.findButtonText}>Find Diabetes-Safe Recipes</Text>
+                <Text style={styles.findButtonText} numberOfLines={1} ellipsizeMode="tail">
+                  Find Diabetes-Safe Recipes
+                </Text>
               </>
             )}
           </View>
@@ -428,10 +608,32 @@ export default function ManualInputScreen() {
         <View style={styles.loadingOverlay}>
           <View style={styles.loadingCard}>
             <ActivityIndicator size="large" color={Colors.primary} />
-            <Text style={styles.loadingTitle}>Generating recipes...</Text>
-            <Text style={styles.loadingSubtitle}>
-              Please wait while we prepare your diabetes-safe options.
+            <Text style={styles.loadingTitle}>
+              {isEatNow ? 'Generating meals...' : 'Generating recipes...'}
             </Text>
+            <Text style={styles.loadingSubtitle}>
+              {isEatNow
+                ? 'Please wait while we prepare 3 diabetes-friendly meal options.'
+                : 'Please wait while we prepare your diabetes-safe options.'}
+            </Text>
+            {typeof countdownSeconds === 'number' ? (
+              <View style={styles.countdownBox}>
+                <Text style={styles.countdownLabel}>
+                  {countdownSeconds > 0 ? 'Time remaining' : 'Still working...'}
+                </Text>
+                {countdownSeconds > 0 ? (
+                  <Text style={styles.countdownValue}>{countdownSeconds}s</Text>
+                ) : null}
+              </View>
+            ) : null}
+            {longWait ? (
+              <View style={styles.longWaitBox}>
+                <Text style={styles.longWaitTitle}>Taking longer than usual</Text>
+                <Text style={styles.longWaitText}>
+                  Still working in the background. You can keep waiting, or cancel and try again.
+                </Text>
+              </View>
+            ) : null}
             <TouchableOpacity
               style={styles.cancelButton}
               onPress={handleCancelRequest}
@@ -441,7 +643,7 @@ export default function ManualInputScreen() {
           </View>
         </View>
       </Modal>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -460,7 +662,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     paddingHorizontal: 20,
-    paddingTop: 2,
+    paddingTop: 12,
     backgroundColor: Colors.background,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
@@ -491,6 +693,42 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 13,
     color: Colors.textLight,
+    textAlign: 'center',
+  },
+  countdownBox: {
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  countdownLabel: {
+    fontSize: 13,
+    color: Colors.textMuted,
+    textAlign: 'center',
+  },
+  countdownValue: {
+    marginTop: 4,
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.text,
+    textAlign: 'center',
+  },
+  longWaitBox: {
+    marginTop: 14,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#F6F7FB',
+    width: '100%',
+  },
+  longWaitTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.text,
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  longWaitText: {
+    fontSize: 13,
+    color: Colors.textLight,
+    lineHeight: 18,
     textAlign: 'center',
   },
   cancelButton: {
@@ -645,7 +883,8 @@ const styles = StyleSheet.create({
   findButton: {
     backgroundColor: Colors.primary,
     borderRadius: 12,
-    paddingVertical: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
     marginBottom: 0,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -666,9 +905,11 @@ const styles = StyleSheet.create({
   },
   findButtonText: {
     color: 'white',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     marginLeft: 8,
+    flexShrink: 1,
+    textAlign: 'center',
   },
   findButtonTextLimit: {
     color: Colors.textLight,

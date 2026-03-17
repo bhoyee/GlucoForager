@@ -18,6 +18,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
+import { getRecipeImageSettings } from '../../utils/recipeImageSettings';
+import { getCachedRecipeImageUrl, setCachedRecipeImageUrl } from '../../utils/recipeImageCache';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import RecipePlaceholder from '../../assets/images/recipe-placeholder.jpeg';
 
@@ -101,6 +103,8 @@ const RecipeDetailsScreen = () => {
   const [expandedTip, setExpandedTip] = useState(null);
   const [isSavingFavorite, setIsSavingFavorite] = useState(false);
   const [imageLoadError, setImageLoadError] = useState(false);
+  const [recipeImagesEnabled, setRecipeImagesEnabled] = useState(true);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -116,6 +120,112 @@ const RecipeDetailsScreen = () => {
     };
     init();
   }, [route.params]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      const settings = await getRecipeImageSettings();
+      if (!cancelled) {
+        setRecipeImagesEnabled(Boolean(settings?.enabled));
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const hydrateFromCache = async () => {
+      const current = `${recipe?.image_url || recipe?.image || ''}`.trim();
+      if (current) return;
+      const cached = await getCachedRecipeImageUrl(recipe);
+      if (!cancelled && cached) {
+        setImageLoadError(false);
+        setRecipe((prev) => ({
+          ...prev,
+          image: cached,
+          image_url: cached,
+          imageSource: prev?.imageSource || prev?.image_source || 'ai',
+          image_source: prev?.image_source || prev?.imageSource || 'ai',
+        }));
+      }
+    };
+    hydrateFromCache();
+    return () => {
+      cancelled = true;
+    };
+  }, [recipe?.title, recipe?.ingredients?.length]);
+
+  const handleGenerateImage = async () => {
+    if (isGeneratingImage) return;
+    try {
+      setIsGeneratingImage(true);
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        Alert.alert('Sign in required', 'Please sign in to generate recipe images.');
+        return;
+      }
+
+      const ingredients = Array.isArray(recipe.ingredients)
+        ? recipe.ingredients
+            .map((item) => (typeof item === 'string' ? item : item?.name))
+            .filter(Boolean)
+        : [];
+
+      const response = await apiFetch(
+        `${API_URL}${API_ENDPOINTS.AI_RECIPES_IMAGE}`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: recipe.title,
+            description: recipe.description,
+            ingredients,
+          }),
+        },
+        { onUnauthorized: signOut, timeoutMs: 60000 }
+      );
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const detail = data?.detail || 'Unable to generate image right now.';
+        Alert.alert('Image generation', detail);
+        return;
+      }
+
+      if (data?.image_url) {
+        setImageLoadError(false);
+        await setCachedRecipeImageUrl(recipe, data.image_url);
+        setRecipe((prev) => ({
+          ...prev,
+          image: data.image_url,
+          image_url: data.image_url,
+          imageSource: data.image_source || 'ai',
+          image_source: data.image_source || 'ai',
+        }));
+
+        // Best-effort: refresh cached recent recipes so the Home list can show the new thumbnail immediately.
+        try {
+          const recentResponse = await apiFetch(
+            `${API_URL}${API_ENDPOINTS.RECENT_RECIPES}`,
+            { headers: { Authorization: `Bearer ${token}` } },
+            { onUnauthorized: signOut, timeoutMs: 5000 }
+          );
+          const recentData = await recentResponse.json().catch(() => ({}));
+          const recentItems = Array.isArray(recentData.items) ? recentData.items : [];
+          await AsyncStorage.setItem('home_recent_recipes', JSON.stringify(recentItems));
+        } catch (e) {
+          // Ignore cache refresh errors.
+        }
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Unable to generate image right now.');
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
 
 
   const fetchRecipeDetail = async (recipeId) => {
@@ -172,7 +282,12 @@ const RecipeDetailsScreen = () => {
       ? item.steps
       : [];
 
-    const nutrition = item.nutrition || item.nutrition_per_serving || {};
+    const nutrition =
+      item.nutrition ||
+      item.nutrition_per_serving ||
+      item.nutritional_info ||
+      item.nutritionPerServing ||
+      {};
 
     const prepTimeRaw = item.prep_time_minutes ?? item.prepTime ?? item.prep_time ?? null;
     const cookTimeRaw = item.cook_time_minutes ?? item.cookTime ?? item.cook_time ?? null;
@@ -500,24 +615,24 @@ const RecipeDetailsScreen = () => {
       ) : (
         <Image source={RecipePlaceholder} style={styles.recipeImage} />
       )}
-      <View style={styles.imageOverlay}>
-        <View style={styles.heroContent}>
-          <View style={styles.recipeBadge}>
-            <Text style={styles.badgeText}>{recipe.category}</Text>
-          </View>
-          <View style={styles.nutritionBadge}>
-            <View style={styles.nutritionItem}>
-              <Text style={styles.nutritionIcon}>🥗</Text>
-              <Text style={styles.nutritionValue}>{recipe.nutrition.calories} cal</Text>
-            </View>
-            <View style={styles.nutritionDivider} />
-            <View style={styles.nutritionItem}>
-              <Text style={styles.nutritionIcon}>🍞</Text>
-              <Text style={styles.nutritionValue}>{recipe.nutrition.carbs} carbs</Text>
-            </View>
-          </View>
+      {recipeImagesEnabled && (recipe.imageSource === 'placeholder' || !recipe.image || imageLoadError) ? (
+        <View pointerEvents="box-none" style={styles.generateImageOverlay}>
+          <TouchableOpacity
+            style={[
+              styles.generateImageButton,
+              styles.generateImageOverlayButton,
+              isGeneratingImage ? styles.generateImageButtonDisabled : null,
+            ]}
+            onPress={handleGenerateImage}
+            disabled={isGeneratingImage}
+            activeOpacity={0.9}
+          >
+            <Text style={styles.generateImageButtonText}>
+              {isGeneratingImage ? 'Generating...' : 'Generate image'}
+            </Text>
+          </TouchableOpacity>
         </View>
-      </View>
+      ) : null}
     </View>
   );
 
@@ -542,6 +657,19 @@ const RecipeDetailsScreen = () => {
 
   const renderTitleSection = () => (
     <View style={styles.titleSection}>
+      {recipeImagesEnabled && recipe.imageSource === 'placeholder' && false ? (
+        <View style={styles.generateImageRow}>
+          <TouchableOpacity
+            style={[styles.generateImageButton, isGeneratingImage ? styles.generateImageButtonDisabled : null]}
+            onPress={handleGenerateImage}
+            disabled={isGeneratingImage}
+          >
+            <Text style={styles.generateImageButtonText}>
+              {isGeneratingImage ? 'Generating…' : 'Generate image'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
       <Text style={styles.recipeTitle}>{recipe.title}</Text>
       <Text style={styles.recipeDescription}>{recipe.description}</Text>
     </View>
@@ -661,6 +789,9 @@ const RecipeDetailsScreen = () => {
     if (recipe.source === 'admin') {
       return null;
     }
+    if (!Array.isArray(recipe.tips) || recipe.tips.length === 0) {
+      return null;
+    }
     return (
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Diabetes Management Tips</Text>
@@ -689,9 +820,6 @@ const RecipeDetailsScreen = () => {
               )}
             </TouchableOpacity>
           ))}
-          {recipe.tips.length === 0 && (
-            <Text style={styles.emptyText}>No tips available for this recipe yet.</Text>
-          )}
         </View>
       </View>
     );
@@ -902,7 +1030,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    backdropFilter: 'blur(10px)',
   },
   headerIconButton: {
     width: 44,
@@ -911,11 +1038,50 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    backdropFilter: 'blur(10px)',
   },
   heroContainer: {
     height: 320,
     position: 'relative',
+  },
+  generateImageOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    backgroundColor: 'rgba(0,0,0,0.12)',
+  },
+  generateImageOverlayButton: {
+    minWidth: 160,
+    alignItems: 'center',
+  },
+  generateImageRow: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginBottom: 10,
+  },
+  generateImageButton: {
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  generateImageButtonDisabled: {
+    opacity: 0.7,
+  },
+  generateImageButtonText: {
+    color: '#0C1824',
+    fontWeight: '700',
+    fontSize: 13,
   },
   recipeImage: {
     width: '100%',
@@ -927,54 +1093,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5F5',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  imageOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    justifyContent: 'flex-end',
-  },
-  heroContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
-  recipeBadge: {
-    backgroundColor: 'rgba(76, 175, 80, 0.9)',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    marginBottom: 10,
-  },
-  badgeText: {
-    color: '#FFF',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  nutritionBadge: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    borderRadius: 16,
-    padding: 12,
-    alignSelf: 'flex-start',
-  },
-  nutritionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-  },
-  nutritionIcon: {
-    fontSize: 16,
-    marginRight: 4,
-  },
-  nutritionValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-  },
-  nutritionDivider: {
-    width: 1,
-    height: '100%',
-    backgroundColor: '#E0E0E0',
   },
   content: {
     flex: 1,
@@ -1355,14 +1473,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
+    paddingHorizontal: 10,
     borderRadius: 12,
     backgroundColor: '#4CAF50',
   },
   primaryActionText: {
     marginLeft: 8,
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '600',
     color: '#FFF',
+    flexShrink: 1,
+    textAlign: 'center',
   },
   modalContainer: {
     flex: 1,

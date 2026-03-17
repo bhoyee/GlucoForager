@@ -1,5 +1,5 @@
 // screens/auth/SignUpScreen.js - COMPLETE WITH AUTH CONTEXT
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -27,13 +27,13 @@ export default function SignUpScreen() {
   const insets = useSafeAreaInsets();
   const headerPaddingTop = Math.max(insets.top, 16);
   const contentBottomPadding = Math.max(insets.bottom, 16) + 24;
+  const [focusedField, setFocusedField] = useState(null);
   
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
     password: "",
     confirmPassword: "",
-    hasDiabetes: false,
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -43,17 +43,16 @@ export default function SignUpScreen() {
     setFormData({ ...formData, [field]: value });
   };
 
+  const inputWrapperStyleFor = useMemo(() => {
+    return (field) => [styles.inputWrapper, focusedField === field ? styles.inputWrapperFocused : null];
+  }, [focusedField]);
+
   const handleSignUp = async () => {
     const { fullName, email, password, confirmPassword } = formData;
 
     // Validation
     if (!fullName || !email || !password || !confirmPassword) {
       Alert.alert("Error", "Please fill in all fields");
-      return;
-    }
-
-    if (!formData.hasDiabetes) {
-      Alert.alert("Required", "Please confirm if you have diabetes or pre-diabetes.");
       return;
     }
 
@@ -85,7 +84,7 @@ export default function SignUpScreen() {
         throw new Error(data?.detail || data?.message || 'Signup failed. Please try again.');
       }
 
-      await signIn(data.access_token, data.public_id, data.refresh_token);
+      await signIn(data.access_token, data.public_id, data.refresh_token, data.profile_completed);
       Alert.alert("Success!", data.message || "Account created successfully!");
     } catch (error) {
       Alert.alert("Error", error.message || "Signup failed. Please try again.");
@@ -107,13 +106,18 @@ export default function SignUpScreen() {
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </TouchableOpacity>
         
-        <TouchableOpacity onPress={() => navigation.navigate("Login")}>
-          <Text style={styles.loginText}>Sign In</Text>
+        <TouchableOpacity
+          onPress={() => navigation.navigate("Login")}
+          style={styles.headerActionButton}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.headerActionText}>Sign In</Text>
         </TouchableOpacity>
       </View>
       <ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
 
         {/* Logo & Title */}
@@ -123,16 +127,22 @@ export default function SignUpScreen() {
             style={styles.logoImage}
             resizeMode="contain"
           />
-          <Text style={styles.title}>Create Account</Text>
-          <Text style={styles.subtitle}>Join GlucoForager for diabetes-friendly recipes</Text>
+          <Text style={styles.kicker}>Create your account</Text>
+          <Text style={styles.title}>GlucoForager</Text>
+          <Text style={styles.subtitle}>Your daily diabetes food assistant.</Text>
         </View>
 
         {/* Form */}
         <View style={styles.form}>
+          <View style={styles.formCard}>
+            <View style={styles.formHeader}>
+              <Text style={styles.formTitle}>Account details</Text>
+              <Text style={styles.formSubtitle}>It takes about a minute.</Text>
+            </View>
           {/* Full Name */}
           <View style={styles.inputContainer}>
             <Text style={styles.inputLabel}>Full Name</Text>
-            <View style={styles.inputWrapper}>
+            <View style={inputWrapperStyleFor("fullName")}>
               <Ionicons name="person-outline" size={20} color={Colors.textLight} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
@@ -142,6 +152,8 @@ export default function SignUpScreen() {
                 onChangeText={(text) => handleChange("fullName", text)}
                 autoCapitalize="words"
                 editable={!isLoading}
+                onFocus={() => setFocusedField("fullName")}
+                onBlur={() => setFocusedField(null)}
               />
             </View>
           </View>
@@ -149,7 +161,7 @@ export default function SignUpScreen() {
           {/* Email */}
           <View style={styles.inputContainer}>
             <Text style={styles.inputLabel}>Email Address</Text>
-            <View style={styles.inputWrapper}>
+            <View style={inputWrapperStyleFor("email")}>
               <Ionicons name="mail-outline" size={20} color={Colors.textLight} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
@@ -161,6 +173,8 @@ export default function SignUpScreen() {
                 autoCapitalize="none"
                 autoCorrect={false}
                 editable={!isLoading}
+                onFocus={() => setFocusedField("email")}
+                onBlur={() => setFocusedField(null)}
               />
             </View>
           </View>
@@ -168,7 +182,7 @@ export default function SignUpScreen() {
           {/* Password */}
           <View style={styles.inputContainer}>
             <Text style={styles.inputLabel}>Password</Text>
-            <View style={styles.inputWrapper}>
+            <View style={inputWrapperStyleFor("password")}>
               <Ionicons name="lock-closed-outline" size={20} color={Colors.textLight} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
@@ -178,6 +192,8 @@ export default function SignUpScreen() {
                 onChangeText={(text) => handleChange("password", text)}
                 secureTextEntry={!showPassword}
                 editable={!isLoading}
+                onFocus={() => setFocusedField("password")}
+                onBlur={() => setFocusedField(null)}
               />
               <TouchableOpacity 
                 onPress={() => setShowPassword(!showPassword)}
@@ -196,7 +212,7 @@ export default function SignUpScreen() {
           {/* Confirm Password */}
           <View style={styles.inputContainer}>
             <Text style={styles.inputLabel}>Confirm Password</Text>
-            <View style={styles.inputWrapper}>
+            <View style={inputWrapperStyleFor("confirmPassword")}>
               <Ionicons name="lock-closed-outline" size={20} color={Colors.textLight} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
@@ -206,6 +222,8 @@ export default function SignUpScreen() {
                 onChangeText={(text) => handleChange("confirmPassword", text)}
                 secureTextEntry={!showConfirmPassword}
                 editable={!isLoading}
+                onFocus={() => setFocusedField("confirmPassword")}
+                onBlur={() => setFocusedField(null)}
               />
               <TouchableOpacity 
                 onPress={() => setShowConfirmPassword(!showConfirmPassword)}
@@ -218,27 +236,6 @@ export default function SignUpScreen() {
                 />
               </TouchableOpacity>
             </View>
-          </View>
-
-          {/* Diabetes Status */}
-          <View style={styles.diabetesContainer}>
-            <TouchableOpacity 
-              style={styles.diabetesOption}
-              onPress={() => handleChange("hasDiabetes", !formData.hasDiabetes)}
-              disabled={isLoading}
-            >
-              <View style={[styles.checkbox, formData.hasDiabetes && styles.checkboxChecked]}>
-                {formData.hasDiabetes && (
-                  <Ionicons name="checkmark" size={16} color="white" />
-                )}
-              </View>
-              <Text style={[styles.diabetesText, isLoading && { opacity: 0.5 }]}>
-                I have diabetes or pre-diabetes
-              </Text>
-            </TouchableOpacity>
-            <Text style={styles.diabetesHint}>
-              This helps us personalize your recipe recommendations
-            </Text>
           </View>
 
           {/* Terms */}
@@ -301,6 +298,7 @@ export default function SignUpScreen() {
               </Text>
             </TouchableOpacity>
           </View>
+          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -336,53 +334,98 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  loginText: {
+  headerActionButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    backgroundColor: "#F2F4F7",
+    borderWidth: 1,
+    borderColor: "#EEF1F5",
+  },
+  headerActionText: {
     color: Colors.primary,
-    fontSize: 16,
-    fontWeight: "600",
+    fontSize: 14,
+    fontWeight: "800",
   },
   logoContainer: {
     alignItems: "center",
     paddingHorizontal: 20,
-    marginBottom: 30,
+    marginBottom: 18,
   },
   logoImage: {
-    width: 110,
-    height: 110,
-    marginBottom: 20,
+    width: 86,
+    height: 86,
+    marginBottom: 14,
+  },
+  kicker: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: Colors.textLight,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
   },
   title: {
-    fontSize: 32,
-    fontWeight: "bold",
+    fontSize: 30,
+    fontWeight: "800",
     color: Colors.text,
-    marginBottom: 8,
+    marginTop: 4,
+    marginBottom: 6,
   },
   subtitle: {
     fontSize: 16,
     color: Colors.textLight,
     textAlign: "center",
+    fontWeight: "600",
   },
   form: {
     paddingHorizontal: 20,
   },
+  formCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 18,
+    padding: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    elevation: 3,
+  },
+  formHeader: {
+    marginBottom: 12,
+  },
+  formTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: Colors.text,
+  },
+  formSubtitle: {
+    marginTop: 4,
+    fontSize: 12,
+    fontWeight: "700",
+    color: Colors.textLight,
+  },
   inputContainer: {
-    marginBottom: 20,
+    marginBottom: 14,
   },
   inputLabel: {
     fontSize: 14,
-    fontWeight: "500",
+    fontWeight: "700",
     color: Colors.text,
     marginBottom: 8,
   },
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
+    backgroundColor: "#F2F4F7",
+    borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: Platform.OS === "ios" ? 16 : 12,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: "#EEF1F5",
+  },
+  inputWrapperFocused: {
+    borderColor: Colors.primary,
+    backgroundColor: "#EFFAF3",
   },
   inputIcon: {
     marginRight: 12,
@@ -399,39 +442,6 @@ const styles = StyleSheet.create({
     marginTop: 6,
     marginLeft: 4,
   },
-  diabetesContainer: {
-    marginBottom: 24,
-  },
-  diabetesOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    marginRight: 12,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  checkboxChecked: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  diabetesText: {
-    fontSize: 16,
-    color: Colors.text,
-    fontWeight: "500",
-  },
-  diabetesHint: {
-    fontSize: 13,
-    color: Colors.textLight,
-    marginLeft: 36,
-    lineHeight: 18,
-  },
   termsContainer: {
     marginBottom: 24,
     paddingHorizontal: 4,
@@ -441,20 +451,21 @@ const styles = StyleSheet.create({
     color: Colors.textLight,
     lineHeight: 20,
     textAlign: "center",
+    fontWeight: "600",
   },
   termsLink: {
     color: Colors.primary,
     fontWeight: "600",
   },
   signUpButton: {
-    borderRadius: 12,
+    borderRadius: 14,
     overflow: "hidden",
     marginBottom: 24,
-    shadowColor: "#2E8B57",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.10,
+    shadowRadius: 16,
+    elevation: 4,
   },
   signUpButtonDisabled: {
     opacity: 0.7,
@@ -476,7 +487,7 @@ const styles = StyleSheet.create({
   signUpButtonText: {
     color: "white",
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "800",
   },
   loginLinkContainer: {
     flexDirection: "row",
@@ -487,6 +498,7 @@ const styles = StyleSheet.create({
   loginPrompt: {
     color: Colors.textLight,
     fontSize: 14,
+    fontWeight: "600",
   },
   loginLink: {
     color: Colors.primary,
