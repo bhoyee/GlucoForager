@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
@@ -46,7 +46,6 @@ def get_today_plan(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _require_premium(db, current_user)
     today = datetime.utcnow().date()
     plan = (
         db.query(MealPlan)
@@ -76,7 +75,7 @@ def generate_today_plan(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _require_premium(db, current_user)
+    tier = get_effective_subscription_tier(db, current_user) or "free"
     today = datetime.utcnow().date()
 
     existing = (
@@ -97,10 +96,10 @@ def generate_today_plan(
             }
         }
 
-    # Rate limit: premium-only, but still protect costs.
-    tier = get_effective_subscription_tier(db, current_user) or "free"
+    # Rate limit: protect costs/latency for all tiers.
     per_minute_limit = 2
-    per_day_limit = 6
+    premium_per_day_limit = 6
+    free_per_week_limit = 1
 
     cache = CacheService()
     minute_key = f"daily_plan:rl:v1:user:{current_user.id}"
@@ -116,25 +115,46 @@ def generate_today_plan(
         )
 
     now = datetime.utcnow()
-    start_of_day = datetime(year=now.year, month=now.month, day=now.day)
-    used_today = (
-        db.query(AIRequest)
-        .filter(
-            AIRequest.user_id == current_user.id,
-            AIRequest.request_type == "daily_plan",
-            AIRequest.created_at >= start_of_day,
+    if tier != "premium":
+        window_start = now - timedelta(days=7)
+        used_recent = (
+            db.query(AIRequest)
+            .filter(
+                AIRequest.user_id == current_user.id,
+                AIRequest.request_type == "daily_plan",
+                AIRequest.created_at >= window_start,
+            )
+            .count()
         )
-        .count()
-    )
-    if used_today >= per_day_limit:
-        raise HTTPException(
-            status_code=429,
-            detail={
-                "code": "daily_limit_reached",
-                "message": "Daily Meal Planner limit reached. Please try again tomorrow.",
-                "limit_per_day": per_day_limit,
-            },
+        if used_recent >= free_per_week_limit:
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "code": "weekly_limit_reached",
+                    "message": "Free plan includes 1 meal plan per week. Upgrade to Premium for more.",
+                    "limit_per_week": free_per_week_limit,
+                },
+            )
+    else:
+        start_of_day = datetime(year=now.year, month=now.month, day=now.day)
+        used_today = (
+            db.query(AIRequest)
+            .filter(
+                AIRequest.user_id == current_user.id,
+                AIRequest.request_type == "daily_plan",
+                AIRequest.created_at >= start_of_day,
+            )
+            .count()
         )
+        if used_today >= premium_per_day_limit:
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "code": "daily_limit_reached",
+                    "message": "Daily Meal Planner limit reached. Please try again tomorrow.",
+                    "limit_per_day": premium_per_day_limit,
+                },
+            )
 
     profile = extract_food_profile(current_user)
     profile_text = build_food_profile_instructions(profile, strength="strong", mode="quick", has_ingredients=False)
