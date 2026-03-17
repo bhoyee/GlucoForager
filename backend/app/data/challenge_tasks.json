@@ -1,40 +1,2400 @@
 [
-  { "id": "challenge-protein-or-veg-first", "task_text": "Start a meal with protein or vegetables", "category": "meal_structure", "active": true },
-  { "id": "challenge-add-veg-one-meal", "task_text": "Add vegetables to one meal", "category": "meal_structure", "active": true },
-  { "id": "challenge-add-fiber-one-meal", "task_text": "Add fiber to one meal (vegetables, beans, chia)", "category": "meal_structure", "active": true },
-  { "id": "challenge-balance-one-plate", "task_text": "Build one balanced plate (protein + vegetables + carbs)", "category": "meal_structure", "active": true },
-  { "id": "challenge-pair-carbs-protein", "task_text": "Pair carbs with protein (don’t eat carbs alone)", "category": "meal_structure", "active": true },
-  { "id": "challenge-avoid-carb-only-snack", "task_text": "Choose a snack with protein or fiber", "category": "food_choice", "active": true },
-  { "id": "challenge-choose-protein-snack", "task_text": "Choose a protein snack (nuts, yogurt, eggs)", "category": "food_choice", "active": true },
-  { "id": "challenge-swap-sugary-drink", "task_text": "Replace a sugary drink with water or unsweetened tea", "category": "food_choice", "active": true },
-  { "id": "challenge-choose-unsweetened-drink", "task_text": "Choose an unsweetened drink today", "category": "food_choice", "active": true },
-  { "id": "challenge-choose-whole-food", "task_text": "Choose one minimally processed food today", "category": "food_choice", "active": true },
-  { "id": "challenge-choose-whole-grain", "task_text": "Choose a higher-fiber carb (beans, oats, whole grains)", "category": "food_choice", "active": true },
-  { "id": "challenge-add-healthy-fat", "task_text": "Add a healthy fat to a meal (olive oil, avocado, nuts)", "category": "food_choice", "active": true },
-  { "id": "challenge-walk-10-min-after-meal", "task_text": "Walk for 10 - 30 minutes after eating", "category": "activity", "active": true },
-  { "id": "challenge-move-15-min", "task_text": "Move for 15 minutes today (walk, chores, stairs)", "category": "activity", "active": true },
-  { "id": "challenge-short-afternoon-walk", "task_text": "Take a short afternoon walk", "category": "activity", "active": true },
-  { "id": "challenge-stand-stretch", "task_text": "Stand up and stretch for 2 minutes", "category": "activity", "active": true },
-  { "id": "challenge-steps-after-dinner", "task_text": "Do a short walk after dinner", "category": "activity", "active": true },
-  { "id": "challenge-water-before-meal", "task_text": "Drink a glass of water before one meal", "category": "hydration", "active": true },
-  { "id": "challenge-hydration-check", "task_text": "Choose water as your main drink today", "category": "hydration", "active": true },
-  { "id": "challenge-refill-bottle", "task_text": "Refill your water bottle at least once", "category": "hydration", "active": true },
-  { "id": "challenge-skip-sugary-drinks", "task_text": "Avoid sugary drinks today", "category": "hydration", "active": true },
-  { "id": "challenge-reduce-rice-portion", "task_text": "Reduce your rice/pasta portion slightly and add vegetables", "category": "portion_control", "active": true },
-  { "id": "challenge-small-plate", "task_text": "Use a smaller plate for one meal", "category": "portion_control", "active": true },
-  { "id": "challenge-no-second-serving", "task_text": "Avoid a second serving at one meal", "category": "portion_control", "active": true },
-  { "id": "challenge-measure-carb-portion", "task_text": "Keep a smaller carb portion and add protein/veg", "category": "portion_control", "active": true },
-  { "id": "challenge-slow-down-eating", "task_text": "Eat slowly (aim for ~20 minutes for a meal)", "category": "awareness", "active": true },
-  { "id": "challenge-read-one-label", "task_text": "Read one nutrition label (check carbs and sugar)", "category": "awareness", "active": true },
-  { "id": "challenge-plan-one-meal", "task_text": "Plan one meal ahead (what, when, portion)", "category": "awareness", "active": true },
-  { "id": "challenge-mindful-snack", "task_text": "Pause before snacking and choose a balanced option", "category": "awareness", "active": true },
-  { "id": "challenge-cook-at-home", "task_text": "Cook one simple meal at home", "category": "awareness", "active": true },
-  { "id": "challenge-add-veg-to-carb", "task_text": "Add extra vegetables to a carb-heavy meal", "category": "meal_structure", "active": true },
-  { "id": "challenge-avoid-dessert-today", "task_text": "Skip dessert once today (or choose fruit + protein)", "category": "food_choice", "active": true },
-  { "id": "challenge-fiber-snack", "task_text": "Choose a fiber snack (vegetables, berries, nuts)", "category": "food_choice", "active": true },
-  { "id": "challenge-walk-after-biggest-meal", "task_text": "Walk after your biggest meal today", "category": "activity", "active": true },
-  { "id": "challenge-water-with-each-meal", "task_text": "Drink water with each meal", "category": "hydration", "active": true },
-  { "id": "challenge-check-portion-mindfully", "task_text": "Stop eating when you feel comfortably full", "category": "portion_control", "active": true },
-  { "id": "challenge-one-small-change", "task_text": "Make one small diabetes-friendly change today", "category": "awareness", "active": true }
+  {
+    "id": "t2-add-protein-meal",
+    "task_text": "Add a protein source to one meal",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-extra-veg-serving",
+    "task_text": "Add an extra vegetable serving today",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "gestational",
+      "managing",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-add-beans-meal",
+    "task_text": "Add beans or lentils to one meal",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-add-beans-meal",
+    "task_text": "Add beans or lentils to one meal today",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "gestational",
+      "managing",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-bean-salad-add",
+    "task_text": "Add beans to a salad or meal today",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-add-veg-to-carb",
+    "task_text": "Add extra vegetables to a carb-heavy meal",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-add-fiber-one-meal",
+    "task_text": "Add fiber to one meal (vegetables, beans, chia)",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-add-leafy-greens",
+    "task_text": "Add leafy greens to a meal today",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "gestational",
+      "managing"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-add-leafy-greens",
+    "task_text": "Add leafy greens to one meal",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-add-leafy-greens",
+    "task_text": "Add leafy greens to one meal today",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-extra-veg-serving",
+    "task_text": "Add one extra vegetable serving today",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-protein-breakfast",
+    "task_text": "Add protein to breakfast today",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "gestational"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-add-protein-meal",
+    "task_text": "Add protein to one meal today",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-add-veg-dinner",
+    "task_text": "Add vegetables to dinner tonight",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-veg-eggs",
+    "task_text": "Add vegetables to eggs or omelet today",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-veg-lunch",
+    "task_text": "Add vegetables to lunch today",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-add-veg-one-meal",
+    "task_text": "Add vegetables to one meal",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-add-veg-meal",
+    "task_text": "Add vegetables to one meal today",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "gestational",
+      "managing",
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-veg-lunch",
+    "task_text": "Add vegetables to your lunch today",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-sauce-on-side",
+    "task_text": "Ask for sauce on the side at one meal",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-eat-balanced-dinner",
+    "task_text": "Build a balanced dinner tonight",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-balanced-dinner",
+    "task_text": "Build a dinner with protein, vegetables, and carbs",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "gestational",
+      "managing"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-balanced-bowl",
+    "task_text": "Build a meal with protein, vegetables, and smaller carbs",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-balanced-meal",
+    "task_text": "Build one balanced meal with protein, vegetables, and carbs",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-balance-one-plate",
+    "task_text": "Build one balanced plate (protein + vegetables + carbs)",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-healthy-breakfast",
+    "task_text": "Choose a healthy breakfast today",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-protein-breakfast",
+    "task_text": "Choose a protein-based breakfast today",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-protein-breakfast-option",
+    "task_text": "Choose eggs, yogurt, or nuts at breakfast",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "gestational",
+      "managing"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-grilled-not-fried",
+    "task_text": "Choose grilled or baked instead of fried food",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-balanced-breakfast",
+    "task_text": "Eat a balanced breakfast with protein today",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "gestational",
+      "managing"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-balanced-lunch",
+    "task_text": "Eat a balanced lunch with protein and vegetables",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "gestational",
+      "managing"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-protein-breakfast",
+    "task_text": "Eat a protein-based breakfast today",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-protein-first-meal",
+    "task_text": "Eat protein before carbs at one meal",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-veg-before-carb",
+    "task_text": "Eat vegetables before carbohydrates at one meal",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-veg-before-carb",
+    "task_text": "Eat vegetables before carbs at one meal",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-veg-first-meal",
+    "task_text": "Eat vegetables before starch at one meal",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-half-plate-veg-dinner",
+    "task_text": "Fill half your dinner plate with vegetables",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-follow-insulin-timing-plan",
+    "task_text": "Follow your insulin timing plan for one meal today (if you use insulin)",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-pair-carbs-protein",
+    "task_text": "Pair carbs with protein (don't eat carbs alone)",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-swap-starchy-side",
+    "task_text": "Replace one starchy side with vegetables",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-protein-or-veg-first",
+    "task_text": "Start a meal with protein or vegetables",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-start-meal-salad",
+    "task_text": "Start one meal with a salad or vegetables",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-veg-first-once",
+    "task_text": "Start one meal with vegetables or protein first",
+    "category": "meal_structure",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-no-second-serving",
+    "task_text": "Avoid a second serving at one meal",
+    "category": "portion_control",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-avoid-second-serving",
+    "task_text": "Avoid taking a second serving today",
+    "category": "portion_control",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-check-portion",
+    "task_text": "Be mindful of portion size at one meal",
+    "category": "portion_control",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-small-balanced-meal",
+    "task_text": "Eat a smaller balanced meal today",
+    "category": "portion_control",
+    "active": true,
+    "audience_profiles": [
+      "gestational",
+      "managing"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-carb-estimate-dinner",
+    "task_text": "Estimate carbs before dinner today",
+    "category": "portion_control",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-carb-estimate-meal",
+    "task_text": "Estimate carbs before one meal today",
+    "category": "portion_control",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-carb-check-snack",
+    "task_text": "Estimate carbs in your snack today",
+    "category": "portion_control",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-measure-carb-portion",
+    "task_text": "Keep a smaller carb portion and add protein/veg",
+    "category": "portion_control",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-review-carb-food",
+    "task_text": "Look up carbs in one common food you eat",
+    "category": "portion_control",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-review-carb-count",
+    "task_text": "Look up the carb count of one food today",
+    "category": "portion_control",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-plan-carb-meal",
+    "task_text": "Plan carbs before your next meal",
+    "category": "portion_control",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-starch-portion-once",
+    "task_text": "Reduce a starchy portion once today (rice, pasta, bread)",
+    "category": "portion_control",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-reduce-rice-portion",
+    "task_text": "Reduce your rice/pasta portion slightly and add vegetables",
+    "category": "portion_control",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-carb-portion-awareness",
+    "task_text": "Serve a moderate portion of carbohydrates today",
+    "category": "portion_control",
+    "active": true,
+    "audience_profiles": [
+      "gestational",
+      "managing"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-smaller-rice-portion",
+    "task_text": "Serve a smaller portion of rice or pasta",
+    "category": "portion_control",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-check-portion-mindfully",
+    "task_text": "Stop eating when you feel comfortably full",
+    "category": "portion_control",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-smaller-plate",
+    "task_text": "Use a smaller plate for dinner today",
+    "category": "portion_control",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-small-plate",
+    "task_text": "Use a smaller plate for one meal",
+    "category": "portion_control",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-add-movement-today",
+    "task_text": "Add 15 minutes of movement today",
+    "category": "activity",
+    "active": true,
+    "audience_profiles": [
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-walk-extra-steps",
+    "task_text": "Add 2000 extra steps today",
+    "category": "activity",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-check-before-activity",
+    "task_text": "Check glucose before activity (and have a plan for lows)",
+    "category": "activity",
+    "active": true,
+    "audience_profiles": [
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-gentle-walk",
+    "task_text": "Do 10 minutes of gentle movement (if approved by your clinician)",
+    "category": "activity",
+    "active": true,
+    "audience_profiles": [
+      "gestational"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-light-movement",
+    "task_text": "Do 10 minutes of gentle movement today",
+    "category": "activity",
+    "active": true,
+    "audience_profiles": [
+      "gestational",
+      "managing"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-steps-after-dinner",
+    "task_text": "Do a short walk after dinner",
+    "category": "activity",
+    "active": true,
+    "audience_profiles": [
+      "gestational",
+      "managing",
+      "prediabetes",
+      "type_2"
+    ],
+    "exclude_profiles": [
+      "type_1"
+    ]
+  },
+  {
+    "id": "challenge-move-15-min",
+    "task_text": "Move for 15 minutes today (walk, chores, stairs)",
+    "category": "activity",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-stand-stretch",
+    "task_text": "Stand up and stretch for 2 minutes",
+    "category": "activity",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-extra-steps",
+    "task_text": "Take 2000 extra steps today",
+    "category": "activity",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-activity-break",
+    "task_text": "Take a 10 minute movement break today",
+    "category": "activity",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-walk-after-meal",
+    "task_text": "Take a gentle 10-minute walk after a meal",
+    "category": "activity",
+    "active": true,
+    "audience_profiles": [
+      "gestational",
+      "managing"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-walk-evening",
+    "task_text": "Take a gentle evening walk today",
+    "category": "activity",
+    "active": true,
+    "audience_profiles": [
+      "gestational",
+      "managing"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-light-stretch-break",
+    "task_text": "Take a gentle stretch break during the day",
+    "category": "activity",
+    "active": true,
+    "audience_profiles": [
+      "gestational",
+      "managing"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-short-afternoon-walk",
+    "task_text": "Take a short afternoon walk",
+    "category": "activity",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-evening-walk",
+    "task_text": "Take a short evening walk",
+    "category": "activity",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-evening-walk",
+    "task_text": "Take a short evening walk today",
+    "category": "activity",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-stretch-break",
+    "task_text": "Take a short stretch break during the day",
+    "category": "activity",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-walk-after-meal",
+    "task_text": "Take a short walk after one meal today",
+    "category": "activity",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-stretch-break",
+    "task_text": "Take a stretch break during the day",
+    "category": "activity",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-extra-walk",
+    "task_text": "Take an extra short walk today",
+    "category": "activity",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-after-meal-walk-10",
+    "task_text": "Walk 10 minutes after your biggest meal",
+    "category": "activity",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_2"
+    ],
+    "exclude_profiles": [
+      "type_1"
+    ]
+  },
+  {
+    "id": "challenge-walk-after-biggest-meal",
+    "task_text": "Walk after your biggest meal today",
+    "category": "activity",
+    "active": true,
+    "audience_profiles": [
+      "gestational",
+      "managing",
+      "prediabetes",
+      "type_2"
+    ],
+    "exclude_profiles": [
+      "type_1"
+    ]
+  },
+  {
+    "id": "challenge-walk-10-min-after-meal",
+    "task_text": "Walk for 10 minutes after eating",
+    "category": "activity",
+    "active": true,
+    "audience_profiles": [
+      "gestational",
+      "managing",
+      "prediabetes",
+      "type_2"
+    ],
+    "exclude_profiles": [
+      "type_1"
+    ]
+  },
+  {
+    "id": "pd-post-meal-walk",
+    "task_text": "Walk for 10 minutes after one meal today",
+    "category": "activity",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-walk-10-minutes",
+    "task_text": "Walk for 10 minutes today",
+    "category": "activity",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-fiber-breakfast",
+    "task_text": "Add a fiber food to breakfast today",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-add-fiber-meal",
+    "task_text": "Add a fiber-rich food to one meal",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-add-fiber-food",
+    "task_text": "Add a fiber-rich food to one meal today",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-add-fiber-food",
+    "task_text": "Add a fiber-rich food to your meal",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-add-nuts",
+    "task_text": "Add a handful of nuts to a meal or snack",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-healthy-fat",
+    "task_text": "Add a healthy fat to a meal",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-add-healthy-fat",
+    "task_text": "Add a healthy fat to a meal (olive oil, avocado, nuts)",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-add-avocado",
+    "task_text": "Add avocado to a meal today",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-add-avocado",
+    "task_text": "Add avocado to one meal today",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-add-beans",
+    "task_text": "Add beans or lentils to one meal",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-add-berries",
+    "task_text": "Add berries to yogurt or breakfast",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-add-berries-meal",
+    "task_text": "Add berries to yogurt or breakfast today",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-add-chia-oats",
+    "task_text": "Add chia or flax seeds to breakfast",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-add-chia",
+    "task_text": "Add chia or flax seeds to one meal",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-add-chia-yogurt",
+    "task_text": "Add chia or flax seeds to yogurt or oatmeal",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-add-leafy-greens",
+    "task_text": "Add leafy greens to one meal",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-add-nuts-snack",
+    "task_text": "Add nuts to a snack today",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-extra-vegetable",
+    "task_text": "Add one extra vegetable serving today",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-add-protein-salad",
+    "task_text": "Add protein to a salad today",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-protein-meal",
+    "task_text": "Add protein to one meal today",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-veg-dinner",
+    "task_text": "Add vegetables to dinner tonight",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-veg-lunch",
+    "task_text": "Add vegetables to lunch today",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-add-vegetable-meal",
+    "task_text": "Add vegetables to one meal today",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-balanced-snack",
+    "task_text": "Choose a balanced snack (protein + fiber) today",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [
+      "gestational"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-fiber-snack",
+    "task_text": "Choose a fiber snack (vegetables, berries, nuts)",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-add-fiber-snack",
+    "task_text": "Choose a fiber-rich snack today",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-healthy-snack",
+    "task_text": "Choose a healthy snack instead of processed snacks",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-choose-whole-grain",
+    "task_text": "Choose a higher-fiber carb (beans, oats, whole grains)",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-choose-protein-snack",
+    "task_text": "Choose a protein snack (nuts, yogurt, eggs)",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-protein-snack-choice",
+    "task_text": "Choose a protein snack today",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-protein-snack",
+    "task_text": "Choose a protein-rich snack today",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [
+      "gestational",
+      "managing"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-balanced-snack",
+    "task_text": "Choose a snack with protein and fiber",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-avoid-carb-only-snack",
+    "task_text": "Choose a snack with protein or fiber",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-whole-grain-choice",
+    "task_text": "Choose a whole grain instead of refined grains",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [
+      "gestational",
+      "managing"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-choose-unsweetened-drink",
+    "task_text": "Choose an unsweetened drink today",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-berries-snack",
+    "task_text": "Choose berries for one snack today",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-fresh-food-choice",
+    "task_text": "Choose fresh food instead of processed food once today",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-choose-whole-food",
+    "task_text": "Choose one minimally processed food today",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-veg-snack",
+    "task_text": "Choose vegetables instead of chips for one snack",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-whole-grain-swap",
+    "task_text": "Choose whole grain instead of refined grains",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-cook-vegetables",
+    "task_text": "Cook vegetables with dinner tonight",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-nuts-snack",
+    "task_text": "Eat a small handful of nuts as a snack",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-fruit-snack",
+    "task_text": "Eat fruit as a snack today",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-fruit-with-protein",
+    "task_text": "Pair fruit with protein today",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [
+      "gestational",
+      "managing"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-fruit-with-protein",
+    "task_text": "Pair fruit with protein when snacking",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-swap-sugary-drink",
+    "task_text": "Replace a sugary drink with water or unsweetened tea",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-avoid-dessert-today",
+    "task_text": "Skip dessert once today (or choose fruit + protein)",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-veg-snack",
+    "task_text": "Snack on vegetables instead of chips",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-veg-snack",
+    "task_text": "Snack on vegetables today",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-swap-sweet-drink",
+    "task_text": "Swap one sweet drink for water or unsweetened tea",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-whole-grain-swap",
+    "task_text": "Swap refined grain for whole grain today",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-olive-oil-meal",
+    "task_text": "Use olive oil instead of butter today",
+    "category": "food_choice",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-avoid-soda",
+    "task_text": "Avoid soda today",
+    "category": "hydration",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-skip-sugary-drink",
+    "task_text": "Avoid sugary drinks today",
+    "category": "hydration",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-water-bottle",
+    "task_text": "Carry a water bottle today",
+    "category": "hydration",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-carry-water",
+    "task_text": "Carry a water bottle with you today",
+    "category": "hydration",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-hydration-check",
+    "task_text": "Choose water as your main drink today",
+    "category": "hydration",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-water-instead-juice",
+    "task_text": "Choose water instead of juice today",
+    "category": "hydration",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-water-before-meal",
+    "task_text": "Drink a glass of water before a meal",
+    "category": "hydration",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-water-before-meal",
+    "task_text": "Drink a glass of water before one meal",
+    "category": "hydration",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-drink-water-meal",
+    "task_text": "Drink a glass of water before one meal today",
+    "category": "hydration",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-water-first",
+    "task_text": "Drink a glass of water before your next meal",
+    "category": "hydration",
+    "active": true,
+    "audience_profiles": [
+      "gestational",
+      "managing"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-drink-extra-water",
+    "task_text": "Drink an extra glass of water today",
+    "category": "hydration",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-drink-herbal-tea",
+    "task_text": "Drink unsweetened tea today",
+    "category": "hydration",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-water-with-each-meal",
+    "task_text": "Drink water with each meal",
+    "category": "hydration",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-water-bottle-day",
+    "task_text": "Keep a water bottle with you today",
+    "category": "hydration",
+    "active": true,
+    "audience_profiles": [
+      "gestational",
+      "managing"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-refill-bottle",
+    "task_text": "Refill your water bottle at least once",
+    "category": "hydration",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-water-refill",
+    "task_text": "Refill your water bottle today",
+    "category": "hydration",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-skip-sugary-drink",
+    "task_text": "Replace one sugary drink with water today",
+    "category": "hydration",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-avoid-fast-food",
+    "task_text": "Avoid fast food today",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-skip-late-snack",
+    "task_text": "Avoid late-night snacking today",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-carry-fast-carb-2",
+    "task_text": "Carry a fast-acting carb source with you today",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-carry-fast-carb",
+    "task_text": "Carry a fast-acting carb today (in case of lows)",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-prepare-extra-supplies",
+    "task_text": "Carry extra testing strips or sensors today",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-carry-medical-id",
+    "task_text": "Carry or wear your diabetes medical ID today",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-carry-spare-sensor",
+    "task_text": "Carry spare CGM or sensor supplies if possible",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-check-sugar-label",
+    "task_text": "Check added sugar on one food label today",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "gestational",
+      "managing",
+      "prediabetes",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-check-added-sugar",
+    "task_text": "Check added sugar on one label today",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-check-device-battery",
+    "task_text": "Check battery on your glucose device",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-check-after-new-meal",
+    "task_text": "Check glucose 1-2 hours after a new meal",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-check-after-new-food",
+    "task_text": "Check glucose 1-2 hours after trying a new meal",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-check-after-lunch",
+    "task_text": "Check glucose 2 hours after lunch",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-check-after-snack",
+    "task_text": "Check glucose after a snack today",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-monitor-after-dessert",
+    "task_text": "Check glucose after eating dessert today",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-check-after-meal",
+    "task_text": "Check glucose after one meal today",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "gestational",
+      "managing"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-check-after-exercise",
+    "task_text": "Check glucose after physical activity",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-check-before-bed-snack",
+    "task_text": "Check glucose before a bedtime snack",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-check-before-driving",
+    "task_text": "Check glucose before a long drive",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-check-before-meeting",
+    "task_text": "Check glucose before a long meeting or event",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-check-before-bed",
+    "task_text": "Check glucose before bedtime tonight",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "gestational",
+      "managing"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-check-before-exercise",
+    "task_text": "Check glucose before starting physical activity",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-check-before-walk",
+    "task_text": "Check glucose before taking a walk",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-check-before-snack",
+    "task_text": "Check glucose before your next snack",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-check-midday-glucose",
+    "task_text": "Check glucose during the middle of the day",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-check-serving-size",
+    "task_text": "Check serving size on one packaged food",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "gestational",
+      "managing",
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-check-sauce-sugar",
+    "task_text": "Check sugar in sauces before using them",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-store-supplies-safe",
+    "task_text": "Check that insulin and supplies are stored properly",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-check-food-label",
+    "task_text": "Check the nutrition label on one packaged food",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-device-sensor-check",
+    "task_text": "Check your CGM sensor placement and comfort",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-check-bedtime-glucose",
+    "task_text": "Check your glucose before going to sleep tonight",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-check-before-meal",
+    "task_text": "Check your glucose before your next meal",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-check-morning-glucose",
+    "task_text": "Check your morning glucose reading today",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "gestational",
+      "managing"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-home-cooked-meal",
+    "task_text": "Cook one meal at home today",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-cook-at-home",
+    "task_text": "Cook one simple meal at home",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-fruit-instead-dessert",
+    "task_text": "Eat fruit instead of dessert today",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-eat-slowly",
+    "task_text": "Eat one meal slowly today",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-eat-without-phone",
+    "task_text": "Eat one meal without using your phone",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-slow-down-eating",
+    "task_text": "Eat slowly (aim for about 20 minutes for a meal)",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-steady-meals-snacks",
+    "task_text": "Keep meals and snacks steady today (3 meals + 2-3 snacks)",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "gestational"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-review-week-glucose",
+    "task_text": "Look for patterns in your weekly readings",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-one-small-change",
+    "task_text": "Make one small diabetes-friendly change today",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-glucose-awareness",
+    "task_text": "Notice how you feel when glucose is stable",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-reflect-glucose-response",
+    "task_text": "Notice how your glucose changed after a meal",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-pack-travel-supplies",
+    "task_text": "Pack diabetes supplies before leaving home",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-mindful-snack",
+    "task_text": "Pause before snacking and choose a balanced option",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-keep-hypo-snack-bedside",
+    "task_text": "Place a hypo treatment snack near your bed",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-pack-car-trip-supplies",
+    "task_text": "Place glucose snacks in your car or bag",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-prepare-glucose-tabs",
+    "task_text": "Place glucose tablets somewhere accessible",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-plan-healthy-breakfast",
+    "task_text": "Plan a healthy breakfast for tomorrow",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-plan-snack-activity",
+    "task_text": "Plan a snack before extended activity if needed",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-plan-one-meal",
+    "task_text": "Plan one meal ahead (what, when, portion)",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-plan-tomorrow-meal",
+    "task_text": "Plan tomorrow's dinner tonight",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-plan-tomorrow-lunch",
+    "task_text": "Plan tomorrow's lunch (what and portion)",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-plan-next-meal",
+    "task_text": "Plan your next meal in advance",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-plan-next-meal",
+    "task_text": "Plan your next meal in advance today",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "gestational",
+      "managing"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-healthy-snack-prep",
+    "task_text": "Prepare a healthy snack for later today",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "gestational",
+      "managing"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-prep-healthy-snack",
+    "task_text": "Prepare a healthy snack for tomorrow",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-pack-diabetes-kit",
+    "task_text": "Prepare a small diabetes supply kit for today",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-prepare-hypo-snack",
+    "task_text": "Prepare a small hypo snack to carry today",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-prepare-next-day-supplies",
+    "task_text": "Prepare tomorrow's diabetes supplies tonight",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-read-ingredient-list",
+    "task_text": "Read ingredient list of one packaged food",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-read-ingredient-list",
+    "task_text": "Read ingredient list on one packaged food",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-read-one-label",
+    "task_text": "Read one nutrition label (check carbs and sugar)",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-read-ingredient-list",
+    "task_text": "Read the ingredient list on a packaged food",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-log-meal-glucose",
+    "task_text": "Record one meal and glucose reading today",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-reflect-meal",
+    "task_text": "Reflect on one healthy meal you ate today",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-meal-reflection",
+    "task_text": "Reflect on one meal that made you feel energized",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-review-last-low",
+    "task_text": "Reflect on what caused your last low glucose event",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-reflect-glucose-day",
+    "task_text": "Reflect on what kept your glucose stable today",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "gd-reflect-food-day",
+    "task_text": "Reflect on your food choices today",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "gestational",
+      "managing"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "pd-swap-dessert-fruit",
+    "task_text": "Replace dessert with fruit today",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-review-carb-ratio",
+    "task_text": "Review your carb ratio or insulin plan today",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-check-monitor-alerts",
+    "task_text": "Review your CGM alert settings today",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-learn-hypo-signs",
+    "task_text": "Review your early signs of low blood sugar",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-review-glucose-pattern",
+    "task_text": "Review your glucose readings from yesterday",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-review-insulin-schedule",
+    "task_text": "Review your insulin timing schedule",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-skip-dessert",
+    "task_text": "Skip dessert after one meal today",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-reduce-sweet-snack",
+    "task_text": "Skip one sweet snack today",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "challenge-skip-processed-snack",
+    "task_text": "Skip processed snacks today",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t2-eat-slower-meal",
+    "task_text": "Take at least 20 minutes to eat one meal",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "prediabetes",
+      "type_2"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-rotate-injection-site",
+    "task_text": "Use a different injection site today",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  },
+  {
+    "id": "t1-log-glucose-note",
+    "task_text": "Write a short note about today's glucose readings",
+    "category": "awareness",
+    "active": true,
+    "audience_profiles": [
+      "managing",
+      "type_1"
+    ],
+    "exclude_profiles": []
+  }
 ]
-

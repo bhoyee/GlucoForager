@@ -21,10 +21,34 @@ class ChallengeTaskUpsert(BaseModel):
     task_text: str = Field(..., min_length=2, max_length=180)
     category: str = Field(..., min_length=2, max_length=40)
     active: bool = True
+    audience_profiles: list[str] = Field(default_factory=list, max_length=20)
+    exclude_profiles: list[str] = Field(default_factory=list, max_length=20)
 
 
 class ChallengeCatalogPayload(BaseModel):
     items: list[ChallengeTaskUpsert]
+
+_PROFILE_KEYS = {"type_2", "prediabetes", "type_1", "gestational", "managing", "prefer_not"}
+
+
+def _clean_profile_list(values: list[str] | None, *, max_items: int = 6) -> list[str]:
+    if not values or not isinstance(values, list):
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in values:
+        if not isinstance(raw, str):
+            continue
+        s = raw.strip().lower()
+        if not s or s not in _PROFILE_KEYS:
+            continue
+        if s in seen:
+            continue
+        seen.add(s)
+        out.append(s)
+        if len(out) >= max_items:
+            break
+    return out
 
 
 def _parse_json_list(value: str) -> list:
@@ -42,7 +66,16 @@ def list_challenge_tasks(
     db: Session = Depends(get_db),
     admin=Depends(get_current_admin),  # noqa: ARG001
 ):
-    return {"items": get_catalog(db)}
+    items = get_catalog(db)
+    # Normalize legacy items missing targeting fields for consistent admin UI.
+    normalized: list[dict] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        item.setdefault("audience_profiles", [])
+        item.setdefault("exclude_profiles", [])
+        normalized.append(item)
+    return {"items": normalized}
 
 
 @router.put("/tasks")
@@ -51,15 +84,21 @@ def replace_challenge_tasks(
     db: Session = Depends(get_db),
     admin=Depends(get_current_admin),  # noqa: ARG001
 ):
-    items = [
-        {
-            "id": item.id.strip(),
-            "task_text": item.task_text.strip(),
-            "category": item.category.strip(),
-            "active": bool(item.active),
-        }
-        for item in payload.items
-    ]
+    items: list[dict] = []
+    for item in payload.items:
+        exclude = _clean_profile_list(item.exclude_profiles, max_items=6)
+        exclude_set = set(exclude)
+        audience = [x for x in _clean_profile_list(item.audience_profiles, max_items=6) if x not in exclude_set]
+        items.append(
+            {
+                "id": item.id.strip(),
+                "task_text": item.task_text.strip(),
+                "category": item.category.strip(),
+                "active": bool(item.active),
+                "audience_profiles": audience,
+                "exclude_profiles": exclude,
+            }
+        )
     if not items:
         raise HTTPException(status_code=422, detail="items must not be empty")
     save_catalog(db, items)
@@ -103,12 +142,27 @@ def seed_challenge_tasks(
         category = str(item.get("category") or "").strip() or "general"
         if not tid or not text:
             continue
+        exclude = _clean_profile_list(
+            item.get("exclude_profiles") if isinstance(item.get("exclude_profiles"), list) else [],
+            max_items=6,
+        )
+        exclude_set = set(exclude)
+        audience = [
+            x
+            for x in _clean_profile_list(
+                item.get("audience_profiles") if isinstance(item.get("audience_profiles"), list) else [],
+                max_items=6,
+            )
+            if x not in exclude_set
+        ]
         cleaned_seed.append(
             {
                 "id": tid,
                 "task_text": text,
                 "category": category,
                 "active": bool(item.get("active", True)),
+                "audience_profiles": audience,
+                "exclude_profiles": exclude,
             }
         )
     if not cleaned_seed:
@@ -132,7 +186,7 @@ def seed_challenge_tasks(
         tid = item["id"]
         if tid in by_id:
             target = by_id[tid]
-            for k in ("task_text", "category", "active"):
+            for k in ("task_text", "category", "active", "audience_profiles", "exclude_profiles"):
                 target[k] = item.get(k)
             updated += 1
         else:

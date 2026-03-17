@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     admin_bootstrap_token: str | None = Field(None, env="ADMIN_BOOTSTRAP_TOKEN")
     site_url: str = Field("https://www.glucoforager.com", env="SITE_URL")
 
+    # Push notifications (Expo push gateway)
+    expo_push_access_token: str | None = Field(None, env="EXPO_PUSH_ACCESS_TOKEN")
+    expo_push_endpoint: str = Field("https://exp.host/--/api/v2/push/send", env="EXPO_PUSH_ENDPOINT")
+
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
 
     @field_validator("cors_origins", mode="before")

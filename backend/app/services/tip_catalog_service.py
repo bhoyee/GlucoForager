@@ -95,6 +95,8 @@ def _default_catalog() -> list[dict[str, Any]]:
                     if isinstance(item, dict):
                         # Ensure `active` exists by default.
                         item.setdefault("active", True)
+                        item.setdefault("audience_profiles", [])
+                        item.setdefault("exclude_profiles", [])
                         out.append(item)
                 if out:
                     return out
@@ -215,6 +217,57 @@ def get_tip_of_the_day(db: Session, *, on_date: date | None = None) -> dict[str,
     return pool[index]
 
 
+def _select_pool_for_blood_sugar_profile(pool: list[dict[str, Any]], bsp: str | None) -> list[dict[str, Any]]:
+    if not bsp or not isinstance(bsp, str):
+        return pool
+    bsp_norm = bsp.strip().lower()
+    if not bsp_norm or bsp_norm == "prefer_not":
+        return pool
+
+    targeted: list[dict[str, Any]] = []
+    general: list[dict[str, Any]] = []
+
+    for tip in pool:
+        if not isinstance(tip, dict):
+            continue
+        excludes = tip.get("exclude_profiles") or []
+        if isinstance(excludes, list):
+            if bsp_norm in {str(x).strip().lower() for x in excludes if isinstance(x, str)}:
+                continue
+
+        audience = tip.get("audience_profiles") or []
+        if isinstance(audience, list):
+            aud_norm = {str(x).strip().lower() for x in audience if isinstance(x, str) and str(x).strip()}
+            if aud_norm:
+                if bsp_norm in aud_norm:
+                    targeted.append(tip)
+                continue
+
+        general.append(tip)
+
+    return targeted or general or pool
+
+
+def get_tip_of_the_day_for_user(db: Session, user: User | None, *, on_date: date | None = None) -> dict[str, Any]:
+    catalog = get_catalog(db)
+    blocked = set(get_tip_settings(db).get("blocked_tip_ids") or [])
+    active = [
+        t
+        for t in catalog
+        if t.get("active", True)
+        and str(t.get("id") or "").strip()
+        and t.get("id") not in blocked
+    ]
+    pool = active if active else [t for t in catalog if str(t.get("id") or "").strip()]
+    if not pool:
+        return {}
+
+    bsp = getattr(user, "blood_sugar_profile", None) if user else None
+    pool = _select_pool_for_blood_sugar_profile(pool, bsp if isinstance(bsp, str) else None)
+    index = _day_of_year_utc(on_date) % len(pool)
+    return pool[index]
+
+
 def get_tip_for_user(db: Session, user: User | None, *, on_date: date | None = None) -> dict[str, Any]:
     """Return onboarding tip for the first 7 days after signup, else the regular daily rotation."""
     if user and getattr(user, "created_at", None):
@@ -232,7 +285,7 @@ def get_tip_for_user(db: Session, user: User | None, *, on_date: date | None = N
                 # If an onboarding tip is blocked, fall back to normal rotation for that day.
                 if str(tip.get("id") or "") not in blocked:
                     return tip
-    return get_tip_of_the_day(db, on_date=on_date)
+    return get_tip_of_the_day_for_user(db, user, on_date=on_date)
 
 
 def _is_meaningful_profile(profile: dict[str, Any] | None) -> bool:
@@ -257,7 +310,9 @@ def _is_meaningful_profile(profile: dict[str, Any] | None) -> bool:
 def _carb_examples_for_cuisines(cuisines: list[str]) -> list[str]:
     normalized = {c.strip().lower() for c in cuisines if isinstance(c, str) and c.strip()}
     if "west_african" in normalized:
-        return ["rice", "yam", "bread", "swallow"]
+        # Use common, broadly understood examples. Avoid region-specific terms like "swallow"
+        # to reduce confusion and avoid implying an endorsement of any specific starchy staple.
+        return ["rice", "plantain", "yam", "bread"]
     if "south_asian" in normalized:
         return ["rice", "roti", "naan", "chapati"]
     if "east_asian" in normalized or "southeast_asian" in normalized:

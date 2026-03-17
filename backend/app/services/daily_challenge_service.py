@@ -14,6 +14,8 @@ from ..models.user_daily_challenge import UserDailyChallenge
 CATALOG_KEY = "challenge.tasks.v1"
 SETTINGS_KEY = "challenge.settings.v1"
 
+_PROFILE_KEYS = {"type_2", "prediabetes", "type_1", "gestational", "managing", "prefer_not"}
+
 
 DEFAULT_CATEGORIES: list[str] = [
     "meal_structure",
@@ -21,6 +23,23 @@ DEFAULT_CATEGORIES: list[str] = [
     "activity",
     "hydration",
     "portion_control",
+    "awareness",
+]
+
+# Balanced daily mix (6 tasks):
+# - 2 meal-related tasks (meal_structure + portion_control)
+# - 1 activity task
+# - 1 nutrition/food choice task
+# - 1 hydration task
+# - 1 habit/reflection task (awareness)
+#
+# Note: if tasks_per_day becomes 7, we add one extra "awareness" slot.
+DEFAULT_CATEGORY_SLOTS: list[str] = [
+    "meal_structure",
+    "portion_control",
+    "activity",
+    "food_choice",
+    "hydration",
     "awareness",
 ]
 
@@ -41,6 +60,8 @@ def _default_catalog() -> list[dict[str, Any]]:
                     if not isinstance(item, dict):
                         continue
                     item.setdefault("active", True)
+                    item.setdefault("audience_profiles", [])
+                    item.setdefault("exclude_profiles", [])
                     out.append(item)
                 if out:
                     return out
@@ -53,6 +74,8 @@ def _default_catalog() -> list[dict[str, Any]]:
             "task_text": "Start a meal with protein or vegetables",
             "category": "meal_structure",
             "active": True,
+            "audience_profiles": [],
+            "exclude_profiles": [],
         }
     ]
 
@@ -118,9 +141,60 @@ def _seeded_random(user_id: int, on_date: date, extra: str) -> random.Random:
     seed = f"{user_id}:{on_date.isoformat()}:{extra}"
     return random.Random(seed)
 
+def _normalize_blood_sugar_profile(value: str | None) -> str | None:
+    if not isinstance(value, str):
+        return None
+    cleaned = value.strip().lower()
+    if not cleaned or cleaned not in _PROFILE_KEYS:
+        return None
+    return cleaned
+
+
+def _clean_profile_list(values: Any, *, max_items: int = 6) -> list[str]:
+    if not values or not isinstance(values, list):
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in values:
+        if not isinstance(raw, str):
+            continue
+        s = raw.strip().lower()
+        if not s or s not in _PROFILE_KEYS:
+            continue
+        if s in seen:
+            continue
+        seen.add(s)
+        out.append(s)
+        if len(out) >= max_items:
+            break
+    return out
+
+
+def _matches_profile(item: dict[str, Any], bsp: str | None) -> bool:
+    """Return True if the challenge task applies to the user's blood sugar profile.
+
+    Rules:
+    - If audience_profiles is empty/missing, treat as universal.
+    - If audience_profiles is non-empty, require bsp to be included.
+    - exclude_profiles always wins.
+    """
+    if not isinstance(item, dict):
+        return False
+    audience = _clean_profile_list(item.get("audience_profiles"), max_items=6)
+    exclude = _clean_profile_list(item.get("exclude_profiles"), max_items=6)
+    if bsp and bsp in exclude:
+        return False
+    if not audience:
+        return True
+    if not bsp:
+        return False
+    return bsp in audience
+
 
 def _pick_tasks_for_day(db: Session, *, user: User, on_date: date) -> list[dict[str, Any]]:
     catalog = get_catalog(db)
+    bsp = _normalize_blood_sugar_profile(getattr(user, "blood_sugar_profile", None))
+
     active = [
         item
         for item in catalog
@@ -129,13 +203,42 @@ def _pick_tasks_for_day(db: Session, *, user: User, on_date: date) -> list[dict[
         and str(item.get("id") or "").strip()
         and str(item.get("task_text") or "").strip()
     ]
+    # Normalize legacy items missing targeting fields.
+    for item in active:
+        if isinstance(item, dict):
+            item.setdefault("audience_profiles", [])
+            item.setdefault("exclude_profiles", [])
     if not active:
         active = _default_catalog()
 
-    by_category: dict[str, list[dict[str, Any]]] = {}
-    for item in active:
+    # Only include tasks applicable to the user's blood sugar profile.
+    applicable: list[dict[str, Any]] = [item for item in active if _matches_profile(item, bsp)]
+    if not applicable:
+        applicable = active
+
+    universal_pool: list[dict[str, Any]] = []
+    targeted_pool: list[dict[str, Any]] = []
+    for item in applicable:
+        audience = _clean_profile_list(item.get("audience_profiles"), max_items=6)
+        if audience:
+            targeted_pool.append(item)
+        else:
+            universal_pool.append(item)
+
+    # If the user has no profile (or "prefer_not"), treat everything as universal.
+    if not bsp or bsp == "prefer_not":
+        universal_pool = applicable
+        targeted_pool = []
+
+    by_category_universal: dict[str, list[dict[str, Any]]] = {}
+    for item in universal_pool:
         cat = str(item.get("category") or "general").strip() or "general"
-        by_category.setdefault(cat, []).append(item)
+        by_category_universal.setdefault(cat, []).append(item)
+
+    by_category_targeted: dict[str, list[dict[str, Any]]] = {}
+    for item in targeted_pool:
+        cat = str(item.get("category") or "general").strip() or "general"
+        by_category_targeted.setdefault(cat, []).append(item)
 
     settings = get_challenge_settings(db)
     tasks_per_day = int(settings.get("tasks_per_day") or 6)
@@ -150,24 +253,82 @@ def _pick_tasks_for_day(db: Session, *, user: User, on_date: date) -> list[dict[
     picked: list[dict[str, Any]] = []
     used_ids: set[str] = set()
 
-    # Category-balanced selection first.
-    for category in DEFAULT_CATEGORIES:
-        pool = by_category.get(category) or []
-        if not pool:
+    # Prefer a mix of universal + targeted tasks while keeping a balanced category mix.
+    universal_target = min(3, tasks_per_day)
+    targeted_target = max(0, tasks_per_day - universal_target)
+    if not targeted_pool:
+        targeted_target = 0
+        universal_target = tasks_per_day
+
+    slots = list(DEFAULT_CATEGORY_SLOTS)
+    if tasks_per_day >= 7:
+        slots.append("awareness")
+    slots = slots[:tasks_per_day]
+
+    remaining_universal = max(0, int(universal_target))
+    remaining_targeted = max(0, int(targeted_target))
+
+    def _pick_one(
+        *,
+        category: str,
+        prefer: str,
+        seed_prefix: str,
+    ) -> dict[str, Any] | None:
+        # prefer: "universal" | "targeted"
+        pools = []
+        if prefer == "targeted":
+            pools = [("targeted", by_category_targeted), ("universal", by_category_universal)]
+        else:
+            pools = [("universal", by_category_universal), ("targeted", by_category_targeted)]
+
+        for label, by_cat in pools:
+            pool = by_cat.get(category) or []
+            available = [x for x in pool if str(x.get("id") or "").strip() not in used_ids]
+            if available:
+                r = _seeded_random(int(user.id), on_date, f"{seed_prefix}:{label}:cat:{category}")
+                return r.choice(available)
+
+        # Category empty; try any remaining from the preferred pool, then fallback.
+        for label, by_cat in pools:
+            all_items: list[dict[str, Any]] = []
+            for items in by_cat.values():
+                all_items.extend(items)
+            available = [x for x in all_items if str(x.get("id") or "").strip() not in used_ids]
+            if available:
+                r = _seeded_random(int(user.id), on_date, f"{seed_prefix}:{label}:any")
+                r.shuffle(available)
+                return available[0]
+        return None
+
+    for slot_index, category in enumerate(slots):
+        want_targeted = remaining_targeted > 0 and targeted_pool
+        want_universal = remaining_universal > 0
+        # Deterministic tie-breaker per slot when both are available.
+        if want_targeted and want_universal:
+            r = _seeded_random(int(user.id), on_date, f"slot_mix:{slot_index}:{category}")
+            prefer = "targeted" if r.randint(0, 1) == 1 else "universal"
+        elif want_targeted:
+            prefer = "targeted"
+        else:
+            prefer = "universal"
+
+        candidate = _pick_one(category=category, prefer=prefer, seed_prefix=f"slot:{slot_index}")
+        if not candidate:
             continue
-        r = _seeded_random(int(user.id), on_date, f"cat:{category}")
-        candidate = r.choice(pool)
         cid = str(candidate.get("id") or "").strip()
-        if cid and cid not in used_ids:
-            used_ids.add(cid)
-            picked.append(candidate)
-        if len(picked) >= tasks_per_day:
-            break
+        if not cid or cid in used_ids:
+            continue
+        used_ids.add(cid)
+        picked.append(candidate)
+        if prefer == "targeted" and remaining_targeted > 0 and _clean_profile_list(candidate.get("audience_profiles"), max_items=6):
+            remaining_targeted -= 1
+        elif remaining_universal > 0 and not _clean_profile_list(candidate.get("audience_profiles"), max_items=6):
+            remaining_universal -= 1
 
     # Fill remaining slots from the full pool.
     if len(picked) < tasks_per_day:
         r = _seeded_random(int(user.id), on_date, "fill")
-        remaining = [item for item in active if str(item.get("id") or "").strip() not in used_ids]
+        remaining = [item for item in applicable if str(item.get("id") or "").strip() not in used_ids]
         r.shuffle(remaining)
         for item in remaining:
             picked.append(item)
