@@ -18,9 +18,12 @@ from ...services.ai_recipe_generator import AIRecipeGenerator
 from ...services.cache_service import CacheService
 from ...services.cost_tracker import record_ai_request
 from ...core.config import settings as core_settings
+from ...services.recipe_image_attach_service import attach_recipe_images
+from ...services.rate_limit_service import check_ai_rate_limit
 from ...services.settings_service import get_recipe_image_settings
 from ...services.subscription_service import get_effective_subscription_tier
 from ...models.recipe_history import RecipeHistory
+from ...services.redis_ai_queue import RedisAIQueue
 
 router = APIRouter(prefix="/ai/recipes", tags=["ai"])
 pipeline = AIPipeline()
@@ -77,6 +80,8 @@ def _run_vision_job(job_id: str) -> None:
         job = db.query(AIJob).filter(AIJob.id == job_id).first()
         if not job:
             return
+        if job.status not in {"pending", "queued"}:
+            return
         job.status = "running"
         db.commit()
 
@@ -85,6 +90,7 @@ def _run_vision_job(job_id: str) -> None:
         filters = payload.get("filters") or []
         device_id = payload.get("device_id")
         mode = payload.get("mode") or "single"
+        base_url = payload.get("base_url")
 
         user = db.query(User).filter(User.id == job.user_id).first()
         if not user:
@@ -126,6 +132,17 @@ def _run_vision_job(job_id: str) -> None:
             }
             db.commit()
             return
+
+        try:
+            attach_recipe_images(
+                db,
+                user=user,
+                recipes=result.get("recipes", []) or [],
+                ingredients=result.get("detected", []) or [],
+                base_url=base_url,
+            )
+        except Exception:
+            pass
 
         job.result = {
             "results": result.get("recipes", []),
@@ -323,6 +340,7 @@ def generate_from_vision_batch(
 
 @router.post("/vision/async")
 def generate_from_vision_async(
+    request: Request,
     payload: VisionRecipeRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
@@ -335,6 +353,20 @@ def generate_from_vision_async(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Daily limit reached. Scans left: {access['searches_left']}",
         )
+
+    tier = get_effective_subscription_tier(db, current_user) or "free"
+    rl = check_ai_rate_limit(user_id=current_user.id, tier=tier, kind="vision")
+    if not rl.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "code": "rate_limited",
+                "message": "Too many requests. Please wait a moment and try again.",
+                "retry_after_seconds": rl.retry_after_seconds,
+                "limit_per_minute": rl.limit_per_minute,
+            },
+            headers={"Retry-After": str(rl.retry_after_seconds)},
+        )
     job_id = str(uuid.uuid4())
     job = AIJob(
         id=job_id,
@@ -346,16 +378,32 @@ def generate_from_vision_async(
             "filters": payload.filters or [],
             "device_id": device_id,
             "mode": "single",
+            "base_url": str(request.base_url).rstrip("/"),
         },
     )
     db.add(job)
     db.commit()
-    background_tasks.add_task(_run_vision_job, job_id)
+    backend = (core_settings.ai_queue_backend or "db").strip().lower()
+    if backend == "redis":
+        queued = False
+        try:
+            q = RedisAIQueue.from_settings()
+            if q:
+                q.enqueue_vision(job_id)
+                queued = True
+        except Exception:
+            queued = False
+        if not queued:
+            background_tasks.add_task(_run_vision_job, job_id)
+    else:
+        if not core_settings.ai_job_runner_enabled:
+            background_tasks.add_task(_run_vision_job, job_id)
     return {"job_id": job_id, "status": job.status, "access": access}
 
 
 @router.post("/vision-batch/async")
 def generate_from_vision_batch_async(
+    request: Request,
     payload: VisionBatchRecipeRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
@@ -368,6 +416,20 @@ def generate_from_vision_batch_async(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Daily limit reached. Scans left: {access['searches_left']}",
         )
+
+    tier = get_effective_subscription_tier(db, current_user) or "free"
+    rl = check_ai_rate_limit(user_id=current_user.id, tier=tier, kind="vision_batch")
+    if not rl.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "code": "rate_limited",
+                "message": "Too many requests. Please wait a moment and try again.",
+                "retry_after_seconds": rl.retry_after_seconds,
+                "limit_per_minute": rl.limit_per_minute,
+            },
+            headers={"Retry-After": str(rl.retry_after_seconds)},
+        )
     job_id = str(uuid.uuid4())
     job = AIJob(
         id=job_id,
@@ -379,11 +441,26 @@ def generate_from_vision_batch_async(
             "filters": payload.filters or [],
             "device_id": device_id,
             "mode": "batch",
+            "base_url": str(request.base_url).rstrip("/"),
         },
     )
     db.add(job)
     db.commit()
-    background_tasks.add_task(_run_vision_job, job_id)
+    backend = (core_settings.ai_queue_backend or "db").strip().lower()
+    if backend == "redis":
+        queued = False
+        try:
+            q = RedisAIQueue.from_settings()
+            if q:
+                q.enqueue_vision(job_id)
+                queued = True
+        except Exception:
+            queued = False
+        if not queued:
+            background_tasks.add_task(_run_vision_job, job_id)
+    else:
+        if not core_settings.ai_job_runner_enabled:
+            background_tasks.add_task(_run_vision_job, job_id)
     return {"job_id": job_id, "status": job.status, "access": access}
 
 
@@ -429,7 +506,17 @@ def generate_recipe_image(
     if not settings.enabled:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Recipe images are disabled.")
 
-    if not core_settings.gemini_api_key:
+    provider = (core_settings.recipe_image_provider or "").strip().lower() or "gemini"
+    provider_ready = False
+    if provider == "runware":
+        provider_ready = bool(core_settings.runware_api_key)
+    elif provider == "gemini":
+        provider_ready = bool(core_settings.gemini_api_key)
+    else:
+        # Backward/robust behavior: accept any configured provider, even if env is mis-set.
+        provider_ready = bool(core_settings.runware_api_key or core_settings.gemini_api_key)
+
+    if not provider_ready:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Recipe image provider is not configured.",
@@ -568,7 +655,13 @@ def generate_recipe_image(
             current_user.id,
             tier,
             "recipe_image",
-            model_used=str(core_settings.gemini_image_model or "unknown"),
+            model_used=str(
+                core_settings.runware_image_model
+                if provider == "runware"
+                else core_settings.gemini_image_model
+                if provider == "gemini"
+                else (core_settings.runware_image_model or core_settings.gemini_image_model or provider or "unknown")
+            ),
             tokens_used=0,
             cost_estimate=float(settings.cost_usd or 0.0),
             device_id=None,
