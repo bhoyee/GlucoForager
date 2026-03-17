@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -56,6 +56,7 @@ const formatDateTime = (value) => {
 
 export default function AdminSystemHealthPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const token = useMemo(() => {
     if (typeof window === 'undefined') return null;
     return localStorage.getItem('adminToken');
@@ -116,6 +117,13 @@ export default function AdminSystemHealthPage() {
   const overallBadge = statusMeta(health?.status);
   const services = health?.services || {};
   const [failureView, setFailureView] = useState('operational');
+
+  useEffect(() => {
+    const requested = (searchParams?.get('failureView') || '').toLowerCase();
+    if (requested === 'operational' || requested === 'invalid_input') {
+      setFailureView(requested);
+    }
+  }, [searchParams]);
 
   const failedOperationalJobs = services?.queue?.failed_operational_items || [];
   const failedInvalidInputJobs = services?.queue?.failed_invalid_input_items || [];
@@ -220,7 +228,7 @@ export default function AdminSystemHealthPage() {
             })}
           </div>
 
-          <div className="admin-card admin-health-secondary">
+          <div className="admin-card admin-health-secondary" id="failed-jobs">
             <h3 className="admin-title" style={{ fontSize: 18 }}>
               Failed Jobs
             </h3>

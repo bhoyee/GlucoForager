@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert, Image } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -32,9 +32,15 @@ function MealCard({ meal, item }) {
   const carbs = typeof nutrition?.carbs_g === 'string' ? nutrition.carbs_g.trim() : '';
   const protein = typeof nutrition?.protein_g === 'string' ? nutrition.protein_g.trim() : '';
   const fiber = typeof nutrition?.fiber_g === 'string' ? nutrition.fiber_g.trim() : '';
+  const imageUrl = typeof item?.image_url === 'string' ? item.image_url.trim() : '';
 
   return (
     <View style={styles.mealCard}>
+      {imageUrl ? (
+        <View style={styles.mealImageWrap}>
+          <Image source={{ uri: imageUrl }} style={styles.mealImage} resizeMode="cover" />
+        </View>
+      ) : null}
       <View style={styles.mealTopRow}>
         <View style={styles.mealTag}>
           <Ionicons name={mealIcon(meal)} size={16} color={Colors.primaryDark} />
@@ -511,6 +517,17 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 6 },
     elevation: 2,
+  },
+  mealImageWrap: {
+    width: '100%',
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#F2F4F7',
+    marginBottom: 12,
+  },
+  mealImage: {
+    width: '100%',
+    height: 160,
   },
   mealTopRow: {
     flexDirection: 'row',

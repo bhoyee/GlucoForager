@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { LinearGradient } from 'expo-linear-gradient';
+import { getCachedRecipeImageUrl } from '../../utils/recipeImageCache';
 
 export default function RecipeResultsScreen() {
   const navigation = useNavigation();
@@ -56,8 +57,25 @@ export default function RecipeResultsScreen() {
     });
 
     setDetectedIngredients(normalizedIngredients);
-    setRecipes(recipesFromParams || []);
-    setIsLoading(false);
+    const baseRecipes = recipesFromParams || [];
+
+    const hydrateImages = async () => {
+      const next = await Promise.all(
+        baseRecipes.map(async (recipe) => {
+          const hasImage =
+            (typeof recipe?.image_url === 'string' && recipe.image_url.trim()) ||
+            (typeof recipe?.image === 'string' && recipe.image.trim());
+          if (hasImage) return recipe;
+          const cached = await getCachedRecipeImageUrl(recipe);
+          if (!cached) return recipe;
+          return { ...recipe, image_url: cached, image: cached, image_source: 'ai' };
+        })
+      );
+      setRecipes(next);
+      setIsLoading(false);
+    };
+
+    hydrateImages();
   }, [detectedFromParams, recipesFromParams, selectedIngredients, source]);
 
   if (isLoading) {
@@ -218,6 +236,10 @@ export default function RecipeResultsScreen() {
             const title = recipe?.title || recipe?.name || `Recipe ${index + 1}`;
             const matchText = getMatchText(recipe);
             const imageKey = recipe.id || `${title}-${index}`;
+            const recipeImageUrl =
+              typeof recipe?.image_url === 'string' && recipe.image_url.trim()
+                ? recipe.image_url.trim()
+                : null;
             const macroText = (label, value, unit = '') => {
               const text = `${value ?? ''}`.trim();
               if (!text || text.toLowerCase() === 'n/a') return `${label} --`;
@@ -236,6 +258,11 @@ export default function RecipeResultsScreen() {
                   })
                 }
               >
+                {recipeImageUrl ? (
+                  <View style={styles.recipeThumbWrap}>
+                    <Image source={{ uri: recipeImageUrl }} style={styles.recipeThumb} resizeMode="cover" />
+                  </View>
+                ) : null}
                 <View style={styles.recipeInfo}>
                   <View style={styles.recipeHeader}>
                     <Text style={styles.recipeName} numberOfLines={2}>{title}</Text>
@@ -491,6 +518,18 @@ const styles = StyleSheet.create({
     padding: 16,
     marginHorizontal: 20,
     marginBottom: 12,
+  },
+  recipeThumbWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: '#F2F4F7',
+    marginRight: 14,
+  },
+  recipeThumb: {
+    width: '100%',
+    height: '100%',
   },
   recipeInfo: {
     flex: 1,

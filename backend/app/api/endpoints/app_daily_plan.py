@@ -14,6 +14,7 @@ from ...services.cost_tracker import record_ai_request
 from ...services.daily_plan_service import DailyPlanService
 from ...services.food_profile_service import extract_food_profile, build_food_profile_instructions
 from ...services.subscription_service import get_effective_subscription_tier
+from ...services.recipe_image_attach_service import attach_recipe_images
 
 router = APIRouter(prefix="/app/daily-plan", tags=["daily-plan"])
 logger = logging.getLogger(__name__)
@@ -138,8 +139,35 @@ def generate_today_plan(
     profile = extract_food_profile(current_user)
     profile_text = build_food_profile_instructions(profile, strength="strong", mode="quick", has_ingredients=False)
     service = DailyPlanService()
+
+    # Avoid repeating yesterday/previous plans for credibility.
+    avoid_titles: list[str] = []
     try:
-        generated = service.generate(plan_date=today, profile_instructions=profile_text)
+        recent_plans = (
+            db.query(MealPlan)
+            .filter(MealPlan.user_id == current_user.id, MealPlan.plan_date < today)
+            .order_by(MealPlan.plan_date.desc(), MealPlan.id.desc())
+            .limit(3)
+            .all()
+        )
+        for p in recent_plans or []:
+            decoded = _decode_plan_payload(p.recipes)
+            for meal in decoded.get("meals") or []:
+                if not isinstance(meal, dict):
+                    continue
+                title = meal.get("title") or meal.get("name")
+                if isinstance(title, str) and title.strip():
+                    avoid_titles.append(title.strip())
+    except Exception:
+        avoid_titles = []
+    try:
+        generated = service.generate(
+            plan_date=today,
+            profile_instructions=profile_text,
+            avoid_titles=avoid_titles,
+            # Force-regenerate should produce variety (seed changes each request).
+            variation_seed=None if not force else datetime.utcnow().isoformat(),
+        )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ValueError as exc:
@@ -182,6 +210,19 @@ def generate_today_plan(
     meals = generated.get("meals") or []
     if not isinstance(meals, list) or not meals:
         raise HTTPException(status_code=500, detail="Invalid plan output. Please try again.")
+
+    try:
+        attach_recipe_images(
+            db,
+            user=current_user,
+            recipes=[m for m in meals if isinstance(m, dict)],
+            ingredients=[],
+            base_url=str(request.base_url).rstrip("/"),
+            # Daily plan generation endpoint is synchronous; keep image generation bounded for latency.
+            max_generate=4,
+        )
+    except Exception:
+        pass
 
     payload_to_store = {
         "meals": meals,

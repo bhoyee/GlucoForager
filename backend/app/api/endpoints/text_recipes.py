@@ -4,7 +4,7 @@ import re
 import uuid
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy.orm import Session
 
@@ -18,7 +18,11 @@ from ...services.ai_recipe_generator import AIRecipeGenerator
 from ...services.cache_service import CacheService
 from ...services.cost_tracker import record_ai_request
 from ...services.ingredient_classifier import IngredientClassifier
+from ...services.recipe_image_attach_service import attach_recipe_images
+from ...services.rate_limit_service import check_ai_rate_limit
 from ...services.subscription_service import get_effective_subscription_tier
+from ...core.config import settings
+from ...services.redis_ai_queue import RedisAIQueue
 
 router = APIRouter(prefix="/ai/text", tags=["ai"])
 pipeline = AIPipeline()
@@ -112,6 +116,8 @@ def _run_text_job(job_id: str) -> None:
         job = db.query(AIJob).filter(AIJob.id == job_id).first()
         if not job:
             return
+        if job.status not in {"pending", "queued"}:
+            return
         job.status = "running"
         db.commit()
 
@@ -122,6 +128,7 @@ def _run_text_job(job_id: str) -> None:
         variety_mode = bool(payload.get("variety_mode") or False)
         mode = (payload.get("mode") or "ingredients").strip().lower()
         device_id = payload.get("device_id")
+        base_url = payload.get("base_url")
 
         user = db.query(User).filter(User.id == job.user_id).first()
         if not user:
@@ -162,6 +169,18 @@ def _run_text_job(job_id: str) -> None:
             mode=mode,
             device_id=device_id,
         )
+
+        try:
+            attach_recipe_images(
+                db,
+                user=user,
+                recipes=recipes or [],
+                ingredients=ingredients,
+                base_url=base_url,
+            )
+        except Exception:
+            # Image generation is best-effort; never fail the recipe result.
+            pass
 
         providers: list[str] = []
         models: list[str] = []
@@ -316,6 +335,7 @@ def generate_from_text(
 
 @router.post("/recipes/async")
 def generate_from_text_async(
+    request: Request,
     payload: TextRecipeRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
@@ -327,6 +347,20 @@ def generate_from_text_async(
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Daily limit reached. Scans left: {access['searches_left']}",
+        )
+
+    tier = get_effective_subscription_tier(db, current_user) or "free"
+    rl = check_ai_rate_limit(user_id=current_user.id, tier=tier, kind="text")
+    if not rl.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "code": "rate_limited",
+                "message": "Too many requests. Please wait a moment and try again.",
+                "retry_after_seconds": rl.retry_after_seconds,
+                "limit_per_minute": rl.limit_per_minute,
+            },
+            headers={"Retry-After": str(rl.retry_after_seconds)},
         )
 
     job_id = str(uuid.uuid4())
@@ -342,12 +376,30 @@ def generate_from_text_async(
             "variety_mode": payload.variety_mode,
             "mode": payload.mode,
             "device_id": device_id,
+            "base_url": str(request.base_url).rstrip("/"),
         },
     )
     db.add(job)
     db.commit()
 
-    background_tasks.add_task(_run_text_job, job_id)
+    backend = (settings.ai_queue_backend or "db").strip().lower()
+    if backend == "redis":
+        queued = False
+        try:
+            q = RedisAIQueue.from_settings()
+            if q:
+                q.enqueue_text(job_id)
+                queued = True
+        except Exception:
+            queued = False
+        if not queued:
+            # Fallback: run inline via BackgroundTasks to avoid jobs getting stuck when Redis misbehaves.
+            background_tasks.add_task(_run_text_job, job_id)
+    else:
+        # DB runner picks jobs and executes them with bounded pools.
+        # If it's disabled, fall back to BackgroundTasks.
+        if not settings.ai_job_runner_enabled:
+            background_tasks.add_task(_run_text_job, job_id)
     return {"job_id": job_id, "status": job.status, "access": access}
 
 

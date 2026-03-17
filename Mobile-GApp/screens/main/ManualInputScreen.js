@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Keyboard,
   Alert,
   Modal,
   ActivityIndicator,
@@ -30,8 +31,12 @@ export default function ManualInputScreen() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const headerPaddingTop = Math.max(insets.top, 16);
-  const footerHeight = 68;
-  const contentBottomPadding = footerHeight + Math.max(insets.bottom, 12);
+  const footerSafePadding = Math.max(insets.bottom, 6);
+  // Keep enough room so the last input row isn't hidden behind the fixed footer.
+  const contentBottomPadding = 140;
+  const scrollRef = useRef(null);
+  const ingredientRowYRef = useRef({});
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [ingredients, setIngredients] = useState(['']);
   const [isLoading, setIsLoading] = useState(false);
   const [longWait, setLongWait] = useState(false);
@@ -159,6 +164,19 @@ export default function ManualInputScreen() {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    const showSub = Keyboard.addListener('keyboardWillShow', (event) => {
+      const height = event?.endCoordinates?.height;
+      setKeyboardHeight(Number.isFinite(height) ? height : 0);
+    });
+    const hideSub = Keyboard.addListener('keyboardWillHide', () => setKeyboardHeight(0));
+    return () => {
+      showSub?.remove?.();
+      hideSub?.remove?.();
     };
   }, []);
 
@@ -427,11 +445,7 @@ export default function ManualInputScreen() {
   const isEatNow = modeParam === 'surprise' || modeParam === 'quick';
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'position' : undefined}
-      keyboardVerticalOffset={headerPaddingTop}
-      style={styles.container}
-    >
+    <View style={styles.container}>
       <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
         <TouchableOpacity 
           style={styles.backButton}
@@ -442,11 +456,24 @@ export default function ManualInputScreen() {
         <Text style={styles.headerTitle}>Type Ingredients</Text>
         <View style={styles.headerRight} />
       </View>
-      <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
+
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        // Account for our custom header (and tab bar when present) so inputs can scroll above the keyboard.
+        keyboardVerticalOffset={headerPaddingTop + (Platform.OS === 'ios' ? 44 : 0) + (tabBarHeight || 0)}
+        style={{ flex: 1 }}
       >
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: contentBottomPadding + (Platform.OS === 'ios' ? keyboardHeight : 0) },
+          ]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+        >
 
         {/* Instructions */}
         <View style={styles.instructionsContainer}>
@@ -475,7 +502,13 @@ export default function ManualInputScreen() {
           <Text style={styles.sectionTitle}>Your Ingredients</Text>
           
           {ingredients.map((ingredient, index) => (
-            <View key={index} style={styles.ingredientRow}>
+            <View
+              key={index}
+              style={styles.ingredientRow}
+              onLayout={(event) => {
+                ingredientRowYRef.current[index] = event?.nativeEvent?.layout?.y ?? 0;
+              }}
+            >
               <TextInput
                 style={styles.ingredientInput}
                 placeholder={`Ingredient ${index + 1} (e.g., tomato)`}
@@ -484,6 +517,11 @@ export default function ManualInputScreen() {
                 onChangeText={(text) => handleIngredientChange(text, index)}
                 autoCapitalize="none"
                 editable={!isLoading}
+                onFocus={() => {
+                  const y = ingredientRowYRef.current[index];
+                  if (!Number.isFinite(y)) return;
+                  scrollRef.current?.scrollTo?.({ y: Math.max(0, y - 120), animated: true });
+                }}
               />
               {index === ingredients.length - 1 && (
                 <TouchableOpacity
@@ -524,10 +562,13 @@ export default function ManualInputScreen() {
       </View>
 
       </ScrollView>
+      </KeyboardAvoidingView>
       <View
         style={[
           styles.footerBar,
-          { paddingBottom: Math.max(insets.bottom, 8), height: footerHeight + Math.max(insets.bottom, 8) },
+          {
+            paddingBottom: footerSafePadding,
+          },
         ]}
       >
         <TouchableOpacity
@@ -555,7 +596,9 @@ export default function ManualInputScreen() {
             ) : (
               <>
                 <Ionicons name="search-outline" size={20} color="white" />
-                <Text style={styles.findButtonText}>Find Diabetes-Safe Recipes</Text>
+                <Text style={styles.findButtonText} numberOfLines={1} ellipsizeMode="tail">
+                  Find Diabetes-Safe Recipes
+                </Text>
               </>
             )}
           </View>
@@ -600,7 +643,7 @@ export default function ManualInputScreen() {
           </View>
         </View>
       </Modal>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -619,7 +662,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     paddingHorizontal: 20,
-    paddingTop: 2,
+    paddingTop: 12,
     backgroundColor: Colors.background,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
@@ -840,7 +883,8 @@ const styles = StyleSheet.create({
   findButton: {
     backgroundColor: Colors.primary,
     borderRadius: 12,
-    paddingVertical: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
     marginBottom: 0,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -861,9 +905,11 @@ const styles = StyleSheet.create({
   },
   findButtonText: {
     color: 'white',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     marginLeft: 8,
+    flexShrink: 1,
+    textAlign: 'center',
   },
   findButtonTextLimit: {
     color: Colors.textLight,

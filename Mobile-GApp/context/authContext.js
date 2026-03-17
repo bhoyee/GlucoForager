@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { configureRevenueCat } from '../utils/revenuecat';
 import { API_ENDPOINTS, API_URL } from '../config/api';
 import { apiFetch, setAuthRefreshHandler } from '../utils/api';
+import { addDebugLog } from '../utils/debugLogger';
 
 // Create the context
 const AuthContext = createContext({});
@@ -15,6 +16,8 @@ export function AuthProvider({ children }) {
   const [foodProfileCompleted, setFoodProfileCompleted] = useState(null); // true | false | null
   const [needsFoodProfileOnboarding, setNeedsFoodProfileOnboarding] = useState(false);
   const [foodProfileHasPreferences, setFoodProfileHasPreferences] = useState(null); // boolean | null
+  const lastRefreshWasTransientRef = React.useRef(false);
+  const refreshInFlightRef = React.useRef(null); // Promise<string | null> | null
 
   const hasMeaningfulFoodProfile = (profile) => {
     if (!profile || typeof profile !== 'object') return false;
@@ -123,39 +126,64 @@ export function AuthProvider({ children }) {
   };
 
   const refreshAccessToken = async () => {
-    try {
-      const refreshToken = await AsyncStorage.getItem('refreshToken');
-      if (!refreshToken) return null;
-      const response = await apiFetch(
-        `${API_URL}${API_ENDPOINTS.REFRESH}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refresh_token: refreshToken }),
-        }
-      );
-      if (!response.ok) {
-        return null;
-      }
-      const data = await response.json();
-      if (!data?.access_token) return null;
-      await AsyncStorage.setItem('userToken', data.access_token);
-      if (data.refresh_token) {
-        await AsyncStorage.setItem('refreshToken', data.refresh_token);
-      }
-      // Prefer hint from refresh response; fall back to fetching profile.
-      if (data.profile_completed === true || data.profile_completed === false) {
-        setFoodProfileCompleted(data.profile_completed);
-        setNeedsFoodProfileOnboarding(data.profile_completed === false);
-      } else {
-        const profile = await fetchProfile(data.access_token);
-        applyFoodProfileFlags(profile);
-      }
-      setUserToken(data.access_token);
-      return data.access_token;
-    } catch (error) {
-      return null;
+    if (refreshInFlightRef.current) {
+      return await refreshInFlightRef.current;
     }
+
+    refreshInFlightRef.current = (async () => {
+      try {
+        const refreshToken = await AsyncStorage.getItem('refreshToken');
+        if (!refreshToken) {
+          lastRefreshWasTransientRef.current = false;
+          return null;
+        }
+
+        const response = await apiFetch(
+          `${API_URL}${API_ENDPOINTS.REFRESH}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refresh_token: refreshToken }),
+            // Prevent apiFetch from trying to refresh again if REFRESH returns 401.
+            _retry: true,
+          }
+        );
+
+        if (!response.ok) {
+          lastRefreshWasTransientRef.current =
+            response.status === 0 || response.status === 429 || response.status >= 500;
+          return null;
+        }
+
+        lastRefreshWasTransientRef.current = false;
+        const data = await response.json();
+        if (!data?.access_token) return null;
+
+        await AsyncStorage.setItem('userToken', data.access_token);
+        if (data.refresh_token) {
+          await AsyncStorage.setItem('refreshToken', data.refresh_token);
+        }
+
+        // Prefer hint from refresh response; fall back to fetching profile.
+        if (data.profile_completed === true || data.profile_completed === false) {
+          setFoodProfileCompleted(data.profile_completed);
+          setNeedsFoodProfileOnboarding(data.profile_completed === false);
+        } else {
+          const profile = await fetchProfile(data.access_token);
+          applyFoodProfileFlags(profile);
+        }
+
+        setUserToken(data.access_token);
+        return data.access_token;
+      } catch (error) {
+        lastRefreshWasTransientRef.current = true;
+        return null;
+      } finally {
+        refreshInFlightRef.current = null;
+      }
+    })();
+
+    return await refreshInFlightRef.current;
   };
 
   const validateToken = async (token) => {
@@ -164,9 +192,22 @@ export function AuthProvider({ children }) {
         `${API_URL}${API_ENDPOINTS.USER_PROFILE}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      // apiFetch returns a synthetic response on network/timeout errors (status=0).
+      // Treat these as transient and keep the token to avoid logging users out.
+      if (response.status === 0 || response.status === 429 || response.status >= 500) {
+        return true;
+      }
       if (response.status === 401) {
-        const refreshed = await refreshAccessToken();
-        return Boolean(refreshed);
+        if (lastRefreshWasTransientRef.current) {
+          return true;
+        }
+        addDebugLog({
+          source: 'Auth',
+          level: 'warn',
+          message: 'Session expired. Please sign in again.',
+          details: 'Access token unauthorized and refresh failed.',
+        });
+        return false;
       }
       return response.ok;
     } catch (error) {
