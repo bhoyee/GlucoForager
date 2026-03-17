@@ -139,7 +139,7 @@ export default function FoodPreferencesScreen({ navigation }) {
   const route = useRoute();
   const forced = Boolean(route?.params?.forced);
   const insets = useSafeAreaInsets();
-  const { signOut, completeFoodProfileOnboarding } = useAuth();
+  const { signOut, completeFoodProfileOnboarding, applyFoodProfileFlags } = useAuth();
   const goalsMax = forced ? 2 : 3;
 
   const [step, setStep] = useState(-1);
@@ -249,7 +249,15 @@ export default function FoodPreferencesScreen({ navigation }) {
         Alert.alert('Error', 'Unable to save preferences right now.');
         return false;
       }
-      await response.json().catch(() => null);
+      const updatedProfile = await response.json().catch(() => null);
+      if (updatedProfile) {
+        applyFoodProfileFlags(updatedProfile);
+      } else {
+        applyFoodProfileFlags({
+          ...payload,
+          profile_completed: markCompleted ? true : undefined,
+        });
+      }
       if (markCompleted) {
         await completeFoodProfileOnboarding();
         addDebugLog({

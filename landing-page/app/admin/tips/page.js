@@ -13,6 +13,8 @@ const emptyForm = {
   try_today: '',
   category: 'general',
   active: true,
+  audience_profiles: [],
+  exclude_profiles: [],
 };
 
 const CATEGORY_OPTIONS = [
@@ -23,6 +25,26 @@ const CATEGORY_OPTIONS = [
   { value: 'labels', label: 'Labels' },
   { value: 'custom', label: 'Custom…' },
 ];
+
+const PROFILE_OPTIONS = [
+  { value: 'type_2', label: 'Type 2 diabetes' },
+  { value: 'prediabetes', label: 'Prediabetes' },
+  { value: 'type_1', label: 'Type 1 diabetes' },
+  { value: 'gestational', label: 'Gestational diabetes' },
+  { value: 'managing', label: 'Managing blood sugar' },
+  { value: 'prefer_not', label: 'Prefer not to say' },
+];
+
+const toggleInList = (list, value) => {
+  const next = Array.isArray(list) ? list.slice() : [];
+  const index = next.indexOf(value);
+  if (index >= 0) {
+    next.splice(index, 1);
+    return next;
+  }
+  next.push(value);
+  return next;
+};
 
 const parseJsonSafe = (text) => {
   try {
@@ -132,6 +154,8 @@ export default function AdminTipsPage() {
       try_today: tip?.try_today || '',
       category: mappedCategory,
       active: tip?.active !== false,
+      audience_profiles: Array.isArray(tip?.audience_profiles) ? tip.audience_profiles : [],
+      exclude_profiles: Array.isArray(tip?.exclude_profiles) ? tip.exclude_profiles : [],
     });
     setCustomCategory(mappedCategory === 'custom' ? categoryValue : '');
     setShowEditor(true);
@@ -168,6 +192,8 @@ export default function AdminTipsPage() {
           try_today: form.try_today,
           category: finalCategory,
           active: Boolean(form.active),
+          audience_profiles: Array.isArray(form.audience_profiles) ? form.audience_profiles : [],
+          exclude_profiles: Array.isArray(form.exclude_profiles) ? form.exclude_profiles : [],
         }),
       });
       if (response.status === 401) {
@@ -547,6 +573,51 @@ export default function AdminTipsPage() {
                         onChange={(e) => setForm({ ...form, try_today: e.target.value })}
                       />
                     </label>
+
+                    <div style={{ gridColumn: '1 / -1', marginTop: 8 }}>
+                      <div style={{ fontWeight: 700, marginBottom: 6 }}>Targeting (optional)</div>
+                      <div className="muted" style={{ marginBottom: 10 }}>
+                        If you select an audience, only those users will see this tip (others fall back to general tips).
+                      </div>
+
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                        {PROFILE_OPTIONS.map((opt) => (
+                          <label key={`aud-${opt.value}`} className="admin-inline-toggle" style={{ gap: 8 }}>
+                            <input
+                              type="checkbox"
+                              checked={Array.isArray(form.audience_profiles) && form.audience_profiles.includes(opt.value)}
+                              onChange={() =>
+                                setForm((s) => ({
+                                  ...s,
+                                  audience_profiles: toggleInList(s.audience_profiles, opt.value),
+                                }))
+                              }
+                              disabled={saving}
+                            />
+                            <span>Audience: {opt.label}</span>
+                          </label>
+                        ))}
+                      </div>
+
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 10 }}>
+                        {PROFILE_OPTIONS.map((opt) => (
+                          <label key={`ex-${opt.value}`} className="admin-inline-toggle" style={{ gap: 8 }}>
+                            <input
+                              type="checkbox"
+                              checked={Array.isArray(form.exclude_profiles) && form.exclude_profiles.includes(opt.value)}
+                              onChange={() =>
+                                setForm((s) => ({
+                                  ...s,
+                                  exclude_profiles: toggleInList(s.exclude_profiles, opt.value),
+                                }))
+                              }
+                              disabled={saving}
+                            />
+                            <span>Exclude: {opt.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
                     <label className="admin-form-field">
                       <span>Active</span>
                       <select

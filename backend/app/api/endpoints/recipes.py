@@ -1,4 +1,5 @@
 import random
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -9,6 +10,7 @@ from ...models.recipe_history import RecipeHistory
 from ...models.user import User
 from ..dependencies import get_current_user
 from ...services.cache_service import CacheService
+from ...services.food_profile_service import extract_food_profile
 import hashlib
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
@@ -32,6 +34,180 @@ def _ai_recipe_fingerprint(item: dict) -> str:
     return hashlib.sha256((title + "|" + normalized).encode("utf-8")).hexdigest()
 
 
+def _recipe_text(recipe: Recipe) -> str:
+    parts: list[str] = []
+    for value in (getattr(recipe, "name", None), getattr(recipe, "description", None)):
+        if isinstance(value, str) and value.strip():
+            parts.append(value.strip())
+    ingredients = getattr(recipe, "ingredients", None)
+    if isinstance(ingredients, list):
+        for ing in ingredients[:40]:
+            if isinstance(ing, str) and ing.strip():
+                parts.append(ing.strip())
+            elif isinstance(ing, dict):
+                name = str(ing.get("name") or ing.get("title") or "").strip()
+                if name:
+                    parts.append(name)
+    return " ".join(parts).lower()
+
+
+def _time_minutes(recipe: Recipe) -> int | None:
+    def _num(value) -> float | None:
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        try:
+            return float(str(value))
+        except Exception:
+            return None
+
+    prep = _num(getattr(recipe, "prep_time_minutes", None))
+    cook = _num(getattr(recipe, "cook_time_minutes", None))
+    if prep is None and cook is None:
+        return None
+    total = (prep or 0.0) + (cook or 0.0)
+    if total < 0:
+        return None
+    return int(round(total))
+
+
+def _get_nutrition_value(recipe: Recipe, keys: list[str]) -> float | None:
+    nutrition = getattr(recipe, "nutrition", None)
+    if not isinstance(nutrition, dict):
+        return None
+    for key in keys:
+        if key not in nutrition:
+            continue
+        value = nutrition.get(key)
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            m = re.search(r"(\d+(?:\.\d+)?)", value)
+            if m:
+                try:
+                    return float(m.group(1))
+                except Exception:
+                    continue
+    return None
+
+
+def _profile_hard_allows(recipe: Recipe, *, profile: dict) -> bool:
+    text = _recipe_text(recipe)
+
+    dietary = str(profile.get("dietary_pattern") or "").strip().lower()
+    allergens = set(str(x).strip().lower() for x in (profile.get("allergens") or []) if isinstance(x, str) and x.strip())
+    exclusions = set(
+        str(x).strip().lower() for x in (profile.get("food_exclusions") or []) if isinstance(x, str) and x.strip()
+    )
+
+    allergen_keywords: dict[str, list[str]] = {
+        "dairy": ["milk", "cheese", "yogurt", "butter", "cream", "whey", "casein", "kefir"],
+        "eggs": ["egg"],
+        "fish": ["fish", "salmon", "tuna", "sardine", "mackerel"],
+        "shellfish": ["shrimp", "prawn", "crab", "lobster", "shellfish"],
+        "peanuts": ["peanut"],
+        "tree_nuts": ["almond", "walnut", "cashew", "pistachio", "pecan", "hazelnut", "macadamia", "nut "],
+        "soy": ["soy", "tofu", "edamame", "tempeh"],
+        "wheat_gluten": ["wheat", "gluten", "bread", "pasta", "flour", "couscous", "bulgur", "seitan"],
+        "sesame": ["sesame", "tahini"],
+    }
+    for allergen, kws in allergen_keywords.items():
+        if allergen in allergens and any(kw in text for kw in kws):
+            return False
+
+    exclusion_keywords: dict[str, list[str]] = {
+        "pork": ["pork", "bacon", "ham", "pepperoni"],
+        "beef": ["beef", "steak"],
+        "chicken": ["chicken"],
+        "seafood": ["seafood", "fish", "salmon", "tuna", "shrimp", "prawn", "crab", "lobster", "shellfish"],
+        "onion_garlic": ["onion", "garlic"],
+        "spicy_food": ["spicy", "chili", "chilli", "pepper"],
+        "mushrooms": ["mushroom"],
+        "alcohol": ["alcohol", "beer", "wine", "vodka", "rum", "whiskey", "cocktail"],
+        "caffeine": ["caffeine", "coffee", "espresso", "energy drink"],
+    }
+    for avoid, kws in exclusion_keywords.items():
+        if avoid in exclusions and any(kw in text for kw in kws):
+            return False
+
+    if dietary == "vegan":
+        if re.search(r"\b(egg|eggs|milk|cheese|yogurt|butter|cream|chicken|beef|pork|fish|shrimp|tuna|salmon|honey)\b", text):
+            return False
+    elif dietary == "vegetarian":
+        if re.search(r"\b(chicken|beef|pork|fish|shrimp|tuna|salmon|bacon|ham)\b", text):
+            return False
+    elif dietary == "pescatarian":
+        if re.search(r"\b(chicken|beef|pork|bacon|ham)\b", text):
+            return False
+    elif dietary == "halal":
+        if re.search(r"\b(pork|bacon|ham)\b", text) or "alcohol" in text:
+            return False
+    elif dietary == "kosher":
+        if re.search(r"\b(pork|bacon|ham|shellfish|shrimp|prawn|crab|lobster)\b", text):
+            return False
+
+    return True
+
+
+def _profile_score(recipe: Recipe, *, profile: dict) -> int:
+    score = 0
+    goals = set(
+        str(x).strip().lower() for x in (profile.get("meal_goals") or []) if isinstance(x, str) and x.strip()
+    )
+    cuisines = set(
+        str(x).strip().lower()
+        for x in (profile.get("preferred_cuisines") or [])
+        if isinstance(x, str) and x.strip()
+    )
+    cook_pref = str(profile.get("cook_time_preference") or "").strip().lower()
+
+    total_time = _time_minutes(recipe)
+    if cook_pref == "under_15" and total_time is not None and total_time <= 15:
+        score += 3
+    elif cook_pref == "15_30" and total_time is not None and total_time <= 30:
+        score += 2
+    elif cook_pref == "30_45" and total_time is not None and total_time <= 45:
+        score += 1
+
+    if "quick_meals" in goals and total_time is not None and total_time <= 20:
+        score += 3
+
+    carbs = _get_nutrition_value(recipe, ["carbs", "carbohydrates", "total_carbs", "net_carbs"])
+    protein = _get_nutrition_value(recipe, ["protein"])
+    if "lower_carb" in goals and carbs is not None and carbs <= 30:
+        score += 3
+    if "high_protein" in goals and protein is not None and protein >= 20:
+        score += 3
+
+    # Simple ingredients: fewer ingredients.
+    ingredients = getattr(recipe, "ingredients", None)
+    if "simple_ingredients" in goals and isinstance(ingredients, list):
+        if len(ingredients) <= 8:
+            score += 2
+        elif len(ingredients) <= 12:
+            score += 1
+
+    # Lightweight cuisine keyword boost (optional, best-effort).
+    cuisine_keywords: dict[str, list[str]] = {
+        "west_african": ["jollof", "suya", "egusi", "okra", "ogbono", "moi moi", "pepper soup", "plantain", "yam"],
+        "british_irish": ["porridge", "stew", "roast", "shepherd", "cottage pie", "beans on toast"],
+        "caribbean": ["jerk", "plantain", "callaloo"],
+        "mediterranean": ["olive", "greek", "tzatziki", "hummus", "tabbouleh"],
+        "south_asian": ["curry", "dal", "dhal", "tikka", "masala"],
+        "east_asian": ["stir fry", "teriyaki", "miso", "kimchi"],
+        "latin_american": ["taco", "salsa", "burrito", "fajita"],
+        "mena": ["shawarma", "tahini", "falafel", "sumac"],
+    }
+    text = _recipe_text(recipe)
+    for c in cuisines:
+        kws = cuisine_keywords.get(c)
+        if kws and any(kw in text for kw in kws):
+            score += 2
+
+    return score
+
+
 @router.get("/legacy")
 def legacy_notice():
     return {"detail": "Legacy recipe search removed; use /api/ai/recipes/vision or /api/ai/text/recipes"}
@@ -51,7 +227,28 @@ def recipe_suggestions(
     if not items:
         return {"items": []}
     limit = max(1, min(limit, 6))
-    selection = random.sample(items, k=min(limit, len(items)))
+
+    profile = extract_food_profile(current_user)
+    has_hard_constraints = bool(profile.get("dietary_pattern")) and str(profile.get("dietary_pattern")).lower() not in {"", "none"}
+    has_hard_constraints = has_hard_constraints or bool(profile.get("allergens")) or bool(profile.get("food_exclusions"))
+
+    # Hard filter (if the user has preferences). Never violate allergies/dietary patterns just to fill 3 cards.
+    filtered = items
+    if profile and has_hard_constraints:
+        filtered = [r for r in items if _profile_hard_allows(r, profile=profile)]
+
+    # Score (soft ranking) then sample from the top pool for variety.
+    scored = [(int(_profile_score(r, profile=profile)), r) for r in filtered]
+    random.shuffle(scored)
+    scored.sort(key=lambda x: x[0], reverse=True)
+    pool_size = min(len(scored), max(30, limit * 10))
+    top_pool = [r for _, r in scored[:pool_size]] if scored else []
+
+    if not top_pool:
+        # No matches under strict constraints; return fewer rather than showing unsafe suggestions.
+        selection = []
+    else:
+        selection = random.sample(top_pool, k=min(limit, len(top_pool)))
     return {
         "items": [
             {
