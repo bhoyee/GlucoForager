@@ -24,6 +24,7 @@ from ...models.shopping_item import ShoppingItem
 from ...models.refresh_token import RefreshToken
 from ...models.subscription import Subscription
 from ...models.user import SearchLog, User
+from ...services.redis_ai_queue import RedisAIQueue
 from ...services.subscription_service import is_subscription_active, is_premium_blocked, refresh_user_tier
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -770,6 +771,95 @@ def recipe_image_usage(
         "week": week,
         "month": month,
     }
+
+
+@router.get("/ai/queue-metrics")
+def ai_queue_metrics(
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),  # noqa: ARG001
+):
+    def _db_counts() -> dict:
+        rows = db.query(AIJob.status, func.count(AIJob.id)).group_by(AIJob.status).all()
+        counts: dict[str, int] = {}
+        for status_value, count_value in rows or []:
+            key = (status_value or "unknown").strip().lower()
+            try:
+                counts[key] = int(count_value or 0)
+            except Exception:  # noqa: BLE001
+                counts[key] = 0
+        return counts
+
+    def _find_group(groups: list, group_name: str) -> dict | None:
+        if not groups:
+            return None
+        for item in groups:
+            if isinstance(item, dict):
+                if str(item.get("name", "")).strip() == group_name:
+                    return item
+        return None
+
+    payload: dict = {
+        "backend": (settings.ai_queue_backend or "db").strip().lower(),
+        "db": {"counts": _db_counts()},
+        "redis": {
+            "available": False,
+            "streams": {
+                "text": {"name": str(settings.ai_queue_redis_stream_text), "length": None, "group": None},
+                "vision": {"name": str(settings.ai_queue_redis_stream_vision), "length": None, "group": None},
+            },
+        },
+    }
+
+    q = RedisAIQueue.from_settings()
+    if not q:
+        return payload
+
+    payload["redis"]["available"] = True
+    for key, stream_name in (
+        ("text", q.cfg.stream_text),
+        ("vision", q.cfg.stream_vision),
+    ):
+        stream_info = payload["redis"]["streams"].get(key) or {"name": stream_name}
+        stream_info["name"] = stream_name
+        try:
+            stream_info["length"] = int(q.client.xlen(stream_name))
+        except Exception:  # noqa: BLE001
+            stream_info["length"] = None
+
+        try:
+            group = _find_group(q.client.xinfo_groups(stream_name), q.cfg.group)
+        except Exception:  # noqa: BLE001
+            group = None
+
+        if group:
+            pending = group.get("pending")
+            consumers = group.get("consumers")
+            lag = group.get("lag")
+            try:
+                pending_value = int(pending) if pending is not None else None
+            except Exception:  # noqa: BLE001
+                pending_value = None
+            try:
+                consumers_value = int(consumers) if consumers is not None else None
+            except Exception:  # noqa: BLE001
+                consumers_value = None
+            try:
+                lag_value = int(lag) if lag is not None else None
+            except Exception:  # noqa: BLE001
+                lag_value = None
+
+            stream_info["group"] = {
+                "name": q.cfg.group,
+                "pending": pending_value,
+                "consumers": consumers_value,
+                "lag": lag_value,
+            }
+        else:
+            stream_info["group"] = {"name": q.cfg.group, "pending": None, "consumers": None, "lag": None}
+
+        payload["redis"]["streams"][key] = stream_info
+
+    return payload
 
 
 @router.post("/uploads")

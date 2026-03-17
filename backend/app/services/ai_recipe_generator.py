@@ -4,9 +4,12 @@ import io
 import random
 import re
 import time
+import uuid
+import base64
 from pathlib import Path
 from typing import Any, Dict, List, Sequence
 
+import httpx
 from openai import OpenAI, OpenAIError
 from PIL import Image
 
@@ -45,6 +48,10 @@ class AIRecipeGenerator:
         self.gemini_api_key = settings.gemini_api_key
         self.gemini_image_model = settings.gemini_image_model
         self.gemini_text_model = (settings.gemini_text_model or "").strip() or None
+        self.recipe_image_provider = (settings.recipe_image_provider or "").strip().lower() or "gemini"
+        self.runware_api_key = settings.runware_api_key
+        self.runware_api_url = (settings.runware_api_url or "").strip().rstrip("/")
+        self.runware_image_model = (settings.runware_image_model or "").strip() or "runware:100@1"
 
     def _call_gemini_text(
         self,
@@ -251,10 +258,24 @@ class AIRecipeGenerator:
 
         prompt = self._build_image_prompt(recipe, ingredients or [])
 
-        if not self.gemini_api_key:
-            return {"image_url": self._placeholder_image(recipe), "image_source": "placeholder"}
+        provider = (self.recipe_image_provider or "").strip().lower()
+        if provider == "runware":
+            if not self.runware_api_key:
+                return {"image_url": self._placeholder_image(recipe), "image_source": "placeholder"}
+            image_bytes = self._generate_image_runware(prompt, size=size)
+        elif provider == "gemini":
+            if not self.gemini_api_key:
+                return {"image_url": self._placeholder_image(recipe), "image_source": "placeholder"}
+            image_bytes = self._generate_image_gemini(prompt, size=size)
+        else:
+            # Best-effort fallback: prefer Runware if configured, otherwise Gemini, otherwise placeholder.
+            if self.runware_api_key:
+                image_bytes = self._generate_image_runware(prompt, size=size)
+            elif self.gemini_api_key:
+                image_bytes = self._generate_image_gemini(prompt, size=size)
+            else:
+                return {"image_url": self._placeholder_image(recipe), "image_source": "placeholder"}
 
-        image_bytes = self._generate_image_gemini(prompt, size=size)
         image_url = self._store_generated_image(image_bytes, recipe, size=size)
         return {"image_url": image_url, "image_source": "ai"}
 
@@ -374,6 +395,91 @@ class AIRecipeGenerator:
             if isinstance(data, (bytes, bytearray)) and data:
                 return bytes(data)
         raise RuntimeError("Gemini response did not include inline image data")
+
+    def _generate_image_runware(self, prompt: str, *, size: int) -> bytes:
+        """
+        Generate an image using Runware API (e.g. FLUX Schnell).
+
+        We request a single image and then download the returned URL (or decode base64 when provided).
+        """
+        if not self.runware_api_key:
+            raise RuntimeError("RUNWARE_API_KEY is not set")
+        if not self.runware_api_url:
+            raise RuntimeError("RUNWARE_API_URL is not set")
+
+        target = 512 if int(size) not in (512, 768, 1024) else int(size)
+        task_uuid = str(uuid.uuid4())
+
+        payload = [
+            {
+                "taskType": "imageInference",
+                "taskUUID": task_uuid,
+                "model": self.runware_image_model,
+                "positivePrompt": prompt,
+                "width": target,
+                "height": target,
+                "numberResults": 1,
+                # Prefer URLs to avoid huge JSON payloads; we download bytes server-side.
+                "outputType": "URL",
+                "outputFormat": "JPG",
+            }
+        ]
+
+        headers = {
+            "Authorization": f"Bearer {self.runware_api_key}",
+            "Content-Type": "application/json",
+        }
+
+        try:
+            resp = httpx.post(self.runware_api_url, json=payload, headers=headers, timeout=60.0)
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError("Runware request failed") from exc
+
+        if resp.status_code >= 400:
+            raise RuntimeError(f"Runware returned {resp.status_code}")
+
+        try:
+            data = resp.json()
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError("Runware returned invalid JSON") from exc
+
+        items = data.get("data") if isinstance(data, dict) else None
+        if not isinstance(items, list) or not items:
+            raise RuntimeError("Runware response missing data")
+
+        image_url: str | None = None
+        image_b64: str | None = None
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            if item.get("taskType") != "imageInference":
+                continue
+            # Common Runware field names
+            image_url = item.get("imageURL") or item.get("imageUrl") or item.get("url")
+            image_b64 = item.get("imageBase64Data") or item.get("imageBase64") or item.get("base64")
+            if image_url or image_b64:
+                break
+
+        if image_b64 and isinstance(image_b64, str):
+            try:
+                # Allow both raw base64 and data URLs.
+                b64 = image_b64.split(",", 1)[1] if image_b64.startswith("data:") and "," in image_b64 else image_b64
+                decoded = base64.b64decode(b64, validate=False)
+                if decoded:
+                    return decoded
+            except Exception as exc:  # noqa: BLE001
+                raise RuntimeError("Runware returned invalid base64 image") from exc
+
+        if not image_url or not isinstance(image_url, str):
+            raise RuntimeError("Runware response missing image URL")
+
+        try:
+            img_resp = httpx.get(image_url, timeout=60.0)
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError("Failed to download Runware image") from exc
+        if img_resp.status_code >= 400 or not img_resp.content:
+            raise RuntimeError("Failed to download Runware image")
+        return bytes(img_resp.content)
 
     def _store_generated_image(self, image_bytes: bytes, recipe: Dict[str, Any], *, size: int) -> str:
         digest = self._image_cache_key(recipe).replace("img:", "")
@@ -1005,7 +1111,8 @@ class AIRecipeGenerator:
                     if budget is not None:
                         remaining_total = budget - (time.time() - started)
                         if mode_norm in ("surprise", "quick"):
-                            cap = 30.0 if budget <= 60.0 else 60.0
+                            # Eat-now flows are async but UX-sensitive; allow a bit more time to avoid unnecessary fallbacks.
+                            cap = 45.0 if budget <= 60.0 else 60.0
                         else:
                             cap = 25.0
                         per_request_timeout = max(5.0, min(cap, remaining_total))
@@ -1146,18 +1253,33 @@ class AIRecipeGenerator:
                             gemini_model,
                         )
                     try:
-                        content = self._call_gemini_text(
-                            gemini_model,
-                            ingredients,
-                            filters,
-                            prompt_template=prompt_template,
-                            extra_instructions=extra_instructions,
-                            temperature=0.6,
-                            timeout_seconds=fallback_budget if fallback_budget >= 5 else 5.0,
-                            max_output_tokens=1200,
-                        )
-                        parsed = parse_content(content)
-                        recipes = self._filter_recipes(parsed, banned_titles_norm)
+                        def _call_gemini_once(extra: str | None = None) -> str:
+                            tighten = (
+                                "Return ONLY valid JSON. Keep each description under 120 characters. "
+                                "Use at most 8 ingredients and at most 5 short steps per recipe. "
+                                "Do not use line breaks inside strings."
+                            )
+                            merged_extra = " ".join([x for x in [(extra_instructions or "").strip(), tighten, (extra or "").strip()] if x]).strip()
+                            return self._call_gemini_text(
+                                gemini_model,
+                                ingredients,
+                                filters,
+                                prompt_template=prompt_template,
+                                extra_instructions=merged_extra,
+                                temperature=0.45,
+                                timeout_seconds=fallback_budget if fallback_budget >= 5 else 5.0,
+                                max_output_tokens=1200,
+                            )
+
+                        content = _call_gemini_once()
+                        try:
+                            parsed = parse_content(content)
+                            recipes = self._filter_recipes(parsed, banned_titles_norm)
+                        except Exception:
+                            # One retry: Gemini occasionally returns truncated/invalid JSON; a second call usually fixes it.
+                            content = _call_gemini_once("Retry: ensure the JSON is complete and parseable.")
+                            parsed = parse_content(content)
+                            recipes = self._filter_recipes(parsed, banned_titles_norm)
                         if recipes:
                             recipes = recipes[:3]
                             for recipe in recipes:

@@ -2,6 +2,7 @@ import json
 import logging
 from datetime import date
 from typing import Any
+import uuid
 
 from openai import OpenAI, OpenAIError
 
@@ -273,10 +274,34 @@ Return ONLY the required JSON.
         *,
         plan_date: date,
         profile_instructions: str | None,
+        avoid_titles: list[str] | None = None,
+        variation_seed: str | None = None,
         timeout_seconds: float = 18.0,
     ) -> dict[str, Any]:
         if not settings.openai_api_key:
             raise RuntimeError("AI is not configured (missing OPENAI_API_KEY).")
+
+        normalized_avoid = []
+        if isinstance(avoid_titles, list):
+            for item in avoid_titles:
+                if not isinstance(item, str):
+                    continue
+                s = item.strip()
+                if s:
+                    normalized_avoid.append(s)
+        normalized_avoid = list(dict.fromkeys(normalized_avoid))[:12]
+
+        extra_hint_parts: list[str] = []
+        if normalized_avoid:
+            joined = "; ".join(normalized_avoid)
+            extra_hint_parts.append(
+                "Variety: Do NOT repeat meals with titles similar to these recent meals: "
+                f"{joined}. Choose different dishes and ingredients."
+            )
+        # Seed nudges the model toward variety when users force-regenerate; it is not user-visible.
+        seed = (variation_seed or "").strip() or uuid.uuid4().hex[:10]
+        extra_hint_parts.append(f"Variation seed: {seed}")
+        extra_hint = "\n".join(extra_hint_parts).strip() if extra_hint_parts else None
 
         try:
             normalized = self._call(
@@ -285,6 +310,7 @@ Return ONLY the required JSON.
                 timeout_seconds=timeout_seconds,
                 temperature=0.3,
                 max_tokens=1400,
+                extra_hint=extra_hint,
             )
         except OpenAIError as exc:
             logger.warning("Daily plan OpenAI call failed: %s", str(exc))

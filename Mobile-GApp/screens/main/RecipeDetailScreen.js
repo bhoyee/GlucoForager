@@ -19,6 +19,7 @@ import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
 import { getRecipeImageSettings } from '../../utils/recipeImageSettings';
+import { getCachedRecipeImageUrl, setCachedRecipeImageUrl } from '../../utils/recipeImageCache';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import RecipePlaceholder from '../../assets/images/recipe-placeholder.jpeg';
 
@@ -134,6 +135,29 @@ const RecipeDetailsScreen = () => {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    const hydrateFromCache = async () => {
+      const current = `${recipe?.image_url || recipe?.image || ''}`.trim();
+      if (current) return;
+      const cached = await getCachedRecipeImageUrl(recipe);
+      if (!cancelled && cached) {
+        setImageLoadError(false);
+        setRecipe((prev) => ({
+          ...prev,
+          image: cached,
+          image_url: cached,
+          imageSource: prev?.imageSource || prev?.image_source || 'ai',
+          image_source: prev?.image_source || prev?.imageSource || 'ai',
+        }));
+      }
+    };
+    hydrateFromCache();
+    return () => {
+      cancelled = true;
+    };
+  }, [recipe?.title, recipe?.ingredients?.length]);
+
   const handleGenerateImage = async () => {
     if (isGeneratingImage) return;
     try {
@@ -173,6 +197,7 @@ const RecipeDetailsScreen = () => {
 
       if (data?.image_url) {
         setImageLoadError(false);
+        await setCachedRecipeImageUrl(recipe, data.image_url);
         setRecipe((prev) => ({
           ...prev,
           image: data.image_url,
