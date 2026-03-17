@@ -72,7 +72,7 @@ export default function Footer() {
               <span className="text-2xl font-bold">GlucoForager</span>
             </div>
             <p className="text-gray-400 mb-6 max-w-md">
-              AI-powered diabetes-friendly meal planning. Transform your fridge into diabetes-safe recipes in 60 seconds.
+              AI-powered meal ideas for steadier blood sugar habits. Scan ingredients, get recipes and swaps, and plan your day with Premium.
             </p>
             
             {/* Social Media Icons */}

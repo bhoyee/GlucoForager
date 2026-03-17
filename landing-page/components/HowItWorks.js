@@ -2,35 +2,35 @@ export default function HowItWorks() {
   const steps = [
     {
       number: "1",
-      title: "Snap Your Fridge",
-      description: "Take a clear photo of everything in your fridge or pantry",
+      title: "Scan or Type",
+      description: "Scan ingredients with your camera or type what you have",
       icon: "📸",
       color: "from-blue-400 to-teal-400",
-      details: "Capture all your available ingredients",
+      details: "Works with real pantry and fridge items",
     },
     {
       number: "2",
-      title: "Select Ingredients",
-      description: "Choose which items you want to use in your recipes",
-      icon: "👆",
+      title: "Choose Your Focus",
+      description: "Pick goals like lower carb, quick meals, or higher protein",
+      icon: "👉",
       color: "from-purple-400 to-pink-400",
-      details: "Pick your favorites to use first",
+      details: "Personalised guidance from your profile",
     },
     {
       number: "3",
-      title: "AI Analysis",
-      description: "AI analyzes ingredients for diabetes safety",
+      title: "Get Meal Ideas + Swaps",
+      description: "Get recipes, portion tips, and food swaps that fit your meal",
       icon: "🤖",
       color: "from-teal-400 to-emerald-400",
-      details: "Checks glycemic index & nutrition",
+      details: "Practical choices you can cook today",
     },
     {
       number: "4",
-      title: "Get 3 Recipes",
-      description: "Instantly receive diabetes-friendly recipes",
+      title: "Plan Your Day (Premium)",
+      description: "Generate a daily plan for breakfast, lunch, dinner, and snacks",
       icon: "🍳",
       color: "from-amber-400 to-orange-400",
-      details: "Complete cooking instructions",
+      details: "Simple, repeatable routines",
     },
   ];
 
@@ -41,9 +41,7 @@ export default function HowItWorks() {
           <div key={step.number} className="relative">
             <div className="relative bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 sm:p-7 lg:p-8 text-center hover:bg-white/10 transition-all duration-300 hover:scale-[1.02]">
               <div className="relative mx-auto mb-6 sm:mb-7 lg:mb-8">
-                <div
-                  className={`absolute inset-0 bg-gradient-to-br ${step.color} rounded-full opacity-20 blur-lg`}
-                />
+                <div className={`absolute inset-0 bg-gradient-to-br ${step.color} rounded-full opacity-20 blur-lg`} />
                 <div
                   className={`relative w-28 h-28 sm:w-32 sm:h-32 lg:w-36 lg:h-36 mx-auto rounded-full bg-gradient-to-br ${step.color} flex items-center justify-center shadow-2xl shadow-current/20`}
                 >
@@ -59,9 +57,7 @@ export default function HowItWorks() {
                 Step {step.number}
               </div>
 
-              <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white mb-3 sm:mb-4">
-                {step.title}
-              </h3>
+              <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white mb-3 sm:mb-4">{step.title}</h3>
 
               <p className="text-gray-200 text-sm sm:text-base lg:text-lg mb-3 sm:mb-4 leading-relaxed">
                 {step.description}
@@ -70,21 +66,14 @@ export default function HowItWorks() {
               <p className="text-xs sm:text-sm text-gray-300 opacity-80 italic">{step.details}</p>
             </div>
 
-            {/* Connector (only on xl when it stays in one row) */}
             {index < steps.length - 1 && (
               <div className="hidden xl:block absolute top-1/2 -right-6 transform -translate-y-1/2 text-teal-400/40 pointer-events-none">
                 <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M14 5l7 7m0 0l-7 7m7-7H3"
-                  />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
                 </svg>
               </div>
             )}
 
-            {/* Mobile connector */}
             {index < steps.length - 1 && (
               <div className="md:hidden flex flex-col items-center mt-4 text-teal-400/50">
                 <div className="w-0.5 h-6 bg-gradient-to-b from-teal-400/50 to-transparent" />
@@ -104,3 +93,4 @@ export default function HowItWorks() {
     </div>
   );
 }
+
