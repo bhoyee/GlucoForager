@@ -2,35 +2,35 @@ export default function HowItWorks() {
   const steps = [
     {
       number: "1",
-      title: "Scan or Type",
-      description: "Scan ingredients with your camera or type what you have",
-      icon: "📸",
+      title: "Scan or Type Ingredients",
+      description: "Scan your fridge/pantry or type what you have",
+      icon: "\u{1F4F7}",
       color: "from-blue-400 to-teal-400",
       details: "Works with real pantry and fridge items",
     },
     {
       number: "2",
-      title: "Choose Your Focus",
-      description: "Pick goals like lower carb, quick meals, or higher protein",
-      icon: "👉",
+      title: "Confirm & Personalise",
+      description: "Select what you want to use and your preferences",
+      icon: "\u{1F4DD}",
       color: "from-purple-400 to-pink-400",
-      details: "Personalised guidance from your profile",
+      details: "Built around your profile and goals",
     },
     {
       number: "3",
-      title: "Get Meal Ideas + Swaps",
-      description: "Get recipes, portion tips, and food swaps that fit your meal",
-      icon: "🤖",
+      title: "Get 3 Recipes",
+      description: "See practical recipes with simple nutrition context",
+      icon: "\u{1F373}",
       color: "from-teal-400 to-emerald-400",
-      details: "Practical choices you can cook today",
+      details: "Clear steps you can cook today",
     },
     {
       number: "4",
-      title: "Plan Your Day (Premium)",
-      description: "Generate a daily plan for breakfast, lunch, dinner, and snacks",
-      icon: "🍳",
+      title: "Save or Plan Your Day",
+      description: "Save favourites or generate a full-day meal plan (Premium)",
+      icon: "\u{1F4C5}",
       color: "from-amber-400 to-orange-400",
-      details: "Simple, repeatable routines",
+      details: "Build repeatable routines",
     },
   ];
 
@@ -57,7 +57,9 @@ export default function HowItWorks() {
                 Step {step.number}
               </div>
 
-              <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white mb-3 sm:mb-4">{step.title}</h3>
+              <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white mb-3 sm:mb-4">
+                {step.title}
+              </h3>
 
               <p className="text-gray-200 text-sm sm:text-base lg:text-lg mb-3 sm:mb-4 leading-relaxed">
                 {step.description}
