@@ -20,6 +20,7 @@ from ...services.cost_tracker import record_ai_request
 from ...core.config import settings as core_settings
 from ...services.recipe_image_attach_service import attach_recipe_images
 from ...services.rate_limit_service import check_ai_rate_limit
+from ...services.recipe_fingerprint import recipe_fingerprint as stable_recipe_fingerprint
 from ...services.settings_service import get_recipe_image_settings
 from ...services.subscription_service import get_effective_subscription_tier
 from ...models.recipe_history import RecipeHistory
@@ -534,25 +535,10 @@ def generate_recipe_image(
     }
 
     today = datetime.now(timezone.utc).date().isoformat()
-    title_norm = str(recipe_payload["title"]).strip().lower()
-    ingredient_norm_items = sorted(
-        {
-            str(item).strip().lower()
-            for item in (payload.ingredients or [])
-            if item and str(item).strip()
-        }
+    fingerprint = stable_recipe_fingerprint(
+        title=str(recipe_payload["title"] or ""),
+        ingredients=[str(item).strip() for item in (payload.ingredients or []) if item and str(item).strip()],
     )
-
-    fingerprint = hashlib.sha256(
-        (
-            # Intentionally DO NOT include description in the fingerprint because the mobile app
-            # may fill a default description when the backend omits it, which would prevent us
-            # from updating recipe_history and recent lists correctly.
-            title_norm
-            + "|"
-            + ",".join(ingredient_norm_items)
-        ).encode("utf-8")
-    ).hexdigest()
 
     per_recipe_key = f"imggen:{current_user.id}:{today}:{fingerprint}"
     per_recipe_count_raw = cache.get(per_recipe_key)
@@ -683,7 +669,7 @@ def generate_recipe_image(
 
 
 def _recipe_fingerprint_from_item(item: dict) -> str:
-    title = str(item.get("title") or item.get("name") or "").strip().lower()
+    title = str(item.get("title") or item.get("name") or "").strip()
     raw_ingredients = item.get("ingredients") or []
     names: list[str] = []
     if isinstance(raw_ingredients, list):
@@ -695,9 +681,7 @@ def _recipe_fingerprint_from_item(item: dict) -> str:
                 name = str(ing.get("name") or ing.get("title") or "").strip()
                 if name:
                     names.append(name)
-    joined = ",".join(names)
-    normalized = ",".join(sorted({name.strip().lower() for name in names if name.strip()}))
-    return hashlib.sha256((title + "|" + normalized).encode("utf-8")).hexdigest()
+    return stable_recipe_fingerprint(title=title, ingredients=names)
 
 
 def _persist_image_to_history(

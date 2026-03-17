@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import logging
 from datetime import datetime, timezone
 from urllib.parse import urlsplit
@@ -14,6 +13,7 @@ from ..services.cost_tracker import record_ai_request
 from ..services.settings_service import get_recipe_image_settings
 from ..services.subscription_service import get_effective_subscription_tier
 from ..core.config import settings as core_settings
+from ..services.recipe_fingerprint import recipe_fingerprint as stable_recipe_fingerprint
 
 logger = logging.getLogger(__name__)
 
@@ -40,20 +40,18 @@ def _normalize_image_url(image_url: str, *, base_url: str | None) -> str:
 
 
 def _recipe_fingerprint(recipe: dict) -> str:
-    title = str(recipe.get("title") or recipe.get("name") or "").strip().lower()
+    title = str(recipe.get("title") or recipe.get("name") or "").strip()
     raw_ingredients = recipe.get("ingredients") or []
     names: list[str] = []
     if isinstance(raw_ingredients, list):
         for ing in raw_ingredients:
-            if isinstance(ing, str):
-                if ing.strip():
-                    names.append(ing.strip())
+            if isinstance(ing, str) and ing.strip():
+                names.append(ing.strip())
             elif isinstance(ing, dict):
                 name = str(ing.get("name") or ing.get("title") or "").strip()
                 if name:
                     names.append(name)
-    normalized = ",".join(sorted({name.strip().lower() for name in names if name.strip()}))
-    return hashlib.sha256((title + "|" + normalized).encode("utf-8")).hexdigest()
+    return stable_recipe_fingerprint(title=title, ingredients=names)
 
 
 def attach_recipe_images(
