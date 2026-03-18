@@ -143,7 +143,9 @@ class AIPipeline:
         non_food = classified.get("non_food", [])
         self._validate_ingredients(food_only)
         selected_food_only, flagged = self._apply_risk_filter(food_only, tier=tier)
-        selected_food_only = self._cap_recipe_ingredients(selected_food_only)
+        # Multi-image scans can yield many ingredients; keep recipe generation inputs tighter to reduce
+        # truncation/invalid JSON and improve latency.
+        selected_food_only = self._cap_recipe_ingredients(selected_food_only, limit=14)
         warning = flagged if isinstance(flagged, dict) and flagged.get("code") else self._get_diabetes_warning(selected_food_only)
         if non_food and not warning:
             warning = {
