@@ -21,6 +21,7 @@ import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
 import { useAuth } from '../../context/authContext';
 import { getRecipeImageSettings } from '../../utils/recipeImageSettings';
+import { getCachedRecipeImageUrl, setCachedRecipeImageUrl } from '../../utils/recipeImageCache';
 
 export default function RecentRecipesScreen() {
   const navigation = useNavigation();
@@ -139,7 +140,27 @@ export default function RecentRecipesScreen() {
       }
       const data = await response.json();
       const items = Array.isArray(data.items) ? data.items : [];
-      setRecipes(items);
+
+      const hydrated = await Promise.all(
+        items.map(async (recipe) => {
+          if (!recipe || typeof recipe !== 'object') return recipe;
+          const directUrl =
+            (typeof recipe?.image_url === 'string' && recipe.image_url.trim())
+              ? recipe.image_url.trim()
+              : (typeof recipe?.image === 'string' && recipe.image.trim())
+                ? recipe.image.trim()
+                : '';
+          if (directUrl) {
+            await setCachedRecipeImageUrl(recipe, directUrl);
+            return { ...recipe, image_url: recipe.image_url || directUrl, image: recipe.image || directUrl };
+          }
+          const cached = await getCachedRecipeImageUrl(recipe);
+          if (!cached) return recipe;
+          return { ...recipe, image_url: cached, image: cached, image_source: recipe.image_source || 'ai' };
+        })
+      );
+
+      setRecipes(hydrated);
     } catch (error) {
       Alert.alert('Error', 'Unable to load recent recipes right now.');
     } finally {

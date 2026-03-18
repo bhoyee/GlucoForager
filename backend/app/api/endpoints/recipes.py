@@ -11,27 +11,25 @@ from ...models.user import User
 from ..dependencies import get_current_user
 from ...services.cache_service import CacheService
 from ...services.food_profile_service import extract_food_profile
-import hashlib
+from ...services.recipe_fingerprint import recipe_fingerprint as stable_recipe_fingerprint
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
 cache = CacheService()
 
 
 def _ai_recipe_fingerprint(item: dict) -> str:
-    title = str(item.get("title") or item.get("name") or "").strip().lower()
+    title = str(item.get("title") or item.get("name") or "").strip()
     raw_ingredients = item.get("ingredients") or []
     names: list[str] = []
     if isinstance(raw_ingredients, list):
         for ing in raw_ingredients:
-            if isinstance(ing, str):
-                if ing.strip():
-                    names.append(ing.strip())
+            if isinstance(ing, str) and ing.strip():
+                names.append(ing.strip())
             elif isinstance(ing, dict):
                 name = str(ing.get("name") or ing.get("title") or "").strip()
                 if name:
                     names.append(name)
-    normalized = ",".join(sorted({name.strip().lower() for name in names if name.strip()}))
-    return hashlib.sha256((title + "|" + normalized).encode("utf-8")).hexdigest()
+    return stable_recipe_fingerprint(title=title, ingredients=names)
 
 
 def _recipe_text(recipe: Recipe) -> str:
