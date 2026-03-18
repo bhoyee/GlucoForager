@@ -1,6 +1,9 @@
 from typing import Any, Dict, List
+from __future__ import annotations
+
 import logging
 import time
+from typing import Any, Dict, List
 
 from sqlalchemy.orm import Session
 
@@ -12,6 +15,7 @@ from .diabetes_friendly_classifier import DiabetesFriendlyClassifier
 from .ingredient_classifier import IngredientClassifier
 from .cost_tracker import record_ai_request
 from .food_profile_service import extract_food_profile
+from .ingredient_risk_classifier import IngredientRiskClassifier
 
 
 logger = logging.getLogger(__name__)
@@ -31,6 +35,7 @@ class AIPipeline:
         self.ai = TieredAIService()
         self.classifier = DiabetesFriendlyClassifier()
         self.ingredient_classifier = IngredientClassifier()
+        self.risk_classifier = IngredientRiskClassifier()
 
     def _validate_ingredients(self, ingredients: list[str]) -> None:
         if not ingredients:
@@ -50,68 +55,50 @@ class AIPipeline:
             cleaned.append(stripped)
         return cleaned
 
-    def _filter_diabetes_risky_ingredients(self, ingredients: list[str]) -> tuple[list[str], dict | None]:
+    def _apply_risk_filter(self, ingredients: list[str], *, tier: str) -> tuple[list[str], dict]:
         """
-        Practical UX filter to avoid "diabetes-friendly" recipes being driven by sugary drinks / sweet condiments.
+        Decide which detected foods should be "selected" as primary recipe inputs.
 
-        - Excludes common sugary beverages/sweeteners from recipe-generation input.
-        - Treats some condiments/fats as optional (not forced into the "ONLY ingredients" list).
-
-        This is NOT medical advice; it just improves recipe quality and user trust.
+        This is AI-driven (not hardcoded): we ask the model to tag each ingredient as:
+        - ok (keep in selected list)
+        - limit (treat as optional, not selected)
+        - avoid (exclude from selected)
         """
-        if not ingredients:
-            return ingredients, None
+        risks = self.risk_classifier.classify(ingredients, tier=tier)
+        risk_by_name = risks.get("risk_by_name") or {}
 
-        import re
-
-        exclude_patterns = [
-            r"\b(juice|fruit\s+juice|orange\s+juice|apple\s+juice|mango\s+juice|pineapple\s+juice)\b",
-            r"\b(soda|cola|soft\s+drink|energy\s+drink|sports\s+drink)\b",
-            r"\b(syrup|maple\s+syrup|honey|sweetened\s+condensed\s+milk)\b",
-        ]
-        optional_patterns = [
-            r"\b(ketchup|tomato\s+ketchup)\b",
-            r"\b(bbq\s+sauce|barbecue\s+sauce)\b",
-            r"\b(sweet\s+chili|chili\s+sauce)\b",
-            r"\b(margarine)\b",
-            r"\b(cream|heavy\s+cream|whipping\s+cream)\b",
-            r"\b(butter)\b",
-        ]
-
-        excluded: list[str] = []
+        selected: list[str] = []
         optional: list[str] = []
-        keep: list[str] = []
+        excluded: list[str] = []
 
-        for item in ingredients:
-            if not isinstance(item, str) or not item.strip():
-                continue
-            text = item.strip().lower()
-            if any(re.search(pattern, text) for pattern in exclude_patterns):
+        for item in ingredients or []:
+            key = (item or "").strip().lower()
+            label = (risk_by_name.get(key) or {}).get("risk") or "ok"
+            if label == "avoid":
                 excluded.append(item)
-                continue
-            if any(re.search(pattern, text) for pattern in optional_patterns):
+            elif label == "limit":
                 optional.append(item)
-                continue
-            keep.append(item)
+            else:
+                selected.append(item)
+
+        # If we excluded too much, fall back to keep some optional items.
+        if len(selected) < 3 and optional:
+            selected = selected + optional[: max(0, 3 - len(selected))]
+            optional = optional[max(0, 3 - len(selected)) :]
 
         warning = None
         if excluded or optional:
-            message_parts = []
-            if excluded:
-                message_parts.append("Some sugary drinks/sweeteners were ignored for recipe generation.")
-            if optional:
-                message_parts.append("Some condiments/fats were treated as optional.")
             warning = {
                 "code": "ingredients_flagged",
-                "message": " ".join(message_parts).strip()
-                or "Some ingredients were treated as optional for diabetes-friendly recipe generation.",
+                "message": "Some ingredients were treated as optional or excluded for better diabetes-friendly results.",
                 "risk_level": "moderate",
-                "source": "rules",
+                "source": risks.get("source") or "ai",
                 "excluded": excluded,
                 "optional": optional,
+                "risk_by_name": risk_by_name,
             }
 
-        return keep, warning
+        return selected, (warning or {"risk_by_name": risk_by_name, "source": risks.get("source") or "ai"})
 
     def _get_diabetes_warning(self, ingredients: list[str]) -> dict | None:
         verdict = self.classifier.classify(ingredients)
@@ -142,8 +129,8 @@ class AIPipeline:
         food_only = classified.get("food", [])
         non_food = classified.get("non_food", [])
         self._validate_ingredients(food_only)
-        filtered_food_only, flagged_warning = self._filter_diabetes_risky_ingredients(food_only)
-        warning = flagged_warning or self._get_diabetes_warning(filtered_food_only)
+        selected_food_only, flagged = self._apply_risk_filter(food_only, tier=tier)
+        warning = flagged if isinstance(flagged, dict) and flagged.get("code") else self._get_diabetes_warning(selected_food_only)
         if non_food and not warning:
             warning = {
                 "code": "non_food_ignored",
@@ -152,7 +139,7 @@ class AIPipeline:
                 "source": classified.get("source", "rules"),
             }
         recipes = self.ai.generate_recipes(
-            filtered_food_only,
+            selected_food_only,
             tier,
             filters=filters,
             timeout_seconds=55,
@@ -162,7 +149,7 @@ class AIPipeline:
         recipes = self._validated_recipes_or_none(recipes)
         if recipes is None:
             recipes_retry = self.ai.generate_recipes(
-                filtered_food_only,
+                selected_food_only,
                 tier,
                 filters=filters,
                 variety_mode=True,
@@ -179,10 +166,10 @@ class AIPipeline:
         db.commit()
         return {
             "recipes": recipes,
-            "detected": filtered_food_only,
+            "detected": selected_food_only,
             "detected_all": food_only,
-            "flagged_out": (flagged_warning or {}).get("excluded", []) if isinstance(flagged_warning, dict) else [],
-            "flagged_optional": (flagged_warning or {}).get("optional", []) if isinstance(flagged_warning, dict) else [],
+            "flagged_out": (warning or {}).get("excluded", []) if isinstance(warning, dict) else [],
+            "flagged_optional": (warning or {}).get("optional", []) if isinstance(warning, dict) else [],
             "non_food": non_food,
             "filters": filters or [],
             "warning": warning,
@@ -222,8 +209,8 @@ class AIPipeline:
         food_only = classified.get("food", [])
         non_food = classified.get("non_food", [])
         self._validate_ingredients(food_only)
-        filtered_food_only, flagged_warning = self._filter_diabetes_risky_ingredients(food_only)
-        warning = flagged_warning or self._get_diabetes_warning(filtered_food_only)
+        selected_food_only, flagged = self._apply_risk_filter(food_only, tier=tier)
+        warning = flagged if isinstance(flagged, dict) and flagged.get("code") else self._get_diabetes_warning(selected_food_only)
         if non_food and not warning:
             warning = {
                 "code": "non_food_ignored",
@@ -232,7 +219,7 @@ class AIPipeline:
                 "source": classified.get("source", "rules"),
             }
         recipes = self.ai.generate_recipes(
-            filtered_food_only,
+            selected_food_only,
             tier,
             filters=filters,
             timeout_seconds=55,
@@ -242,7 +229,7 @@ class AIPipeline:
         recipes = self._validated_recipes_or_none(recipes)
         if recipes is None:
             recipes_retry = self.ai.generate_recipes(
-                filtered_food_only,
+                selected_food_only,
                 tier,
                 filters=filters,
                 variety_mode=True,
@@ -259,10 +246,10 @@ class AIPipeline:
         db.commit()
         return {
             "recipes": recipes,
-            "detected": filtered_food_only,
+            "detected": selected_food_only,
             "detected_all": food_only,
-            "flagged_out": (flagged_warning or {}).get("excluded", []) if isinstance(flagged_warning, dict) else [],
-            "flagged_optional": (flagged_warning or {}).get("optional", []) if isinstance(flagged_warning, dict) else [],
+            "flagged_out": (warning or {}).get("excluded", []) if isinstance(warning, dict) else [],
+            "flagged_optional": (warning or {}).get("optional", []) if isinstance(warning, dict) else [],
             "non_food": non_food,
             "filters": filters or [],
             "warning": warning,
