@@ -38,17 +38,24 @@ export default function ScanResultsScreen() {
 
   useEffect(() => {
     if (Array.isArray(detectedFromApi) && detectedFromApi.length > 0) {
+      const riskByName = warning?.risk_by_name || {};
       const normalized = detectedFromApi
         .map((item) => (typeof item === 'string' ? item.trim() : ''))
         .filter((item) => item.length > 0)
-        .map((item, index) => ({
-        id: `${index}-${item}`,
-        name: item,
-        confidence: 'AI',
-        selected: true,
-        }));
+        .map((item, index) => {
+          const key = item.trim().toLowerCase();
+          const risk = riskByName?.[key]?.risk || 'ok';
+          return {
+            id: `${index}-${item}`,
+            name: item,
+            confidence: 'AI',
+            risk,
+            risk_reason: riskByName?.[key]?.reason || '',
+            selected: risk === 'ok',
+          };
+        });
       setDetectedIngredients(normalized);
-      setSelectedIngredients(normalized.map(item => item.id));
+      setSelectedIngredients(normalized.filter((item) => item.selected).map(item => item.id));
       setIsLoading(false);
       return;
     }
@@ -248,7 +255,14 @@ export default function ScanResultsScreen() {
                     </View>
                   </View>
                   <View style={styles.ingredientInfo}>
-                    <Text style={styles.ingredientName}>{item.name}</Text>
+                    <View style={styles.ingredientNameRow}>
+                      <Text style={styles.ingredientName}>{item.name}</Text>
+                      {item.risk === 'limit' ? (
+                        <Text style={styles.riskBadgeLimit}>Use sparingly</Text>
+                      ) : item.risk === 'avoid' ? (
+                        <Text style={styles.riskBadgeAvoid}>Avoid</Text>
+                      ) : null}
+                    </View>
                   </View>
                   {item.confidence === 'Manual' ? (
                     <TouchableOpacity 
@@ -262,7 +276,17 @@ export default function ScanResultsScreen() {
                     </TouchableOpacity>
                   ) : (
                     <View style={styles.ingredientIcon}>
-                      <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
+                      <Ionicons
+                        name={
+                          item.risk === 'avoid'
+                            ? 'close-circle'
+                            : item.risk === 'limit'
+                              ? 'alert-circle'
+                              : 'checkmark-circle'
+                        }
+                        size={20}
+                        color={item.risk === 'avoid' ? Colors.danger : item.risk === 'limit' ? Colors.warning : Colors.success}
+                      />
                     </View>
                   )}
                 </View>
@@ -526,11 +550,36 @@ const styles = StyleSheet.create({
   ingredientInfo: {
     flex: 1,
   },
+  ingredientNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
   ingredientName: {
     fontSize: 16,
     fontWeight: '600',
     color: Colors.text,
     marginBottom: 2,
+  },
+  riskBadgeLimit: {
+    marginLeft: 8,
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.warning,
+    backgroundColor: `${Colors.warning}15`,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  riskBadgeAvoid: {
+    marginLeft: 8,
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.danger,
+    backgroundColor: `${Colors.danger}15`,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
   },
   ingredientIcon: {
     marginLeft: 8,
