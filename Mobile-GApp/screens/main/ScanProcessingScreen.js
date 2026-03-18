@@ -15,6 +15,7 @@ import { Colors } from '../../constants/Colors';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
+import * as ImageManipulator from 'expo-image-manipulator';
 
 export default function ScanProcessingScreen() {
   const navigation = useNavigation();
@@ -27,7 +28,7 @@ export default function ScanProcessingScreen() {
   const phaseRef = useRef(null);
   const [jobId, setJobId] = useState(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [statusLine, setStatusLine] = useState('Preparing…');
+  const [statusLine, setStatusLine] = useState('Preparing...');
 
   const pulse = useRef(new Animated.Value(0)).current;
 
@@ -60,17 +61,18 @@ export default function ScanProcessingScreen() {
 
       // Start a simple elapsed timer + rotating status line to reduce "it froze" feeling.
       setElapsedSeconds(0);
-      setStatusLine(images.length > 1 ? 'Uploading photos…' : 'Uploading photo…');
+      setStatusLine(images.length > 1 ? 'Optimizing photos...' : 'Optimizing photo...');
       if (elapsedRef.current) clearInterval(elapsedRef.current);
       elapsedRef.current = setInterval(() => {
         setElapsedSeconds((prev) => prev + 1);
       }, 1000);
 
       const phases = [
-        images.length > 1 ? 'Uploading photos…' : 'Uploading photo…',
-        'AI is analyzing ingredients…',
-        'Selecting diabetes-friendly recipes…',
-        'Finalizing results…',
+        images.length > 1 ? 'Optimizing photos...' : 'Optimizing photo...',
+        images.length > 1 ? 'Uploading photos...' : 'Uploading photo...',
+        'AI is analyzing ingredients...',
+        'Selecting diabetes-friendly recipes...',
+        'Finalizing results...',
       ];
       let idx = 0;
       if (phaseRef.current) clearInterval(phaseRef.current);
@@ -87,9 +89,48 @@ export default function ScanProcessingScreen() {
           return;
         }
         const deviceId = await getDeviceId();
-        const imagesBase64 = images
-          .map((item) => item.base64)
-          .filter((value) => Boolean(value));
+
+        // Adapt compression slightly for multi-photo scans to keep payload sizes down.
+        const sources = Array.isArray(images) ? images.slice(0, 5) : [];
+        const targetWidth = sources.length > 2 ? 896 : 1024;
+        const jpegCompress = sources.length > 2 ? 0.55 : 0.6;
+
+        const toCompressedBase64 = async (uri) => {
+          if (!uri) return null;
+          try {
+            const result = await ImageManipulator.manipulateAsync(
+              uri,
+              [{ resize: { width: targetWidth } }],
+              { compress: jpegCompress, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+            );
+            return result?.base64 || null;
+          } catch {
+            return null;
+          }
+        };
+
+        // Cap how many photos we process to keep requests bounded (and prevent huge payloads).
+        // Users can still scan again if they want to add more.
+        if (Array.isArray(images) && images.length > 5) {
+          setStatusLine('Optimizing first 5 photos...');
+        }
+
+        // Limit CPU load on low-end devices: compress a couple at a time.
+        const concurrency = 2;
+        const imagesBase64 = [];
+        for (let i = 0; i < sources.length; i += concurrency) {
+          const batch = sources.slice(i, i + concurrency);
+          const results = await Promise.all(
+            batch.map(async (item) => {
+              const direct = typeof item?.base64 === 'string' && item.base64.trim() ? item.base64.trim() : null;
+              if (direct) return direct;
+              return await toCompressedBase64(item?.uri);
+            })
+          );
+          results.forEach((b64) => {
+            if (typeof b64 === 'string' && b64.trim()) imagesBase64.push(b64.trim());
+          });
+        }
 
         if (imagesBase64.length === 0) {
           Alert.alert('Image error', 'Unable to read image data. Please try again.');
@@ -101,6 +142,9 @@ export default function ScanProcessingScreen() {
           imagesBase64.length > 1
             ? API_ENDPOINTS.AI_VISION_RECIPES_BATCH_ASYNC
             : API_ENDPOINTS.AI_VISION_RECIPES_ASYNC;
+
+        const startTimeoutMs =
+          imagesBase64.length <= 1 ? 90000 : imagesBase64.length <= 2 ? 120000 : 180000;
         const response = await apiFetch(
           `${API_URL}${endpoint}`,
           {
@@ -115,7 +159,7 @@ export default function ScanProcessingScreen() {
                 ? JSON.stringify({ images_base64: imagesBase64 })
                 : JSON.stringify({ image_base64: imagesBase64[0] }),
           },
-          { onUnauthorized: signOut, timeoutMs: 60000 }
+          { onUnauthorized: signOut, timeoutMs: startTimeoutMs }
         );
 
         if (response.status === 401) {
@@ -142,6 +186,8 @@ export default function ScanProcessingScreen() {
         pollingRef.current = setInterval(() => {
           pollJob(data.job_id);
         }, 3000);
+        const count = imagesBase64.length || (images?.length || 1);
+        const overallTimeoutMs = count <= 2 ? 120000 : count <= 4 ? 180000 : 240000;
         timeoutRef.current = setTimeout(() => {
           stopPolling();
           Alert.alert(
@@ -149,7 +195,7 @@ export default function ScanProcessingScreen() {
             'Please try again in a moment.'
           );
           navigation.goBack();
-        }, 120000);
+        }, overallTimeoutMs);
       } catch (error) {
         console.warn('Scan analysis error:', error?.message || error);
         Alert.alert('Scan failed', 'Unable to analyze image. Please try again.');
@@ -262,7 +308,13 @@ export default function ScanProcessingScreen() {
         </View>
         <View style={styles.metaPill}>
           <Ionicons name="shield-checkmark-outline" size={14} color="rgba(255, 255, 255, 0.85)" />
-          <Text style={styles.metaText}>Usually under 1 minute</Text>
+          <Text style={styles.metaText}>
+            {images?.length <= 1
+              ? 'Usually ~1 minute'
+              : images?.length === 2
+                ? 'Usually ~2 minutes'
+                : 'Usually ~2-3 minutes'}
+          </Text>
         </View>
       </View>
 
