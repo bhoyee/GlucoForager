@@ -84,6 +84,35 @@ class TieredAIService:
             self.cache.set(key, json.dumps(result), ttl_seconds=300)
         return result
 
+    def analyze_vision_batch(self, images_b64: list[str], tier: str) -> Dict[str, Any]:
+        normalized_images: list[str] = []
+        digests: list[str] = []
+        for raw in (images_b64 or []):
+            normalized_b64, digest = self._normalize_image_b64_for_vision(raw)
+            if normalized_b64:
+                normalized_images.append(normalized_b64)
+            elif isinstance(raw, str) and raw.strip():
+                normalized_images.append(raw.strip())
+            if digest:
+                digests.append(digest)
+
+        batch_digest = hashlib.sha256("|".join(digests).encode("utf-8")).hexdigest() if digests else ""
+        payload = {"image_digest": batch_digest, "count": len(normalized_images), "tier": tier, "v": 1}
+        key = self._cache_key("vision_batch", payload)
+
+        if self._should_cache(tier):
+            cached = self.cache.get(key)
+            if cached:
+                try:
+                    return json.loads(cached)
+                except Exception:
+                    pass
+
+        result = self.vision.analyze_fridge_batch(normalized_images, tier)
+        if self._should_cache(tier):
+            self.cache.set(key, json.dumps(result), ttl_seconds=300)
+        return result
+
     def generate_recipes(
         self,
         ingredients: List[str],
