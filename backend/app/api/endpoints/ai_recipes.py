@@ -148,6 +148,9 @@ def _run_vision_job(job_id: str) -> None:
         job.result = {
             "results": result.get("recipes", []),
             "detected": result.get("detected", []),
+            "detected_all": result.get("detected_all", []),
+            "flagged_out": result.get("flagged_out", []),
+            "flagged_optional": result.get("flagged_optional", []),
             "non_food": result.get("non_food", []),
             "filters": result.get("filters", []),
             "warning": result.get("warning"),
@@ -243,6 +246,9 @@ def generate_from_vision(
             return {
                 "results": cached_result.get("recipes", []),
                 "detected": cached_result.get("detected", []),
+                "detected_all": cached_result.get("detected_all", []),
+                "flagged_out": cached_result.get("flagged_out", []),
+                "flagged_optional": cached_result.get("flagged_optional", []),
                 "non_food": cached_result.get("non_food", []),
                 "filters": cached_result.get("filters", []),
                 "warning": cached_result.get("warning"),
@@ -266,6 +272,9 @@ def generate_from_vision(
     return {
         "results": result.get("recipes", []),
         "detected": result.get("detected", []),
+        "detected_all": result.get("detected_all", []),
+        "flagged_out": result.get("flagged_out", []),
+        "flagged_optional": result.get("flagged_optional", []),
         "non_food": result.get("non_food", []),
         "filters": result.get("filters", []),
         "warning": result.get("warning"),
