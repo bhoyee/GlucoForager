@@ -210,11 +210,10 @@ export default function ScanScreen() {
     if (!cameraRef || !CameraView) return;
     setIsCapturing(true);
     try {
-      const photo = await cameraRef.takePictureAsync({ quality: 0.7, skipProcessing: true, base64: true });
+      const photo = await cameraRef.takePictureAsync({ quality: 0.7, skipProcessing: true, base64: false });
       const newImage = {
         id: Date.now().toString(),
         uri: photo.uri,
-        base64: photo.base64,
         name: `Photo ${capturedImages.length + 1}`,
       };
       setCapturedImages((prev) => [...prev, newImage]);
@@ -244,14 +243,13 @@ export default function ScanScreen() {
         allowsEditing: false,
         allowsMultipleSelection: true,
         quality: 0.8,
-        base64: true,
+        base64: false,
       });
 
       if (!result.canceled) {
         const newImages = result.assets.map((asset, index) => ({
           id: Date.now().toString() + index,
           uri: asset.uri,
-          base64: asset.base64,
           name: `Image ${capturedImages.length + index + 1}`
         }));
         
@@ -268,6 +266,13 @@ export default function ScanScreen() {
     if (capturedImages.length === 0) {
       Alert.alert('No Images', 'Please select at least one image before analyzing.');
       return;
+    }
+    if (capturedImages.length > 5) {
+      Alert.alert(
+        'Lots of photos',
+        'To keep things fast and reliable, we will analyze the first 5 photos. You can scan again to add more.',
+        [{ text: 'OK' }]
+      );
     }
     setIsScanning(true);
     setIsCameraActive(false);
