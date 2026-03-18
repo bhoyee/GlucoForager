@@ -108,6 +108,22 @@ class AIPipeline:
             }
         return None
 
+    def _cap_recipe_ingredients(self, ingredients: list[str], *, limit: int = 18) -> list[str]:
+        """
+        Keep recipe generation inputs bounded to reduce latency and invalid/truncated JSON outputs.
+
+        Vision scans can detect dozens of items; passing them all makes prompts long and model outputs more likely
+        to truncate mid-JSON.
+        """
+        try:
+            n = int(limit)
+        except Exception:  # noqa: BLE001
+            n = 18
+        n = max(5, min(30, n))
+        if not ingredients:
+            return ingredients
+        return list(ingredients[:n])
+
     def fridge_to_recipes(
         self,
         db: Session,
@@ -127,6 +143,7 @@ class AIPipeline:
         non_food = classified.get("non_food", [])
         self._validate_ingredients(food_only)
         selected_food_only, flagged = self._apply_risk_filter(food_only, tier=tier)
+        selected_food_only = self._cap_recipe_ingredients(selected_food_only)
         warning = flagged if isinstance(flagged, dict) and flagged.get("code") else self._get_diabetes_warning(selected_food_only)
         if non_food and not warning:
             warning = {
@@ -207,6 +224,7 @@ class AIPipeline:
         non_food = classified.get("non_food", [])
         self._validate_ingredients(food_only)
         selected_food_only, flagged = self._apply_risk_filter(food_only, tier=tier)
+        selected_food_only = self._cap_recipe_ingredients(selected_food_only)
         warning = flagged if isinstance(flagged, dict) and flagged.get("code") else self._get_diabetes_warning(selected_food_only)
         if non_food and not warning:
             warning = {
@@ -285,7 +303,7 @@ class AIPipeline:
         )
 
         recipes = self.ai.generate_recipes(
-            ingredients,
+            self._cap_recipe_ingredients(ingredients),
             tier,
             filters=filters,
             exclude_titles=exclude_titles or [],
