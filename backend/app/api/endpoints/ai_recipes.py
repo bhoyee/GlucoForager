@@ -158,7 +158,7 @@ def _run_vision_job(job_id: str) -> None:
     except Exception as exc:  # noqa: BLE001
         if "job" in locals() and job:
             job.status = "failed"
-            job.error = str(exc)
+            job.error = _safe_job_error(str(exc))
             job.result = {
                 "error": {
                     "type": "operational",
@@ -169,6 +169,18 @@ def _run_vision_job(job_id: str) -> None:
             db.commit()
     finally:
         db.close()
+
+
+def _safe_job_error(message: str) -> str:
+    raw = (message or "").strip()
+    if not raw:
+        return "Unable to generate recipes right now. Please try again."
+    lowered = raw.lower()
+    if "ai_disable_emergency_fallback" in lowered or "emergency fallback" in lowered:
+        return "Unable to generate recipes right now. Please try again in a moment."
+    if "all ai models failed" in lowered or "invalid output" in lowered:
+        return "Unable to generate recipes right now. Please try again in a moment."
+    return raw[:240]
 
 
 @router.post("/vision")

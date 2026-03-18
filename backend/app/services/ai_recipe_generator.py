@@ -1398,10 +1398,8 @@ class AIRecipeGenerator:
 
         fallback = emergency_recipes()
         if settings.ai_disable_emergency_fallback:
-            raise RuntimeError(
-                "All AI models failed or returned invalid output. "
-                "Emergency fallback is disabled (AI_DISABLE_EMERGENCY_FALLBACK=true)."
-            )
+            # Do not leak internal config details to end users.
+            raise RuntimeError("Unable to generate recipes right now. Please try again in a moment.")
         for recipe in fallback:
             if isinstance(recipe, dict):
                 recipe["_ai_provider"] = "fallback"
