@@ -258,7 +258,7 @@ export default function ScanProcessingScreen() {
         navigation.replace('ScanResults', {
           images,
           userIsPremium,
-          detectedIngredients: result.detected || [],
+          detectedIngredients: result.detected_all || result.detected || [],
           recipes: result.results || [],
           warning: result.warning || null,
         });
