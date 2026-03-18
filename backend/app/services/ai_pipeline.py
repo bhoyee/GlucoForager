@@ -143,16 +143,16 @@ class AIPipeline:
         non_food = classified.get("non_food", [])
         self._validate_ingredients(food_only)
         selected_food_only, flagged = self._apply_risk_filter(food_only, tier=tier)
-        # Multi-image scans can yield many ingredients; keep recipe generation inputs tighter to reduce
-        # truncation/invalid JSON and improve latency.
-        selected_food_only = self._cap_recipe_ingredients(selected_food_only, limit=14)
-        warning = flagged if isinstance(flagged, dict) and flagged.get("code") else self._get_diabetes_warning(selected_food_only)
-        if non_food and not warning:
+        selected_food_only = self._cap_recipe_ingredients(selected_food_only)
+        risk_meta = flagged if isinstance(flagged, dict) else {}
+        warning = self._get_diabetes_warning(selected_food_only) or risk_meta
+        if non_food and (not isinstance(warning, dict) or not warning.get("code")):
             warning = {
                 "code": "non_food_ignored",
                 "message": "Some items were not food ingredients and were ignored.",
                 "risk_level": "low",
                 "source": classified.get("source", "rules"),
+                "risk_by_name": risk_meta.get("risk_by_name") or {},
             }
         recipes = self.ai.generate_recipes(
             selected_food_only,
@@ -226,14 +226,18 @@ class AIPipeline:
         non_food = classified.get("non_food", [])
         self._validate_ingredients(food_only)
         selected_food_only, flagged = self._apply_risk_filter(food_only, tier=tier)
-        selected_food_only = self._cap_recipe_ingredients(selected_food_only)
-        warning = flagged if isinstance(flagged, dict) and flagged.get("code") else self._get_diabetes_warning(selected_food_only)
-        if non_food and not warning:
+        # Multi-image scans can yield many ingredients; keep recipe generation inputs tighter to reduce
+        # truncation/invalid JSON and improve latency.
+        selected_food_only = self._cap_recipe_ingredients(selected_food_only, limit=14)
+        risk_meta = flagged if isinstance(flagged, dict) else {}
+        warning = self._get_diabetes_warning(selected_food_only) or risk_meta
+        if non_food and (not isinstance(warning, dict) or not warning.get("code")):
             warning = {
                 "code": "non_food_ignored",
                 "message": "Some items were not food ingredients and were ignored.",
                 "risk_level": "low",
                 "source": classified.get("source", "rules"),
+                "risk_by_name": risk_meta.get("risk_by_name") or {},
             }
         recipes = self.ai.generate_recipes(
             selected_food_only,
