@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -23,7 +24,11 @@ export default function ScanProcessingScreen() {
   const { signOut } = useAuth();
   const pollingRef = useRef(null);
   const timeoutRef = useRef(null);
+  const elapsedRef = useRef(null);
+  const phaseRef = useRef(null);
   const [jobId, setJobId] = useState(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [statusLine, setStatusLine] = useState('Preparing…');
 
   const pulse = useRef(new Animated.Value(0)).current;
 
@@ -53,6 +58,28 @@ export default function ScanProcessingScreen() {
         navigation.goBack();
         return;
       }
+
+      // Start a simple elapsed timer + rotating status line to reduce "it froze" feeling.
+      setElapsedSeconds(0);
+      setStatusLine(images.length > 1 ? 'Uploading photos…' : 'Uploading photo…');
+      if (elapsedRef.current) clearInterval(elapsedRef.current);
+      elapsedRef.current = setInterval(() => {
+        setElapsedSeconds((prev) => prev + 1);
+      }, 1000);
+
+      const phases = [
+        images.length > 1 ? 'Uploading photos…' : 'Uploading photo…',
+        'AI is analyzing ingredients…',
+        'Selecting diabetes-friendly recipes…',
+        'Finalizing results…',
+      ];
+      let idx = 0;
+      if (phaseRef.current) clearInterval(phaseRef.current);
+      phaseRef.current = setInterval(() => {
+        idx = (idx + 1) % phases.length;
+        setStatusLine(phases[idx]);
+      }, 6500);
+
       try {
         const token = await AsyncStorage.getItem('userToken');
         if (!token) {
@@ -152,6 +179,14 @@ export default function ScanProcessingScreen() {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
+    if (elapsedRef.current) {
+      clearInterval(elapsedRef.current);
+      elapsedRef.current = null;
+    }
+    if (phaseRef.current) {
+      clearInterval(phaseRef.current);
+      phaseRef.current = null;
+    }
   };
 
   const pollJob = async (id) => {
@@ -202,19 +237,40 @@ export default function ScanProcessingScreen() {
     outputRange: [0.3, 0.9],
   });
 
+  const formatElapsed = (seconds) => {
+    const s = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
+    const mm = String(Math.floor(s / 60)).padStart(2, '0');
+    const ss = String(s % 60).padStart(2, '0');
+    return `${mm}:${ss}`;
+  };
+
   return (
     <View style={styles.container}>
       <Animated.View style={[styles.iconWrapper, { opacity: glow }]}>
         <Ionicons name="sparkles" size={56} color="white" />
       </Animated.View>
-      <Text style={styles.title}>Analyzing Ingredients</Text>
-      <Text style={styles.subtitle}>
-        We are scanning your images to find diabetes-friendly recipes.
-      </Text>
+      <Text style={styles.title}>AI Analysis in Progress</Text>
+      <Text style={styles.subtitle}>{statusLine}</Text>
       <ActivityIndicator size="large" color="white" style={styles.spinner} />
       <Text style={styles.progressText}>
         Processing {images?.length || 1} image{(images?.length || 1) !== 1 ? 's' : ''}...
       </Text>
+
+      <View style={styles.metaRow}>
+        <View style={styles.metaPill}>
+          <Ionicons name="time-outline" size={14} color="rgba(255, 255, 255, 0.85)" />
+          <Text style={styles.metaText}>Elapsed {formatElapsed(elapsedSeconds)}</Text>
+        </View>
+        <View style={styles.metaPill}>
+          <Ionicons name="shield-checkmark-outline" size={14} color="rgba(255, 255, 255, 0.85)" />
+          <Text style={styles.metaText}>Usually under 1 minute</Text>
+        </View>
+      </View>
+
+      <Text style={styles.helperText}>
+        If this takes longer than expected, your connection may be slow. You can cancel and try again.
+      </Text>
+
       <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
         <Text style={styles.cancelText}>Cancel</Text>
       </TouchableOpacity>
@@ -263,6 +319,36 @@ const styles = StyleSheet.create({
   progressText: {
     fontSize: 12,
     color: 'rgba(255, 255, 255, 0.7)',
+  },
+  metaRow: {
+    marginTop: 14,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
+  metaPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255, 255, 255, 0.10)',
+    marginHorizontal: 6,
+    marginTop: 8,
+  },
+  metaText: {
+    marginLeft: 6,
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.85)',
+  },
+  helperText: {
+    marginTop: 12,
+    maxWidth: 320,
+    textAlign: 'center',
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.70)',
+    lineHeight: 16,
   },
   cancelButton: {
     marginTop: 20,
