@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getCachedRecipeImageUrl } from '../../utils/recipeImageCache';
+import { getCachedRecipeImageUrl, setCachedRecipeImageUrl } from '../../utils/recipeImageCache';
 
 export default function RecipeResultsScreen() {
   const navigation = useNavigation();
@@ -62,10 +62,16 @@ export default function RecipeResultsScreen() {
     const hydrateImages = async () => {
       const next = await Promise.all(
         baseRecipes.map(async (recipe) => {
-          const hasImage =
-            (typeof recipe?.image_url === 'string' && recipe.image_url.trim()) ||
-            (typeof recipe?.image === 'string' && recipe.image.trim());
-          if (hasImage) return recipe;
+          const directUrl =
+            (typeof recipe?.image_url === 'string' && recipe.image_url.trim())
+              ? recipe.image_url.trim()
+              : (typeof recipe?.image === 'string' && recipe.image.trim())
+                ? recipe.image.trim()
+                : '';
+          if (directUrl) {
+            await setCachedRecipeImageUrl(recipe, directUrl);
+            return { ...recipe, image_url: recipe.image_url || directUrl, image: recipe.image || directUrl };
+          }
           const cached = await getCachedRecipeImageUrl(recipe);
           if (!cached) return recipe;
           return { ...recipe, image_url: cached, image: cached, image_source: 'ai' };
