@@ -1,4 +1,5 @@
 from typing import Any, Dict, List
+import concurrent.futures
 import logging
 import time
 
@@ -133,10 +134,25 @@ class AIPipeline:
         user = db.query(User).filter(User.id == user_id).first()
         food_profile = extract_food_profile(user) if user else None
         all_ingredients: list[str] = []
-        for image in images_base64:
-            analysis = self.ai.analyze_vision(image, tier)
-            detected = analysis.get("ingredients", [])
-            all_ingredients.extend(detected)
+        images_base64 = [img for img in (images_base64 or []) if isinstance(img, str) and img.strip()]
+
+        def analyze_one(image_b64: str) -> list[str]:
+            try:
+                analysis = self.ai.analyze_vision(image_b64, tier)
+                detected = analysis.get("ingredients", [])
+                if not isinstance(detected, list):
+                    return []
+                return [str(x).strip() for x in detected if isinstance(x, str) and str(x).strip()]
+            except Exception:  # noqa: BLE001
+                return []
+
+        # Vision calls are network-bound; parallelize to reduce user-perceived latency when multiple images are provided.
+        if images_base64:
+            max_workers = max(1, min(3, len(images_base64)))
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = [executor.submit(analyze_one, image) for image in images_base64]
+                for future in concurrent.futures.as_completed(futures):
+                    all_ingredients.extend(future.result() or [])
 
         # De-duplicate while preserving order
         seen = set()
