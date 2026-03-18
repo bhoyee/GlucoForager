@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import Any, Dict
 
 from openai import OpenAI, OpenAIError
@@ -10,6 +11,16 @@ logger = logging.getLogger(__name__)
 
 class AIVisionService:
     """Wrapper for GPT-5 Vision primary with DeepSeek fallback."""
+
+    def _parse_ingredients(self, content: str) -> list[str]:
+        raw = (content or "").strip()
+        if not raw:
+            return []
+        # Normalize common bullet/list formats into a simple list.
+        raw = raw.replace("\r", "\n")
+        raw = re.sub(r"^[\\s\\-•*\\d.()]+", "", raw, flags=re.MULTILINE)
+        parts = [p.strip() for p in re.split(r"[,;\\n]+", raw) if p and p.strip()]
+        return [p for p in parts if p]
 
     def __init__(self) -> None:
         self.primary_client = (
@@ -73,7 +84,7 @@ class AIVisionService:
         if self.primary_client:
             try:
                 content = self._call(self.primary_client, tier_model, [image_b64], timeout_seconds=25.0)
-                return {"ingredients": [i.strip() for i in content.split(",") if i.strip()], "raw": content}
+                return {"ingredients": self._parse_ingredients(content), "raw": content}
             except OpenAIError as exc:
                 logger.warning("Primary vision failed: %s", exc)
 
@@ -105,15 +116,43 @@ class AIVisionService:
         # One call with multiple images is typically faster and more reliable than multiple sequential calls.
         if self.primary_client:
             try:
-                content = self._call(self.primary_client, tier_model, images_b64, timeout_seconds=35.0)
-                return {"ingredients": [i.strip() for i in content.split(",") if i.strip()], "raw": content}
+                content = self._call(self.primary_client, tier_model, images_b64, timeout_seconds=45.0)
+                parsed = self._parse_ingredients(content)
+                if parsed:
+                    return {"ingredients": parsed, "raw": content}
             except OpenAIError as exc:
                 logger.warning("Primary vision batch failed: %s", exc)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Primary vision batch failed: %s", str(exc)[:240])
+
+        # Robust fallback: if the multi-image call fails/returns empty, try per-image calls and merge results.
+        merged: list[str] = []
+        for img in images_b64 or []:
+            if not (isinstance(img, str) and img.strip()):
+                continue
+            try:
+                if not self.primary_client:
+                    continue
+                content = self._call(self.primary_client, tier_model, [img], timeout_seconds=25.0)
+                merged.extend(self._parse_ingredients(content))
+            except Exception:
+                continue
+
+        if merged:
+            seen: set[str] = set()
+            unique: list[str] = []
+            for item in merged:
+                key = (item or "").strip().lower()
+                if not key or key in seen:
+                    continue
+                seen.add(key)
+                unique.append(item)
+            return {"ingredients": unique, "raw": "per_image_fallback"}
 
         if self.fallback_client and fallback_model:
             try:
                 content = self._call(self.fallback_client, fallback_model, images_b64, timeout_seconds=35.0)
-                return {"ingredients": [i.strip() for i in content.split(",") if i.strip()], "raw": content}
+                return {"ingredients": self._parse_ingredients(content), "raw": content}
             except OpenAIError as exc:
                 logger.exception("Fallback vision batch failed")
                 return {"ingredients": [], "raw": "vision_fallback_error"}
