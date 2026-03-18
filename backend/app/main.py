@@ -151,6 +151,43 @@ def _skip_rate_limit(request: Request) -> bool:
     return False
 
 
+def _is_noise_scan_path(path: str) -> bool:
+    normalized = (path or "").lower()
+    if not normalized.startswith("/api/"):
+        return False
+    # Common automated exploit scans for non-Python stacks.
+    noise_fragments = (
+        "/vendor/phpunit/",
+        "phpunit",
+        "/wp-",
+        "/wordpress",
+        "/wp-includes/",
+        "/wp-admin/",
+        "/.env",
+        "/.git",
+    )
+    return any(fragment in normalized for fragment in noise_fragments)
+
+
+def _should_log_failed_api_request(request: Request, status_code: int) -> bool:
+    path = request.url.path
+    if not path.startswith("/api/"):
+        return False
+    if _is_noise_scan_path(path):
+        return False
+
+    # Avoid flooding system logs with unauthenticated probes to protected endpoints.
+    # Real app requests usually include an Authorization header and app metadata.
+    if status_code == 401:
+        has_auth = bool(request.headers.get("authorization"))
+        has_app_version = bool(request.headers.get("x-app-version") or request.headers.get("x-appversion"))
+        has_device = bool(request.headers.get("x-device"))
+        if not has_auth and not (has_app_version or has_device):
+            return False
+
+    return True
+
+
 @app.on_event("startup")
 def on_startup():
     logger.info("Startup complete.")
@@ -208,7 +245,7 @@ async def abuse_guard(request: Request, call_next):
     # Only record "API request failed" events for real API routes.
     # This prevents system-log flooding from internet scanners probing random paths
     # like "/.env", "/.git/config", "/wp-includes/...", etc.
-    if response.status_code >= 400 and request.url.path.startswith("/api/"):
+    if response.status_code >= 400 and _should_log_failed_api_request(request, response.status_code):
         log_system_event({
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "level": "error" if response.status_code >= 500 else "warn",
