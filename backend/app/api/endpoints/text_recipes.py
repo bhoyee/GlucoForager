@@ -23,6 +23,7 @@ from ...services.rate_limit_service import check_ai_rate_limit
 from ...services.subscription_service import get_effective_subscription_tier
 from ...core.config import settings
 from ...services.redis_ai_queue import RedisAIQueue
+from .ai_recipes import _safe_job_error
 
 router = APIRouter(prefix="/ai/text", tags=["ai"])
 pipeline = AIPipeline()
@@ -222,7 +223,7 @@ def _run_text_job(job_id: str) -> None:
     except Exception as exc:  # noqa: BLE001
         if "job" in locals() and job:
             job.status = "failed"
-            job.error = str(exc)
+            job.error = _safe_job_error(str(exc))
             job.result = {
                 "error": {
                     "type": "operational",
