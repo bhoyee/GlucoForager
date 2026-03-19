@@ -35,16 +35,40 @@ export default function ScanResultsScreen() {
   const [ingredientToAdd, setIngredientToAdd] = useState('');
   const [recipes, setRecipes] = useState([]);
   const [showRecipeButton, setShowRecipeButton] = useState(false);
+  const [warningMessage, setWarningMessage] = useState('');
 
   useEffect(() => {
     if (Array.isArray(detectedFromApi) && detectedFromApi.length > 0) {
       const riskByName = warning?.risk_by_name || {};
+      const excluded = Array.isArray(warning?.excluded) ? warning.excluded : [];
+      const optional = Array.isArray(warning?.optional) ? warning.optional : [];
+      const excludedSet = new Set(excluded.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean));
+      const optionalSet = new Set(optional.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean));
+
+      const buildCautionMessage = () => {
+        if (typeof warning?.message === 'string' && warning.message.trim()) {
+          return warning.message.trim();
+        }
+        if (excluded.length === 0 && optional.length === 0) {
+          return '';
+        }
+        const limitShown = 6;
+        const excludedList = excluded.slice(0, limitShown).join(', ');
+        const optionalList = optional.slice(0, limitShown).join(', ');
+        const parts = [];
+        if (excludedList) parts.push(`Avoid: ${excludedList}${excluded.length > limitShown ? '…' : ''}`);
+        if (optionalList) parts.push(`Use sparingly: ${optionalList}${optional.length > limitShown ? '…' : ''}`);
+        return parts.join(' • ');
+      };
+
       const normalized = detectedFromApi
         .map((item) => (typeof item === 'string' ? item.trim() : ''))
         .filter((item) => item.length > 0)
         .map((item, index) => {
           const key = item.trim().toLowerCase();
-          const risk = riskByName?.[key]?.risk || 'ok';
+          const risk =
+            riskByName?.[key]?.risk ||
+            (excludedSet.has(key) ? 'avoid' : optionalSet.has(key) ? 'limit' : 'ok');
           return {
             id: `${index}-${item}`,
             name: item,
@@ -56,12 +80,14 @@ export default function ScanResultsScreen() {
         });
       setDetectedIngredients(normalized);
       setSelectedIngredients(normalized.filter((item) => item.selected).map(item => item.id));
+      setWarningMessage(buildCautionMessage());
       setIsLoading(false);
       return;
     }
 
     setDetectedIngredients([]);
     setSelectedIngredients([]);
+    setWarningMessage('');
     setIsLoading(false);
   }, [detectedFromApi]);
 
@@ -174,11 +200,11 @@ export default function ScanResultsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
       >
-        {(warning || detectedIngredients.length === 0) && (
+        {((typeof warningMessage === 'string' && warningMessage.trim().length > 0) || detectedIngredients.length === 0) && (
           <View style={styles.warningBanner}>
             <Ionicons name="alert-circle-outline" size={18} color={Colors.warning} />
             <Text style={styles.warningText}>
-              {warning?.message || 'No food ingredients detected. Please try another image.'}
+              {warningMessage || 'No food ingredients detected. Please try another image.'}
             </Text>
           </View>
         )}
