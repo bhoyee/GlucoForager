@@ -46,10 +46,14 @@ class AIVisionService:
                 {
                     "role": "system",
                     "content": (
-                        "Extract ONLY edible food ingredients from the photo(s). "
+                        "Extract ONLY edible food/drink items from the photo(s). "
+                        "Include: produce (e.g., leafy greens), spreads/condiments (e.g., nut butter), "
+                        "and packaged drinks/foods by reading labels when visible. "
+                        "If a brand/label name is clearly readable, prefer that (e.g., 'unsweetened almond milk', "
+                        "'diet soda') instead of a generic category. "
                         "Ignore non-food items (electronics, furniture, tools, etc.). "
-                        "If no food ingredients are visible, return an empty string. "
-                        "Return a comma-separated list."
+                        "If no food/drink items are visible, return an empty string. "
+                        "Return a comma-separated list of short item names (no sentences)."
                     ),
                 },
                 {
