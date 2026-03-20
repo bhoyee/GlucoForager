@@ -1,5 +1,5 @@
 // screens/main/RecipeResultsScreen.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -16,10 +16,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getCachedRecipeImageUrl, setCachedRecipeImageUrl } from '../../utils/recipeImageCache';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_ENDPOINTS, API_URL } from '../../config/api';
+import { apiFetch } from '../../utils/api';
+import { useAuth } from '../../context/authContext';
 
 export default function RecipeResultsScreen() {
   const navigation = useNavigation();
   const route = useRoute();
+  const { signOut } = useAuth();
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const headerPaddingTop = Math.max(insets.top, 16);
@@ -37,6 +42,7 @@ export default function RecipeResultsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [detectedIngredients, setDetectedIngredients] = useState([]);
   const [recipes, setRecipes] = useState([]);
+  const pollingRef = useRef(null);
 
   useEffect(() => {
     const ingredientSource = source === 'text' ? 'Input' : 'Detected';
@@ -59,9 +65,17 @@ export default function RecipeResultsScreen() {
     setDetectedIngredients(normalizedIngredients);
     const baseRecipes = recipesFromParams || [];
 
-    const hydrateImages = async () => {
+    const getDeviceId = async () => {
+      const existing = await AsyncStorage.getItem('deviceId');
+      if (existing) return existing;
+      const generated = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      await AsyncStorage.setItem('deviceId', generated);
+      return generated;
+    };
+
+    const hydrateImages = async (incomingRecipes) => {
       const next = await Promise.all(
-        baseRecipes.map(async (recipe) => {
+        (incomingRecipes || []).map(async (recipe) => {
           const directUrl =
             (typeof recipe?.image_url === 'string' && recipe.image_url.trim())
               ? recipe.image_url.trim()
@@ -81,8 +95,76 @@ export default function RecipeResultsScreen() {
       setIsLoading(false);
     };
 
-    hydrateImages();
-  }, [detectedFromParams, recipesFromParams, selectedIngredients, source]);
+    const pollJob = async (jobId) => {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) return;
+      const res = await apiFetch(
+        `${API_URL}${API_ENDPOINTS.AI_TEXT_RECIPES_ASYNC_STATUS}/${jobId}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+        { onUnauthorized: signOut, timeoutMs: 10000 }
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.status === 'completed') {
+        if (pollingRef.current) clearInterval(pollingRef.current);
+        pollingRef.current = null;
+        const result = data.result || {};
+        const nextRecipes = Array.isArray(result?.results) ? result.results : (Array.isArray(result?.recipes) ? result.recipes : []);
+        await hydrateImages(nextRecipes);
+      } else if (data.status === 'failed') {
+        if (pollingRef.current) clearInterval(pollingRef.current);
+        pollingRef.current = null;
+        setIsLoading(false);
+      }
+    };
+
+    const generateIfMissing = async () => {
+      if (baseRecipes.length > 0) {
+        await hydrateImages(baseRecipes);
+        return;
+      }
+      try {
+        const token = await AsyncStorage.getItem('userToken');
+        if (!token) {
+          setIsLoading(false);
+          return;
+        }
+        const deviceId = await getDeviceId();
+        const ingredients = Array.isArray(selectedIngredients) ? selectedIngredients : [];
+        const response = await apiFetch(
+          `${API_URL}${API_ENDPOINTS.AI_TEXT_RECIPES_ASYNC}`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+              'X-Device-Id': deviceId,
+            },
+            body: JSON.stringify({ ingredients }),
+          },
+          { onUnauthorized: signOut, timeoutMs: 45000 }
+        );
+        if (response.status === 401) return;
+        const data = await response.json();
+        if (!response.ok || !data?.job_id) {
+          setIsLoading(false);
+          return;
+        }
+        await pollJob(data.job_id);
+        pollingRef.current = setInterval(() => {
+          pollJob(data.job_id);
+        }, 3000);
+      } catch {
+        setIsLoading(false);
+      }
+    };
+
+    generateIfMissing();
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    };
+  }, [detectedFromParams, recipesFromParams, selectedIngredients, source, signOut]);
 
   if (isLoading) {
     return (

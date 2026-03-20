@@ -37,11 +37,13 @@ logger = logging.getLogger(__name__)
 class VisionRecipeRequest(BaseModel):
     image_base64: str
     filters: list[str] | None = None
+    include_recipes: bool = True
 
 
 class VisionBatchRecipeRequest(BaseModel):
     images_base64: list[str]
     filters: list[str] | None = None
+    include_recipes: bool = True
 
 
 class RecipeImageRequest(BaseModel):
@@ -50,9 +52,9 @@ class RecipeImageRequest(BaseModel):
     ingredients: list[str] | None = None
 
 
-def _vision_cache_key(user_id: int, tier: str, payload: str, filters: list[str] | None) -> str:
+def _vision_cache_key(user_id: int, tier: str, payload: str, filters: list[str] | None, include_recipes: bool) -> str:
     filter_items = sorted({item.strip().lower() for item in (filters or []) if item})
-    raw = f"{user_id}|{tier}|{payload}|{','.join(filter_items)}"
+    raw = f"{user_id}|{tier}|{payload}|{','.join(filter_items)}|include_recipes={bool(include_recipes)}"
     digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
     return f"vision_recipes:{digest}"
 
@@ -89,6 +91,7 @@ def _run_vision_job(job_id: str) -> None:
         payload = job.payload or {}
         images_base64 = payload.get("images_base64") or []
         filters = payload.get("filters") or []
+        include_recipes = bool(payload.get("include_recipes", True))
         device_id = payload.get("device_id")
         mode = payload.get("mode") or "single"
         base_url = payload.get("base_url")
@@ -110,6 +113,7 @@ def _run_vision_job(job_id: str) -> None:
                     images_base64,
                     filters=filters,
                     device_id=device_id,
+                    include_recipes=include_recipes,
                 )
             else:
                 image_b64 = images_base64[0] if images_base64 else ""
@@ -120,6 +124,7 @@ def _run_vision_job(job_id: str) -> None:
                     image_b64,
                     filters=filters,
                     device_id=device_id,
+                    include_recipes=include_recipes,
                 )
         except IngredientValidationError as exc:
             job.status = "failed"
@@ -207,7 +212,11 @@ def generate_from_vision(
         )
     tier = get_effective_subscription_tier(db, current_user) or "free"
     cache_key = _vision_cache_key(
-        current_user.id, tier, _image_fingerprint(payload.image_base64), payload.filters or []
+        current_user.id,
+        tier,
+        _image_fingerprint(payload.image_base64),
+        payload.filters or [],
+        payload.include_recipes,
     )
     cached = cache.get(cache_key)
     if cached:
@@ -233,16 +242,17 @@ def generate_from_vision(
                 cost_estimate=0,
                 device_id=device_id,
             )
-            record_ai_request(
-                db,
-                current_user.id,
-                tier,
-                "recipes",
-                model_used="cache",
-                tokens_used=0,
-                cost_estimate=0,
-                device_id=device_id,
-            )
+            if payload.include_recipes:
+                record_ai_request(
+                    db,
+                    current_user.id,
+                    tier,
+                    "recipes",
+                    model_used="cache",
+                    tokens_used=0,
+                    cost_estimate=0,
+                    device_id=device_id,
+                )
             return {
                 "results": cached_result.get("recipes", []),
                 "detected": cached_result.get("detected", []),
@@ -262,6 +272,7 @@ def generate_from_vision(
             payload.image_base64,
             filters=payload.filters or [],
             device_id=device_id,
+            include_recipes=payload.include_recipes,
         )
     except IngredientValidationError as exc:
         raise HTTPException(
@@ -297,7 +308,11 @@ def generate_from_vision_batch(
         )
     tier = get_effective_subscription_tier(db, current_user) or "free"
     cache_key = _vision_cache_key(
-        current_user.id, tier, _batch_fingerprint(payload.images_base64), payload.filters or []
+        current_user.id,
+        tier,
+        _batch_fingerprint(payload.images_base64),
+        payload.filters or [],
+        payload.include_recipes,
     )
     cached = cache.get(cache_key)
     if cached:
@@ -323,19 +338,23 @@ def generate_from_vision_batch(
                 cost_estimate=0,
                 device_id=device_id,
             )
-            record_ai_request(
-                db,
-                current_user.id,
-                tier,
-                "recipes",
-                model_used="cache",
-                tokens_used=0,
-                cost_estimate=0,
-                device_id=device_id,
-            )
+            if payload.include_recipes:
+                record_ai_request(
+                    db,
+                    current_user.id,
+                    tier,
+                    "recipes",
+                    model_used="cache",
+                    tokens_used=0,
+                    cost_estimate=0,
+                    device_id=device_id,
+                )
             return {
                 "results": cached_result.get("recipes", []),
                 "detected": cached_result.get("detected", []),
+                "detected_all": cached_result.get("detected_all", []),
+                "flagged_out": cached_result.get("flagged_out", []),
+                "flagged_optional": cached_result.get("flagged_optional", []),
                 "non_food": cached_result.get("non_food", []),
                 "filters": cached_result.get("filters", []),
                 "warning": cached_result.get("warning"),
@@ -349,6 +368,7 @@ def generate_from_vision_batch(
             payload.images_base64,
             filters=payload.filters or [],
             device_id=device_id,
+            include_recipes=payload.include_recipes,
         )
     except IngredientValidationError as exc:
         raise HTTPException(
@@ -359,6 +379,9 @@ def generate_from_vision_batch(
     return {
         "results": result.get("recipes", []),
         "detected": result.get("detected", []),
+        "detected_all": result.get("detected_all", []),
+        "flagged_out": result.get("flagged_out", []),
+        "flagged_optional": result.get("flagged_optional", []),
         "non_food": result.get("non_food", []),
         "filters": result.get("filters", []),
         "warning": result.get("warning"),
@@ -404,6 +427,7 @@ def generate_from_vision_async(
         payload={
             "images_base64": [payload.image_base64],
             "filters": payload.filters or [],
+            "include_recipes": bool(payload.include_recipes),
             "device_id": device_id,
             "mode": "single",
             "base_url": str(request.base_url).rstrip("/"),
@@ -467,6 +491,7 @@ def generate_from_vision_batch_async(
         payload={
             "images_base64": payload.images_base64,
             "filters": payload.filters or [],
+            "include_recipes": bool(payload.include_recipes),
             "device_id": device_id,
             "mode": "batch",
             "base_url": str(request.base_url).rstrip("/"),
