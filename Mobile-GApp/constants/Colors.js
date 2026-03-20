@@ -8,6 +8,7 @@ export const Colors = {
   accentLight: "#FBD38D",
   success: "#38A169",
   warning: "#D69E2E",
+  danger: "#E53E3E",
   error: "#E53E3E",
   info: "#3182CE",
   background: "#F7FAFC",
