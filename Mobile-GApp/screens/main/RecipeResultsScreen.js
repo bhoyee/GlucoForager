@@ -43,6 +43,10 @@ export default function RecipeResultsScreen() {
   const [detectedIngredients, setDetectedIngredients] = useState([]);
   const [recipes, setRecipes] = useState([]);
   const pollingRef = useRef(null);
+  const elapsedRef = useRef(null);
+  const phaseRef = useRef(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [statusLine, setStatusLine] = useState('Preparing…');
 
   useEffect(() => {
     const ingredientSource = source === 'text' ? 'Input' : 'Detected';
@@ -101,6 +105,7 @@ export default function RecipeResultsScreen() {
     };
 
     const pollJob = async (jobId) => {
+      setStatusLine('Generating recipes…');
       const token = await AsyncStorage.getItem('userToken');
       if (!token) return;
       const res = await apiFetch(
@@ -110,6 +115,12 @@ export default function RecipeResultsScreen() {
       );
       if (!res.ok) return;
       const data = await res.json();
+      if (data.status === 'pending' || data.status === 'queued') {
+        setStatusLine('Queued…');
+      }
+      if (data.status === 'running') {
+        setStatusLine('Cooking up your plan…');
+      }
       if (data.status === 'completed') {
         if (pollingRef.current) clearInterval(pollingRef.current);
         pollingRef.current = null;
@@ -128,6 +139,28 @@ export default function RecipeResultsScreen() {
         await hydrateImages(baseRecipes);
         return;
       }
+
+      setElapsedSeconds(0);
+      setStatusLine('Preparing…');
+      if (elapsedRef.current) clearInterval(elapsedRef.current);
+      elapsedRef.current = setInterval(() => {
+        setElapsedSeconds((prev) => prev + 1);
+      }, 1000);
+
+      const phases = [
+        'Uploading selection…',
+        'Generating recipes…',
+        'Balancing carbs & protein…',
+        'Writing steps…',
+        'Finalizing…',
+      ];
+      let idx = 0;
+      if (phaseRef.current) clearInterval(phaseRef.current);
+      phaseRef.current = setInterval(() => {
+        idx = (idx + 1) % phases.length;
+        setStatusLine(phases[idx]);
+      }, 6500);
+
       try {
         const token = await AsyncStorage.getItem('userToken');
         if (!token) {
@@ -168,10 +201,32 @@ export default function RecipeResultsScreen() {
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
       pollingRef.current = null;
+      if (elapsedRef.current) clearInterval(elapsedRef.current);
+      elapsedRef.current = null;
+      if (phaseRef.current) clearInterval(phaseRef.current);
+      phaseRef.current = null;
     };
   }, [detectedFromParams, recipesFromParams, selectedIngredients, source, signOut]);
 
   if (isLoading) {
+    const formatElapsed = (seconds) => {
+      const s = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
+      const mm = String(Math.floor(s / 60)).padStart(2, '0');
+      const ss = String(s % 60).padStart(2, '0');
+      return `${mm}:${ss}`;
+    };
+
+    const handleCancel = () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      pollingRef.current = null;
+      if (elapsedRef.current) clearInterval(elapsedRef.current);
+      elapsedRef.current = null;
+      if (phaseRef.current) clearInterval(phaseRef.current);
+      phaseRef.current = null;
+      navigation.goBack();
+    };
+
+    const ingredientCount = Array.isArray(selectedIngredients) ? selectedIngredients.length : 0;
     return (
       <View style={styles.loadingContainer}>
         <LinearGradient
@@ -181,9 +236,26 @@ export default function RecipeResultsScreen() {
           <Ionicons name="sparkles" size={60} color="white" />
           <Text style={styles.loadingTitle}>Preparing Recipes</Text>
           <Text style={styles.loadingSubtitle}>
-            Finding diabetes-safe recipes for your ingredients...
+            {statusLine || 'Generating your recipes…'}
           </Text>
+
+          <View style={styles.loadingMetaRow}>
+            <View style={styles.loadingPill}>
+              <Ionicons name="time-outline" size={14} color="rgba(255,255,255,0.9)" />
+              <Text style={styles.loadingPillText}>Elapsed {formatElapsed(elapsedSeconds)}</Text>
+            </View>
+            <View style={styles.loadingPill}>
+              <Ionicons name="leaf-outline" size={14} color="rgba(255,255,255,0.9)" />
+              <Text style={styles.loadingPillText}>
+                {ingredientCount > 0 ? `${ingredientCount} ingredient${ingredientCount !== 1 ? 's' : ''}` : 'Your selection'}
+              </Text>
+            </View>
+          </View>
+
           <ActivityIndicator size="large" color="white" style={{ marginTop: 30 }} />
+          <TouchableOpacity style={styles.loadingCancelButton} onPress={handleCancel}>
+            <Text style={styles.loadingCancelText}>Cancel</Text>
+          </TouchableOpacity>
         </LinearGradient>
       </View>
     );
@@ -459,6 +531,40 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.9)',
     textAlign: 'center',
     lineHeight: 22,
+  },
+  loadingMetaRow: {
+    marginTop: 14,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
+  loadingPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    marginHorizontal: 6,
+    marginTop: 8,
+  },
+  loadingPillText: {
+    marginLeft: 6,
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.92)',
+  },
+  loadingCancelButton: {
+    marginTop: 18,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  loadingCancelText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
   },
   header: {
     flexDirection: 'row',
