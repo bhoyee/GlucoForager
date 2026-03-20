@@ -26,7 +26,15 @@ export default function ScanResultsScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const headerPaddingTop = Math.max(insets.top, 16);
   const contentBottomPadding = Math.max(tabBarHeight - 12, 8);
-  const { images, userIsPremium, scansUsed, detectedIngredients: detectedFromApi, warning, recipes: recipesFromApi } = route.params || {};
+  const {
+    images,
+    userIsPremium,
+    scansUsed,
+    detectedIngredients: detectedFromApi,
+    detectedIngredientsSelected: detectedSelectedFromApi,
+    warning,
+    recipes: recipesFromApi,
+  } = route.params || {};
   
   const [isLoading, setIsLoading] = useState(true);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
@@ -44,6 +52,13 @@ export default function ScanResultsScreen() {
       const optional = Array.isArray(warning?.optional) ? warning.optional : [];
       const excludedSet = new Set(excluded.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean));
       const optionalSet = new Set(optional.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean));
+
+      // Default selection should follow the backend-selected list (safe ingredients used for recipes),
+      // not "risk === ok". This prevents the UI from auto-selecting everything when risk metadata is missing.
+      const selectedFromApi = Array.isArray(detectedSelectedFromApi) ? detectedSelectedFromApi : [];
+      const selectedSet = new Set(
+        selectedFromApi.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean)
+      );
 
       const buildCautionMessage = () => {
         if (typeof warning?.message === 'string' && warning.message.trim()) {
@@ -75,7 +90,7 @@ export default function ScanResultsScreen() {
             confidence: 'AI',
             risk,
             risk_reason: riskByName?.[key]?.reason || '',
-            selected: risk === 'ok',
+            selected: selectedSet.has(key),
           };
         });
       setDetectedIngredients(normalized);
@@ -89,7 +104,7 @@ export default function ScanResultsScreen() {
     setSelectedIngredients([]);
     setWarningMessage('');
     setIsLoading(false);
-  }, [detectedFromApi]);
+  }, [detectedFromApi, detectedSelectedFromApi, warning]);
 
   useEffect(() => {
     // Show generate recipe button when at least one ingredient is selected
