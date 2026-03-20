@@ -259,6 +259,7 @@ export default function ScanProcessingScreen() {
           images,
           userIsPremium,
           detectedIngredients: result.detected_all || result.detected || [],
+          detectedIngredientsSelected: result.detected || [],
           recipes: result.results || [],
           warning: result.warning || null,
         });
