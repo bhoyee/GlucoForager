@@ -286,7 +286,15 @@ export default function FoodPreferencesScreen({ navigation }) {
       navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
       return;
     }
-    navigation.goBack();
+    // If the user opened Food Preferences from another tab (e.g., Home),
+    // `goBack()` can take them back to that tab but leave FoodPreferences as the top
+    // screen in the Profile stack. Ensure Profile resets to ProfileMain, then go Home.
+    try {
+      navigation.popToTop();
+      navigation.getParent()?.navigate('Home');
+    } catch {
+      navigation.goBack();
+    }
   };
 
   const handleNext = async () => {
@@ -300,7 +308,12 @@ export default function FoodPreferencesScreen({ navigation }) {
       navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
       return;
     }
-    navigation.goBack();
+    try {
+      navigation.popToTop();
+      navigation.getParent()?.navigate('Home');
+    } catch {
+      navigation.goBack();
+    }
   };
 
   const handleBack = () => {
