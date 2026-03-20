@@ -132,6 +132,7 @@ class AIPipeline:
         image_base64: str,
         filters: list[str] | None = None,
         device_id: str | None = None,
+        include_recipes: bool = True,
     ) -> Dict[str, Any]:
         user = db.query(User).filter(User.id == user_id).first()
         food_profile = extract_food_profile(user) if user else None
@@ -154,32 +155,34 @@ class AIPipeline:
                 "source": classified.get("source", "rules"),
                 "risk_by_name": risk_meta.get("risk_by_name") or {},
             }
-        recipes = self.ai.generate_recipes(
-            selected_food_only,
-            tier,
-            filters=filters,
-            timeout_seconds=55,
-            generate_images=False,
-            food_profile=food_profile,
-        )
-        recipes = self._validated_recipes_or_none(recipes)
-        if recipes is None:
-            recipes_retry = self.ai.generate_recipes(
+        recipes: list[dict] = []
+        record_ai_request(db, user_id, tier, "vision", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
+        if include_recipes:
+            recipes = self.ai.generate_recipes(
                 selected_food_only,
                 tier,
                 filters=filters,
-                variety_mode=True,
                 timeout_seconds=55,
                 generate_images=False,
                 food_profile=food_profile,
             )
-            recipes = self._validated_recipes_or_none(recipes_retry)
-        if recipes is None:
-            raise RuntimeError("Recipe generation failed. Please try again.")
-        record_ai_request(db, user_id, tier, "vision", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
-        record_ai_request(db, user_id, tier, "recipes", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
-        db.add(RecipeHistory(user_id=user_id, source="vision", recipes=recipes))
-        db.commit()
+            recipes = self._validated_recipes_or_none(recipes) or []
+            if not recipes:
+                recipes_retry = self.ai.generate_recipes(
+                    selected_food_only,
+                    tier,
+                    filters=filters,
+                    variety_mode=True,
+                    timeout_seconds=55,
+                    generate_images=False,
+                    food_profile=food_profile,
+                )
+                recipes = self._validated_recipes_or_none(recipes_retry) or []
+            if not recipes:
+                raise RuntimeError("Recipe generation failed. Please try again.")
+            record_ai_request(db, user_id, tier, "recipes", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
+            db.add(RecipeHistory(user_id=user_id, source="vision", recipes=recipes))
+            db.commit()
         return {
             "recipes": recipes,
             "detected": selected_food_only,
@@ -199,6 +202,7 @@ class AIPipeline:
         images_base64: list[str],
         filters: list[str] | None = None,
         device_id: str | None = None,
+        include_recipes: bool = True,
     ) -> Dict[str, Any]:
         user = db.query(User).filter(User.id == user_id).first()
         food_profile = extract_food_profile(user) if user else None
@@ -239,32 +243,34 @@ class AIPipeline:
                 "source": classified.get("source", "rules"),
                 "risk_by_name": risk_meta.get("risk_by_name") or {},
             }
-        recipes = self.ai.generate_recipes(
-            selected_food_only,
-            tier,
-            filters=filters,
-            timeout_seconds=55,
-            generate_images=False,
-            food_profile=food_profile,
-        )
-        recipes = self._validated_recipes_or_none(recipes)
-        if recipes is None:
-            recipes_retry = self.ai.generate_recipes(
+        recipes: list[dict] = []
+        record_ai_request(db, user_id, tier, "vision_batch", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
+        if include_recipes:
+            recipes = self.ai.generate_recipes(
                 selected_food_only,
                 tier,
                 filters=filters,
-                variety_mode=True,
                 timeout_seconds=55,
                 generate_images=False,
                 food_profile=food_profile,
             )
-            recipes = self._validated_recipes_or_none(recipes_retry)
-        if recipes is None:
-            raise RuntimeError("Recipe generation failed. Please try again.")
-        record_ai_request(db, user_id, tier, "vision_batch", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
-        record_ai_request(db, user_id, tier, "recipes", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
-        db.add(RecipeHistory(user_id=user_id, source="vision", recipes=recipes))
-        db.commit()
+            recipes = self._validated_recipes_or_none(recipes) or []
+            if not recipes:
+                recipes_retry = self.ai.generate_recipes(
+                    selected_food_only,
+                    tier,
+                    filters=filters,
+                    variety_mode=True,
+                    timeout_seconds=55,
+                    generate_images=False,
+                    food_profile=food_profile,
+                )
+                recipes = self._validated_recipes_or_none(recipes_retry) or []
+            if not recipes:
+                raise RuntimeError("Recipe generation failed. Please try again.")
+            record_ai_request(db, user_id, tier, "recipes", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
+            db.add(RecipeHistory(user_id=user_id, source="vision", recipes=recipes))
+            db.commit()
         return {
             "recipes": recipes,
             "detected": selected_food_only,

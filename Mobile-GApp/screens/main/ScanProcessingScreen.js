@@ -156,8 +156,8 @@ export default function ScanProcessingScreen() {
             },
             body:
               imagesBase64.length > 1
-                ? JSON.stringify({ images_base64: imagesBase64 })
-                : JSON.stringify({ image_base64: imagesBase64[0] }),
+                ? JSON.stringify({ images_base64: imagesBase64, include_recipes: false })
+                : JSON.stringify({ image_base64: imagesBase64[0], include_recipes: false }),
           },
           { onUnauthorized: signOut, timeoutMs: startTimeoutMs }
         );
