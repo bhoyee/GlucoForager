@@ -46,12 +46,17 @@ export default function RecipeResultsScreen() {
 
   useEffect(() => {
     const ingredientSource = source === 'text' ? 'Input' : 'Detected';
-    const useDetected = source === 'text'
-      ? Array.isArray(detectedFromParams)
-      : detectedFromParams?.length;
-    const rawIngredients = useDetected
-      ? detectedFromParams
-      : selectedIngredients || [];
+    // Important: for scan flows (source='vision'), recipe generation must use the user's selected ingredients,
+    // not every detected ingredient. `detectedFromParams` is used only for display.
+    const normalizedSelected = Array.isArray(selectedIngredients)
+      ? selectedIngredients.map((x) => (typeof x === 'string' ? x.trim() : '')).filter(Boolean)
+      : [];
+    const hasSelected = normalizedSelected.length > 0;
+    const rawIngredients = source === 'vision' && hasSelected
+      ? normalizedSelected
+      : (Array.isArray(detectedFromParams) && detectedFromParams.length > 0)
+        ? detectedFromParams
+        : normalizedSelected;
 
     const normalizedIngredients = rawIngredients.map((item, index) => {
       const name = typeof item === 'string' ? item : item?.name || `Ingredient ${index + 1}`;
@@ -130,7 +135,7 @@ export default function RecipeResultsScreen() {
           return;
         }
         const deviceId = await getDeviceId();
-        const ingredients = Array.isArray(selectedIngredients) ? selectedIngredients : [];
+        const ingredients = normalizedSelected;
         const response = await apiFetch(
           `${API_URL}${API_ENDPOINTS.AI_TEXT_RECIPES_ASYNC}`,
           {
