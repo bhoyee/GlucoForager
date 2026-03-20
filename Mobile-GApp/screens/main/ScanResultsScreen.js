@@ -282,7 +282,14 @@ export default function ScanResultsScreen() {
                   </View>
                   <View style={styles.ingredientInfo}>
                     <View style={styles.ingredientNameRow}>
-                      <Text style={styles.ingredientName}>{item.name}</Text>
+                      <Text
+                        style={[
+                          styles.ingredientName,
+                          item.risk === 'avoid' && styles.ingredientNameAvoid,
+                        ]}
+                      >
+                        {item.name}
+                      </Text>
                       {item.risk === 'limit' ? (
                         <Text style={styles.riskBadgeLimit}>Use sparingly</Text>
                       ) : item.risk === 'avoid' ? (
@@ -586,6 +593,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.text,
     marginBottom: 2,
+  },
+  ingredientNameAvoid: {
+    color: Colors.danger,
   },
   riskBadgeLimit: {
     marginLeft: 8,
