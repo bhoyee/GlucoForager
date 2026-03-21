@@ -49,6 +49,8 @@ export default function ScanScreen() {
   
   const [userIsPremium, setUserIsPremium] = useState(false);
   const [remainingScans, setRemainingScans] = useState(3);
+  const [freeLimitCount, setFreeLimitCount] = useState(3);
+  const [freeLimitWindowDays, setFreeLimitWindowDays] = useState(1);
   const [isScanning, setIsScanning] = useState(false);
   const [capturedImages, setCapturedImages] = useState([]);
   const [showPreview, setShowPreview] = useState(false);
@@ -96,6 +98,8 @@ export default function ScanScreen() {
       data.searches_left === 'unlimited';
     setUserIsPremium(isPremium);
     setRemainingScans(typeof data.searches_left === 'number' ? data.searches_left : 0);
+    if (typeof data.daily_limit === 'number') setFreeLimitCount(data.daily_limit);
+    if (typeof data.limit_window_days === 'number') setFreeLimitWindowDays(data.limit_window_days);
   }, [signOut]);
 
   useEffect(() => {
@@ -118,9 +122,12 @@ export default function ScanScreen() {
   }, [isFocused, autoLaunched]);
 
   const showUpgradeAlert = () => {
+    const count = Number.isFinite(Number(freeLimitCount)) ? Number(freeLimitCount) : 3;
+    const days = Number.isFinite(Number(freeLimitWindowDays)) ? Number(freeLimitWindowDays) : 1;
+    const periodText = days <= 1 ? 'today' : `in the last ${days} days`;
     Alert.alert(
-      'Daily Limit Reached',
-      'You have used all 3 free scans today. Upgrade to Premium for unlimited scans.',
+      'Limit Reached',
+      `You have used all ${count} free scans/searches ${periodText}. Upgrade to Premium for unlimited access.`,
       [
         { text: 'OK', style: 'cancel' },
         { 
@@ -156,6 +163,8 @@ export default function ScanScreen() {
       if (typeof data.searches_left === 'number') {
         setRemainingScans(data.searches_left);
       }
+      if (typeof data.daily_limit === 'number') setFreeLimitCount(data.daily_limit);
+      if (typeof data.limit_window_days === 'number') setFreeLimitWindowDays(data.limit_window_days);
       const numericLeft = Number(data.searches_left);
       const allowed = isPremium || (Number.isFinite(numericLeft) && numericLeft > 0);
       if (!allowed && capturedImages.length === 0) {
