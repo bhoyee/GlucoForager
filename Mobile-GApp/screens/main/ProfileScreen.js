@@ -24,8 +24,8 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const headerPaddingTop = Math.max(insets.top, 16);
-  // Keep content visible above an absolute tab bar (some builds use overlay tab bars).
-  const contentBottomPadding = Math.max(tabBarHeight - 4, 16);
+  const versionFooterBottom = Math.max(tabBarHeight, 0) + Math.max(insets.bottom, 0) + 8;
+  const versionFooterHeight = 44;
   // Modal overlays the tab bar, so we only need to respect safe-area inset.
   const premiumModalBottomPadding = Math.max(insets.bottom, 14) + 14;
   const appStoreUrl = 'https://apps.apple.com/us/app/glucoforager/id6758808427?action=write-review';
@@ -584,10 +584,11 @@ export default function ProfileScreen() {
           <Text style={styles.logoutText}>Logout</Text>
         </TouchableOpacity>
       </View>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
-      >
+      <View style={{ flex: 1, paddingBottom: versionFooterBottom + versionFooterHeight }}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
       <Modal
         visible={premiumModalVisible}
         animationType="slide"
@@ -866,9 +867,11 @@ export default function ProfileScreen() {
       </View>
 
       </ScrollView>
+        </ScrollView>
+      </View>
 
       <TouchableOpacity
-        style={[styles.versionContainer, { marginBottom: Math.max(tabBarHeight - 2, 12) }]}
+        style={[styles.versionContainer, { bottom: versionFooterBottom }]}
         activeOpacity={0.8}
         onPress={__DEV__ ? handleDebugTap : undefined}
       >
@@ -1197,6 +1200,9 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   versionContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
     alignItems: 'center',
     paddingVertical: 10,
     paddingHorizontal: 18,
