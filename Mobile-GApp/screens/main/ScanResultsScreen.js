@@ -49,6 +49,36 @@ export default function ScanResultsScreen() {
   const [showRecipeButton, setShowRecipeButton] = useState(false);
   const [warningMessage, setWarningMessage] = useState('');
 
+  // Keep Eat Now "Use ingredients I have" in sync with the latest scan selection.
+  useEffect(() => {
+    if (!detectedIngredients.length || !selectedIngredients.length) return;
+
+    const t = setTimeout(() => {
+      try {
+        const selectedNames = detectedIngredients
+          .filter((item) => selectedIngredients.includes(item.id))
+          .map((item) => item.name);
+
+        const seen = new Set();
+        const normalizedUnique = [];
+        for (const raw of selectedNames) {
+          const name = String(raw || '').trim().replace(/\s+/g, ' ');
+          if (!name) continue;
+          const key = name.toLowerCase();
+          if (seen.has(key)) continue;
+          seen.add(key);
+          normalizedUnique.push(name);
+          if (normalizedUnique.length >= 20) break;
+        }
+        void AsyncStorage.setItem(LAST_INGREDIENTS_KEY, JSON.stringify(normalizedUnique));
+      } catch {
+        // Ignore.
+      }
+    }, 300);
+
+    return () => clearTimeout(t);
+  }, [detectedIngredients, selectedIngredients]);
+
   useEffect(() => {
     if (Array.isArray(detectedFromApi) && detectedFromApi.length > 0) {
       const riskByName = warning?.risk_by_name || {};
