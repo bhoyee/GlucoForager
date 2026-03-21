@@ -9,9 +9,9 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   FlatList,
-  CheckBox,
   TextInput,
   Alert,
+  useWindowDimensions,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
@@ -24,6 +24,7 @@ export default function ScanResultsScreen() {
   const route = useRoute();
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
+  const { width: windowWidth } = useWindowDimensions();
   const headerPaddingTop = Math.max(insets.top, 16);
   const contentBottomPadding = Math.max(tabBarHeight - 12, 8);
   const {
@@ -185,7 +186,13 @@ export default function ScanResultsScreen() {
   }
 
   const renderImageItem = ({ item, index }) => (
-    <View style={[styles.imageSlide, activeImageIndex === index && styles.activeSlide]}>
+    <View
+      style={[
+        styles.imageSlide,
+        { width: Math.max(280, windowWidth - 40) },
+        activeImageIndex === index && styles.activeSlide,
+      ]}
+    >
       <Image source={{ uri: item.uri }} style={styles.slideImage} resizeMode="cover" />
       <Text style={styles.imageLabel}>{item.name}</Text>
     </View>
@@ -213,6 +220,9 @@ export default function ScanResultsScreen() {
 
       <ScrollView 
         showsVerticalScrollIndicator={false}
+        horizontal={false}
+        directionalLockEnabled
+        alwaysBounceHorizontal={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
       >
         {((typeof warningMessage === 'string' && warningMessage.trim().length > 0) || detectedIngredients.length === 0) && (
@@ -232,7 +242,10 @@ export default function ScanResultsScreen() {
               keyExtractor={item => item.id}
               horizontal
               pagingEnabled
+              decelerationRate="fast"
+              snapToAlignment="center"
               showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 20 }}
               onMomentumScrollEnd={(event) => {
                 const index = Math.floor(event.nativeEvent.contentOffset.x / event.nativeEvent.layoutMeasurement.width);
                 setActiveImageIndex(index);
