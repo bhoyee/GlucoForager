@@ -78,8 +78,9 @@ export default function PremiumDetailsScreen() {
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>What you get</Text>
-          <Text style={styles.bullet}>- Unlimited ingredient scans and searches</Text>
-          <Text style={styles.bullet}>- Diabetes-friendly recipe suggestions</Text>
+          <Text style={styles.bullet}>- Unlimited ingredient scans & searches</Text>
+          <Text style={styles.bullet}>- Daily meal planner</Text>
+          <Text style={styles.bullet}>- More AI recipe image generations</Text>
           <Text style={styles.bullet}>- Detailed nutrition insights</Text>
           <Text style={styles.bullet}>- Unlimited favorites</Text>
         </View>
