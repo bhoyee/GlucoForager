@@ -640,10 +640,13 @@ export default function ProfileScreen() {
 
               <View style={styles.premiumBenefits}>
                 <Text style={styles.premiumBenefitsTitle}>What you get:</Text>
-                <Text style={styles.premiumBenefitItem}>- Unlimited ingredient scans & searches</Text>
-                <Text style={styles.premiumBenefitItem}>- Daily meal planner</Text>
-                <Text style={styles.premiumBenefitItem}>- Detailed nutrition insights</Text>
-                <Text style={styles.premiumBenefitItem}>- Unlimited favorites</Text>
+                <Text style={styles.premiumBenefitItem}>- Unlimited ingredient scans & searches (scan or type what you have)</Text>
+                <Text style={styles.premiumBenefitItem}>- Blood‑sugar‑friendly meal ideas and recipe suggestions</Text>
+                <Text style={styles.premiumBenefitItem}>- Daily meal planner (breakfast, lunch, dinner + snacks)</Text>
+                <Text style={styles.premiumBenefitItem}>- Smarter food swaps for meals, snacks, and drinks</Text>
+                <Text style={styles.premiumBenefitItem}>- Daily challenges (simple actions to support better glucose control)</Text>
+                <Text style={styles.premiumBenefitItem}>- Personalized suggestions based on your lifestyle and preferences</Text>
+                <Text style={styles.premiumBenefitItem}>- Unlimited favorites + quick access to recent meals</Text>
               </View>
 
               <Text style={styles.premiumLegalText}>
