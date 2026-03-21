@@ -40,8 +40,9 @@ yarn-error.*
 *.aab
 build-*.aab
 
-# Firebase / Push notifications (do not commit secrets)
-google-services.json
+# Firebase / Push notifications
+# Note: `google-services.json` is required for Android builds and is commonly committed.
+# If you prefer not to commit it, switch to an `app.config.js` + EAS file secret setup instead.
 GoogleService-Info.plist
 
 # generated native folders
