@@ -3,6 +3,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
+from sqlalchemy import desc
 
 from ...database import get_db
 from ...core.security import get_password_hash
@@ -233,6 +234,74 @@ def scans_today(
         )
         response["device_total"] = device_ai + device_text
     return response
+
+
+def _normalize_ingredient_list(items: list[str] | None, *, max_items: int = 20, max_len: int = 40) -> list[str]:
+    if not items:
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        if not isinstance(item, str):
+            continue
+        cleaned = item.strip()
+        if not cleaned:
+            continue
+        cleaned = cleaned.replace("\n", " ").replace("\r", " ")
+        cleaned = " ".join(cleaned.split())
+        cleaned = cleaned[:max_len]
+        key = cleaned.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(cleaned)
+        if len(out) >= max_items:
+            break
+    return out
+
+
+@router.get("/last-ingredients")
+def last_ingredients(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Returns the most recent ingredient list the user used for recipe generation.
+
+    This backs the mobile "Use ingredients I have" flow so it works even after reinstall,
+    cache clear, or when AsyncStorage isn't yet populated.
+    """
+    job = (
+        db.query(AIJob)
+        .filter(AIJob.user_id == current_user.id, AIJob.status == "completed")
+        .order_by(desc(AIJob.updated_at))
+        .first()
+    )
+    if not job:
+        return {"ingredients": [], "source": None, "updated_at": None}
+
+    payload = job.payload or {}
+    result = job.result or {}
+    ingredients: list[str] = []
+    if job.source == "text":
+        raw = payload.get("ingredients")
+        if isinstance(raw, list):
+            ingredients = [str(x) for x in raw]
+    elif job.source in ("vision", "vision_batch"):
+        raw = result.get("detected")
+        if isinstance(raw, list):
+            ingredients = [str(x) for x in raw]
+        else:
+            raw_all = result.get("detected_all")
+            if isinstance(raw_all, list):
+                ingredients = [str(x) for x in raw_all]
+
+    ingredients = _normalize_ingredient_list(ingredients, max_items=20, max_len=40)
+    return {
+        "ingredients": ingredients,
+        "source": job.source,
+        "updated_at": job.updated_at.isoformat() if getattr(job, "updated_at", None) else None,
+    }
 
 
 @router.get("/stats")

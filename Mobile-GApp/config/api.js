@@ -30,6 +30,7 @@ export const API_ENDPOINTS = {
   FAVORITES: '/api/favorites',
   USER_STATS: '/api/user/stats',
   USER_PROFILE: '/api/user/profile',
+  USER_LAST_INGREDIENTS: '/api/user/last-ingredients',
   USER_DELETE_ACCOUNT: '/api/user/account',
   SUBSCRIPTION_UPGRADE: '/api/subscriptions/upgrade',
   CAN_SCAN: '/api/user/can-scan',
