@@ -17,6 +17,8 @@ import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
 import * as ImageManipulator from 'expo-image-manipulator';
 
+const LAST_INGREDIENTS_KEY = 'last_used_ingredients_v1';
+
 export default function ScanProcessingScreen() {
   const navigation = useNavigation();
   const route = useRoute();
@@ -255,6 +257,27 @@ export default function ScanProcessingScreen() {
           navigation.goBack();
           return;
         }
+
+        // Persist latest scan-selected ingredients for "Eat now" reuse.
+        // Use the backend-selected list (safe ingredients used for recipes), not the full detected list.
+        try {
+          const rawList = Array.isArray(result.detected) ? result.detected : [];
+          const seen = new Set();
+          const normalizedUnique = [];
+          for (const raw of rawList) {
+            const name = String(raw || '').trim().replace(/\s+/g, ' ');
+            if (!name) continue;
+            const key = name.toLowerCase();
+            if (seen.has(key)) continue;
+            seen.add(key);
+            normalizedUnique.push(name);
+            if (normalizedUnique.length >= 20) break;
+          }
+          await AsyncStorage.setItem(LAST_INGREDIENTS_KEY, JSON.stringify(normalizedUnique));
+        } catch {
+          // Ignore.
+        }
+
         navigation.replace('ScanResults', {
           images,
           userIsPremium,
