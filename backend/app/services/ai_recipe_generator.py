@@ -307,11 +307,21 @@ class AIRecipeGenerator:
         # Avoid including structured labels like "Recipe name:" / "Ingredients:" which increases the chance
         # the model will generate a recipe-card image with text overlays.
         if ingredient_text:
-            parts.append(f"The dish is made from {ingredient_text}.")
+            parts.append(f"The dish is inspired by ingredients such as {ingredient_text}, shown as cooked/served (not raw).")
         elif title:
             parts.append("The dish matches the recipe title concept, but do not write any words in the image.")
         parts.append("The dish should look diabetes-friendly (balanced plate, not overly sugary).")
-        return " ".join(parts)
+
+        cooked_guidance = " ".join(
+            [
+                "The subject must look like a finished, plated, ready-to-eat meal (served dish, not prep).",
+                "Main proteins must look clearly cooked (golden-brown sear, grill marks, roasted surface, crisp edges, flaky cooked fish as appropriate).",
+                "Absolutely no raw meat, no raw fish, no uncooked chicken, no sashimi, no ingredient pile, no cutting board, no prep scene.",
+                "Add subtle steam/heat cues when it makes sense for the dish.",
+                "If the recipe is a drink/smoothie, show a finished ready-to-drink beverage instead (still no prep scene).",
+            ]
+        )
+        return " ".join([*parts, cooked_guidance])
 
     def _generate_image_gemini(self, prompt: str, *, size: int) -> bytes:
         """
