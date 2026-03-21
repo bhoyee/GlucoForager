@@ -1,5 +1,6 @@
 import logging
 from datetime import date
+import uuid
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, EmailStr
@@ -394,6 +395,10 @@ def delete_account(
         db.commit()
         return {"detail": "Account deleted"}
     except Exception as exc:  # noqa: BLE001
+        error_id = str(uuid.uuid4())
         db.rollback()
-        logger.exception("Delete account failed user_id=%s: %s", user_id, str(exc)[:400])
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Delete failed")
+        logger.exception("Delete account failed user_id=%s error_id=%s: %s", user_id, error_id, str(exc)[:400])
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unable to delete your account right now. Please try again later. (ref: {error_id})",
+        )
