@@ -5,6 +5,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/Colors';
+import { apiFetch } from '../../utils/api';
+import { API_ENDPOINTS } from '../../config/api';
+import { API_URL } from '../../config/api';
+import { useAuth } from '../../context/authContext';
 
 const LAST_INGREDIENTS_KEY = 'last_used_ingredients_v1';
 
@@ -12,6 +16,7 @@ export default function EatNowScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const headerPaddingTop = Math.max(insets.top, 16);
+  const { signOut } = useAuth();
 
   const cards = useMemo(
     () => [
@@ -27,10 +32,36 @@ export default function EatNowScreen() {
             const list = raw ? JSON.parse(raw) : null;
             const ingredients = Array.isArray(list) ? list.filter(Boolean) : [];
             if (!ingredients.length) {
-              Alert.alert(
-                'No saved ingredients',
-                'Scan or type ingredients once, then you can reuse them here.'
-              );
+              // Fallback to server (more reliable in production + after reinstalls).
+              try {
+                const token = await AsyncStorage.getItem('userToken');
+                if (token) {
+                  const res = await apiFetch(
+                    `${API_URL}${API_ENDPOINTS.USER_LAST_INGREDIENTS}`,
+                    { headers: { Authorization: `Bearer ${token}` } },
+                    { onUnauthorized: signOut, timeoutMs: 10000 }
+                  );
+                  if (res.ok) {
+                    const data = await res.json();
+                    const serverList = Array.isArray(data?.ingredients) ? data.ingredients.filter(Boolean) : [];
+                    if (serverList.length) {
+                      await AsyncStorage.setItem(LAST_INGREDIENTS_KEY, JSON.stringify(serverList));
+                      navigation.navigate('ManualInput', {
+                        prefillIngredients: serverList,
+                        autoSubmit: true,
+                        source: 'eat_now_have',
+                        excludeRecent: true,
+                        varietyMode: true,
+                      });
+                      return;
+                    }
+                  }
+                }
+              } catch {
+                // Ignore.
+              }
+
+              Alert.alert('No saved ingredients', 'Scan or type ingredients once, then you can reuse them here.');
               navigation.navigate('ManualInput');
               return;
             }

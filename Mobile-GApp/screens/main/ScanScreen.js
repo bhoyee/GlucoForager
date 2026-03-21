@@ -45,9 +45,12 @@ export default function ScanScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const headerTop = Math.max(insets.top, 16);
   const bottomPadding = tabBarHeight + Math.max(insets.bottom, 16);
+  const MAX_IMAGES = 5;
   
   const [userIsPremium, setUserIsPremium] = useState(false);
   const [remainingScans, setRemainingScans] = useState(3);
+  const [freeLimitCount, setFreeLimitCount] = useState(3);
+  const [freeLimitWindowDays, setFreeLimitWindowDays] = useState(1);
   const [isScanning, setIsScanning] = useState(false);
   const [capturedImages, setCapturedImages] = useState([]);
   const [showPreview, setShowPreview] = useState(false);
@@ -57,6 +60,7 @@ export default function ScanScreen() {
   const [hasCameraPermission, setHasCameraPermission] = useState(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [autoLaunched, setAutoLaunched] = useState(false);
+  const maxReached = capturedImages.length >= MAX_IMAGES;
 
   const getDeviceId = async () => {
     const existing = await AsyncStorage.getItem('deviceId');
@@ -94,6 +98,8 @@ export default function ScanScreen() {
       data.searches_left === 'unlimited';
     setUserIsPremium(isPremium);
     setRemainingScans(typeof data.searches_left === 'number' ? data.searches_left : 0);
+    if (typeof data.daily_limit === 'number') setFreeLimitCount(data.daily_limit);
+    if (typeof data.limit_window_days === 'number') setFreeLimitWindowDays(data.limit_window_days);
   }, [signOut]);
 
   useEffect(() => {
@@ -116,9 +122,12 @@ export default function ScanScreen() {
   }, [isFocused, autoLaunched]);
 
   const showUpgradeAlert = () => {
+    const count = Number.isFinite(Number(freeLimitCount)) ? Number(freeLimitCount) : 3;
+    const days = Number.isFinite(Number(freeLimitWindowDays)) ? Number(freeLimitWindowDays) : 1;
+    const periodText = days <= 1 ? 'today' : `in the last ${days} days`;
     Alert.alert(
-      'Daily Limit Reached',
-      'You have used all 3 free scans today. Upgrade to Premium for unlimited scans.',
+      'Limit Reached',
+      `You have used all ${count} free scans/searches ${periodText}. Upgrade to Premium for unlimited access.`,
       [
         { text: 'OK', style: 'cancel' },
         { 
@@ -154,6 +163,8 @@ export default function ScanScreen() {
       if (typeof data.searches_left === 'number') {
         setRemainingScans(data.searches_left);
       }
+      if (typeof data.daily_limit === 'number') setFreeLimitCount(data.daily_limit);
+      if (typeof data.limit_window_days === 'number') setFreeLimitWindowDays(data.limit_window_days);
       const numericLeft = Number(data.searches_left);
       const allowed = isPremium || (Number.isFinite(numericLeft) && numericLeft > 0);
       if (!allowed && capturedImages.length === 0) {
@@ -207,14 +218,17 @@ export default function ScanScreen() {
   };
 
   const capturePhoto = async () => {
+    if (maxReached) {
+      Alert.alert('Max reached', `You can add up to ${MAX_IMAGES} photos per scan.`);
+      return;
+    }
     if (!cameraRef || !CameraView) return;
     setIsCapturing(true);
     try {
-      const photo = await cameraRef.takePictureAsync({ quality: 0.7, skipProcessing: true, base64: true });
+      const photo = await cameraRef.takePictureAsync({ quality: 0.7, skipProcessing: true, base64: false });
       const newImage = {
         id: Date.now().toString(),
         uri: photo.uri,
-        base64: photo.base64,
         name: `Photo ${capturedImages.length + 1}`,
       };
       setCapturedImages((prev) => [...prev, newImage]);
@@ -228,6 +242,10 @@ export default function ScanScreen() {
   };
 
   const handlePickImage = async () => {
+    if (maxReached) {
+      Alert.alert('Max reached', `You can add up to ${MAX_IMAGES} photos per scan.`);
+      return;
+    }
     const allowed = await checkScanLimit();
     if (!allowed) return;
 
@@ -244,19 +262,24 @@ export default function ScanScreen() {
         allowsEditing: false,
         allowsMultipleSelection: true,
         quality: 0.8,
-        base64: true,
+        base64: false,
       });
 
       if (!result.canceled) {
-        const newImages = result.assets.map((asset, index) => ({
+        const remainingSlots = Math.max(0, MAX_IMAGES - capturedImages.length);
+        const pickedAssets = result.assets.slice(0, remainingSlots);
+        const newImages = pickedAssets.map((asset, index) => ({
           id: Date.now().toString() + index,
           uri: asset.uri,
-          base64: asset.base64,
           name: `Image ${capturedImages.length + index + 1}`
         }));
         
         setCapturedImages(prev => [...prev, ...newImages]);
         setShowPreview(true);
+
+        if (result.assets.length > remainingSlots) {
+          Alert.alert('Max reached', `Only the first ${MAX_IMAGES} photos were added.`);
+        }
       }
     } catch (error) {
       console.error('Error picking image:', error);
@@ -316,7 +339,7 @@ export default function ScanScreen() {
         <TouchableOpacity 
           style={[styles.galleryButton, styles.launchButton]}
           onPress={handleLaunchCamera}
-          disabled={isScanning || isCapturing}
+          disabled={isScanning || isCapturing || maxReached}
         >
           {isCapturing ? (
             <ActivityIndicator size="small" color="white" />
@@ -331,7 +354,7 @@ export default function ScanScreen() {
         <TouchableOpacity 
           style={styles.galleryButton}
           onPress={handlePickImage}
-          disabled={isScanning}
+          disabled={isScanning || maxReached}
         >
           {isScanning ? (
             <ActivityIndicator size="small" color="white" />
@@ -399,17 +422,17 @@ export default function ScanScreen() {
             <TouchableOpacity 
               style={styles.addMoreButton}
               onPress={handlePickImage}
-              disabled={isScanning}
+              disabled={isScanning || maxReached}
             >
               <Ionicons name="add-outline" size={20} color={Colors.primary} />
-              <Text style={styles.addMoreText}>Add More</Text>
+              <Text style={styles.addMoreText}>{maxReached ? `Max ${MAX_IMAGES}` : 'Add More'}</Text>
             </TouchableOpacity>
           </View>
         ) : (
           <TouchableOpacity 
             style={styles.uploadButton}
             onPress={handlePickImage}
-            disabled={isScanning}
+            disabled={isScanning || maxReached}
           >
             <Ionicons name="image-outline" size={20} color={Colors.text} />
             <Text style={styles.uploadButtonText}>Select Images from Gallery</Text>
@@ -469,7 +492,11 @@ export default function ScanScreen() {
                 ))}
               </ScrollView>
             )}
-            <TouchableOpacity style={styles.galleryOverlayButton} onPress={handlePickImage}>
+            <TouchableOpacity
+              style={styles.galleryOverlayButton}
+              onPress={handlePickImage}
+              disabled={maxReached}
+            >
               <Ionicons name="images-outline" size={18} color="white" />
               <Text style={styles.galleryOverlayText}>Gallery</Text>
             </TouchableOpacity>
@@ -478,13 +505,15 @@ export default function ScanScreen() {
             <TouchableOpacity
               style={styles.captureButton}
               onPress={capturePhoto}
-              disabled={isCapturing}
+              disabled={isCapturing || maxReached}
             >
               <View style={styles.captureCircle}>
                 <View style={styles.captureDot} />
               </View>
             </TouchableOpacity>
-            <Text style={styles.captureLabel}>{isCapturing ? 'Capturing…' : 'Capture'}</Text>
+            <Text style={styles.captureLabel}>
+              {isCapturing ? 'Capturing...' : maxReached ? `Max ${MAX_IMAGES} reached` : 'Capture'}
+            </Text>
             {capturedImages.length > 0 && (
               <TouchableOpacity
                 style={styles.analyzeOverlayButton}

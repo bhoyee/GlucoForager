@@ -24,8 +24,12 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const headerPaddingTop = Math.max(insets.top, 16);
-  // Ensure the last items (including version) aren't hidden behind the bottom tab bar.
-  const contentBottomPadding = Math.max(insets.bottom + tabBarHeight + 12, 24);
+  // `tabBarHeight` already accounts for safe-area insets in most navigators.
+  // Avoid double-counting `insets.bottom`, which creates extra white space below the footer.
+  // In React Navigation, the tab bar typically takes its own layout space (not overlay),
+  // so we anchor the footer to the bottom of the screen and only respect safe-area.
+  const versionFooterBottom = Math.max(insets.bottom, 0) + 4;
+  const versionFooterHeight = 38;
   // Modal overlays the tab bar, so we only need to respect safe-area inset.
   const premiumModalBottomPadding = Math.max(insets.bottom, 14) + 14;
   const appStoreUrl = 'https://apps.apple.com/us/app/glucoforager/id6758808427?action=write-review';
@@ -584,10 +588,11 @@ export default function ProfileScreen() {
           <Text style={styles.logoutText}>Logout</Text>
         </TouchableOpacity>
       </View>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
-      >
+      <View style={{ flex: 1, paddingBottom: versionFooterBottom + versionFooterHeight }}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
       <Modal
         visible={premiumModalVisible}
         animationType="slide"
@@ -635,10 +640,12 @@ export default function ProfileScreen() {
 
               <View style={styles.premiumBenefits}>
                 <Text style={styles.premiumBenefitsTitle}>What you get:</Text>
-                <Text style={styles.premiumBenefitItem}>- Unlimited ingredient scans & searches</Text>
-                <Text style={styles.premiumBenefitItem}>- Daily meal planner</Text>
-                <Text style={styles.premiumBenefitItem}>- Detailed nutrition insights</Text>
-                <Text style={styles.premiumBenefitItem}>- Unlimited favorites</Text>
+                <Text style={styles.premiumBenefitItem}>- Unlimited scans & ingredient searches</Text>
+                <Text style={styles.premiumBenefitItem}>- Daily meal planner (incl. snacks)</Text>
+                <Text style={styles.premiumBenefitItem}>- Food swaps for meals, snacks & drinks</Text>
+                <Text style={styles.premiumBenefitItem}>- Daily challenges to build healthy habits</Text>
+                <Text style={styles.premiumBenefitItem}>- Personalized suggestions from your preferences</Text>
+                <Text style={styles.premiumBenefitItem}>- Unlimited favorites + recent meals</Text>
               </View>
 
               <Text style={styles.premiumLegalText}>
@@ -865,15 +872,23 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
 
+        </ScrollView>
+      </View>
+
       <TouchableOpacity
-        style={styles.versionContainer}
+        style={[styles.versionContainer, { bottom: versionFooterBottom }]}
         activeOpacity={0.8}
         onPress={__DEV__ ? handleDebugTap : undefined}
       >
-        <Text style={styles.versionText}>GlucoForager</Text>
-        <Text style={styles.versionSubText}>v{String(appVersion)}</Text>
+        <Text
+          style={styles.versionLine}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.85}
+        >
+          GlucoForager v{String(appVersion)}
+        </Text>
       </TouchableOpacity>
-      </ScrollView>
     </View>
   );
 }
@@ -1190,19 +1205,17 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   versionContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
     alignItems: 'center',
-    paddingVertical: 12,
-  },
-  versionText: {
-    fontSize: 14,
-    color: Colors.textLight,
-    textAlign: 'center',
+    paddingVertical: 6,
     paddingHorizontal: 18,
   },
-  versionSubText: {
-    fontSize: 12,
+  versionLine: {
+    fontSize: 13,
     color: Colors.textMuted,
     textAlign: 'center',
-    paddingHorizontal: 18,
+    maxWidth: '100%',
   },
 });

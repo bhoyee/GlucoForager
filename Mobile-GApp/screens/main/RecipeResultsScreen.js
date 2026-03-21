@@ -1,5 +1,5 @@
 // screens/main/RecipeResultsScreen.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -15,11 +15,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getCachedRecipeImageUrl } from '../../utils/recipeImageCache';
+import { getCachedRecipeImageUrl, setCachedRecipeImageUrl } from '../../utils/recipeImageCache';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_ENDPOINTS, API_URL } from '../../config/api';
+import { apiFetch } from '../../utils/api';
+import { useAuth } from '../../context/authContext';
 
 export default function RecipeResultsScreen() {
   const navigation = useNavigation();
   const route = useRoute();
+  const { signOut } = useAuth();
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const headerPaddingTop = Math.max(insets.top, 16);
@@ -37,15 +42,25 @@ export default function RecipeResultsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [detectedIngredients, setDetectedIngredients] = useState([]);
   const [recipes, setRecipes] = useState([]);
+  const pollingRef = useRef(null);
+  const elapsedRef = useRef(null);
+  const phaseRef = useRef(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [statusLine, setStatusLine] = useState('Starting AI recipe generation...');
 
   useEffect(() => {
     const ingredientSource = source === 'text' ? 'Input' : 'Detected';
-    const useDetected = source === 'text'
-      ? Array.isArray(detectedFromParams)
-      : detectedFromParams?.length;
-    const rawIngredients = useDetected
-      ? detectedFromParams
-      : selectedIngredients || [];
+    // Important: for scan flows (source='vision'), recipe generation must use the user's selected ingredients,
+    // not every detected ingredient. `detectedFromParams` is used only for display.
+    const normalizedSelected = Array.isArray(selectedIngredients)
+      ? selectedIngredients.map((x) => (typeof x === 'string' ? x.trim() : '')).filter(Boolean)
+      : [];
+    const hasSelected = normalizedSelected.length > 0;
+    const rawIngredients = source === 'vision' && hasSelected
+      ? normalizedSelected
+      : (Array.isArray(detectedFromParams) && detectedFromParams.length > 0)
+        ? detectedFromParams
+        : normalizedSelected;
 
     const normalizedIngredients = rawIngredients.map((item, index) => {
       const name = typeof item === 'string' ? item : item?.name || `Ingredient ${index + 1}`;
@@ -59,13 +74,27 @@ export default function RecipeResultsScreen() {
     setDetectedIngredients(normalizedIngredients);
     const baseRecipes = recipesFromParams || [];
 
-    const hydrateImages = async () => {
+    const getDeviceId = async () => {
+      const existing = await AsyncStorage.getItem('deviceId');
+      if (existing) return existing;
+      const generated = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      await AsyncStorage.setItem('deviceId', generated);
+      return generated;
+    };
+
+    const hydrateImages = async (incomingRecipes) => {
       const next = await Promise.all(
-        baseRecipes.map(async (recipe) => {
-          const hasImage =
-            (typeof recipe?.image_url === 'string' && recipe.image_url.trim()) ||
-            (typeof recipe?.image === 'string' && recipe.image.trim());
-          if (hasImage) return recipe;
+        (incomingRecipes || []).map(async (recipe) => {
+          const directUrl =
+            (typeof recipe?.image_url === 'string' && recipe.image_url.trim())
+              ? recipe.image_url.trim()
+              : (typeof recipe?.image === 'string' && recipe.image.trim())
+                ? recipe.image.trim()
+                : '';
+          if (directUrl) {
+            await setCachedRecipeImageUrl(recipe, directUrl);
+            return { ...recipe, image_url: recipe.image_url || directUrl, image: recipe.image || directUrl };
+          }
           const cached = await getCachedRecipeImageUrl(recipe);
           if (!cached) return recipe;
           return { ...recipe, image_url: cached, image: cached, image_source: 'ai' };
@@ -75,10 +104,129 @@ export default function RecipeResultsScreen() {
       setIsLoading(false);
     };
 
-    hydrateImages();
-  }, [detectedFromParams, recipesFromParams, selectedIngredients, source]);
+    const pollJob = async (jobId) => {
+      setStatusLine('Generating recipes with AI...');
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) return;
+      const res = await apiFetch(
+        `${API_URL}${API_ENDPOINTS.AI_TEXT_RECIPES_ASYNC_STATUS}/${jobId}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+        { onUnauthorized: signOut, timeoutMs: 10000 }
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.status === 'pending' || data.status === 'queued') {
+        setStatusLine('Waiting to start...');
+      }
+      if (data.status === 'running') {
+        setStatusLine('Generating recipes...');
+      }
+      if (data.status === 'completed') {
+        if (pollingRef.current) clearInterval(pollingRef.current);
+        pollingRef.current = null;
+        const result = data.result || {};
+        const nextRecipes = Array.isArray(result?.results) ? result.results : (Array.isArray(result?.recipes) ? result.recipes : []);
+        await hydrateImages(nextRecipes);
+      } else if (data.status === 'failed') {
+        if (pollingRef.current) clearInterval(pollingRef.current);
+        pollingRef.current = null;
+        setIsLoading(false);
+      }
+    };
+
+    const generateIfMissing = async () => {
+      if (baseRecipes.length > 0) {
+        await hydrateImages(baseRecipes);
+        return;
+      }
+
+      setElapsedSeconds(0);
+      setStatusLine('Starting AI recipe generation...');
+      if (elapsedRef.current) clearInterval(elapsedRef.current);
+      elapsedRef.current = setInterval(() => {
+        setElapsedSeconds((prev) => prev + 1);
+      }, 1000);
+
+      const phases = [
+        'Sending ingredients...',
+        'Checking diabetes-friendly choices...',
+        'Creating recipe ideas...',
+        'Writing cooking steps...',
+        'Finishing up...',
+      ];
+      let idx = 0;
+      if (phaseRef.current) clearInterval(phaseRef.current);
+      phaseRef.current = setInterval(() => {
+        idx = (idx + 1) % phases.length;
+        setStatusLine(phases[idx]);
+      }, 6500);
+
+      try {
+        const token = await AsyncStorage.getItem('userToken');
+        if (!token) {
+          setIsLoading(false);
+          return;
+        }
+        const deviceId = await getDeviceId();
+        const ingredients = normalizedSelected;
+        const response = await apiFetch(
+          `${API_URL}${API_ENDPOINTS.AI_TEXT_RECIPES_ASYNC}`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+              'X-Device-Id': deviceId,
+            },
+            body: JSON.stringify({ ingredients }),
+          },
+          { onUnauthorized: signOut, timeoutMs: 45000 }
+        );
+        if (response.status === 401) return;
+        const data = await response.json();
+        if (!response.ok || !data?.job_id) {
+          setIsLoading(false);
+          return;
+        }
+        await pollJob(data.job_id);
+        pollingRef.current = setInterval(() => {
+          pollJob(data.job_id);
+        }, 3000);
+      } catch {
+        setIsLoading(false);
+      }
+    };
+
+    generateIfMissing();
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      pollingRef.current = null;
+      if (elapsedRef.current) clearInterval(elapsedRef.current);
+      elapsedRef.current = null;
+      if (phaseRef.current) clearInterval(phaseRef.current);
+      phaseRef.current = null;
+    };
+  }, [detectedFromParams, recipesFromParams, selectedIngredients, source, signOut]);
 
   if (isLoading) {
+    const formatElapsed = (seconds) => {
+      const s = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
+      const mm = String(Math.floor(s / 60)).padStart(2, '0');
+      const ss = String(s % 60).padStart(2, '0');
+      return `${mm}:${ss}`;
+    };
+
+    const handleCancel = () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      pollingRef.current = null;
+      if (elapsedRef.current) clearInterval(elapsedRef.current);
+      elapsedRef.current = null;
+      if (phaseRef.current) clearInterval(phaseRef.current);
+      phaseRef.current = null;
+      navigation.goBack();
+    };
+
+    const ingredientCount = Array.isArray(selectedIngredients) ? selectedIngredients.length : 0;
     return (
       <View style={styles.loadingContainer}>
         <LinearGradient
@@ -86,11 +234,28 @@ export default function RecipeResultsScreen() {
           style={styles.loadingGradient}
         >
           <Ionicons name="sparkles" size={60} color="white" />
-          <Text style={styles.loadingTitle}>Preparing Recipes</Text>
+          <Text style={styles.loadingTitle}>AI Recipe Generation</Text>
           <Text style={styles.loadingSubtitle}>
-            Finding diabetes-safe recipes for your ingredients...
+            {statusLine || 'Generating your recipes…'}
           </Text>
+
+          <View style={styles.loadingMetaRow}>
+            <View style={styles.loadingPill}>
+              <Ionicons name="time-outline" size={14} color="rgba(255,255,255,0.9)" />
+              <Text style={styles.loadingPillText}>Elapsed {formatElapsed(elapsedSeconds)}</Text>
+            </View>
+            <View style={styles.loadingPill}>
+              <Ionicons name="leaf-outline" size={14} color="rgba(255,255,255,0.9)" />
+              <Text style={styles.loadingPillText}>
+                {ingredientCount > 0 ? `${ingredientCount} ingredient${ingredientCount !== 1 ? 's' : ''}` : 'Your selection'}
+              </Text>
+            </View>
+          </View>
+
           <ActivityIndicator size="large" color="white" style={{ marginTop: 30 }} />
+          <TouchableOpacity style={styles.loadingCancelButton} onPress={handleCancel}>
+            <Text style={styles.loadingCancelText}>Cancel</Text>
+          </TouchableOpacity>
         </LinearGradient>
       </View>
     );
@@ -366,6 +531,40 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.9)',
     textAlign: 'center',
     lineHeight: 22,
+  },
+  loadingMetaRow: {
+    marginTop: 14,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
+  loadingPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    marginHorizontal: 6,
+    marginTop: 8,
+  },
+  loadingPillText: {
+    marginLeft: 6,
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.92)',
+  },
+  loadingCancelButton: {
+    marginTop: 18,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  loadingCancelText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
   },
   header: {
     flexDirection: 'row',

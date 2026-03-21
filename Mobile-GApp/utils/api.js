@@ -1,9 +1,45 @@
 import { addDebugLog } from './debugLogger';
+import { Alert } from 'react-native';
 
 let authRefreshHandler = null;
+let lastRateLimitAlertAt = 0;
+const RATE_LIMIT_ALERT_COOLDOWN_MS = 15000;
 
 export const setAuthRefreshHandler = (handler) => {
   authRefreshHandler = handler;
+};
+
+const shouldSuppressFailureDebugLog = (url) => {
+  const u = String(url || '');
+  // Avoid feedback loops: mobile log upload failures would generate more logs.
+  if (u.includes('/api/mobile/logs')) return true;
+  return false;
+};
+
+const shouldShowRateLimitAlert = (url) => {
+  const u = String(url || '');
+  // Never show popups for background / silent endpoints.
+  if (u.includes('/api/mobile/logs')) return false;
+  return true;
+};
+
+const maybeShowRateLimitAlert = (url, response) => {
+  if (!shouldShowRateLimitAlert(url)) return;
+  const now = Date.now();
+  if (now - lastRateLimitAlertAt < RATE_LIMIT_ALERT_COOLDOWN_MS) return;
+  lastRateLimitAlertAt = now;
+
+  const retryAfterRaw = response?.headers?.get?.('Retry-After');
+  const retryAfterSeconds = retryAfterRaw ? Number.parseInt(retryAfterRaw, 10) : null;
+  const waitText =
+    Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+      ? `Please wait ${retryAfterSeconds} seconds and try again.`
+      : 'Please wait a moment and try again.';
+
+  Alert.alert(
+    'Please slow down',
+    `You’ve made too many requests in a short time. ${waitText}`
+  );
 };
 
 const buildNetworkErrorResponse = (url, error) => ({
@@ -91,13 +127,25 @@ export const apiFetch = async (
     if (response.status === 401 && onUnauthorized) {
       await onUnauthorized();
     }
-    if (!response.ok) {
+    if (response.status === 429) {
+      maybeShowRateLimitAlert(url, response);
+      const retryAfter = response.headers.get('Retry-After');
       addDebugLog({
         source: 'API',
         level: 'warn',
-        message: `Request failed (${response.status})`,
-        details: url,
+        message: 'Rate limit reached (429)',
+        details: retryAfter ? `${url} | Retry-After: ${retryAfter}s` : url,
       });
+    }
+    if (!response.ok) {
+      if (!shouldSuppressFailureDebugLog(url) && response.status !== 429) {
+        addDebugLog({
+          source: 'API',
+          level: 'warn',
+          message: `Request failed (${response.status})`,
+          details: url,
+        });
+      }
     }
     return withSafeBodyParsing(response);
   } catch (error) {

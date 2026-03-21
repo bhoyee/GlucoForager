@@ -9,24 +9,36 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   FlatList,
-  CheckBox,
   TextInput,
   Alert,
+  useWindowDimensions,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const LAST_INGREDIENTS_KEY = 'last_used_ingredients_v1';
 
 export default function ScanResultsScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
+  const { width: windowWidth } = useWindowDimensions();
   const headerPaddingTop = Math.max(insets.top, 16);
   const contentBottomPadding = Math.max(tabBarHeight - 12, 8);
-  const { images, userIsPremium, scansUsed, detectedIngredients: detectedFromApi, warning, recipes: recipesFromApi } = route.params || {};
+  const {
+    images,
+    userIsPremium,
+    scansUsed,
+    detectedIngredients: detectedFromApi,
+    detectedIngredientsSelected: detectedSelectedFromApi,
+    warning,
+    recipes: recipesFromApi,
+  } = route.params || {};
   
   const [isLoading, setIsLoading] = useState(true);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
@@ -35,28 +47,98 @@ export default function ScanResultsScreen() {
   const [ingredientToAdd, setIngredientToAdd] = useState('');
   const [recipes, setRecipes] = useState([]);
   const [showRecipeButton, setShowRecipeButton] = useState(false);
+  const [warningMessage, setWarningMessage] = useState('');
+
+  // Keep Eat Now "Use ingredients I have" in sync with the latest scan selection.
+  useEffect(() => {
+    if (!detectedIngredients.length || !selectedIngredients.length) return;
+
+    const t = setTimeout(() => {
+      try {
+        const selectedNames = detectedIngredients
+          .filter((item) => selectedIngredients.includes(item.id))
+          .map((item) => item.name);
+
+        const seen = new Set();
+        const normalizedUnique = [];
+        for (const raw of selectedNames) {
+          const name = String(raw || '').trim().replace(/\s+/g, ' ');
+          if (!name) continue;
+          const key = name.toLowerCase();
+          if (seen.has(key)) continue;
+          seen.add(key);
+          normalizedUnique.push(name);
+          if (normalizedUnique.length >= 20) break;
+        }
+        void AsyncStorage.setItem(LAST_INGREDIENTS_KEY, JSON.stringify(normalizedUnique));
+      } catch {
+        // Ignore.
+      }
+    }, 300);
+
+    return () => clearTimeout(t);
+  }, [detectedIngredients, selectedIngredients]);
 
   useEffect(() => {
     if (Array.isArray(detectedFromApi) && detectedFromApi.length > 0) {
+      const riskByName = warning?.risk_by_name || {};
+      const excluded = Array.isArray(warning?.excluded) ? warning.excluded : [];
+      const optional = Array.isArray(warning?.optional) ? warning.optional : [];
+      const excludedSet = new Set(excluded.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean));
+      const optionalSet = new Set(optional.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean));
+
+      // Default selection should follow the backend-selected list (safe ingredients used for recipes),
+      // not "risk === ok". This prevents the UI from auto-selecting everything when risk metadata is missing.
+      const selectedFromApi = Array.isArray(detectedSelectedFromApi) ? detectedSelectedFromApi : [];
+      const selectedSet = new Set(
+        selectedFromApi.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean)
+      );
+
+      const buildCautionMessage = () => {
+        if (typeof warning?.message === 'string' && warning.message.trim()) {
+          return warning.message.trim();
+        }
+        if (excluded.length === 0 && optional.length === 0) {
+          return '';
+        }
+        const limitShown = 6;
+        const excludedList = excluded.slice(0, limitShown).join(', ');
+        const optionalList = optional.slice(0, limitShown).join(', ');
+        const parts = [];
+        if (excludedList) parts.push(`Avoid: ${excludedList}${excluded.length > limitShown ? '…' : ''}`);
+        if (optionalList) parts.push(`Use sparingly: ${optionalList}${optional.length > limitShown ? '…' : ''}`);
+        return parts.join(' • ');
+      };
+
       const normalized = detectedFromApi
         .map((item) => (typeof item === 'string' ? item.trim() : ''))
         .filter((item) => item.length > 0)
-        .map((item, index) => ({
-        id: `${index}-${item}`,
-        name: item,
-        confidence: 'AI',
-        selected: true,
-        }));
+        .map((item, index) => {
+          const key = item.trim().toLowerCase();
+          const risk =
+            riskByName?.[key]?.risk ||
+            (excludedSet.has(key) ? 'avoid' : optionalSet.has(key) ? 'limit' : 'ok');
+          return {
+            id: `${index}-${item}`,
+            name: item,
+            confidence: 'AI',
+            risk,
+            risk_reason: riskByName?.[key]?.reason || '',
+            selected: selectedSet.has(key),
+          };
+        });
       setDetectedIngredients(normalized);
-      setSelectedIngredients(normalized.map(item => item.id));
+      setSelectedIngredients(normalized.filter((item) => item.selected).map(item => item.id));
+      setWarningMessage(buildCautionMessage());
       setIsLoading(false);
       return;
     }
 
     setDetectedIngredients([]);
     setSelectedIngredients([]);
+    setWarningMessage('');
     setIsLoading(false);
-  }, [detectedFromApi]);
+  }, [detectedFromApi, detectedSelectedFromApi, warning]);
 
   useEffect(() => {
     // Show generate recipe button when at least one ingredient is selected
@@ -98,7 +180,7 @@ export default function ScanResultsScreen() {
     }
   };
 
-  const handleGenerateRecipes = () => {
+  const handleGenerateRecipes = async () => {
     if (selectedIngredients.length === 0) {
       Alert.alert('No Ingredients', 'Please select at least one ingredient to generate recipes.');
       return;
@@ -108,6 +190,25 @@ export default function ScanResultsScreen() {
     const selectedItems = detectedIngredients
       .filter(item => selectedIngredients.includes(item.id))
       .map(item => item.name);
+
+    // Persist for "Use ingredients I have" (Eat now) re-use.
+    // Keep it small + de-duped so it remains fast and predictable.
+    try {
+      const seen = new Set();
+      const normalizedUnique = [];
+      for (const raw of selectedItems) {
+        const name = String(raw || '').trim().replace(/\s+/g, ' ');
+        if (!name) continue;
+        const key = name.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        normalizedUnique.push(name);
+        if (normalizedUnique.length >= 20) break;
+      }
+      await AsyncStorage.setItem(LAST_INGREDIENTS_KEY, JSON.stringify(normalizedUnique));
+    } catch {
+      // Ignore.
+    }
     
     // Navigate to recipe generation screen
     navigation.navigate('RecipeResults', { 
@@ -137,7 +238,13 @@ export default function ScanResultsScreen() {
   }
 
   const renderImageItem = ({ item, index }) => (
-    <View style={[styles.imageSlide, activeImageIndex === index && styles.activeSlide]}>
+    <View
+      style={[
+        styles.imageSlide,
+        { width: Math.max(280, windowWidth - 40) },
+        activeImageIndex === index && styles.activeSlide,
+      ]}
+    >
       <Image source={{ uri: item.uri }} style={styles.slideImage} resizeMode="cover" />
       <Text style={styles.imageLabel}>{item.name}</Text>
     </View>
@@ -165,13 +272,16 @@ export default function ScanResultsScreen() {
 
       <ScrollView 
         showsVerticalScrollIndicator={false}
+        horizontal={false}
+        directionalLockEnabled
+        alwaysBounceHorizontal={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
       >
-        {(warning || detectedIngredients.length === 0) && (
+        {((typeof warningMessage === 'string' && warningMessage.trim().length > 0) || detectedIngredients.length === 0) && (
           <View style={styles.warningBanner}>
             <Ionicons name="alert-circle-outline" size={18} color={Colors.warning} />
             <Text style={styles.warningText}>
-              {warning?.message || 'No food ingredients detected. Please try another image.'}
+              {warningMessage || 'No food ingredients detected. Please try another image.'}
             </Text>
           </View>
         )}
@@ -184,7 +294,10 @@ export default function ScanResultsScreen() {
               keyExtractor={item => item.id}
               horizontal
               pagingEnabled
+              decelerationRate="fast"
+              snapToAlignment="center"
               showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 20 }}
               onMomentumScrollEnd={(event) => {
                 const index = Math.floor(event.nativeEvent.contentOffset.x / event.nativeEvent.layoutMeasurement.width);
                 setActiveImageIndex(index);
@@ -248,7 +361,21 @@ export default function ScanResultsScreen() {
                     </View>
                   </View>
                   <View style={styles.ingredientInfo}>
-                    <Text style={styles.ingredientName}>{item.name}</Text>
+                    <View style={styles.ingredientNameRow}>
+                      <Text
+                        style={[
+                          styles.ingredientName,
+                          item.risk === 'avoid' && styles.ingredientNameAvoid,
+                        ]}
+                      >
+                        {item.name}
+                      </Text>
+                      {item.risk === 'limit' ? (
+                        <Text style={styles.riskBadgeLimit}>Use sparingly</Text>
+                      ) : item.risk === 'avoid' ? (
+                        <Text style={styles.riskBadgeAvoid}>Avoid</Text>
+                      ) : null}
+                    </View>
                   </View>
                   {item.confidence === 'Manual' ? (
                     <TouchableOpacity 
@@ -262,7 +389,17 @@ export default function ScanResultsScreen() {
                     </TouchableOpacity>
                   ) : (
                     <View style={styles.ingredientIcon}>
-                      <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
+                      <Ionicons
+                        name={
+                          item.risk === 'avoid'
+                            ? 'close-circle'
+                            : item.risk === 'limit'
+                              ? 'alert-circle'
+                              : 'checkmark-circle'
+                        }
+                        size={20}
+                        color={item.risk === 'avoid' ? Colors.danger : item.risk === 'limit' ? Colors.warning : Colors.success}
+                      />
                     </View>
                   )}
                 </View>
@@ -526,11 +663,39 @@ const styles = StyleSheet.create({
   ingredientInfo: {
     flex: 1,
   },
+  ingredientNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
   ingredientName: {
     fontSize: 16,
     fontWeight: '600',
     color: Colors.text,
     marginBottom: 2,
+  },
+  ingredientNameAvoid: {
+    color: Colors.danger,
+  },
+  riskBadgeLimit: {
+    marginLeft: 8,
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.warning,
+    backgroundColor: `${Colors.warning}15`,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  riskBadgeAvoid: {
+    marginLeft: 8,
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.danger,
+    backgroundColor: `${Colors.danger}15`,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
   },
   ingredientIcon: {
     marginLeft: 8,

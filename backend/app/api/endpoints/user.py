@@ -1,8 +1,11 @@
+import logging
 from datetime import date
+import uuid
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
+from sqlalchemy import desc
 
 from ...database import get_db
 from ...core.security import get_password_hash
@@ -15,12 +18,15 @@ from ...models.refresh_token import RefreshToken
 from ...models.recipe_history import RecipeHistory
 from ...models.shopping_item import ShoppingItem
 from ...models.subscription import Subscription
+from ...models.push_token import PushToken
+from ...models.admin_push_send import AdminPushSendFailure
 from ...models.user import SearchLog, User
 from ...models.user_daily_challenge import UserDailyChallenge
 from ..dependencies import check_user_access, get_current_user
 from ...services.subscription_service import get_effective_subscription_tier
 
 router = APIRouter(prefix="/user", tags=["user"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/profile")
@@ -210,6 +216,7 @@ def scans_today(
         "searches_left": access["searches_left"],
         "device_searches_left": access.get("device_searches_left"),
         "daily_limit": access.get("daily_limit"),
+        "limit_window_days": access.get("limit_window_days", 1),
         "subscription_tier": effective_tier or "free",
         "is_premium": effective_tier == "premium",
         "premium_access_blocked": bool(getattr(current_user, "premium_access_blocked_at", None)),
@@ -233,6 +240,74 @@ def scans_today(
         )
         response["device_total"] = device_ai + device_text
     return response
+
+
+def _normalize_ingredient_list(items: list[str] | None, *, max_items: int = 20, max_len: int = 40) -> list[str]:
+    if not items:
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        if not isinstance(item, str):
+            continue
+        cleaned = item.strip()
+        if not cleaned:
+            continue
+        cleaned = cleaned.replace("\n", " ").replace("\r", " ")
+        cleaned = " ".join(cleaned.split())
+        cleaned = cleaned[:max_len]
+        key = cleaned.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(cleaned)
+        if len(out) >= max_items:
+            break
+    return out
+
+
+@router.get("/last-ingredients")
+def last_ingredients(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Returns the most recent ingredient list the user used for recipe generation.
+
+    This backs the mobile "Use ingredients I have" flow so it works even after reinstall,
+    cache clear, or when AsyncStorage isn't yet populated.
+    """
+    job = (
+        db.query(AIJob)
+        .filter(AIJob.user_id == current_user.id, AIJob.status == "completed")
+        .order_by(desc(AIJob.updated_at))
+        .first()
+    )
+    if not job:
+        return {"ingredients": [], "source": None, "updated_at": None}
+
+    payload = job.payload or {}
+    result = job.result or {}
+    ingredients: list[str] = []
+    if job.source == "text":
+        raw = payload.get("ingredients")
+        if isinstance(raw, list):
+            ingredients = [str(x) for x in raw]
+    elif job.source in ("vision", "vision_batch"):
+        raw = result.get("detected")
+        if isinstance(raw, list):
+            ingredients = [str(x) for x in raw]
+        else:
+            raw_all = result.get("detected_all")
+            if isinstance(raw_all, list):
+                ingredients = [str(x) for x in raw_all]
+
+    ingredients = _normalize_ingredient_list(ingredients, max_items=20, max_len=40)
+    return {
+        "ingredients": ingredients,
+        "source": job.source,
+        "updated_at": job.updated_at.isoformat() if getattr(job, "updated_at", None) else None,
+    }
 
 
 @router.get("/stats")
@@ -286,6 +361,24 @@ def delete_account(
     user_id = current_user.id
     try:
         # Delete dependent records first to avoid FK constraint errors.
+        # Push notification tables: failures may not always store user_id, but can reference push_token_id.
+        token_rows = (
+            db.query(PushToken.id, PushToken.token)
+            .filter(PushToken.user_id == user_id)
+            .all()
+        )
+        push_token_ids = [row[0] for row in token_rows if row and row[0] is not None]
+        push_tokens = [row[1] for row in token_rows if row and isinstance(row[1], str) and row[1]]
+
+        db.query(AdminPushSendFailure).filter(AdminPushSendFailure.user_id == user_id).delete(synchronize_session=False)
+        if push_token_ids:
+            db.query(AdminPushSendFailure).filter(AdminPushSendFailure.push_token_id.in_(push_token_ids)).delete(
+                synchronize_session=False
+            )
+        if push_tokens:
+            db.query(AdminPushSendFailure).filter(AdminPushSendFailure.token.in_(push_tokens)).delete(
+                synchronize_session=False
+            )
         db.query(AIJob).filter(AIJob.user_id == user_id).delete(synchronize_session=False)
         db.query(AIRequest).filter(AIRequest.user_id == user_id).delete(synchronize_session=False)
         db.query(SearchLog).filter(SearchLog.user_id == user_id).delete(synchronize_session=False)
@@ -297,9 +390,15 @@ def delete_account(
         db.query(MealPlan).filter(MealPlan.user_id == user_id).delete(synchronize_session=False)
         db.query(UserDailyChallenge).filter(UserDailyChallenge.user_id == user_id).delete(synchronize_session=False)
         db.query(ShoppingItem).filter(ShoppingItem.user_id == user_id).delete(synchronize_session=False)
+        db.query(PushToken).filter(PushToken.user_id == user_id).delete(synchronize_session=False)
         db.delete(current_user)
         db.commit()
         return {"detail": "Account deleted"}
-    except Exception:
+    except Exception as exc:  # noqa: BLE001
+        error_id = str(uuid.uuid4())
         db.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Delete failed")
+        logger.exception("Delete account failed user_id=%s error_id=%s: %s", user_id, error_id, str(exc)[:400])
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unable to delete your account right now. Please try again later. (ref: {error_id})",
+        )
