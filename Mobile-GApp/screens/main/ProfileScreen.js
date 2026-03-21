@@ -24,8 +24,8 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const headerPaddingTop = Math.max(insets.top, 16);
-  // Ensure the last items (including version) aren't hidden behind the bottom tab bar.
-  const contentBottomPadding = Math.max(insets.bottom + tabBarHeight + 12, 24);
+  // Keep content visible above an absolute tab bar (some builds use overlay tab bars).
+  const contentBottomPadding = Math.max(tabBarHeight - 4, 16);
   // Modal overlays the tab bar, so we only need to respect safe-area inset.
   const premiumModalBottomPadding = Math.max(insets.bottom, 14) + 14;
   const appStoreUrl = 'https://apps.apple.com/us/app/glucoforager/id6758808427?action=write-review';
@@ -865,15 +865,22 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
 
+      </ScrollView>
+
       <TouchableOpacity
-        style={styles.versionContainer}
+        style={[styles.versionContainer, { marginBottom: Math.max(tabBarHeight - 2, 12) }]}
         activeOpacity={0.8}
         onPress={__DEV__ ? handleDebugTap : undefined}
       >
-        <Text style={styles.versionText}>GlucoForager</Text>
-        <Text style={styles.versionSubText}>v{String(appVersion)}</Text>
+        <Text
+          style={styles.versionLine}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.85}
+        >
+          GlucoForager v{String(appVersion)}
+        </Text>
       </TouchableOpacity>
-      </ScrollView>
     </View>
   );
 }
@@ -1191,18 +1198,13 @@ const styles = StyleSheet.create({
   },
   versionContainer: {
     alignItems: 'center',
-    paddingVertical: 12,
-  },
-  versionText: {
-    fontSize: 14,
-    color: Colors.textLight,
-    textAlign: 'center',
+    paddingVertical: 10,
     paddingHorizontal: 18,
   },
-  versionSubText: {
-    fontSize: 12,
+  versionLine: {
+    fontSize: 13,
     color: Colors.textMuted,
     textAlign: 'center',
-    paddingHorizontal: 18,
+    maxWidth: '100%',
   },
 });
