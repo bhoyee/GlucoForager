@@ -24,8 +24,10 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const headerPaddingTop = Math.max(insets.top, 16);
-  const versionFooterBottom = Math.max(tabBarHeight, 0) + Math.max(insets.bottom, 0) + 8;
-  const versionFooterHeight = 44;
+  // `tabBarHeight` already accounts for safe-area insets in most navigators.
+  // Avoid double-counting `insets.bottom`, which creates extra white space below the footer.
+  const versionFooterBottom = Math.max(tabBarHeight, 0) + 4;
+  const versionFooterHeight = 38;
   // Modal overlays the tab bar, so we only need to respect safe-area inset.
   const premiumModalBottomPadding = Math.max(insets.bottom, 14) + 14;
   const appStoreUrl = 'https://apps.apple.com/us/app/glucoforager/id6758808427?action=write-review';
@@ -1203,7 +1205,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 6,
     paddingHorizontal: 18,
   },
   versionLine: {
