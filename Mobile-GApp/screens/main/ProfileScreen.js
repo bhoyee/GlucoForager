@@ -866,7 +866,6 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      </ScrollView>
         </ScrollView>
       </View>
 
