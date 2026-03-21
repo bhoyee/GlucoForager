@@ -1,3 +1,4 @@
+import logging
 from datetime import date
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
@@ -16,12 +17,15 @@ from ...models.refresh_token import RefreshToken
 from ...models.recipe_history import RecipeHistory
 from ...models.shopping_item import ShoppingItem
 from ...models.subscription import Subscription
+from ...models.push_token import PushToken
+from ...models.admin_push_send import AdminPushSendFailure
 from ...models.user import SearchLog, User
 from ...models.user_daily_challenge import UserDailyChallenge
 from ..dependencies import check_user_access, get_current_user
 from ...services.subscription_service import get_effective_subscription_tier
 
 router = APIRouter(prefix="/user", tags=["user"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/profile")
@@ -356,6 +360,7 @@ def delete_account(
     user_id = current_user.id
     try:
         # Delete dependent records first to avoid FK constraint errors.
+        db.query(AdminPushSendFailure).filter(AdminPushSendFailure.user_id == user_id).delete(synchronize_session=False)
         db.query(AIJob).filter(AIJob.user_id == user_id).delete(synchronize_session=False)
         db.query(AIRequest).filter(AIRequest.user_id == user_id).delete(synchronize_session=False)
         db.query(SearchLog).filter(SearchLog.user_id == user_id).delete(synchronize_session=False)
@@ -367,9 +372,11 @@ def delete_account(
         db.query(MealPlan).filter(MealPlan.user_id == user_id).delete(synchronize_session=False)
         db.query(UserDailyChallenge).filter(UserDailyChallenge.user_id == user_id).delete(synchronize_session=False)
         db.query(ShoppingItem).filter(ShoppingItem.user_id == user_id).delete(synchronize_session=False)
+        db.query(PushToken).filter(PushToken.user_id == user_id).delete(synchronize_session=False)
         db.delete(current_user)
         db.commit()
         return {"detail": "Account deleted"}
-    except Exception:
+    except Exception as exc:  # noqa: BLE001
         db.rollback()
+        logger.exception("Delete account failed user_id=%s: %s", user_id, str(exc)[:400])
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Delete failed")
