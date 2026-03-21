@@ -46,7 +46,7 @@ export default function RecipeResultsScreen() {
   const elapsedRef = useRef(null);
   const phaseRef = useRef(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [statusLine, setStatusLine] = useState('Initializing AI…');
+  const [statusLine, setStatusLine] = useState('Starting AI recipe generation...');
 
   useEffect(() => {
     const ingredientSource = source === 'text' ? 'Input' : 'Detected';
@@ -105,7 +105,7 @@ export default function RecipeResultsScreen() {
     };
 
     const pollJob = async (jobId) => {
-      setStatusLine('Generating recipes with AI…');
+      setStatusLine('Generating your recipes with AI...');
       const token = await AsyncStorage.getItem('userToken');
       if (!token) return;
       const res = await apiFetch(
@@ -116,10 +116,10 @@ export default function RecipeResultsScreen() {
       if (!res.ok) return;
       const data = await res.json();
       if (data.status === 'pending' || data.status === 'queued') {
-        setStatusLine('Queued (waiting for an AI worker)…');
+        setStatusLine('Waiting to start...');
       }
       if (data.status === 'running') {
-        setStatusLine('AI is composing your recipes…');
+        setStatusLine('AI is generating your recipes...');
       }
       if (data.status === 'completed') {
         if (pollingRef.current) clearInterval(pollingRef.current);
@@ -141,18 +141,18 @@ export default function RecipeResultsScreen() {
       }
 
       setElapsedSeconds(0);
-      setStatusLine('Initializing AI…');
+      setStatusLine('Starting AI recipe generation...');
       if (elapsedRef.current) clearInterval(elapsedRef.current);
       elapsedRef.current = setInterval(() => {
         setElapsedSeconds((prev) => prev + 1);
       }, 1000);
 
       const phases = [
-        'Submitting ingredients to AI…',
-        'Analyzing ingredients…',
-        'Generating recipe ideas…',
-        'Writing steps & portions…',
-        'Final quality check…',
+        'Sending your ingredients...',
+        'Checking diabetes-friendly choices...',
+        'Creating recipe ideas...',
+        'Writing the cooking steps...',
+        'Finishing up...',
       ];
       let idx = 0;
       if (phaseRef.current) clearInterval(phaseRef.current);
