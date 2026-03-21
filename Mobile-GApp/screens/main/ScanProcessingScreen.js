@@ -15,6 +15,9 @@ import { Colors } from '../../constants/Colors';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
+import * as ImageManipulator from 'expo-image-manipulator';
+
+const LAST_INGREDIENTS_KEY = 'last_used_ingredients_v1';
 
 export default function ScanProcessingScreen() {
   const navigation = useNavigation();
@@ -23,7 +26,11 @@ export default function ScanProcessingScreen() {
   const { signOut } = useAuth();
   const pollingRef = useRef(null);
   const timeoutRef = useRef(null);
+  const elapsedRef = useRef(null);
+  const phaseRef = useRef(null);
   const [jobId, setJobId] = useState(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [statusLine, setStatusLine] = useState('Preparing...');
 
   const pulse = useRef(new Animated.Value(0)).current;
 
@@ -53,6 +60,29 @@ export default function ScanProcessingScreen() {
         navigation.goBack();
         return;
       }
+
+      // Start a simple elapsed timer + rotating status line to reduce "it froze" feeling.
+      setElapsedSeconds(0);
+      setStatusLine(images.length > 1 ? 'Optimizing photos...' : 'Optimizing photo...');
+      if (elapsedRef.current) clearInterval(elapsedRef.current);
+      elapsedRef.current = setInterval(() => {
+        setElapsedSeconds((prev) => prev + 1);
+      }, 1000);
+
+      const phases = [
+        images.length > 1 ? 'Optimizing photos...' : 'Optimizing photo...',
+        images.length > 1 ? 'Uploading photos...' : 'Uploading photo...',
+        'AI is analyzing ingredients...',
+        'Selecting diabetes-friendly recipes...',
+        'Finalizing results...',
+      ];
+      let idx = 0;
+      if (phaseRef.current) clearInterval(phaseRef.current);
+      phaseRef.current = setInterval(() => {
+        idx = (idx + 1) % phases.length;
+        setStatusLine(phases[idx]);
+      }, 6500);
+
       try {
         const token = await AsyncStorage.getItem('userToken');
         if (!token) {
@@ -61,9 +91,48 @@ export default function ScanProcessingScreen() {
           return;
         }
         const deviceId = await getDeviceId();
-        const imagesBase64 = images
-          .map((item) => item.base64)
-          .filter((value) => Boolean(value));
+
+        // Adapt compression slightly for multi-photo scans to keep payload sizes down.
+        const sources = Array.isArray(images) ? images.slice(0, 5) : [];
+        const targetWidth = sources.length > 2 ? 896 : 1024;
+        const jpegCompress = sources.length > 2 ? 0.55 : 0.6;
+
+        const toCompressedBase64 = async (uri) => {
+          if (!uri) return null;
+          try {
+            const result = await ImageManipulator.manipulateAsync(
+              uri,
+              [{ resize: { width: targetWidth } }],
+              { compress: jpegCompress, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+            );
+            return result?.base64 || null;
+          } catch {
+            return null;
+          }
+        };
+
+        // Cap how many photos we process to keep requests bounded (and prevent huge payloads).
+        // Users can still scan again if they want to add more.
+        if (Array.isArray(images) && images.length > 5) {
+          setStatusLine('Optimizing first 5 photos...');
+        }
+
+        // Limit CPU load on low-end devices: compress a couple at a time.
+        const concurrency = 2;
+        const imagesBase64 = [];
+        for (let i = 0; i < sources.length; i += concurrency) {
+          const batch = sources.slice(i, i + concurrency);
+          const results = await Promise.all(
+            batch.map(async (item) => {
+              const direct = typeof item?.base64 === 'string' && item.base64.trim() ? item.base64.trim() : null;
+              if (direct) return direct;
+              return await toCompressedBase64(item?.uri);
+            })
+          );
+          results.forEach((b64) => {
+            if (typeof b64 === 'string' && b64.trim()) imagesBase64.push(b64.trim());
+          });
+        }
 
         if (imagesBase64.length === 0) {
           Alert.alert('Image error', 'Unable to read image data. Please try again.');
@@ -75,6 +144,9 @@ export default function ScanProcessingScreen() {
           imagesBase64.length > 1
             ? API_ENDPOINTS.AI_VISION_RECIPES_BATCH_ASYNC
             : API_ENDPOINTS.AI_VISION_RECIPES_ASYNC;
+
+        const startTimeoutMs =
+          imagesBase64.length <= 1 ? 90000 : imagesBase64.length <= 2 ? 120000 : 180000;
         const response = await apiFetch(
           `${API_URL}${endpoint}`,
           {
@@ -86,10 +158,10 @@ export default function ScanProcessingScreen() {
             },
             body:
               imagesBase64.length > 1
-                ? JSON.stringify({ images_base64: imagesBase64 })
-                : JSON.stringify({ image_base64: imagesBase64[0] }),
+                ? JSON.stringify({ images_base64: imagesBase64, include_recipes: false })
+                : JSON.stringify({ image_base64: imagesBase64[0], include_recipes: false }),
           },
-          { onUnauthorized: signOut, timeoutMs: 60000 }
+          { onUnauthorized: signOut, timeoutMs: startTimeoutMs }
         );
 
         if (response.status === 401) {
@@ -116,6 +188,8 @@ export default function ScanProcessingScreen() {
         pollingRef.current = setInterval(() => {
           pollJob(data.job_id);
         }, 3000);
+        const count = imagesBase64.length || (images?.length || 1);
+        const overallTimeoutMs = count <= 2 ? 120000 : count <= 4 ? 180000 : 240000;
         timeoutRef.current = setTimeout(() => {
           stopPolling();
           Alert.alert(
@@ -123,7 +197,7 @@ export default function ScanProcessingScreen() {
             'Please try again in a moment.'
           );
           navigation.goBack();
-        }, 120000);
+        }, overallTimeoutMs);
       } catch (error) {
         console.warn('Scan analysis error:', error?.message || error);
         Alert.alert('Scan failed', 'Unable to analyze image. Please try again.');
@@ -152,6 +226,14 @@ export default function ScanProcessingScreen() {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
+    if (elapsedRef.current) {
+      clearInterval(elapsedRef.current);
+      elapsedRef.current = null;
+    }
+    if (phaseRef.current) {
+      clearInterval(phaseRef.current);
+      phaseRef.current = null;
+    }
   };
 
   const pollJob = async (id) => {
@@ -175,10 +257,32 @@ export default function ScanProcessingScreen() {
           navigation.goBack();
           return;
         }
+
+        // Persist latest scan-selected ingredients for "Eat now" reuse.
+        // Use the backend-selected list (safe ingredients used for recipes), not the full detected list.
+        try {
+          const rawList = Array.isArray(result.detected) ? result.detected : [];
+          const seen = new Set();
+          const normalizedUnique = [];
+          for (const raw of rawList) {
+            const name = String(raw || '').trim().replace(/\s+/g, ' ');
+            if (!name) continue;
+            const key = name.toLowerCase();
+            if (seen.has(key)) continue;
+            seen.add(key);
+            normalizedUnique.push(name);
+            if (normalizedUnique.length >= 20) break;
+          }
+          await AsyncStorage.setItem(LAST_INGREDIENTS_KEY, JSON.stringify(normalizedUnique));
+        } catch {
+          // Ignore.
+        }
+
         navigation.replace('ScanResults', {
           images,
           userIsPremium,
-          detectedIngredients: result.detected || [],
+          detectedIngredients: result.detected_all || result.detected || [],
+          detectedIngredientsSelected: result.detected || [],
           recipes: result.results || [],
           warning: result.warning || null,
         });
@@ -202,19 +306,46 @@ export default function ScanProcessingScreen() {
     outputRange: [0.3, 0.9],
   });
 
+  const formatElapsed = (seconds) => {
+    const s = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
+    const mm = String(Math.floor(s / 60)).padStart(2, '0');
+    const ss = String(s % 60).padStart(2, '0');
+    return `${mm}:${ss}`;
+  };
+
   return (
     <View style={styles.container}>
       <Animated.View style={[styles.iconWrapper, { opacity: glow }]}>
         <Ionicons name="sparkles" size={56} color="white" />
       </Animated.View>
-      <Text style={styles.title}>Analyzing Ingredients</Text>
-      <Text style={styles.subtitle}>
-        We are scanning your images to find diabetes-friendly recipes.
-      </Text>
+      <Text style={styles.title}>AI Analysis in Progress</Text>
+      <Text style={styles.subtitle}>{statusLine}</Text>
       <ActivityIndicator size="large" color="white" style={styles.spinner} />
       <Text style={styles.progressText}>
         Processing {images?.length || 1} image{(images?.length || 1) !== 1 ? 's' : ''}...
       </Text>
+
+      <View style={styles.metaRow}>
+        <View style={styles.metaPill}>
+          <Ionicons name="time-outline" size={14} color="rgba(255, 255, 255, 0.85)" />
+          <Text style={styles.metaText}>Elapsed {formatElapsed(elapsedSeconds)}</Text>
+        </View>
+        <View style={styles.metaPill}>
+          <Ionicons name="shield-checkmark-outline" size={14} color="rgba(255, 255, 255, 0.85)" />
+          <Text style={styles.metaText}>
+            {images?.length <= 1
+              ? 'Usually ~1 minute'
+              : images?.length === 2
+                ? 'Usually ~2 minutes'
+                : 'Usually ~2-3 minutes'}
+          </Text>
+        </View>
+      </View>
+
+      <Text style={styles.helperText}>
+        If this takes longer than expected, your connection may be slow. You can cancel and try again.
+      </Text>
+
       <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
         <Text style={styles.cancelText}>Cancel</Text>
       </TouchableOpacity>
@@ -263,6 +394,36 @@ const styles = StyleSheet.create({
   progressText: {
     fontSize: 12,
     color: 'rgba(255, 255, 255, 0.7)',
+  },
+  metaRow: {
+    marginTop: 14,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
+  metaPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255, 255, 255, 0.10)',
+    marginHorizontal: 6,
+    marginTop: 8,
+  },
+  metaText: {
+    marginLeft: 6,
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.85)',
+  },
+  helperText: {
+    marginTop: 12,
+    maxWidth: 320,
+    textAlign: 'center',
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.70)',
+    lineHeight: 16,
   },
   cancelButton: {
     marginTop: 20,

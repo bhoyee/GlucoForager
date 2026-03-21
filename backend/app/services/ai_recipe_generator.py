@@ -307,11 +307,21 @@ class AIRecipeGenerator:
         # Avoid including structured labels like "Recipe name:" / "Ingredients:" which increases the chance
         # the model will generate a recipe-card image with text overlays.
         if ingredient_text:
-            parts.append(f"The dish is made from {ingredient_text}.")
+            parts.append(f"The dish is inspired by ingredients such as {ingredient_text}, shown as cooked/served (not raw).")
         elif title:
             parts.append("The dish matches the recipe title concept, but do not write any words in the image.")
         parts.append("The dish should look diabetes-friendly (balanced plate, not overly sugary).")
-        return " ".join(parts)
+
+        cooked_guidance = " ".join(
+            [
+                "The subject must look like a finished, plated, ready-to-eat meal (served dish, not prep).",
+                "Main proteins must look clearly cooked (golden-brown sear, grill marks, roasted surface, crisp edges, flaky cooked fish as appropriate).",
+                "Absolutely no raw meat, no raw fish, no uncooked chicken, no sashimi, no ingredient pile, no cutting board, no prep scene.",
+                "Add subtle steam/heat cues when it makes sense for the dish.",
+                "If the recipe is a drink/smoothie, show a finished ready-to-drink beverage instead (still no prep scene).",
+            ]
+        )
+        return " ".join([*parts, cooked_guidance])
 
     def _generate_image_gemini(self, prompt: str, *, size: int) -> bytes:
         """
@@ -1085,6 +1095,8 @@ class AIRecipeGenerator:
             budget = min(budget, 60.0)
         attempts: list[dict[str, Any]] = []
         used_deterministic_schedule = False
+        gemini_model = self.gemini_text_model
+        has_gemini = bool(self.gemini_api_key and gemini_model)
 
         def _try_models(
             models: list[str],
@@ -1348,12 +1360,56 @@ class AIRecipeGenerator:
             if recipes:
                 return recipes
 
+        # Fallback for non "eat now" flows: try Gemini even if it isn't part of the model chain.
+        # This significantly reduces "all models failed" incidents when OpenAI-compatible providers return invalid JSON.
+        if not used_deterministic_schedule and has_gemini and gemini_model:
+            try:
+                remaining_total = None
+                if budget is not None:
+                    remaining_total = budget - (time.time() - started)
+                # Keep bounded for UX/cost; use what's left if we're already near budget end.
+                gemini_timeout = 20.0
+                if remaining_total is not None:
+                    gemini_timeout = max(5.0, min(20.0, remaining_total))
+                content = self._call_gemini_text(
+                    gemini_model,
+                    ingredients,
+                    filters,
+                    prompt_template=prompt_template,
+                    extra_instructions=extra_instructions,
+                    temperature=0.55 if mode_norm in ("surprise", "quick") else (0.7 if variety_mode else 0.4),
+                    timeout_seconds=gemini_timeout,
+                    max_output_tokens=2200,
+                )
+                parsed = parse_content(content)
+                recipes = self._filter_recipes(parsed, banned_titles_norm)
+                if recipes:
+                    for recipe in recipes:
+                        if isinstance(recipe, dict):
+                            recipe["_ai_provider"] = "gemini"
+                            recipe["_ai_model"] = gemini_model
+                    if settings.ai_debug_logging:
+                        logger.info(
+                            "AI output accepted mode=%s tier=%s provider=gemini model=%s recipes=%d",
+                            mode_norm or "ingredients",
+                            tier,
+                            gemini_model,
+                            len(recipes),
+                        )
+                    if generate_images:
+                        self._attach_images(recipes, tier, ingredients)
+                    else:
+                        self._attach_placeholders(recipes)
+                    return recipes
+                attempts.append({"model": gemini_model, "provider": "gemini", "error": "empty_or_unparseable_json"})
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Gemini fallback failed (model=%s): %s", gemini_model, str(exc)[:400])
+                attempts.append({"model": gemini_model, "provider": "gemini", "error": str(exc)})
+
         fallback = emergency_recipes()
         if settings.ai_disable_emergency_fallback:
-            raise RuntimeError(
-                "All AI models failed or returned invalid output. "
-                "Emergency fallback is disabled (AI_DISABLE_EMERGENCY_FALLBACK=true)."
-            )
+            # Do not leak internal config details to end users.
+            raise RuntimeError("Unable to generate recipes right now. Please try again in a moment.")
         for recipe in fallback:
             if isinstance(recipe, dict):
                 recipe["_ai_provider"] = "fallback"

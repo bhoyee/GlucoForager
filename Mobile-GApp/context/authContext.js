@@ -267,31 +267,45 @@ export function AuthProvider({ children }) {
   };
 
   const signOut = async () => {
+    // Sign-out should never crash the app or surface as an error after destructive actions
+    // like "Delete account". Best-effort logout + always clear local state.
     try {
       const refreshToken = await AsyncStorage.getItem('refreshToken');
       if (refreshToken) {
-        await apiFetch(
-          `${API_URL}${API_ENDPOINTS.LOGOUT}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refresh_token: refreshToken }),
-          }
-        );
+        await apiFetch(`${API_URL}${API_ENDPOINTS.LOGOUT}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        });
       }
+    } catch (error) {
+      console.warn('Logout request failed (ignored):', error);
+    }
+
+    try {
       await AsyncStorage.removeItem('userToken');
       await AsyncStorage.removeItem('refreshToken');
       await AsyncStorage.removeItem('publicUserId');
+    } catch (error) {
+      console.warn('AsyncStorage sign-out cleanup failed (ignored):', error);
+    }
+
+    try {
       setUserToken(null);
       setFoodProfileCompleted(null);
       setNeedsFoodProfileOnboarding(false);
       setFoodProfileHasPreferences(null);
-      await configureRevenueCat({});
-      devLog('User signed out');
     } catch (error) {
-      console.error('Error signing out:', error);
-      throw error;
+      console.warn('Local auth state reset failed (ignored):', error);
     }
+
+    try {
+      await configureRevenueCat({});
+    } catch (error) {
+      console.warn('RevenueCat reset failed (ignored):', error);
+    }
+
+    devLog('User signed out');
   };
 
   const completeFoodProfileOnboarding = async () => {

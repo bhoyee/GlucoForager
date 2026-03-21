@@ -78,10 +78,12 @@ export default function PremiumDetailsScreen() {
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>What you get</Text>
-          <Text style={styles.bullet}>- Unlimited ingredient scans and searches</Text>
-          <Text style={styles.bullet}>- Diabetes-friendly recipe suggestions</Text>
-          <Text style={styles.bullet}>- Detailed nutrition insights</Text>
-          <Text style={styles.bullet}>- Unlimited favorites</Text>
+          <Text style={styles.bullet}>- Unlimited scans & ingredient searches</Text>
+          <Text style={styles.bullet}>- Daily meal planner (incl. snacks)</Text>
+          <Text style={styles.bullet}>- Food swaps for meals, snacks & drinks</Text>
+          <Text style={styles.bullet}>- Daily challenges to build healthy habits</Text>
+          <Text style={styles.bullet}>- Personalized suggestions from your preferences</Text>
+          <Text style={styles.bullet}>- Unlimited favorites + recent meals</Text>
         </View>
 
         <View style={styles.infoRow}>

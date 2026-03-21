@@ -173,6 +173,7 @@ export default function PersonalInfoScreen({ navigation }) {
   };
 
   const handleDeleteAccount = async () => {
+    let deleteSucceeded = false;
     try {
       setIsDeleting(true);
       const token = await AsyncStorage.getItem('userToken');
@@ -194,10 +195,18 @@ export default function PersonalInfoScreen({ navigation }) {
         return;
       }
       await response.json().catch(() => null);
+      deleteSucceeded = true;
       Alert.alert('Account deleted', 'Your account has been deleted.');
-      await signOut();
+      try {
+        await signOut();
+      } catch (error) {
+        // signOut is best-effort; ignore any unexpected errors here so we don't show a "delete failed"
+        console.warn('Sign out after delete failed (ignored):', error);
+      }
     } catch (error) {
-      Alert.alert('Error', 'Unable to delete your account right now.');
+      if (!deleteSucceeded) {
+        Alert.alert('Error', 'Unable to delete your account right now.');
+      }
     } finally {
       setIsDeleting(false);
     }

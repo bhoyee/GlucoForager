@@ -67,6 +67,14 @@ class Settings(BaseSettings):
     ai_queue_redis_claim_idle_ms: int = Field(60000, env="AI_QUEUE_REDIS_CLAIM_IDLE_MS")
     redis_url: str | None = Field(None, env="REDIS_URL")
 
+    # General API burst limits (requests per minute).
+    # These protect the API from accidental client retry loops and basic scraping.
+    # AI endpoints have their own per-user limits (see ai_rate_limit_*).
+    api_rate_limit_anonymous_per_min: int = Field(120, env="API_RATE_LIMIT_ANON_PER_MIN")
+    api_rate_limit_authenticated_per_min: int = Field(240, env="API_RATE_LIMIT_AUTH_PER_MIN")
+    api_rate_limit_mobile_logs_per_min: int = Field(600, env="API_RATE_LIMIT_MOBILE_LOGS_PER_MIN")
+    api_rate_limit_push_tokens_per_min: int = Field(60, env="API_RATE_LIMIT_PUSH_TOKENS_PER_MIN")
+
     # Per-user burst rate limits for AI endpoints (protects cost + latency under abuse).
     # Limits are "requests per minute" per user.
     ai_rate_limit_free_text_per_min: int = Field(4, env="AI_RATE_LIMIT_FREE_TEXT_PER_MIN")

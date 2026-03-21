@@ -6,6 +6,8 @@ import os
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
+import logging
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
@@ -51,6 +53,7 @@ from .api.endpoints import (
     mobile_push_tokens,
 )
 from .core.config import settings
+from .core.security import decode_access_token
 from .database import Base, engine
 from .models import (  # ensure models are registered with SQLAlchemy
     subscription,
@@ -70,7 +73,7 @@ from .models import (  # ensure models are registered with SQLAlchemy
     admin_push_campaign,
     admin_push_send,
 )
-from .services.abuse_detector import AbuseDetector
+from .services.cache_service import CacheService
 from .services.system_log_service import log_system_event
 from .services.backup_scheduler import start_backup_scheduler
 from .services.ai_job_runner import runner as ai_job_runner
@@ -119,7 +122,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-abuse_detector = AbuseDetector()
+_rate_limit_cache = CacheService()
+
+
+def _minute_bucket(ts: float | None = None) -> int:
+    now_ts = time.time() if ts is None else float(ts)
+    return int(now_ts // 60)
+
+
+def _rate_limit_identifier(request: Request) -> str:
+    """
+    Prefer per-user rate limiting when a valid Authorization token is present.
+    Falls back to client IP for anonymous/invalid tokens.
+    """
+    auth = request.headers.get("authorization") or ""
+    if auth.lower().startswith("bearer "):
+        token = auth.split(" ", 1)[1].strip()
+        if token:
+            try:
+                payload = decode_access_token(token)
+                sub = payload.get("sub")
+                if sub:
+                    return f"user:{str(sub)[:64]}"
+            except Exception:
+                # Invalid/expired token -> fall back to IP-based limiting.
+                pass
+    return f"ip:{_client_ip(request)}"
 
 def _client_ip(request: Request) -> str:
     forwarded = request.headers.get("x-forwarded-for")
@@ -151,6 +179,47 @@ def _skip_rate_limit(request: Request) -> bool:
     return False
 
 
+def _is_noise_scan_path(path: str) -> bool:
+    normalized = (path or "").lower()
+    if not normalized.startswith("/api/"):
+        return False
+    # Common automated exploit scans for non-Python stacks.
+    noise_fragments = (
+        "/vendor/phpunit/",
+        "phpunit",
+        "/wp-",
+        "/wordpress",
+        "/wp-includes/",
+        "/wp-admin/",
+        "/.env",
+        "/.git",
+    )
+    return any(fragment in normalized for fragment in noise_fragments)
+
+
+def _should_log_failed_api_request(request: Request, status_code: int) -> bool:
+    path = request.url.path
+    if not path.startswith("/api/"):
+        return False
+    if _is_noise_scan_path(path):
+        return False
+
+    # 429s are expected under rate limiting and can be noisy (e.g., mobile log batching).
+    if status_code == 429:
+        return False
+
+    # Avoid flooding system logs with unauthenticated probes to protected endpoints.
+    # Real app requests usually include an Authorization header and app metadata.
+    if status_code == 401:
+        has_auth = bool(request.headers.get("authorization"))
+        has_app_version = bool(request.headers.get("x-app-version") or request.headers.get("x-appversion"))
+        has_device = bool(request.headers.get("x-device"))
+        if not has_auth and not (has_app_version or has_device):
+            return False
+
+    return True
+
+
 @app.on_event("startup")
 def on_startup():
     logger.info("Startup complete.")
@@ -170,9 +239,39 @@ def on_startup():
 async def abuse_guard(request: Request, call_next):
     if _skip_rate_limit(request):
         return await call_next(request)
-    identifier = _client_ip(request)
-    if not abuse_detector.record_and_check(identifier):
-        return JSONResponse(status_code=429, content={"detail": "Slow down"})
+
+    path = request.url.path or ""
+    identifier = _rate_limit_identifier(request)
+
+    # Route-specific limits so a chatty endpoint (e.g. /api/mobile/logs) doesn't block
+    # normal app usage (profile, scans, etc.).
+    if path.startswith("/api/mobile/logs"):
+        limit_per_min = int(getattr(settings, "api_rate_limit_mobile_logs_per_min", 600))
+        bucket_key = "mobile_logs"
+    elif path.startswith("/api/mobile/push-tokens"):
+        limit_per_min = int(getattr(settings, "api_rate_limit_push_tokens_per_min", 60))
+        bucket_key = "push_tokens"
+    else:
+        is_user = identifier.startswith("user:")
+        if is_user:
+            limit_per_min = int(getattr(settings, "api_rate_limit_authenticated_per_min", 240))
+        else:
+            limit_per_min = int(getattr(settings, "api_rate_limit_anonymous_per_min", 120))
+        bucket_key = "api"
+
+    # Disable if misconfigured.
+    if limit_per_min > 0:
+        bucket = _minute_bucket()
+        key = f"rl:{bucket_key}:{identifier}:{bucket}"
+        used = int(_rate_limit_cache.incr(key, ttl_seconds=120))
+        if used > limit_per_min:
+            retry_after = int(60 - (time.time() % 60))
+            headers = {"Retry-After": str(max(1, retry_after))}
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Too many requests. Please wait a moment and try again."},
+                headers=headers,
+            )
     start = time.time()
     try:
         response = await call_next(request)
@@ -208,7 +307,7 @@ async def abuse_guard(request: Request, call_next):
     # Only record "API request failed" events for real API routes.
     # This prevents system-log flooding from internet scanners probing random paths
     # like "/.env", "/.git/config", "/wp-includes/...", etc.
-    if response.status_code >= 400 and request.url.path.startswith("/api/"):
+    if response.status_code >= 400 and _should_log_failed_api_request(request, response.status_code):
         log_system_event({
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "level": "error" if response.status_code >= 500 else "warn",
