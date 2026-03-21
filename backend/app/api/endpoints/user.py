@@ -360,7 +360,24 @@ def delete_account(
     user_id = current_user.id
     try:
         # Delete dependent records first to avoid FK constraint errors.
+        # Push notification tables: failures may not always store user_id, but can reference push_token_id.
+        token_rows = (
+            db.query(PushToken.id, PushToken.token)
+            .filter(PushToken.user_id == user_id)
+            .all()
+        )
+        push_token_ids = [row[0] for row in token_rows if row and row[0] is not None]
+        push_tokens = [row[1] for row in token_rows if row and isinstance(row[1], str) and row[1]]
+
         db.query(AdminPushSendFailure).filter(AdminPushSendFailure.user_id == user_id).delete(synchronize_session=False)
+        if push_token_ids:
+            db.query(AdminPushSendFailure).filter(AdminPushSendFailure.push_token_id.in_(push_token_ids)).delete(
+                synchronize_session=False
+            )
+        if push_tokens:
+            db.query(AdminPushSendFailure).filter(AdminPushSendFailure.token.in_(push_tokens)).delete(
+                synchronize_session=False
+            )
         db.query(AIJob).filter(AIJob.user_id == user_id).delete(synchronize_session=False)
         db.query(AIRequest).filter(AIRequest.user_id == user_id).delete(synchronize_session=False)
         db.query(SearchLog).filter(SearchLog.user_id == user_id).delete(synchronize_session=False)
