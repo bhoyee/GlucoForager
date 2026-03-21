@@ -211,6 +211,7 @@ def scans_today(
         "searches_left": access["searches_left"],
         "device_searches_left": access.get("device_searches_left"),
         "daily_limit": access.get("daily_limit"),
+        "limit_window_days": access.get("limit_window_days", 1),
         "subscription_tier": effective_tier or "free",
         "is_premium": effective_tier == "premium",
         "premium_access_blocked": bool(getattr(current_user, "premium_access_blocked_at", None)),

@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, time, timedelta
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -9,6 +9,7 @@ from ..core.security import decode_access_token
 from ..database import get_db
 from ..models.ai_request import AIRequest
 from ..models.user import SearchLog, User
+from ..services.settings_service import get_scan_limit_settings
 from ..services.subscription_service import get_effective_subscription_tier
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
@@ -51,12 +52,24 @@ def check_user_access(user: User, db: Session, device_id: str | None = None) -> 
         }
 
     today = date.today()
+
+    # Default behavior is free=3/day from constants, but allow Admin overrides via app_settings.
+    scan_limits = get_scan_limit_settings(db)
     daily_limit = tier_cfg.get("max_daily_scans", FREE_SEARCH_LIMIT)
+    window_days = 1
+    if effective_tier == "free":
+        daily_limit = scan_limits.free_count
+        window_days = scan_limits.free_window_days
+
     ai_count = 0
     search_count = 0
     device_ai_count = 0
     device_search_count = 0
     tomorrow = date.fromordinal(today.toordinal() + 1)
+
+    window_start_date = today - timedelta(days=max(0, int(window_days) - 1))
+    window_start_dt = datetime.combine(window_start_date, time.min)
+    window_end_dt = datetime.combine(tomorrow, time.min)
 
     if daily_limit:
         ai_count = (
@@ -64,14 +77,18 @@ def check_user_access(user: User, db: Session, device_id: str | None = None) -> 
             .filter(
                 AIRequest.user_id == user.id,
                 AIRequest.request_type.in_(["vision", "vision_batch", "text"]),
-                AIRequest.created_at >= today,
-                AIRequest.created_at < tomorrow,
+                AIRequest.created_at >= window_start_dt,
+                AIRequest.created_at < window_end_dt,
             )
             .count()
         )
         search_count = (
             db.query(SearchLog)
-            .filter(SearchLog.user_id == user.id, SearchLog.executed_at == today)
+            .filter(
+                SearchLog.user_id == user.id,
+                SearchLog.executed_at >= window_start_date,
+                SearchLog.executed_at < tomorrow,
+            )
             .count()
         )
 
@@ -81,14 +98,18 @@ def check_user_access(user: User, db: Session, device_id: str | None = None) -> 
                 .filter(
                     AIRequest.device_id == device_id,
                     AIRequest.request_type.in_(["vision", "vision_batch", "text"]),
-                    AIRequest.created_at >= today,
-                    AIRequest.created_at < tomorrow,
+                    AIRequest.created_at >= window_start_dt,
+                    AIRequest.created_at < window_end_dt,
                 )
                 .count()
             )
             device_search_count = (
                 db.query(SearchLog)
-                .filter(SearchLog.device_id == device_id, SearchLog.executed_at == today)
+                .filter(
+                    SearchLog.device_id == device_id,
+                    SearchLog.executed_at >= window_start_date,
+                    SearchLog.executed_at < tomorrow,
+                )
                 .count()
             )
 
@@ -110,6 +131,7 @@ def check_user_access(user: User, db: Session, device_id: str | None = None) -> 
         if daily_limit is None or not device_id
         else max(0, daily_limit - device_used),
         "daily_limit": daily_limit,
+        "limit_window_days": int(window_days),
         "camera_access": False,
         "ads": True,
     }

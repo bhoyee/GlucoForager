@@ -25,9 +25,16 @@ export default function AdminNotificationsPage() {
   const [recipeImagesPremiumDailyLimit, setRecipeImagesPremiumDailyLimit] = useState(10);
   const [recipeImagesMaxPerRecipe, setRecipeImagesMaxPerRecipe] = useState(1);
   const [recipeImagesCostUsd, setRecipeImagesCostUsd] = useState(0.04);
+  const [freeScanLimitCount, setFreeScanLimitCount] = useState(3);
+  const [freeScanLimitWindowDays, setFreeScanLimitWindowDays] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+
+  const safeNumber = (value, fallback) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+  };
 
   const loadSettings = async () => {
     if (!token) {
@@ -38,12 +45,18 @@ export default function AdminNotificationsPage() {
     setMessage('');
     try {
       const headers = { Authorization: `Bearer ${token}` };
-      const [signupRes, updatesRes, recipeImagesRes] = await Promise.all([
+      const [signupRes, updatesRes, recipeImagesRes, scanLimitsRes] = await Promise.all([
         fetch(`${API_URL}/api/admin/settings/signup-notifications`, { headers }),
         fetch(`${API_URL}/api/admin/settings/app-updates`, { headers }),
         fetch(`${API_URL}/api/admin/settings/recipe-images`, { headers }),
+        fetch(`${API_URL}/api/admin/settings/scan-limits`, { headers }),
       ]);
-      if (signupRes.status === 401 || updatesRes.status === 401 || recipeImagesRes.status === 401) {
+      if (
+        signupRes.status === 401 ||
+        updatesRes.status === 401 ||
+        recipeImagesRes.status === 401 ||
+        scanLimitsRes.status === 401
+      ) {
         localStorage.removeItem('adminToken');
         router.push('/admin');
         return;
@@ -71,6 +84,10 @@ export default function AdminNotificationsPage() {
           ? Number(recipeImages.cost_usd) || 0.04
           : 0.04
       );
+
+      const scanLimits = await scanLimitsRes.json().catch(() => ({}));
+      setFreeScanLimitCount(safeNumber(scanLimits.free_count, 3));
+      setFreeScanLimitWindowDays(safeNumber(scanLimits.free_window_days, 1));
     } catch (error) {
       setMessage('Failed to load notification settings.');
     } finally {
@@ -94,7 +111,7 @@ export default function AdminNotificationsPage() {
     setMessage('');
     try {
       const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-      const [signupRes, updatesRes, recipeImagesRes] = await Promise.all([
+      const [signupRes, updatesRes, recipeImagesRes, scanLimitsRes] = await Promise.all([
         fetch(`${API_URL}/api/admin/settings/signup-notifications`, {
           method: 'PUT',
           headers,
@@ -123,8 +140,21 @@ export default function AdminNotificationsPage() {
             cost_usd: Number(recipeImagesCostUsd) || 0,
           }),
         }),
+        fetch(`${API_URL}/api/admin/settings/scan-limits`, {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({
+            free_count: safeNumber(freeScanLimitCount, 3),
+            free_window_days: safeNumber(freeScanLimitWindowDays, 1),
+          }),
+        }),
       ]);
-      if (signupRes.status === 401 || updatesRes.status === 401 || recipeImagesRes.status === 401) {
+      if (
+        signupRes.status === 401 ||
+        updatesRes.status === 401 ||
+        recipeImagesRes.status === 401 ||
+        scanLimitsRes.status === 401
+      ) {
         localStorage.removeItem('adminToken');
         router.push('/admin');
         return;
@@ -132,11 +162,13 @@ export default function AdminNotificationsPage() {
       const signup = await signupRes.json().catch(() => ({}));
       const updates = await updatesRes.json().catch(() => ({}));
       const recipeImages = await recipeImagesRes.json().catch(() => ({}));
-      if (!signupRes.ok || !updatesRes.ok || !recipeImagesRes.ok) {
+      const scanLimits = await scanLimitsRes.json().catch(() => ({}));
+      if (!signupRes.ok || !updatesRes.ok || !recipeImagesRes.ok || !scanLimitsRes.ok) {
         setMessage(
           signup?.detail ||
             updates?.detail ||
             recipeImages?.detail ||
+            scanLimits?.detail ||
             'Failed to save notification settings.'
         );
         return;
@@ -161,6 +193,8 @@ export default function AdminNotificationsPage() {
           ? Number(recipeImages.cost_usd) || 0.04
           : 0.04
       );
+      setFreeScanLimitCount(safeNumber(scanLimits.free_count, 3));
+      setFreeScanLimitWindowDays(safeNumber(scanLimits.free_window_days, 1));
       setMessage('Settings saved.');
     } catch (error) {
       setMessage('Failed to save notification settings.');
@@ -394,6 +428,47 @@ export default function AdminNotificationsPage() {
               onChange={(event) => setRecipeImagesPremiumDailyLimit(Number(event.target.value) ?? 10)}
               disabled={busy}
             />
+          </div>
+        </div>
+
+        <div className="admin-actions" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button className="admin-button" type="button" onClick={save} disabled={busy}>
+            {busy ? 'Working...' : 'Save'}
+          </button>
+        </div>
+      </div>
+
+      <div className="admin-card" style={{ marginTop: 16 }}>
+        <h3 className="admin-title">Free usage limits</h3>
+        <p className="admin-subtitle">
+          Control how many scans/searches free users can do before they need to upgrade.
+        </p>
+
+        <div className="admin-grid" style={{ marginTop: 12 }}>
+          <div className="admin-field">
+            <label>Free scans/searches allowed</label>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={freeScanLimitCount}
+              onChange={(event) => setFreeScanLimitCount(Number(event.target.value) ?? 0)}
+              disabled={busy}
+            />
+          </div>
+          <div className="admin-field">
+            <label>Window (days)</label>
+            <input
+              type="number"
+              min={1}
+              max={30}
+              value={freeScanLimitWindowDays}
+              onChange={(event) => setFreeScanLimitWindowDays(Number(event.target.value) ?? 1)}
+              disabled={busy}
+            />
+            <small className="admin-subtitle" style={{ display: 'block', marginTop: 6 }}>
+              Example: 1 day = per day, 7 days = per week (rolling window).
+            </small>
           </div>
         </div>
 

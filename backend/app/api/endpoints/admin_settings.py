@@ -11,12 +11,15 @@ from ...services.email_service import send_admin_signup_alert
 from ...services.settings_service import (
     AppUpdateSettings,
     RecipeImageSettings,
+    ScanLimitSettings,
     SignupNotificationSettings,
     get_app_update_settings,
     get_recipe_image_settings,
+    get_scan_limit_settings,
     get_signup_notification_settings,
     update_app_update_settings,
     update_recipe_image_settings,
+    update_scan_limit_settings,
     update_signup_notification_settings,
 )
 from ...models.app_setting import AppSetting
@@ -44,6 +47,11 @@ class RecipeImagesPayload(BaseModel):
     premium_daily_limit: int = Field(10, ge=-1, le=5000)
     max_per_recipe: int = Field(1, ge=1, le=50)
     cost_usd: float | None = Field(None, ge=0, le=10)
+
+
+class ScanLimitsPayload(BaseModel):
+    free_count: int = Field(3, ge=0, le=100)
+    free_window_days: int = Field(1, ge=1, le=30)
 
 class TipSettingsPayload(BaseModel):
     blocked_tip_ids: list[str] = Field(default_factory=list, max_length=500)
@@ -236,4 +244,33 @@ def put_recipe_images(
         "premium_daily_limit": settings.premium_daily_limit,
         "max_per_recipe": settings.max_per_recipe,
         "cost_usd": settings.cost_usd,
+    }
+
+
+@router.get("/scan-limits")
+def get_scan_limits(
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    settings: ScanLimitSettings = get_scan_limit_settings(db)
+    return {
+        "free_count": settings.free_count,
+        "free_window_days": settings.free_window_days,
+    }
+
+
+@router.put("/scan-limits")
+def put_scan_limits(
+    payload: ScanLimitsPayload,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    settings: ScanLimitSettings = update_scan_limit_settings(
+        db,
+        free_count=payload.free_count,
+        free_window_days=payload.free_window_days,
+    )
+    return {
+        "free_count": settings.free_count,
+        "free_window_days": settings.free_window_days,
     }

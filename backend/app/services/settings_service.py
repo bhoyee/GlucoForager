@@ -19,6 +19,8 @@ RECIPE_IMAGES_FREE_DAILY_LIMIT_KEY = "recipe_images_free_daily_limit"
 RECIPE_IMAGES_PREMIUM_DAILY_LIMIT_KEY = "recipe_images_premium_daily_limit"
 RECIPE_IMAGES_MAX_PER_RECIPE_KEY = "recipe_images_max_per_recipe"
 RECIPE_IMAGES_COST_USD_KEY = "recipe_images_cost_usd"
+FREE_SCAN_LIMIT_COUNT_KEY = "scan_limits_free_count"
+FREE_SCAN_LIMIT_WINDOW_DAYS_KEY = "scan_limits_free_window_days"
 
 
 @dataclass(frozen=True)
@@ -44,6 +46,12 @@ class RecipeImageSettings:
     premium_daily_limit: int
     max_per_recipe: int
     cost_usd: float
+
+
+@dataclass(frozen=True)
+class ScanLimitSettings:
+    free_count: int
+    free_window_days: int
 
 
 def _get_value(db: Session, key: str) -> str | None:
@@ -177,3 +185,31 @@ def update_recipe_image_settings(
     if cost_usd is not None:
         _set_value(db, RECIPE_IMAGES_COST_USD_KEY, str(float(max(0.0, cost_usd))))
     return get_recipe_image_settings(db)
+
+
+def get_scan_limit_settings(db: Session) -> ScanLimitSettings:
+    # Defaults match existing behavior (free=3/day).
+    free_count = _to_int(_get_value(db, FREE_SCAN_LIMIT_COUNT_KEY), 3)
+    free_window_days = _to_int(_get_value(db, FREE_SCAN_LIMIT_WINDOW_DAYS_KEY), 1)
+    free_count = _normalize_non_negative(free_count, 3)
+    if free_window_days <= 0:
+        free_window_days = 1
+    # Safety cap to prevent accidental huge ranges.
+    free_window_days = min(int(free_window_days), 30)
+    return ScanLimitSettings(free_count=int(free_count), free_window_days=int(free_window_days))
+
+
+def update_scan_limit_settings(
+    db: Session,
+    *,
+    free_count: int,
+    free_window_days: int,
+) -> ScanLimitSettings:
+    free_count_norm = _normalize_non_negative(int(free_count), 3)
+    days = int(free_window_days)
+    if days <= 0:
+        days = 1
+    days = min(days, 30)
+    _set_value(db, FREE_SCAN_LIMIT_COUNT_KEY, str(int(free_count_norm)))
+    _set_value(db, FREE_SCAN_LIMIT_WINDOW_DAYS_KEY, str(int(days)))
+    return get_scan_limit_settings(db)
