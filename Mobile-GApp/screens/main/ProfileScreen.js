@@ -26,7 +26,9 @@ export default function ProfileScreen() {
   const headerPaddingTop = Math.max(insets.top, 16);
   // `tabBarHeight` already accounts for safe-area insets in most navigators.
   // Avoid double-counting `insets.bottom`, which creates extra white space below the footer.
-  const versionFooterBottom = Math.max(tabBarHeight, 0) + 4;
+  // In React Navigation, the tab bar typically takes its own layout space (not overlay),
+  // so we anchor the footer to the bottom of the screen and only respect safe-area.
+  const versionFooterBottom = Math.max(insets.bottom, 0) + 4;
   const versionFooterHeight = 38;
   // Modal overlays the tab bar, so we only need to respect safe-area inset.
   const premiumModalBottomPadding = Math.max(insets.bottom, 14) + 14;
