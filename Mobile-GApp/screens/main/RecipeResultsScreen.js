@@ -46,7 +46,7 @@ export default function RecipeResultsScreen() {
   const elapsedRef = useRef(null);
   const phaseRef = useRef(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [statusLine, setStatusLine] = useState('Preparing…');
+  const [statusLine, setStatusLine] = useState('Initializing AI…');
 
   useEffect(() => {
     const ingredientSource = source === 'text' ? 'Input' : 'Detected';
@@ -105,7 +105,7 @@ export default function RecipeResultsScreen() {
     };
 
     const pollJob = async (jobId) => {
-      setStatusLine('Generating recipes…');
+      setStatusLine('Generating recipes with AI…');
       const token = await AsyncStorage.getItem('userToken');
       if (!token) return;
       const res = await apiFetch(
@@ -116,10 +116,10 @@ export default function RecipeResultsScreen() {
       if (!res.ok) return;
       const data = await res.json();
       if (data.status === 'pending' || data.status === 'queued') {
-        setStatusLine('Queued…');
+        setStatusLine('Queued (waiting for an AI worker)…');
       }
       if (data.status === 'running') {
-        setStatusLine('Cooking up your plan…');
+        setStatusLine('AI is composing your recipes…');
       }
       if (data.status === 'completed') {
         if (pollingRef.current) clearInterval(pollingRef.current);
@@ -141,18 +141,18 @@ export default function RecipeResultsScreen() {
       }
 
       setElapsedSeconds(0);
-      setStatusLine('Preparing…');
+      setStatusLine('Initializing AI…');
       if (elapsedRef.current) clearInterval(elapsedRef.current);
       elapsedRef.current = setInterval(() => {
         setElapsedSeconds((prev) => prev + 1);
       }, 1000);
 
       const phases = [
-        'Uploading selection…',
-        'Generating recipes…',
-        'Balancing carbs & protein…',
-        'Writing steps…',
-        'Finalizing…',
+        'Submitting ingredients to AI…',
+        'Analyzing ingredients…',
+        'Generating recipe ideas…',
+        'Writing steps & portions…',
+        'Final quality check…',
       ];
       let idx = 0;
       if (phaseRef.current) clearInterval(phaseRef.current);
@@ -234,7 +234,7 @@ export default function RecipeResultsScreen() {
           style={styles.loadingGradient}
         >
           <Ionicons name="sparkles" size={60} color="white" />
-          <Text style={styles.loadingTitle}>Preparing Recipes</Text>
+          <Text style={styles.loadingTitle}>AI Recipe Generation</Text>
           <Text style={styles.loadingSubtitle}>
             {statusLine || 'Generating your recipes…'}
           </Text>
