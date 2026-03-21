@@ -119,7 +119,7 @@ export default function RecipeResultsScreen() {
         setStatusLine('Waiting to start...');
       }
       if (data.status === 'running') {
-        setStatusLine('AI is generating your recipes...');
+        setStatusLine('Generating your recipes...');
       }
       if (data.status === 'completed') {
         if (pollingRef.current) clearInterval(pollingRef.current);
