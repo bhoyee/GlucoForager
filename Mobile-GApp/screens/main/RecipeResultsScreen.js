@@ -105,7 +105,7 @@ export default function RecipeResultsScreen() {
     };
 
     const pollJob = async (jobId) => {
-      setStatusLine('Generating your recipes with AI...');
+      setStatusLine('Generating recipes with AI...');
       const token = await AsyncStorage.getItem('userToken');
       if (!token) return;
       const res = await apiFetch(
@@ -119,7 +119,7 @@ export default function RecipeResultsScreen() {
         setStatusLine('Waiting to start...');
       }
       if (data.status === 'running') {
-        setStatusLine('Generating your recipes...');
+        setStatusLine('Generating recipes...');
       }
       if (data.status === 'completed') {
         if (pollingRef.current) clearInterval(pollingRef.current);
@@ -148,10 +148,10 @@ export default function RecipeResultsScreen() {
       }, 1000);
 
       const phases = [
-        'Sending your ingredients...',
+        'Sending ingredients...',
         'Checking diabetes-friendly choices...',
         'Creating recipe ideas...',
-        'Writing the cooking steps...',
+        'Writing cooking steps...',
         'Finishing up...',
       ];
       let idx = 0;
