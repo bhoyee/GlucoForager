@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1048575382912",
+    "project_id": "glucoforager",
+    "storage_bucket": "glucoforager.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1048575382912:android:6be1e1fde3a75ed1ab9d65",
+        "android_client_info": {
+          "package_name": "com.glucoforager.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDVmt7WuUv8S3wlg9myBZh8lzTSd7RjCIw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
