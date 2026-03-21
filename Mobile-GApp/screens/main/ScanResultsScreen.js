@@ -150,7 +150,7 @@ export default function ScanResultsScreen() {
     }
   };
 
-  const handleGenerateRecipes = () => {
+  const handleGenerateRecipes = async () => {
     if (selectedIngredients.length === 0) {
       Alert.alert('No Ingredients', 'Please select at least one ingredient to generate recipes.');
       return;
@@ -175,7 +175,7 @@ export default function ScanResultsScreen() {
         normalizedUnique.push(name);
         if (normalizedUnique.length >= 20) break;
       }
-      void AsyncStorage.setItem(LAST_INGREDIENTS_KEY, JSON.stringify(normalizedUnique));
+      await AsyncStorage.setItem(LAST_INGREDIENTS_KEY, JSON.stringify(normalizedUnique));
     } catch {
       // Ignore.
     }
