@@ -18,6 +18,9 @@ import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const LAST_INGREDIENTS_KEY = 'last_used_ingredients_v1';
 
 export default function ScanResultsScreen() {
   const navigation = useNavigation();
@@ -157,6 +160,25 @@ export default function ScanResultsScreen() {
     const selectedItems = detectedIngredients
       .filter(item => selectedIngredients.includes(item.id))
       .map(item => item.name);
+
+    // Persist for "Use ingredients I have" (Eat now) re-use.
+    // Keep it small + de-duped so it remains fast and predictable.
+    try {
+      const seen = new Set();
+      const normalizedUnique = [];
+      for (const raw of selectedItems) {
+        const name = String(raw || '').trim().replace(/\s+/g, ' ');
+        if (!name) continue;
+        const key = name.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        normalizedUnique.push(name);
+        if (normalizedUnique.length >= 20) break;
+      }
+      void AsyncStorage.setItem(LAST_INGREDIENTS_KEY, JSON.stringify(normalizedUnique));
+    } catch {
+      // Ignore.
+    }
     
     // Navigate to recipe generation screen
     navigation.navigate('RecipeResults', { 
