@@ -2,11 +2,8 @@ name: EAS Build (Android)
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "Mobile-GApp/**"
-      - ".github/workflows/eas-android.yml"
+  # Disabled automatic builds/submits on push to avoid unintended deployments.
+  # Trigger this workflow manually from the Actions tab when you're ready to build/submit.
 
 concurrency:
   group: eas-android-${{ github.ref }}
