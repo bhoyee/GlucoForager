@@ -25,7 +25,7 @@ export default function DownloadModal({ open, onClose }) {
           <div className="text-center mb-6">
             <h3 className="text-2xl font-bold text-gray-900 mb-2">Get GlucoForager</h3>
             <p className="text-gray-600">
-              Download the app to start generating diabetes-friendly recipes.
+              Download the app to get meal ideas, swaps, and daily plans for steadier blood sugar.
             </p>
           </div>
 

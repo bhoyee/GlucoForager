@@ -5,11 +5,11 @@ const APP_STORE_URL =
 
 export const metadata = {
   title: 'Download',
-  description: 'Download GlucoForager for diabetes-friendly recipe suggestions, meal ideas, and nutrition insights.',
+  description: 'Download GlucoForager, your daily diabetes food assistant for meal ideas, swaps, and daily plans.',
   alternates: { canonical: '/download' },
   openGraph: {
     title: 'Download GlucoForager',
-    description: 'Get the app on Android and iOS to find diabetes-friendly recipes from your ingredients.',
+    description: 'Get the app on Android and iOS to decide what to eat with diabetes without guessing.',
     url: `${SITE_URL}/download`,
     type: 'website',
   },
@@ -58,11 +58,10 @@ export default function DownloadPage() {
         <section className="rounded-2xl border border-gray-200 bg-white p-6 space-y-3">
           <h2 className="text-xl font-bold text-gray-900">What you can do with GlucoForager</h2>
           <ul className="list-disc pl-6 text-gray-700 space-y-1">
-            <li>Scan or type ingredients to get diabetes-friendly recipe ideas.</li>
-            <li>See clear steps and per-meal nutrition estimates.</li>
+            <li>Scan or type ingredients to get blood-sugar-friendly meal ideas.</li>
             <li>Use food swaps and portion tips to reduce carb load.</li>
             <li>Get daily tips and challenges to build healthier habits.</li>
-            <li>Premium: generate a full-day meal plan (breakfast, lunch, dinner, snack).</li>
+            <li>Premium: generate a full-day meal plan (breakfast, lunch, dinner + snack).</li>
           </ul>
           <p className="text-sm text-gray-500">
             Note: GlucoForager provides informational recipe suggestions and is not medical advice.
