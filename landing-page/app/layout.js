@@ -4,26 +4,31 @@ import CookieBanner from "../components/CookieBanner";
 
 export const metadata = {
   title: {
-    default: "GlucoForager | AI-Powered Diabetes-Friendly Recipes",
+    default: "GlucoForager | Daily Diabetes Food Assistant",
     template: "%s | GlucoForager",
   },
   description:
-    "Snap a photo of your fridge, get 3 diabetes-friendly recipes instantly. AI-powered meal planning for Type 2 Diabetes.",
+    "Stop guessing what to eat with diabetes. Scan ingredients or type what you have to get blood-sugar-friendly meal ideas, food swaps, and a daily meal plan.",
   applicationName: "GlucoForager",
   keywords: [
-    "diabetes recipes",
-    "diabetes-friendly meals",
-    "low glycemic recipes",
+    "diabetes food assistant",
+    "what to eat with diabetes",
+    "blood sugar meal ideas",
+    "diabetes meal planner",
+    "daily meal plan",
+    "food swaps",
+    "carb swaps",
     "Type 2 Diabetes app",
-    "AI meal planner",
-    "AI cooking",
-    "ingredient scanner",
-    "healthy meal planning",
+    "ingredient scanner app",
+    "scan ingredients",
+    "low carb meal ideas",
+    "glucose-friendly meals",
   ],
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://www.glucoforager.com"),
   openGraph: {
-    title: "GlucoForager - Diabetes-Friendly Recipes in 60 Seconds",
-    description: "AI-powered meal planning for Type 2 Diabetes. Snap your fridge, get safe recipes.",
+    title: "GlucoForager - Daily Diabetes Food Assistant",
+    description:
+      "Stop guessing what to eat. Scan ingredients or type what you have - get smarter meal ideas, better swaps, and a daily meal plan.",
     url: process.env.NEXT_PUBLIC_SITE_URL || "https://www.glucoforager.com",
     siteName: "GlucoForager",
     locale: "en_GB",
@@ -35,8 +40,9 @@ export const metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "GlucoForager - Diabetes-Friendly Recipes in 60 Seconds",
-    description: "AI-powered meal planning for Type 2 Diabetes. Snap your fridge, get safe recipes.",
+    title: "GlucoForager - Daily Diabetes Food Assistant",
+    description:
+      "Stop guessing what to eat. Scan ingredients or type what you have - get smarter meal ideas, better swaps, and a daily meal plan.",
     images: ["/twitter-image.png"],
   },
   robots: {
@@ -64,6 +70,8 @@ export const viewport = {
 
 export default function RootLayout({ children }) {
   const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.glucoforager.com").replace(/\/+$/, "");
+  const appStoreUrl = "https://apps.apple.com/us/app/glucoforager/id6758808427";
+  const playStoreUrl = "https://play.google.com/store/apps/details?id=com.glucoforager.app";
   const jsonLd = {
     "@context": "https://schema.org",
     "@graph": [
@@ -77,6 +85,16 @@ export default function RootLayout({ children }) {
         "@type": "WebSite",
         name: "GlucoForager",
         url: siteUrl,
+      },
+      {
+        "@type": "MobileApplication",
+        name: "GlucoForager",
+        applicationCategory: "HealthApplication",
+        operatingSystem: "iOS, Android",
+        url: siteUrl,
+        downloadUrl: [appStoreUrl, playStoreUrl],
+        description:
+          "GlucoForager is a daily diabetes food assistant that helps you decide what to eat without guessing. Scan ingredients or type what you have to get meal ideas, food swaps, and a daily meal plan.",
       },
     ],
   };
