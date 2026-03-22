@@ -128,11 +128,23 @@ export default function HeroSection({ onDownloadClick }) {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
           <div className="text-center lg:text-left">
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900 mb-6">
-              Stop guessing what to eat <span className="text-teal-600">with diabetes.</span>
+              Your <span className="text-teal-600">Daily Diabetes</span> Food Assistant
             </h1>
             <p className="text-lg md:text-xl text-gray-600 mb-10 max-w-2xl mx-auto lg:mx-0">
               GlucoForager is your daily diabetes food assistant. Scan ingredients or type what you have to get meal ideas, smarter swaps, and a daily meal plan.
             </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10 max-w-2xl mx-auto lg:mx-0">
+              <div className="rounded-2xl bg-white/80 backdrop-blur border border-teal-100 px-4 py-3 shadow-sm">
+                <h2 className="text-sm font-extrabold text-gray-900">Scan What You Have, Eat What Works</h2>
+              </div>
+              <div className="rounded-2xl bg-white/80 backdrop-blur border border-teal-100 px-4 py-3 shadow-sm">
+                <h2 className="text-sm font-extrabold text-gray-900">A Daily Plan Built for Blood Sugar</h2>
+              </div>
+              <div className="rounded-2xl bg-white/80 backdrop-blur border border-teal-100 px-4 py-3 shadow-sm">
+                <h2 className="text-sm font-extrabold text-gray-900">Smarter Swaps, Better Choices</h2>
+              </div>
+            </div>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start mb-10">
               <button
