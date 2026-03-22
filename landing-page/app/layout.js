@@ -4,11 +4,11 @@ import CookieBanner from "../components/CookieBanner";
 
 export const metadata = {
   title: {
-    default: "GlucoForager | Daily Diabetes Food Assistant",
+    default: "GlucoForager — Your Daily Diabetes Food Assistant | Meal Ideas & Blood Sugar Support",
     template: "%s | GlucoForager",
   },
   description:
-    "Stop guessing what to eat with diabetes. Scan ingredients or type what you have to get blood-sugar-friendly meal ideas, food swaps, and a daily meal plan.",
+    "Stop guessing what to eat with diabetes. GlucoForager scans ingredients, suggests blood-sugar-friendly meals, and gives you a daily plan to stay in control. Free on iOS & Android.",
   applicationName: "GlucoForager",
   keywords: [
     "diabetes food assistant",
@@ -26,9 +26,9 @@ export const metadata = {
   ],
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://www.glucoforager.com"),
   openGraph: {
-    title: "GlucoForager - Daily Diabetes Food Assistant",
+    title: "GlucoForager — Your Daily Diabetes Food Assistant | Meal Ideas & Blood Sugar Support",
     description:
-      "Stop guessing what to eat. Scan ingredients or type what you have - get smarter meal ideas, better swaps, and a daily meal plan.",
+      "Stop guessing what to eat with diabetes. GlucoForager scans ingredients, suggests blood-sugar-friendly meals, and gives you a daily plan to stay in control. Free on iOS & Android.",
     url: process.env.NEXT_PUBLIC_SITE_URL || "https://www.glucoforager.com",
     siteName: "GlucoForager",
     locale: "en_GB",
@@ -40,9 +40,9 @@ export const metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "GlucoForager - Daily Diabetes Food Assistant",
+    title: "GlucoForager — Your Daily Diabetes Food Assistant | Meal Ideas & Blood Sugar Support",
     description:
-      "Stop guessing what to eat. Scan ingredients or type what you have - get smarter meal ideas, better swaps, and a daily meal plan.",
+      "Stop guessing what to eat with diabetes. GlucoForager scans ingredients, suggests blood-sugar-friendly meals, and gives you a daily plan to stay in control. Free on iOS & Android.",
     images: ["/twitter-image.png"],
   },
   robots: {
