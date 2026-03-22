@@ -128,11 +128,10 @@ export default function HeroSection({ onDownloadClick }) {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
           <div className="text-center lg:text-left">
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900 mb-6">
-              GlucoForager — your daily diabetes food assistant{' '}
-              <span className="text-teal-600">that helps you decide what to eat without guessing.</span>
+              Stop guessing what to eat <span className="text-teal-600">with diabetes.</span>
             </h1>
             <p className="text-lg md:text-xl text-gray-600 mb-10 max-w-2xl mx-auto lg:mx-0">
-              Scan ingredients or type what you have to get blood‑sugar‑friendly meal ideas, smarter food swaps, and a daily meal plan.
+              GlucoForager is your daily diabetes food assistant. Scan ingredients or type what you have to get meal ideas, smarter swaps, and a daily meal plan.
             </p>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start mb-10">
