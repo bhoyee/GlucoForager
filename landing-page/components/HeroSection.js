@@ -134,15 +134,30 @@ export default function HeroSection({ onDownloadClick }) {
               GlucoForager is your daily diabetes food assistant. Scan ingredients or type what you have to get meal ideas, smarter swaps, and a daily meal plan.
             </p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10 max-w-2xl mx-auto lg:mx-0">
-              <div className="rounded-2xl bg-white/80 backdrop-blur border border-teal-100 px-4 py-3 shadow-sm">
-                <h2 className="text-sm font-extrabold text-gray-900">Scan What You Have, Eat What Works</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-10 max-w-2xl mx-auto lg:mx-0">
+              <div className="group rounded-2xl bg-gradient-to-br from-white/95 to-teal-50/60 backdrop-blur border border-teal-100/80 px-4 py-3 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-teal-200/30">
+                <div className="flex items-start gap-2.5">
+                  <span className="mt-1.5 h-2.5 w-2.5 rounded-full bg-gradient-to-r from-teal-500 to-emerald-500 shadow-sm" />
+                  <h2 className="text-sm font-extrabold text-gray-900 leading-snug">
+                    Scan What You Have, Eat What Works
+                  </h2>
+                </div>
               </div>
-              <div className="rounded-2xl bg-white/80 backdrop-blur border border-teal-100 px-4 py-3 shadow-sm">
-                <h2 className="text-sm font-extrabold text-gray-900">A Daily Plan Built for Blood Sugar</h2>
+              <div className="group rounded-2xl bg-gradient-to-br from-white/95 to-teal-50/60 backdrop-blur border border-teal-100/80 px-4 py-3 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-teal-200/30">
+                <div className="flex items-start gap-2.5">
+                  <span className="mt-1.5 h-2.5 w-2.5 rounded-full bg-gradient-to-r from-teal-500 to-emerald-500 shadow-sm" />
+                  <h2 className="text-sm font-extrabold text-gray-900 leading-snug">
+                    A Daily Plan Built for Blood Sugar
+                  </h2>
+                </div>
               </div>
-              <div className="rounded-2xl bg-white/80 backdrop-blur border border-teal-100 px-4 py-3 shadow-sm">
-                <h2 className="text-sm font-extrabold text-gray-900">Smarter Swaps, Better Choices</h2>
+              <div className="group rounded-2xl bg-gradient-to-br from-white/95 to-teal-50/60 backdrop-blur border border-teal-100/80 px-4 py-3 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-teal-200/30">
+                <div className="flex items-start gap-2.5">
+                  <span className="mt-1.5 h-2.5 w-2.5 rounded-full bg-gradient-to-r from-teal-500 to-emerald-500 shadow-sm" />
+                  <h2 className="text-sm font-extrabold text-gray-900 leading-snug">
+                    Smarter Swaps, Better Choices
+                  </h2>
+                </div>
               </div>
             </div>
             
@@ -181,7 +196,7 @@ export default function HeroSection({ onDownloadClick }) {
             </div>
           </div>
 
-          <div className="flex justify-center lg:justify-start lg:pl-6 xl:pl-10 -mt-10">
+          <div className="flex justify-center lg:justify-end lg:pr-6 xl:pr-10 -mt-10">
             <div className="relative w-[220px] sm:w-[260px] md:w-[300px] lg:w-[340px] h-[470px] sm:h-[520px] md:h-[580px] lg:h-[640px] transform-gpu transition-transform duration-300">
               <div className="absolute inset-0 rounded-[2.5rem] bg-white shadow-2xl ring-1 ring-black/5 transition-transform duration-300 hover:-translate-y-2 hover:shadow-emerald-200/40"></div>
               <div className="absolute inset-3 rounded-[2rem] overflow-hidden bg-white ring-1 ring-black/5">
