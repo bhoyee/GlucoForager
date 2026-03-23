@@ -2,6 +2,8 @@ import "./globals.css";
 import SystemLogger from "../components/SystemLogger";
 import CookieBanner from "../components/CookieBanner";
 
+const SOCIAL_IMAGE_VERSION = "20260323";
+
 export const metadata = {
   title: {
     default: "GlucoForager — Your Daily Diabetes Food Assistant | Meal Ideas & Blood Sugar Support",
@@ -34,7 +36,12 @@ export const metadata = {
     locale: "en_GB",
     type: "website",
     images: [
-      { url: "/opengraph-image.png", width: 1200, height: 630, alt: "GlucoForager" },
+      {
+        url: `/opengraph-image.png?v=${SOCIAL_IMAGE_VERSION}`,
+        width: 1200,
+        height: 630,
+        alt: "GlucoForager",
+      },
       { url: "/images/logo.png", width: 512, height: 512, alt: "GlucoForager Logo" },
     ],
   },
@@ -43,7 +50,7 @@ export const metadata = {
     title: "GlucoForager — Your Daily Diabetes Food Assistant | Meal Ideas & Blood Sugar Support",
     description:
       "Stop guessing what to eat with diabetes. GlucoForager scans ingredients, suggests blood-sugar-friendly meals, and gives you a daily plan to stay in control. Free on iOS & Android.",
-    images: ["/twitter-image.png"],
+    images: [`/twitter-image.png?v=${SOCIAL_IMAGE_VERSION}`],
   },
   robots: {
     index: true,
