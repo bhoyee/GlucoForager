@@ -89,14 +89,14 @@ export async function GET(request) {
               GlucoForager
             </div>
             <div style={{ display: "flex", fontSize: 24, fontWeight: 800, color: "rgba(6, 32, 24, 0.86)" }}>
-              Diabetes-friendly recipes in 60 seconds
+              Your daily diabetes food assistant
             </div>
           </div>
         </div>
 
-        <div style={{ position: "relative", marginTop: 22, maxWidth: 960, display: "flex", flexDirection: "column" }}>
+        <div style={{ position: "relative", marginTop: 22, maxWidth: 980, display: "flex", flexDirection: "column" }}>
           <div style={{ display: "flex", fontSize: 26, lineHeight: 1.35, color: "rgba(6, 32, 24, 0.92)", fontWeight: 700 }}>
-            Scan ingredients, get safe meal ideas, and learn from our blog.
+            Stop guessing what to eat. Scan ingredients or type what you have to get meal ideas, smarter swaps, and a daily plan.
           </div>
         </div>
 
@@ -113,7 +113,7 @@ export async function GET(request) {
           }}
         >
           <div style={{ display: "flex" }}>glucoforager.com</div>
-          <div style={{ display: "flex" }}>iOS • Android</div>
+          <div style={{ display: "flex" }}>iOS + Android</div>
         </div>
       </div>
     ),
