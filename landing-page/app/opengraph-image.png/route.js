@@ -98,12 +98,12 @@ export async function GET(request) {
               GlucoForager
             </div>
             <div style={{ display: "flex", fontSize: 26, fontWeight: 800, color: "rgba(6, 32, 24, 0.86)" }}>
-              Diabetes-friendly recipes in 60 seconds
+              Your daily diabetes food assistant
             </div>
           </div>
         </div>
 
-        <div style={{ position: "relative", marginTop: 18, maxWidth: 940, display: "flex", flexDirection: "column" }}>
+        <div style={{ position: "relative", marginTop: 18, maxWidth: 980, display: "flex", flexDirection: "column" }}>
           <div
             style={{
               display: "flex",
@@ -113,12 +113,13 @@ export async function GET(request) {
               fontWeight: 700,
             }}
           >
-            Scan ingredients, get low-glycemic meal ideas, and learn smarter habits — built for Type 2 Diabetes.
+            Stop guessing what to eat. Scan ingredients or type what you have to get meal ideas, smarter swaps, and a daily
+            plan for steadier blood sugar.
           </div>
         </div>
 
         <div style={{ position: "relative", display: "flex", gap: 14, flexWrap: "wrap", marginTop: 28 }}>
-          {["Ingredient scan", "Low glycemic", "Meal planning", "Nutrition-aware", "Blog tips"].map((label) => (
+          {["Ingredient scan", "Meal ideas", "Food swaps", "Daily plan", "Habits & tips"].map((label) => (
             <div
               key={label}
               style={{
@@ -150,7 +151,7 @@ export async function GET(request) {
           }}
         >
           <div style={{ display: "flex" }}>glucoforager.com</div>
-          <div style={{ display: "flex" }}>iOS • Android</div>
+          <div style={{ display: "flex" }}>iOS + Android</div>
         </div>
       </div>
     ),
