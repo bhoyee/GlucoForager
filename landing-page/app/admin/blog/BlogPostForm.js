@@ -6,6 +6,22 @@ import AdminTinyEditor from '../../../components/AdminTinyEditor';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 const API_BASE = API_URL.replace(/\/+$/, '');
 
+const stripHtml = (value) =>
+  String(value || '')
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;|\u00A0/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const trimLeadingNbspHtml = (value) => {
+  const html = String(value || '');
+  return html
+    .replace(/^(?:\s|&nbsp;|\u00A0)+/i, '')
+    .replace(/^(<p[^>]*>)(?:\s|&nbsp;|\u00A0|<br\s*\/?>)+/i, '$1');
+};
+
 export default function BlogPostForm({
   initialValues,
   onSubmit,
@@ -85,7 +101,7 @@ export default function BlogPostForm({
   const seo = useMemo(() => {
     const keyword = String(form.focus_keyword || '').trim().toLowerCase();
     const title = String(form.seo_title || form.title || '').trim();
-    const desc = String(form.seo_description || form.excerpt || '').trim();
+    const desc = stripHtml(form.seo_description || form.excerpt || '');
 
     const slug = String(form.slug || '').trim() || String(form.title || '').trim();
     const urlSlug = slug ? slug.trim().toLowerCase().replace(/\s+/g, '-') : '';
@@ -127,7 +143,11 @@ export default function BlogPostForm({
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (!canSubmit) return;
-    await onSubmit(form);
+    await onSubmit({
+      ...form,
+      excerpt: trimLeadingNbspHtml(form.excerpt),
+      seo_description: stripHtml(form.seo_description),
+    });
   };
 
   return (
@@ -232,7 +252,7 @@ export default function BlogPostForm({
           compact
           height={160}
           value={form.excerpt}
-          onChange={(next) => setForm((prev) => ({ ...prev, excerpt: next }))}
+          onChange={(next) => setForm((prev) => ({ ...prev, excerpt: trimLeadingNbspHtml(next) }))}
           placeholder="Short summary shown on the blog list."
           adminToken={adminToken}
         />
