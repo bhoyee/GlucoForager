@@ -140,8 +140,7 @@ export default function AdminEditBlogPostPage() {
         return;
       }
       await response.json().catch(() => null);
-      setMessage('Saved.');
-      await load();
+      router.push('/admin/blog');
     } catch {
       setMessage('Failed to update post.');
     } finally {
