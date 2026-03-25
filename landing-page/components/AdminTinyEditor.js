@@ -15,7 +15,13 @@ export default function AdminTinyEditor({
   compact = false,
   adminToken,
 }) {
-  const toolbarId = useId();
+  const rawToolbarId = useId();
+  const toolbarId = useMemo(() => {
+    // React's useId() can include ":" which is not a valid CSS selector in querySelector without escaping.
+    // Quill uses querySelector internally for toolbar containers, so we normalize to a safe ID.
+    const safe = String(rawToolbarId || '').replace(/[^a-zA-Z0-9_-]/g, '');
+    return `gf-quill-${safe || 'toolbar'}`;
+  }, [rawToolbarId]);
   const quillRef = useRef(null);
   const [uploadBusy, setUploadBusy] = useState(false);
 
