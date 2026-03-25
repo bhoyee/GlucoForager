@@ -40,9 +40,9 @@ class BlogPostPayload(BaseModel):
     slug: str | None = Field(None, max_length=80)
     excerpt: str | None = Field(None, max_length=280)
     image_url: str | None = Field(None, max_length=600)
-    # Blog posts can be long (especially with formatting). Keep a generous cap to avoid
+    # Blog posts can be long (especially with formatting / embedded HTML). Keep a generous cap to avoid
     # accidental huge payloads, while not blocking real-world posts.
-    content: str = Field(..., min_length=10, max_length=200000)
+    content: str = Field(..., min_length=10, max_length=1000000)
     status: str = Field("draft", max_length=20)
     author_name: str | None = Field(None, max_length=80)
     published_at: datetime | None = None
