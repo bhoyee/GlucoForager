@@ -251,7 +251,14 @@ export default function BlogPostForm({
             disabled={uploadBusy || !adminToken}
             onChange={(event) => handleFileUpload(event.target.files?.[0])}
           />
-          {uploadMessage ? <span className="text-sm text-gray-600">{uploadMessage}</span> : null}
+          {uploadBusy ? (
+            <span className="inline-flex items-center gap-2 text-sm text-gray-600">
+              <span className="h-4 w-4 rounded-full border-2 border-gray-300 border-t-gray-700 animate-spin" />
+              Uploading...
+            </span>
+          ) : uploadMessage ? (
+            <span className="text-sm text-gray-600">{uploadMessage}</span>
+          ) : null}
         </div>
         {previewUrl ? (
           <div className="mt-3 overflow-hidden rounded-xl border border-gray-200 bg-white">
@@ -320,7 +327,14 @@ export default function BlogPostForm({
 
       <div className="admin-actions">
         <button className="admin-button" type="submit" disabled={!canSubmit}>
-          {isSubmitting ? 'Saving...' : submitLabel}
+          {isSubmitting ? (
+            <span className="inline-flex items-center gap-2">
+              <span className="h-4 w-4 rounded-full border-2 border-white/60 border-t-white animate-spin" />
+              Saving...
+            </span>
+          ) : (
+            submitLabel
+          )}
         </button>
       </div>
     </form>
