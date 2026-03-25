@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import AdminTinyEditor from '../../../components/AdminTinyEditor';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
+const API_BASE = API_URL.replace(/\/+$/, '');
 
 export default function BlogPostForm({
   initialValues,
@@ -34,7 +35,8 @@ export default function BlogPostForm({
   const previewUrl = useMemo(() => {
     const value = String(form.image_url || '').trim();
     if (!value) return '';
-    if (value.startsWith('/') || value.startsWith('http://') || value.startsWith('https://')) return value;
+    if (value.startsWith('/')) return `${API_BASE}${value}`;
+    if (value.startsWith('http://') || value.startsWith('https://')) return value;
     return '';
   }, [form.image_url]);
 
@@ -57,7 +59,9 @@ export default function BlogPostForm({
         return;
       }
       if (data?.url) {
-        setForm((prev) => ({ ...prev, image_url: data.url }));
+        const uploadedUrl = String(data.url || '').trim();
+        const normalizedUrl = uploadedUrl.startsWith('/') ? `${API_BASE}${uploadedUrl}` : uploadedUrl;
+        setForm((prev) => ({ ...prev, image_url: normalizedUrl }));
         setUploadMessage('Uploaded.');
       } else {
         setUploadMessage('Upload failed.');
