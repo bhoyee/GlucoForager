@@ -5,6 +5,7 @@ import BlogTopBar from '../../components/BlogTopBar';
 import BlogCoverImage from '../../components/BlogCoverImage';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
+const API_BASE = API_URL.replace(/\/+$/, '');
 
 export const metadata = {
   title: 'GlucoForager Blog',
@@ -26,6 +27,13 @@ export const metadata = {
 };
 
 const stripHtml = (value) => String(value || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+
+const resolveImageUrl = (value) => {
+  const url = typeof value === 'string' ? value.trim() : '';
+  if (!url) return '';
+  if (url.startsWith('/')) return `${API_BASE}${url}`;
+  return url;
+};
 
 export default async function BlogIndexPage({ searchParams }) {
   const page = Math.max(1, Number(searchParams?.page || 1));
@@ -78,7 +86,7 @@ export default async function BlogIndexPage({ searchParams }) {
             >
               <BlogCoverImage
                 title={post.title}
-                imageUrl={post.image_url}
+                imageUrl={resolveImageUrl(post.image_url)}
                 aspect="16/9"
                 roundedClass="rounded-none"
                 containerClassName="bg-gray-100"

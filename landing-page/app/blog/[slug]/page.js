@@ -5,6 +5,7 @@ import BlogTopBar from '../../../components/BlogTopBar';
 import BlogCoverImage from '../../../components/BlogCoverImage';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
+const API_BASE = API_URL.replace(/\/+$/, '');
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.glucoforager.com').replace(/\/+$/, '');
 
 const escapeHtml = (value) =>
@@ -23,6 +24,13 @@ const stripHtml = (value) =>
     .replace(/&nbsp;/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+
+const resolveImageUrl = (value) => {
+  const url = typeof value === 'string' ? value.trim() : '';
+  if (!url) return '';
+  if (url.startsWith('/')) return `${API_BASE}${url}`;
+  return url;
+};
 
 function renderContent(content) {
   const looksLikeHtml = /<\/?[a-z][\s\S]*>/i.test(String(content || ''));
@@ -80,7 +88,8 @@ export async function generateMetadata({ params }) {
     if (!response.ok) return {};
     const post = await response.json();
     const url = `${SITE_URL}/blog/${post.slug}`;
-    const imageUrl = typeof post.image_url === "string" && post.image_url.trim() ? post.image_url.trim() : `${SITE_URL}/blog/${post.slug}/opengraph-image`;
+    const coverUrl = resolveImageUrl(post.image_url);
+    const imageUrl = coverUrl ? coverUrl : `${SITE_URL}/blog/${post.slug}/opengraph-image`;
     const metaTitle = (post.seo_title || post.title || "").trim();
     const metaDescription = stripHtml(post.seo_description || post.excerpt || post.title || "").trim();
     return {
@@ -146,7 +155,7 @@ export default async function BlogPostPage({ params }) {
 
         <BlogCoverImage
           title={post.title}
-          imageUrl={post.image_url}
+          imageUrl={resolveImageUrl(post.image_url)}
           aspect="16/7"
           roundedClass="rounded-2xl"
           containerClassName="bg-gray-100 border border-gray-200"
