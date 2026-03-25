@@ -18,6 +18,9 @@ export default function BlogPostForm({
     slug: initialValues?.slug || '',
     excerpt: initialValues?.excerpt || '',
     image_url: initialValues?.image_url || '',
+    seo_title: initialValues?.seo_title || '',
+    seo_description: initialValues?.seo_description || '',
+    focus_keyword: initialValues?.focus_keyword || '',
     author_name: initialValues?.author_name || '',
     status: initialValues?.status || 'draft',
     published_at: initialValues?.published_at || '',
@@ -75,6 +78,44 @@ export default function BlogPostForm({
     );
   }, [form, isSubmitting]);
 
+  const seo = useMemo(() => {
+    const keyword = String(form.focus_keyword || '').trim().toLowerCase();
+    const title = String(form.seo_title || form.title || '').trim();
+    const desc = String(form.seo_description || form.excerpt || '').trim();
+
+    const slug = String(form.slug || '').trim() || String(form.title || '').trim();
+    const urlSlug = slug ? slug.trim().toLowerCase().replace(/\s+/g, '-') : '';
+    const url = urlSlug ? `https://www.glucoforager.com/blog/${urlSlug}` : 'https://www.glucoforager.com/blog/...';
+
+    const rawContent = String(form.content || '');
+    const text = rawContent.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    const firstPara = text.split(/\n{1,}|\.\s+/)[0] || text.slice(0, 240);
+    const headingsText = rawContent
+      .replace(/\n+/g, '\n')
+      .split('\n')
+      .filter((l) => l.startsWith('## ') || l.startsWith('# '))
+      .join(' ')
+      .toLowerCase();
+
+    const has = (haystack) => (keyword ? String(haystack || '').toLowerCase().includes(keyword) : false);
+
+    return {
+      keyword,
+      url,
+      previewTitle: title || 'Meta title preview',
+      previewDesc: desc || 'Meta description preview',
+      titleLen: title.length,
+      descLen: desc.length,
+      checks: {
+        keywordSet: Boolean(keyword),
+        inTitle: has(title),
+        inUrl: has(urlSlug),
+        inFirstPara: has(firstPara),
+        inHeading: has(headingsText),
+      },
+    };
+  }, [form]);
+
   const update = (key) => (event) => {
     setForm((prev) => ({ ...prev, [key]: event.target.value }));
   };
@@ -87,6 +128,83 @@ export default function BlogPostForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="rounded-2xl border border-teal-200 bg-white p-4">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <h3 className="text-base font-extrabold text-gray-900">SEO (Yoast-style)</h3>
+            <p className="text-sm text-gray-600">
+              Set a focus keyword, meta title, and meta description to improve how your post appears in Google and social previews.
+            </p>
+          </div>
+          <div className="text-xs text-gray-500">
+            Title: {seo.titleLen}/60 • Description: {seo.descLen}/160
+          </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-3">
+            <div className="admin-field">
+              <label>Focus keyword</label>
+              <input
+                value={form.focus_keyword}
+                onChange={update('focus_keyword')}
+                placeholder='e.g. "blood sugar friendly breakfast"'
+              />
+              <p className="admin-help">Used for a simple checklist (keyword should appear in title, first paragraph, a subheading, and URL).</p>
+            </div>
+
+            <div className="admin-field">
+              <label>Meta title</label>
+              <input
+                value={form.seo_title}
+                onChange={update('seo_title')}
+                placeholder="Shown in Google results and social previews"
+              />
+            </div>
+
+            <div className="admin-field">
+              <label>Meta description</label>
+              <textarea
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2"
+                rows={3}
+                value={form.seo_description}
+                onChange={update('seo_description')}
+                placeholder="Short summary to encourage clicks"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+              <div className="text-xs text-green-700 font-semibold">{seo.url}</div>
+              <div className="mt-1 text-lg font-extrabold text-blue-800">{seo.previewTitle}</div>
+              <div className="mt-1 text-sm text-gray-700">{seo.previewDesc}</div>
+            </div>
+
+            <div className="rounded-2xl border border-gray-200 bg-white p-4">
+              <div className="text-sm font-extrabold text-gray-900">Checklist</div>
+              <ul className="mt-2 space-y-1 text-sm">
+                <li className={seo.checks.keywordSet ? 'text-emerald-700' : 'text-gray-500'}>
+                  {seo.checks.keywordSet ? '✓' : '•'} Focus keyword set
+                </li>
+                <li className={seo.checks.inTitle ? 'text-emerald-700' : 'text-gray-500'}>
+                  {seo.checks.inTitle ? '✓' : '•'} Keyword in meta title
+                </li>
+                <li className={seo.checks.inUrl ? 'text-emerald-700' : 'text-gray-500'}>
+                  {seo.checks.inUrl ? '✓' : '•'} Keyword in URL (slug)
+                </li>
+                <li className={seo.checks.inFirstPara ? 'text-emerald-700' : 'text-gray-500'}>
+                  {seo.checks.inFirstPara ? '✓' : '•'} Keyword in first paragraph
+                </li>
+                <li className={seo.checks.inHeading ? 'text-emerald-700' : 'text-gray-500'}>
+                  {seo.checks.inHeading ? '✓' : '•'} Keyword in a subheading
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="admin-field">
         <label>Title</label>
         <input value={form.title} onChange={update('title')} placeholder="Post title" required />

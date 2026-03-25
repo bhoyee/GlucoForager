@@ -40,6 +40,9 @@ class BlogPostPayload(BaseModel):
     slug: str | None = Field(None, max_length=80)
     excerpt: str | None = Field(None, max_length=280)
     image_url: str | None = Field(None, max_length=600)
+    seo_title: str | None = Field(None, max_length=220)
+    seo_description: str | None = Field(None, max_length=320)
+    focus_keyword: str | None = Field(None, max_length=120)
     # Blog posts can be long (especially with formatting / embedded HTML). Keep a generous cap to avoid
     # accidental huge payloads, while not blocking real-world posts.
     content: str = Field(..., min_length=10, max_length=1000000)
@@ -240,6 +243,9 @@ def admin_create_post(
         title=payload.title.strip(),
         excerpt=payload.excerpt.strip() if payload.excerpt else None,
         image_url=payload.image_url.strip() if payload.image_url else None,
+        seo_title=payload.seo_title.strip() if payload.seo_title else None,
+        seo_description=payload.seo_description.strip() if payload.seo_description else None,
+        focus_keyword=payload.focus_keyword.strip() if payload.focus_keyword else None,
         content=payload.content.strip(),
         status=normalized_status,
         author_name=payload.author_name.strip() if payload.author_name else None,
@@ -285,6 +291,9 @@ def admin_get_post(
         slug=post.slug,
         excerpt=post.excerpt,
         image_url=post.image_url,
+        seo_title=getattr(post, "seo_title", None),
+        seo_description=getattr(post, "seo_description", None),
+        focus_keyword=getattr(post, "focus_keyword", None),
         content=post.content,
         status=post.status,
         author_name=post.author_name,
@@ -321,6 +330,9 @@ def admin_update_post(
     post.title = payload.title.strip()
     post.excerpt = payload.excerpt.strip() if payload.excerpt else None
     post.image_url = payload.image_url.strip() if payload.image_url else None
+    post.seo_title = payload.seo_title.strip() if payload.seo_title else None
+    post.seo_description = payload.seo_description.strip() if payload.seo_description else None
+    post.focus_keyword = payload.focus_keyword.strip() if payload.focus_keyword else None
     post.content = payload.content.strip()
     post.status = normalized_status
     post.author_name = payload.author_name.strip() if payload.author_name else None
