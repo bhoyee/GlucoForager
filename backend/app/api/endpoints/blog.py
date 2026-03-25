@@ -33,6 +33,9 @@ class BlogPostDetail(BaseModel):
     title: str
     excerpt: str | None = None
     image_url: str | None = None
+    seo_title: str | None = None
+    seo_description: str | None = None
+    focus_keyword: str | None = None
     content: str
     author_name: str | None = None
     published_at: datetime | None = None
@@ -105,6 +108,9 @@ def get_post(slug: str, db: Session = Depends(get_db)):
         title=post.title,
         excerpt=post.excerpt,
         image_url=post.image_url,
+        seo_title=getattr(post, "seo_title", None),
+        seo_description=getattr(post, "seo_description", None),
+        focus_keyword=getattr(post, "focus_keyword", None),
         content=post.content,
         author_name=post.author_name,
         published_at=post.published_at,
