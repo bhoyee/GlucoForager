@@ -15,6 +15,30 @@ const stripHtml = (value) =>
     .replace(/\s+/g, ' ')
     .trim();
 
+const keywordToSlug = (value) =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/&nbsp;|\u00A0/gi, ' ')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+
+const extractFirstParagraphText = (html) => {
+  const source = String(html || '');
+  const match = source.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+  if (!match) return '';
+  return stripHtml(match[1]);
+};
+
+const extractHeadingsText = (html) => {
+  const source = String(html || '');
+  const matches = Array.from(source.matchAll(/<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/gi));
+  if (!matches.length) return '';
+  return matches.map((m) => stripHtml(m[1])).filter(Boolean).join(' ');
+};
+
 const trimLeadingNbspHtml = (value) => {
   const html = String(value || '');
   return html
@@ -100,6 +124,7 @@ export default function BlogPostForm({
 
   const seo = useMemo(() => {
     const keyword = String(form.focus_keyword || '').trim().toLowerCase();
+    const keywordSlug = keywordToSlug(keyword);
     const title = String(form.seo_title || form.title || '').trim();
     const desc = stripHtml(form.seo_description || form.excerpt || '');
 
@@ -108,16 +133,13 @@ export default function BlogPostForm({
     const url = urlSlug ? `https://www.glucoforager.com/blog/${urlSlug}` : 'https://www.glucoforager.com/blog/...';
 
     const rawContent = String(form.content || '');
-    const text = rawContent.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-    const firstPara = text.split(/\n{1,}|\.\s+/)[0] || text.slice(0, 240);
-    const headingsText = rawContent
-      .replace(/\n+/g, '\n')
-      .split('\n')
-      .filter((l) => l.startsWith('## ') || l.startsWith('# '))
-      .join(' ')
-      .toLowerCase();
+    const text = stripHtml(rawContent);
+    const firstPara = extractFirstParagraphText(rawContent) || text.split(/\n{1,}|\.\s+/)[0] || text.slice(0, 240);
+    const headingsText = extractHeadingsText(rawContent).toLowerCase();
 
-    const has = (haystack) => (keyword ? String(haystack || '').toLowerCase().includes(keyword) : false);
+    const hasText = (haystack) => (keyword ? String(haystack || '').toLowerCase().includes(keyword) : false);
+    const hasUrl = (haystack) =>
+      keywordSlug ? String(haystack || '').toLowerCase().includes(keywordSlug) : false;
 
     return {
       keyword,
@@ -128,10 +150,10 @@ export default function BlogPostForm({
       descLen: desc.length,
       checks: {
         keywordSet: Boolean(keyword),
-        inTitle: has(title),
-        inUrl: has(urlSlug),
-        inFirstPara: has(firstPara),
-        inHeading: has(headingsText),
+        inTitle: hasText(title),
+        inUrl: hasUrl(urlSlug) || hasText(urlSlug),
+        inFirstPara: hasText(firstPara),
+        inHeading: hasText(headingsText),
       },
     };
   }, [form]);
