@@ -109,21 +109,23 @@ export async function generateMetadata({ params }) {
     const post = await response.json();
     const url = `${SITE_URL}/blog/${post.slug}`;
     const imageUrl = typeof post.image_url === "string" && post.image_url.trim() ? post.image_url.trim() : `${SITE_URL}/blog/${post.slug}/opengraph-image`;
+    const metaTitle = (post.seo_title || post.title || "").trim();
+    const metaDescription = (post.seo_description || post.excerpt || post.title || "").trim();
     return {
-      title: post.title,
-      description: post.excerpt || post.title,
+      title: metaTitle || post.title,
+      description: metaDescription || post.title,
       alternates: { canonical: url },
       openGraph: {
-        title: post.title,
-        description: post.excerpt || post.title,
+        title: metaTitle || post.title,
+        description: metaDescription || post.title,
         url,
         type: 'article',
-        images: [{ url: imageUrl, width: 1200, height: 630, alt: post.title }],
+        images: [{ url: imageUrl, width: 1200, height: 630, alt: metaTitle || post.title }],
       },
       twitter: {
         card: 'summary_large_image',
-        title: post.title,
-        description: post.excerpt || post.title,
+        title: metaTitle || post.title,
+        description: metaDescription || post.title,
         images: [imageUrl],
       },
     };
