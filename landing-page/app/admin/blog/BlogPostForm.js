@@ -112,6 +112,7 @@ export default function BlogPostForm({
           value={form.excerpt}
           onChange={(next) => setForm((prev) => ({ ...prev, excerpt: next }))}
           placeholder="Short summary shown on the blog list."
+          adminToken={adminToken}
         />
       </div>
 
@@ -193,6 +194,7 @@ export default function BlogPostForm({
           value={form.content}
           onChange={(next) => setForm((prev) => ({ ...prev, content: next }))}
           placeholder="Write your post content..."
+          adminToken={adminToken}
         />
       </div>
 
