@@ -2,8 +2,10 @@ import Link from 'next/link';
 import Footer from '../../components/Footer';
 import ScrollControls from '../../components/ScrollControls';
 import BlogTopBar from '../../components/BlogTopBar';
+import BlogCoverImage from '../../components/BlogCoverImage';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
+const API_BASE = API_URL.replace(/\/+$/, '');
 
 export const metadata = {
   title: 'GlucoForager Blog',
@@ -24,45 +26,14 @@ export const metadata = {
   },
 };
 
-function PostImagePlaceholder({ title }) {
-  const label = String(title || 'GF').trim();
-  const first = label ? label[0].toUpperCase() : 'G';
-  return (
-    <div className="relative w-full overflow-hidden rounded-xl bg-gradient-to-br from-teal-600 via-emerald-500 to-cyan-500">
-      <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_30%_20%,white,transparent_55%)]" />
-      <div className="aspect-[16/9] flex items-center justify-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/15 backdrop-blur border border-white/20">
-          <span className="text-2xl font-extrabold text-white">{first}</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function PostCardMedia({ title, imageUrl }) {
-  const url = typeof imageUrl === 'string' ? imageUrl.trim() : '';
-  if (url) {
-    return (
-      <div className="relative w-full overflow-hidden rounded-xl bg-gray-100">
-        <div className="aspect-[16/9]">
-          <img
-            src={url}
-            alt={title ? `${title} cover` : 'Post cover'}
-            className="h-full w-full object-cover"
-            loading="lazy"
-            referrerPolicy="no-referrer"
-            onError={(event) => {
-              event.currentTarget.style.display = 'none';
-            }}
-          />
-        </div>
-      </div>
-    );
-  }
-  return <PostImagePlaceholder title={title} />;
-}
-
 const stripHtml = (value) => String(value || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+
+const resolveImageUrl = (value) => {
+  const url = typeof value === 'string' ? value.trim() : '';
+  if (!url) return '';
+  if (url.startsWith('/')) return `${API_BASE}${url}`;
+  return url;
+};
 
 export default async function BlogIndexPage({ searchParams }) {
   const page = Math.max(1, Number(searchParams?.page || 1));
@@ -113,7 +84,13 @@ export default async function BlogIndexPage({ searchParams }) {
               key={post.id}
               className="rounded-2xl border border-gray-200 bg-white overflow-hidden hover:shadow-lg transition-shadow"
             >
-              <PostCardMedia title={post.title} imageUrl={post.image_url} />
+              <BlogCoverImage
+                title={post.title}
+                imageUrl={resolveImageUrl(post.image_url)}
+                aspect="16/9"
+                roundedClass="rounded-none"
+                containerClassName="bg-gray-100"
+              />
               <div className="p-6">
                 <p className="text-sm text-gray-500">
                   {post.published_at ? new Date(post.published_at).toLocaleDateString() : 'Unpublished'}
