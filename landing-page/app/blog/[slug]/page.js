@@ -52,6 +52,15 @@ const escapeHtml = (value) =>
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
 
+const stripHtml = (value) =>
+  String(value || '')
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
 function renderContent(content) {
   const looksLikeHtml = /<\/?[a-z][\s\S]*>/i.test(String(content || ''));
   if (looksLikeHtml) {
@@ -110,7 +119,7 @@ export async function generateMetadata({ params }) {
     const url = `${SITE_URL}/blog/${post.slug}`;
     const imageUrl = typeof post.image_url === "string" && post.image_url.trim() ? post.image_url.trim() : `${SITE_URL}/blog/${post.slug}/opengraph-image`;
     const metaTitle = (post.seo_title || post.title || "").trim();
-    const metaDescription = (post.seo_description || post.excerpt || post.title || "").trim();
+    const metaDescription = stripHtml(post.seo_description || post.excerpt || post.title || "").trim();
     return {
       title: metaTitle || post.title,
       description: metaDescription || post.title,
@@ -159,6 +168,7 @@ export default async function BlogPostPage({ params }) {
   const post = await postRes.json();
   const initialComments = commentsRes.ok ? await commentsRes.json() : [];
   const url = `${SITE_URL}/blog/${post.slug}`;
+  const excerptText = stripHtml(post.excerpt);
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
@@ -179,7 +189,7 @@ export default async function BlogPostPage({ params }) {
             {post.author_name ? <span>By {post.author_name}</span> : null}
             {post.published_at ? <span>{new Date(post.published_at).toLocaleDateString()}</span> : null}
           </div>
-          {post.excerpt ? <p className="text-lg text-gray-700">{post.excerpt}</p> : null}
+          {excerptText ? <p className="text-lg text-gray-700">{excerptText}</p> : null}
         </header>
 
         <article className="space-y-4 rounded-2xl border border-gray-200 bg-white p-6">
