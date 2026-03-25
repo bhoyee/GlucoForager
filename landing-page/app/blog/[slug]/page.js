@@ -2,47 +2,10 @@ import Link from 'next/link';
 import BlogComments from '../../../components/BlogComments';
 import BlogShare from '../../../components/BlogShare';
 import BlogTopBar from '../../../components/BlogTopBar';
+import BlogCoverImage from '../../../components/BlogCoverImage';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.glucoforager.com').replace(/\/+$/, '');
-
-function PostHeroPlaceholder({ title }) {
-  const label = String(title || 'GF').trim();
-  const first = label ? label[0].toUpperCase() : 'G';
-  return (
-    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-teal-700 via-emerald-600 to-cyan-600">
-      <div className="absolute inset-0 opacity-25 bg-[radial-gradient(circle_at_30%_20%,white,transparent_55%)]" />
-      <div className="aspect-[16/7] flex items-center justify-center">
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15 backdrop-blur border border-white/20">
-          <span className="text-3xl font-extrabold text-white">{first}</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function PostHeroMedia({ title, imageUrl }) {
-  const url = typeof imageUrl === 'string' ? imageUrl.trim() : '';
-  if (url) {
-    return (
-      <div className="relative overflow-hidden rounded-2xl bg-gray-100 border border-gray-200">
-        <div className="aspect-[16/7]">
-          <img
-            src={url}
-            alt={title ? `${title} cover` : 'Post cover'}
-            className="h-full w-full object-cover"
-            loading="lazy"
-            referrerPolicy="no-referrer"
-            onError={(event) => {
-              event.currentTarget.style.display = 'none';
-            }}
-          />
-        </div>
-      </div>
-    );
-  }
-  return <PostHeroPlaceholder title={title} />;
-}
 
 const escapeHtml = (value) =>
   String(value || '')
@@ -181,7 +144,13 @@ export default async function BlogPostPage({ params }) {
           <BlogShare title={post.title} url={url} />
         </div>
 
-        <PostHeroMedia title={post.title} imageUrl={post.image_url} />
+        <BlogCoverImage
+          title={post.title}
+          imageUrl={post.image_url}
+          aspect="16/7"
+          roundedClass="rounded-2xl"
+          containerClassName="bg-gray-100 border border-gray-200"
+        />
 
         <header className="space-y-3">
           <h1 className="text-4xl font-bold text-gray-900">{post.title}</h1>
