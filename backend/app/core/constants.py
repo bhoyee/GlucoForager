@@ -3,9 +3,9 @@ DEFAULT_TAGS = ["diabetes-friendly", "low-carb", "low-glycemic", "high-fiber"]
 MATCH_THRESHOLD = 0.3
 FREE_SEARCH_LIMIT = 3
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
-LOGIN_MAX_ATTEMPTS = 3
+LOGIN_MAX_ATTEMPTS = 5
 LOGIN_WINDOW_SECONDS = 300  # 5 minutes
-LOGIN_LOCKOUT_SECONDS = 1800  # 30 minutes
+LOGIN_LOCKOUT_SECONDS = 600  # 10 minutes
 TIER_CONFIG = {
     "free": {
         "max_daily_scans": 3,

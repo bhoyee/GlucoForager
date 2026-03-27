@@ -6,6 +6,7 @@ from typing import Any, Dict, List
 from openai import OpenAI, OpenAIError
 
 from ..core.config import settings
+from ..data.swaps_fallback import FALLBACK_ALIASES, FALLBACK_CATALOG
 
 logger = logging.getLogger(__name__)
 
@@ -16,19 +17,18 @@ When a user enters a food or drink, suggest healthier alternatives that may have
 
 Rules:
 - Accept any food or drink (meals, snacks, drinks, desserts).
-- If the input is ambiguous or likely misspelled, ask for clarification instead of guessing.
+- Only ask for clarification if the input is not recognizable as a food/drink after a best-effort interpretation.
 - If you can reasonably suggest a corrected spelling, include it as suggested_query.
-- First decide if the food is already a generally diabetes-friendly choice.
-- If it is already a good choice, DO NOT suggest swaps unless the user explicitly asks for substitutions.
-- If it is higher-impact (likely to spike), suggest swaps.
+- Always provide swap candidates for recognizable foods/drinks (this endpoint is explicitly "Food swaps").
+- For recognizable foods/drinks: set needs_clarification=false, set should_show_swaps=true, and return exactly 6 swap_candidates.
 - If the input is not a food or drink, set is_food_or_drink=false and do NOT fabricate swaps.
 - When you do not suggest swaps, set should_show_swaps=false and swaps=null.
 - Respect allergies/intolerances, dietary pattern, and avoid foods STRICTLY when proposing swaps.
 - Avoid extreme diets unless necessary.
 - Focus on common grocery-store or restaurant options.
-- Include a short explanation.
-- Include portion guidance if the user still chooses the original food.
-- Keep responses concise and practical.
+- Keep responses concise and practical, in plain language.
+- GI is REQUIRED for every swap candidate: always provide gi_min and gi_max as integers in range 0–110.
+  If you are not sure, provide your best estimate range and set gi_note="Estimated".
 
 Return ONLY valid JSON with this exact shape:
 {
@@ -50,6 +50,15 @@ Return ONLY valid JSON with this exact shape:
     {
       "name": "...",
       "reason": "...",
+      "gi_min": 0,
+      "gi_max": 0,
+      "gi_note": "Estimated" | "..." | null,
+      "serving": "..." | null,
+      "net_carbs_g": 0 | null,
+      "fiber_g": 0 | null,
+      "protein_g": 0 | null,
+      "impact_label": "low" | "medium" | "high" | null,
+      "portion_suggestion": "..." | null,
       "fit_tags": ["lower_carb", "high_protein", "balanced", "weight_loss", "quick_meals", "simple_ingredients", "budget_friendly", "family_friendly"],
       "cuisine_fit": ["west_african", "british_irish", "mediterranean", "south_asian", "east_asian", "southeast_asian", "latin_american", "european", "mena", "american_canadian", "caribbean", "other", "generic"],
       "estimated_effort": "very_low" | "low" | "medium" | "high",
@@ -58,6 +67,9 @@ Return ONLY valid JSON with this exact shape:
   ] | null
 }
 """
+
+def _fallback_key(food: str) -> str:
+    return _clean_food(food).lower()
 
 
 def _clean_food(value: str) -> str:
@@ -100,6 +112,28 @@ def _normalize_string_list(value: Any, *, limit: int) -> List[str]:
         if len(out) >= limit:
             break
     return out
+
+
+def _to_float(value: Any) -> float | None:
+    try:
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            return None
+        return float(value)
+    except Exception:
+        return None
+
+
+def _to_int(value: Any) -> int | None:
+    try:
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            return None
+        return int(float(value))
+    except Exception:
+        return None
 
 
 _PROFILE_KEYS = {"type_2", "prediabetes", "type_1", "gestational", "managing", "prefer_not"}
@@ -271,8 +305,67 @@ def _normalize_candidates(raw_candidates: Any) -> list[dict[str, Any]]:
             continue
         name = str(item.get("name") or "").strip()
         reason = str(item.get("reason") or "").strip()
-        if not name or not reason:
+        if not name:
             continue
+        if not reason:
+            reason = "May have a lower blood sugar impact than the original (portion still matters)."
+
+        gi_min = _to_int(item.get("gi_min"))
+        gi_max = _to_int(item.get("gi_max"))
+        if gi_min is not None:
+            gi_min = max(0, min(110, gi_min))
+        if gi_max is not None:
+            gi_max = max(0, min(110, gi_max))
+        if gi_min is not None and gi_max is not None and gi_min > gi_max:
+            gi_min, gi_max = gi_max, gi_min
+
+        gi_note = item.get("gi_note")
+        if gi_note is not None and not isinstance(gi_note, str):
+            gi_note = None
+        if isinstance(gi_note, str):
+            gi_note = gi_note.strip()[:120] or None
+
+        serving = item.get("serving")
+        if serving is not None and not isinstance(serving, str):
+            serving = None
+        if isinstance(serving, str):
+            serving = serving.strip()[:60] or None
+
+        net_carbs = _to_float(item.get("net_carbs_g"))
+        fiber = _to_float(item.get("fiber_g"))
+        protein = _to_float(item.get("protein_g"))
+        if net_carbs is not None:
+            net_carbs = max(0.0, min(200.0, net_carbs))
+        if fiber is not None:
+            fiber = max(0.0, min(100.0, fiber))
+        if protein is not None:
+            protein = max(0.0, min(120.0, protein))
+
+        impact = item.get("impact_label")
+        if impact is not None and not isinstance(impact, str):
+            impact = None
+        if isinstance(impact, str):
+            impact = impact.strip().lower()
+            if impact not in {"low", "medium", "high"}:
+                impact = None
+
+        # GI is required for this feature. If the model omitted it, infer a reasonable estimate
+        # from impact_label so the UI always has a range to show.
+        if gi_min is None and gi_max is None:
+            if impact == "low":
+                gi_min, gi_max = 15, 55
+            elif impact == "high":
+                gi_min, gi_max = 70, 100
+            else:
+                gi_min, gi_max = 56, 69
+            gi_note = gi_note or "Estimated"
+
+        portion_suggestion = item.get("portion_suggestion")
+        if portion_suggestion is not None and not isinstance(portion_suggestion, str):
+            portion_suggestion = None
+        if isinstance(portion_suggestion, str):
+            portion_suggestion = portion_suggestion.strip()[:120] or None
+
         fit_tags = [x for x in _clean_profile_list(item.get("fit_tags"), max_items=10) if x in _GOAL_KEYS]
         cuisine_fit = [x for x in _clean_profile_list(item.get("cuisine_fit"), max_items=10) if x in _CUISINE_KEYS]
         effort = str(item.get("estimated_effort") or "").strip().lower()
@@ -285,6 +378,15 @@ def _normalize_candidates(raw_candidates: Any) -> list[dict[str, Any]]:
             {
                 "name": name[:80],
                 "reason": reason[:140],
+                "gi": {"min": gi_min, "max": gi_max, "note": gi_note},
+                "serving": serving,
+                "macros": {
+                    "net_carbs_g": round(net_carbs, 1) if isinstance(net_carbs, float) else None,
+                    "fiber_g": round(fiber, 1) if isinstance(fiber, float) else None,
+                    "protein_g": round(protein, 1) if isinstance(protein, float) else None,
+                },
+                "impact_label": impact,
+                "portion_suggestion": portion_suggestion,
                 "fit_tags": fit_tags,
                 "cuisine_fit": cuisine_fit,
                 "estimated_effort": effort,
@@ -358,24 +460,31 @@ def _normalize_payload(data: Dict[str, Any], *, food_profile: dict[str, Any] | N
         return None
     if not needs_clarification and is_food_or_drink:
         if not isinstance(portion_tip, str) or not portion_tip.strip():
-            return None
+            portion_tip = "If you choose the original, start with a smaller portion and pair it with protein and non-starchy veggies."
     else:
         if not isinstance(portion_tip, str):
             portion_tip = ""
     watch_outs = _normalize_string_list(assessment.get("watch_outs"), limit=3)
     pair_with = _normalize_string_list(assessment.get("pair_with"), limit=3)
 
-    should_show_bool = bool(should_show) and (not needs_clarification) and bool(is_food_or_drink)
+    # This endpoint is explicitly "Food swaps", so we don't rely on the model's should_show_swaps flag.
+    # If the input is a food and doesn't need clarification, show swaps when we have enough candidates.
+    should_show_bool = (not needs_clarification) and bool(is_food_or_drink)
     normalized_swaps = None
     if should_show_bool:
         candidates = _normalize_candidates(raw_candidates)
+        # Don't hard-fail if the model output is a bit thin; fall back to assessment-only.
         if len(candidates) < 3:
-            return None
+            should_show_bool = False
+            candidates = []
         best = _best_options_from_candidates(candidates, food_profile=food_profile)
-        opts = [str(c.get("name") or "").strip() for c in best if isinstance(c, dict)]
-        opts = [o for o in opts if o][:5]
-        if len(opts) < 3:
-            return None
+        best = [c for c in best if isinstance(c, dict)]
+        best = best[:5]
+        opts = [str(c.get("name") or "").strip() for c in best]
+        opts = [o for o in opts if o]
+        if len(opts) < 3 or len(best) < 3:
+            should_show_bool = False
+            best = []
         why = swaps_explanation
         if not isinstance(why, str) or not why.strip():
             # Fallback: use the assessment summary if the model omitted swaps_explanation.
@@ -383,11 +492,28 @@ def _normalize_payload(data: Dict[str, Any], *, food_profile: dict[str, Any] | N
         s_portion = assessment.get("portion_tip")
         if not isinstance(s_portion, str) or not s_portion.strip():
             return None
-        normalized_swaps = {
-            "better_options": opts[:5],
-            "why_these_are_better": str(why).strip()[:320],
-            "portion_tip": s_portion.strip()[:240],
-        }
+        if should_show_bool:
+            normalized_swaps = {
+                # Keep compatibility with older clients expecting a list of strings.
+                "better_options": opts[:5],
+                # Rich option details for improved UX.
+                "options": [
+                    {
+                        "name": str(c.get("name") or "").strip()[:80],
+                        "reason": str(c.get("reason") or "").strip()[:140],
+                        "gi": c.get("gi"),
+                        "serving": c.get("serving"),
+                        "macros": c.get("macros"),
+                        "impact_label": c.get("impact_label"),
+                        "portion_suggestion": c.get("portion_suggestion"),
+                        "fit_tags": c.get("fit_tags") or [],
+                        "cuisine_fit": c.get("cuisine_fit") or [],
+                    }
+                    for c in best
+                ],
+                "why_these_are_better": str(why).strip()[:320],
+                "portion_tip": s_portion.strip()[:240],
+            }
 
     return {
         "assessment": {
@@ -409,8 +535,17 @@ def _normalize_payload(data: Dict[str, Any], *, food_profile: dict[str, Any] | N
 
 class AISwapsService:
     def __init__(self) -> None:
-        self._openai = OpenAI(api_key=settings.openai_api_key, organization=settings.openai_organization)
-        self._model = getattr(settings, "swaps_model", None) or "gpt-4o-mini-2024-07-18"
+        # Keep retries off for latency-sensitive endpoints (mobile requests may abort quickly).
+        # The OpenAI SDK retries can extend total wall time far beyond our per-request timeout.
+        self._openai = OpenAI(
+            api_key=settings.openai_api_key,
+            organization=settings.openai_organization,
+            max_retries=0,
+        )
+        # Prefer a dedicated swaps model if configured; otherwise fall back to OPENAI_MODEL.
+        swaps_model = (getattr(settings, "swaps_model", None) or "").strip()
+        openai_model = (getattr(settings, "openai_model", None) or "").strip()
+        self._model = swaps_model or openai_model or "gpt-4o-mini"
 
     def generate_swaps(
         self,
@@ -441,7 +576,13 @@ class AISwapsService:
 {force_line}
 {(profile_text + chr(10)) if profile_text else ""}
 
-Suggest 8 diabetes-friendly alternatives that may have lower blood sugar impact.
+Suggest 6 diabetes-friendly alternatives that may have lower blood sugar impact.
+For each swap candidate, include:
+- A GI range (gi_min/gi_max) ALWAYS. If unsure, estimate and set gi_note="Estimated".
+- Estimated macros per a typical serving (serving + net_carbs_g + fiber_g + protein_g). Use nulls if unsure.
+- A short portion_suggestion when the swap is still starchy (e.g. "keep to 1/2 cup cooked").
+Do NOT include cooking instructions or times.
+Write in very simple words (no jargon). Use short reasons (one sentence each).
 Return ONLY the required JSON.
 """
 
@@ -453,7 +594,8 @@ Return ONLY the required JSON.
                     {"role": "user", "content": user_prompt},
                 ],
                 "temperature": 0.4,
-                "max_tokens": 420,
+                # Rich swap candidates (GI + macros) need more output room; keep bounded to control costs.
+                "max_tokens": 900,
                 # Prefer strict JSON mode where supported.
                 "response_format": {"type": "json_object"},
             }
@@ -475,3 +617,162 @@ Return ONLY the required JSON.
             "model": self._model,
             **normalized,
         }
+
+
+def fallback_swaps(*, food: str, food_profile: dict[str, Any] | None, force_swaps: bool) -> Dict[str, Any]:
+    key = _fallback_key(food)
+    canonical = FALLBACK_ALIASES.get(key) or key
+    data = FALLBACK_CATALOG.get(canonical)
+    # If we have no fallback, return a minimal assessment that doesn't break clients.
+    if not data:
+        return {
+            "food": _clean_food(food),
+            "assessment": {
+                "is_food_or_drink": True,
+                "confidence": 0.7,
+                "verdict": "depends",
+                "needs_clarification": False,
+                "suggested_query": None,
+                "clarification_question": None,
+                "summary": "AI is temporarily slow. Here are general lower-impact swap ideas you can use right now.",
+                "watch_outs": [],
+                "pair_with": [],
+                "portion_tip": "Portion size and pairing matter.",
+            },
+            # Prefer showing something useful rather than a blank result when AI is down.
+            "should_show_swaps": True,
+            "swaps": {
+                "better_options": [
+                    "Non-starchy vegetables",
+                    "Beans/lentils",
+                    "Cauliflower rice / veg swaps",
+                    "Greek yogurt / protein snack",
+                    "Smaller portion + protein",
+                ],
+                "options": [
+                    {
+                        "name": "Non-starchy vegetables",
+                        "reason": "Lower net carbs; adds fiber and volume.",
+                        "gi": {"min": 0, "max": 30, "note": "Estimated"},
+                        "serving": "1-2 cups",
+                        "macros": None,
+                        "impact_label": "low",
+                        "portion_suggestion": "Aim for half your plate as vegetables.",
+                        "fit_tags": ["balanced", "weight_loss", "budget_friendly"],
+                        "cuisine_fit": ["generic"],
+                    },
+                    {
+                        "name": "Beans/lentils",
+                        "reason": "More fiber/protein; often steadier blood sugar response.",
+                        "gi": {"min": 25, "max": 45, "note": "Estimated"},
+                        "serving": "1/2 cup",
+                        "macros": None,
+                        "impact_label": "low",
+                        "portion_suggestion": "Watch added sugar in canned/baked beans.",
+                        "fit_tags": ["high_protein", "balanced", "budget_friendly"],
+                        "cuisine_fit": ["generic"],
+                    },
+                    {
+                        "name": "Cauliflower rice / veggie swaps",
+                        "reason": "Cuts starch while keeping a similar 'base' texture.",
+                        "gi": {"min": 0, "max": 25, "note": "Estimated"},
+                        "serving": "1-2 cups",
+                        "macros": None,
+                        "impact_label": "low",
+                        "portion_suggestion": "Pair with protein + healthy fat for satiety.",
+                        "fit_tags": ["lower_carb", "quick_meals"],
+                        "cuisine_fit": ["generic"],
+                    },
+                    {
+                        "name": "Greek yogurt / protein snack",
+                        "reason": "Higher protein; may reduce cravings for refined carbs.",
+                        "gi": {"min": 10, "max": 35, "note": "Estimated"},
+                        "serving": "3/4-1 cup",
+                        "macros": None,
+                        "impact_label": "low",
+                        "portion_suggestion": "Choose plain/unsweetened; add berries if needed.",
+                        "fit_tags": ["high_protein", "simple_ingredients"],
+                        "cuisine_fit": ["generic"],
+                    },
+                    {
+                        "name": "Smaller portion + protein",
+                        "reason": "Portion control + pairing can reduce glucose spikes.",
+                        "gi": {"min": 56, "max": 69, "note": "Estimated"},
+                        "serving": "Reduce carbs by ~1/3",
+                        "macros": None,
+                        "impact_label": "medium",
+                        "portion_suggestion": "Add eggs, chicken, fish, tofu, or beans.",
+                        "fit_tags": ["balanced", "family_friendly"],
+                        "cuisine_fit": ["generic"],
+                    },
+                ],
+                "why_these_are_better": "They generally reduce net carbs and/or increase fiber and protein, which can blunt glucose spikes.",
+                "portion_tip": "If you still choose the original food, start with a smaller portion and pair with protein + vegetables.",
+            },
+        }
+
+    verdict = str(data.get("verdict") or "depends")
+    if verdict not in {"good_choice", "higher_impact", "depends"}:
+        verdict = "depends"
+    candidates = list(data.get("candidates") or [])
+    best = _best_options_from_candidates(candidates, food_profile=food_profile)
+    best = [c for c in best if isinstance(c, dict)][:5]
+    opts = [str(c.get("name") or "").strip() for c in best if str(c.get("name") or "").strip()]
+
+    should_show = bool(force_swaps) or (verdict != "good_choice")
+    swaps_payload = None
+    if should_show and len(opts) < 3:
+        # If preference filtering makes the list too short, fall back to the raw catalog
+        # so the UI always has swap options to show.
+        raw_names = [str(c.get("name") or "").strip() for c in candidates if isinstance(c, dict)]
+        raw_names = [n for n in raw_names if n]
+        if len(raw_names) >= 3:
+            opts = raw_names[:5]
+            best = [c for c in candidates if isinstance(c, dict)][:5]
+
+    if should_show and len(opts) >= 3:
+        swaps_payload = {
+            "better_options": opts[:5],
+            "options": [
+                {
+                    "name": str(c.get("name") or "").strip()[:80],
+                    "reason": str(c.get("reason") or "").strip()[:140],
+                    "gi": c.get("gi"),
+                    "serving": c.get("serving"),
+                    "macros": c.get("macros"),
+                    "impact_label": c.get("impact_label"),
+                    "portion_suggestion": c.get("portion_suggestion"),
+                    "fit_tags": c.get("fit_tags") or [],
+                    "cuisine_fit": c.get("cuisine_fit") or [],
+                }
+                for c in best
+            ],
+            "why_these_are_better": str(data.get("why") or "").strip()[:320] or "These options may reduce net carbs or increase fiber/protein.",
+            "portion_tip": str(data.get("portion_tip") or "").strip()[:240] or "Portion size and pairing matter.",
+        }
+
+    summary = str(data.get("summary") or "").strip()[:240] or "Portion size and pairing matter."
+    portion_tip = str(data.get("portion_tip") or "").strip()[:240] or "Portion size and pairing matter."
+    return {
+        "food": _clean_food(food),
+        "assessment": {
+            "is_food_or_drink": True,
+            "confidence": 0.75,
+            "verdict": verdict,
+            "needs_clarification": False,
+            "suggested_query": None,
+            "clarification_question": None,
+            "summary": summary,
+            "watch_outs": [],
+            "pair_with": [],
+            "portion_tip": portion_tip,
+        },
+        "should_show_swaps": bool(swaps_payload),
+        "swaps": swaps_payload,
+    }
+
+
+def has_fallback_swaps(food: str) -> bool:
+    key = _fallback_key(food)
+    canonical = FALLBACK_ALIASES.get(key) or key
+    return bool(canonical) and canonical in FALLBACK_CATALOG

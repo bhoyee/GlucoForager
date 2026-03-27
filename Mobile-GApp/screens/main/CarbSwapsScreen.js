@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -29,6 +29,36 @@ const SWAPS = {
 };
 
 const normalizeKey = (value) => `${value || ''}`.trim().toLowerCase().replace(/\s+/g, ' ');
+
+const GOAL_LABELS = {
+  lower_carb: 'Lower carb',
+  high_protein: 'Higher protein',
+  balanced: 'Balanced',
+  weight_loss: 'Weight loss',
+  quick_meals: 'Quick meals',
+  simple_ingredients: 'Simple ingredients',
+  budget_friendly: 'Budget-friendly',
+  family_friendly: 'Family-friendly',
+};
+
+const formatGi = (gi) => {
+  const min = gi && typeof gi === "object" ? gi.min : null;
+  const max = gi && typeof gi === "object" ? gi.max : null;
+  if (typeof min === "number" && typeof max === "number") return `${min}–${max}`;
+  if (typeof min === "number") return `${min}+`;
+  if (typeof max === "number") return `≤${max}`;
+  return null;
+};
+
+const formatMacro = (value) => (typeof value === 'number' && Number.isFinite(value) ? `${value}g` : null);
+
+const impactTone = (impact) => {
+  const v = String(impact || '').toLowerCase();
+  if (v === 'low') return { bg: 'rgba(16, 185, 129, 0.12)', fg: 'rgba(16, 185, 129, 1)' };
+  if (v === 'medium') return { bg: 'rgba(245, 158, 11, 0.14)', fg: 'rgba(245, 158, 11, 1)' };
+  if (v === 'high') return { bg: 'rgba(239, 68, 68, 0.12)', fg: 'rgba(239, 68, 68, 1)' };
+  return { bg: 'rgba(59, 130, 246, 0.12)', fg: Colors.secondary };
+};
 
 export default function CarbSwapsScreen() {
   const navigation = useNavigation();
@@ -64,9 +94,11 @@ export default function CarbSwapsScreen() {
     return null;
   }, [query]);
 
-  const fetchAiSwaps = async (food, { forceSwaps = false } = {}) => {
+  const fetchAiSwaps = async (food, { forceSwaps = true } = {}) => {
     const trimmed = String(food || '').trim();
-    if (!trimmed) return;
+    // Avoid noisy API calls for 1-character inputs while the user is typing.
+    // Two-letter prefixes (e.g. "un") frequently cause backend clarifications; wait a bit longer.
+    if (!trimmed || trimmed.length < 3) return;
     const requestId = Date.now();
     lastRequestIdRef.current = requestId;
     setLoading(true);
@@ -92,7 +124,7 @@ export default function CarbSwapsScreen() {
           },
           body: JSON.stringify({ food: trimmed, force_swaps: Boolean(forceSwaps) }),
         },
-        { timeoutMs: 12000 }
+        { timeoutMs: 65000 }
       );
       if (lastRequestIdRef.current !== requestId) return;
       if (!response.ok) {
@@ -113,9 +145,17 @@ export default function CarbSwapsScreen() {
         return;
       }
       const data = await response.json();
-      if (data?.assessment?.verdict) {
+      if (data?.swaps?.better_options?.length || data?.swaps?.options?.length) {
         setAiResult(data);
       } else {
+        // Clarification / guidance path (server returns 200 with message + suggested_query).
+        if (data?.message) {
+          setAiError(String(data.message));
+          setAiErrorCode('needs_clarification');
+          setAiSuggestedQuery(typeof data.suggested_query === 'string' ? data.suggested_query : null);
+          setAiResult(null);
+          return;
+        }
         setAiError('No swaps returned.');
         setAiResult(null);
       }
@@ -137,12 +177,12 @@ export default function CarbSwapsScreen() {
     setAiErrorCode(null);
     setAiSuggestedQuery(null);
     setShouldUpgrade(false);
-    if (!trimmed) {
+    if (!trimmed || trimmed.length < 3) {
       setLoading(false);
       return;
     }
     const handle = setTimeout(() => {
-      void fetchAiSwaps(trimmed);
+      void fetchAiSwaps(trimmed, { forceSwaps: true });
     }, 450);
     return () => clearTimeout(handle);
   }, [query]);
@@ -220,80 +260,125 @@ export default function CarbSwapsScreen() {
             </View>
           ) : aiResult ? (
             <>
-              <Text style={styles.cardSub}>
-                {aiResult.assessment?.verdict === 'good_choice'
-                  ? 'This is already a good choice'
-                  : aiResult.assessment?.verdict === 'depends'
-                    ? 'It depends'
-                    : 'Higher impact'}
-              </Text>
-
-              <View style={styles.noteCard}>
-                <Text style={styles.noteTitle}>Quick take</Text>
-                <Text style={styles.noteText}>{aiResult.assessment?.summary}</Text>
-              </View>
-
-              {Array.isArray(aiResult.assessment?.watch_outs) && aiResult.assessment.watch_outs.length > 0 ? (
-                <View style={styles.noteCard}>
-                  <Text style={styles.noteTitle}>Watch out for</Text>
-                  {aiResult.assessment.watch_outs.map((t) => (
-                    <Text key={t} style={styles.bulletText}>• {t}</Text>
-                  ))}
-                </View>
-              ) : null}
-
-              {Array.isArray(aiResult.assessment?.pair_with) && aiResult.assessment.pair_with.length > 0 ? (
-                <View style={styles.noteCard}>
-                  <Text style={styles.noteTitle}>Pair with</Text>
-                  {aiResult.assessment.pair_with.map((t) => (
-                    <Text key={t} style={styles.bulletText}>• {t}</Text>
-                  ))}
-                </View>
-              ) : null}
-
-              {aiResult.assessment?.portion_tip ? (
-                <View style={styles.noteCard}>
-                  <Text style={styles.noteTitle}>Portion tip</Text>
-                  <Text style={styles.noteText}>{aiResult.assessment.portion_tip}</Text>
-                </View>
-              ) : null}
-
-              {aiResult.should_show_swaps && aiResult.swaps?.better_options?.length ? (
+              {aiResult.swaps?.better_options?.length ? (
                 <>
                   <Text style={styles.cardSub}>
                     Better options for <Text style={styles.bold}>{aiResult.food}</Text>
                   </Text>
-                  <View style={styles.rows}>
-                    {aiResult.swaps.better_options.map((item) => (
-                      <View key={item} style={styles.row}>
-                        <View style={styles.rowIcon}>
-                          <Ionicons name="sparkles-outline" size={16} color={Colors.secondary} />
+                  {Array.isArray(aiResult.swaps?.options) && aiResult.swaps.options.length ? (
+                    <View style={styles.swapCards}>
+                      {aiResult.swaps.options.map((opt) => {
+                        const name = String(opt?.name || '').trim();
+                        if (!name) return null;
+                        const giText = formatGi(opt?.gi);
+                        const serving = typeof opt?.serving === 'string' ? opt.serving.trim() : '';
+                        const macros = opt?.macros && typeof opt.macros === 'object' ? opt.macros : {};
+                        const netCarbs = formatMacro(macros?.net_carbs_g);
+                        const fiber = formatMacro(macros?.fiber_g);
+                        const protein = formatMacro(macros?.protein_g);
+                        const tags = Array.isArray(opt?.fit_tags) ? opt.fit_tags.filter((t) => GOAL_LABELS[t]).slice(0, 3) : [];
+                        const impact = typeof opt?.impact_label === 'string' ? opt.impact_label : null;
+                        const tone = impactTone(impact);
+
+                        return (
+                          <View key={name} style={styles.swapCard}>
+                            <View style={styles.swapCardAccent} pointerEvents="none" />
+                            <View style={styles.swapCardHeader}>
+                              <Text style={styles.swapCardTitle}>{name}</Text>
+                              {impact ? (
+                                <View style={[styles.impactPill, { backgroundColor: tone.bg }]}>
+                                  <Text style={[styles.impactPillText, { color: tone.fg }]}>
+                                    {String(impact).toUpperCase()} IMPACT
+                                  </Text>
+                                </View>
+                              ) : null}
+                            </View>
+
+                            {(serving || giText || netCarbs || fiber || protein) ? (
+                              <View style={styles.metaRow}>
+                                {serving ? (
+                                  <View style={styles.metaPill}>
+                                    <Ionicons name="restaurant-outline" size={12} color={Colors.textLight} />
+                                    <Text style={styles.metaPillText}>{serving}</Text>
+                                  </View>
+                                ) : null}
+                                {giText ? (
+                                  <View style={styles.metaPill}>
+                                    <Ionicons name="pulse-outline" size={12} color={Colors.textLight} />
+                                    <Text style={styles.metaPillText}>Glycemic index {giText}</Text>
+                                  </View>
+                                ) : null}
+                                {netCarbs ? (
+                                  <View style={styles.macroPill}>
+                                    <Text style={styles.macroPillLabel}>Carbs</Text>
+                                    <Text style={styles.macroPillValue}>{netCarbs}</Text>
+                                  </View>
+                                ) : null}
+                                {fiber ? (
+                                  <View style={styles.macroPill}>
+                                    <Text style={styles.macroPillLabel}>Fiber</Text>
+                                    <Text style={styles.macroPillValue}>{fiber}</Text>
+                                  </View>
+                                ) : null}
+                                {protein ? (
+                                  <View style={styles.macroPill}>
+                                    <Text style={styles.macroPillLabel}>Protein</Text>
+                                    <Text style={styles.macroPillValue}>{protein}</Text>
+                                  </View>
+                                ) : null}
+                              </View>
+                            ) : null}
+
+                            {typeof opt?.reason === 'string' && opt.reason.trim() ? (
+                              <Text style={styles.swapCardReason}>{opt.reason.trim()}</Text>
+                            ) : null}
+
+                            {typeof opt?.portion_suggestion === 'string' && opt.portion_suggestion.trim() ? (
+                              <Text style={styles.swapCardTip}>Portion: {opt.portion_suggestion.trim()}</Text>
+                            ) : null}
+
+                            {tags.length ? (
+                              <View style={styles.tagRow}>
+                                {tags.map((t) => (
+                                  <View key={t} style={styles.tagPill}>
+                                    <Text style={styles.tagText}>{GOAL_LABELS[t]}</Text>
+                                  </View>
+                                ))}
+                              </View>
+                            ) : null}
+                          </View>
+                        );
+                      })}
+                      <Text style={styles.disclaimerSmall}>Glycemic index and macros are estimates; portion size and preparation can change impact.</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.rows}>
+                      {aiResult.swaps.better_options.map((item) => (
+                        <View key={item} style={styles.row}>
+                          <View style={styles.rowIcon}>
+                            <Ionicons name="sparkles-outline" size={16} color={Colors.secondary} />
+                          </View>
+                          <Text style={styles.rowText}>{item}</Text>
                         </View>
-                        <Text style={styles.rowText}>{item}</Text>
-                      </View>
-                    ))}
-                  </View>
-                  <View style={styles.noteCard}>
-                    <Text style={styles.noteTitle}>Why these are better</Text>
-                    <Text style={styles.noteText}>{aiResult.swaps.why_these_are_better}</Text>
-                  </View>
-                  <View style={styles.noteCard}>
-                    <Text style={styles.noteTitle}>Portion tip</Text>
-                    <Text style={styles.noteText}>{aiResult.swaps.portion_tip}</Text>
-                  </View>
+                      ))}
+                    </View>
+                  )}
+                  {aiResult.swaps?.why_these_are_better ? (
+                    <View style={styles.noteCard}>
+                      <Text style={styles.noteTitle}>Why these are better</Text>
+                      <Text style={styles.noteText}>{aiResult.swaps.why_these_are_better}</Text>
+                    </View>
+                  ) : null}
+                  {aiResult.swaps?.portion_tip ? (
+                    <View style={styles.noteCard}>
+                      <Text style={styles.noteTitle}>Portion tip</Text>
+                      <Text style={styles.noteText}>{aiResult.swaps.portion_tip}</Text>
+                    </View>
+                  ) : null}
                 </>
-              ) : (
-                <TouchableOpacity
-                  style={styles.secondaryButton}
-                  onPress={() => void fetchAiSwaps(query, { forceSwaps: true })}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.secondaryButtonText}>Need a substitute?</Text>
-                  <Ionicons name="chevron-forward" size={16} color={Colors.secondary} />
-                </TouchableOpacity>
-              )}
+              ) : null}
             </>
-          ) : matches ? (
+          ) : matches && !aiError ? (
             <>
               <Text style={styles.cardSub}>
                 Swaps for <Text style={styles.bold}>{matches.key}</Text>
@@ -359,6 +444,133 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 12,
     justifyContent: 'space-between',
+  },
+  swapCards: {
+    marginTop: 10,
+  },
+  swapCard: {
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
+  },
+  swapCardAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 12,
+    bottom: 12,
+    width: 3,
+    borderTopRightRadius: 6,
+    borderBottomRightRadius: 6,
+    backgroundColor: Colors.secondary,
+    opacity: 0.9,
+  },
+  swapCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  swapCardTitle: {
+    flex: 1,
+    fontSize: 15.5,
+    fontWeight: '900',
+    color: Colors.text,
+  },
+  impactPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: 'rgba(59, 130, 246, 0.12)',
+  },
+  impactPillText: {
+    fontSize: 10.5,
+    fontWeight: '900',
+    color: Colors.secondary,
+  },
+  metaRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    alignItems: 'center',
+  },
+  metaPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: 'rgba(15, 23, 42, 0.06)',
+  },
+  metaPillText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Colors.textLight,
+  },
+  macroPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: `${Colors.secondary}10`,
+    borderWidth: 1,
+    borderColor: `${Colors.secondary}18`,
+  },
+  macroPillLabel: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: Colors.secondary,
+  },
+  macroPillValue: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: Colors.text,
+  },
+  swapCardReason: {
+    marginTop: 10,
+    fontSize: 13.5,
+    color: Colors.text,
+    lineHeight: 19,
+  },
+  swapCardTip: {
+    marginTop: 8,
+    fontSize: 12.5,
+    color: Colors.textLight,
+  },
+  tagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10,
+  },
+  tagPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(16, 185, 129, 0.10)',
+  },
+  tagText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(16, 185, 129, 1)',
+  },
+  disclaimerSmall: {
+    marginTop: 6,
+    fontSize: 12,
+    color: Colors.textLight,
+    lineHeight: 16,
   },
   backButton: {
     width: 44,
