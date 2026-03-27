@@ -422,12 +422,34 @@ def generate_food_swaps(
                 code="invalid_food_input",
                 message="Enter a single food or drink (e.g. 'rice', 'spinach', 'soda').",
             )
-        # Never leak model/parsing errors to the client (e.g. "Invalid AI swaps payload").
-        _http_error(
-            status_code=502,
-            code="ai_output_invalid",
-            message="Couldn't generate swaps right now. Please try again in a moment.",
+        # If the model returns malformed/partial JSON, do not throw a 502 to mobile.
+        # Return deterministic fallback swaps instead so the feature stays usable.
+        log_system_event(
+            {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "level": "warn",
+                "source": "swaps",
+                "message": "Swaps AI output invalid; serving fallback",
+                "details": f"trace={trace_id} user_id={user.id} food={food!r} err={msg[:160]}",
+                "path": request.url.path,
+                "method": request.method,
+                "ip": request.client.host if request.client else None,
+            }
         )
+        fb = fallback_swaps(food=food, food_profile=food_profile, force_swaps=True)
+        client_payload = _to_client_payload(
+            {
+                "food": fb.get("food"),
+                "assessment": fb.get("assessment"),
+                "should_show_swaps": True,
+                "swaps": fb.get("swaps"),
+            }
+        )
+        try:
+            cache.set(cache_key_fb, json.dumps(client_payload, ensure_ascii=False), ttl_seconds=15 * 60)
+        except Exception:
+            pass
+        return client_payload
     except HTTPException:
         raise
     except Exception:

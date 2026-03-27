@@ -442,9 +442,23 @@ def _normalize_payload(data: Dict[str, Any], *, food_profile: dict[str, Any] | N
         confidence = float(confidence_raw)
     except Exception:
         confidence = 0.0
-    verdict = str(assessment.get("verdict") or "").strip()
+    verdict = str(assessment.get("verdict") or "").strip().lower().replace(" ", "_")
+    # Be tolerant to minor schema drift from the model.
+    verdict_map = {
+        "good_choice": "good_choice",
+        "good": "good_choice",
+        "ok": "good_choice",
+        "higher_impact": "higher_impact",
+        "higherimpact": "higher_impact",
+        "high_impact": "higher_impact",
+        "highimpact": "higher_impact",
+        "spiky": "higher_impact",
+        "depends": "depends",
+        "it_depends": "depends",
+    }
+    verdict = verdict_map.get(verdict, verdict)
     if verdict not in {"good_choice", "higher_impact", "depends"}:
-        return None
+        verdict = "depends"
 
     needs_clarification = bool(assessment.get("needs_clarification", False))
     suggested_query = assessment.get("suggested_query")
@@ -457,7 +471,8 @@ def _normalize_payload(data: Dict[str, Any], *, food_profile: dict[str, Any] | N
     summary = assessment.get("summary")
     portion_tip = assessment.get("portion_tip")
     if not isinstance(summary, str) or not summary.strip():
-        return None
+        # Summary is no longer required by the mobile client, but keep something for logs/debugging.
+        summary = "Here are swap options you can try."
     if not needs_clarification and is_food_or_drink:
         if not isinstance(portion_tip, str) or not portion_tip.strip():
             portion_tip = "If you choose the original, start with a smaller portion and pair it with protein and non-starchy veggies."
