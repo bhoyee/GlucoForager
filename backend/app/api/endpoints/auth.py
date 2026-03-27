@@ -212,7 +212,7 @@ def login(
     if not allowed:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Too many failed attempts. Try again in {remaining} seconds.",
+            detail=f"Invalid email or password. Please wait {remaining} seconds and try again.",
         )
 
     user = db.query(User).filter(User.email == form_data.username).first()
@@ -223,11 +223,12 @@ def login(
             allowed, remaining = login_throttler.check_allowed(identifier)
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"Too many failed attempts. Try again in {remaining} seconds.",
+                detail=f"Invalid email or password. Please wait {remaining} seconds and try again.",
             )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid credentials. {remaining_attempts} attempts remaining.",
+            # Avoid account enumeration; do not reveal whether email exists.
+            detail="Invalid email or password.",
         )
     if user.suspended_at:
         raise HTTPException(
@@ -265,7 +266,7 @@ def login_alias(
     if not allowed:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Too many failed attempts. Try again in {remaining} seconds.",
+            detail=f"Invalid email or password. Please wait {remaining} seconds and try again.",
         )
 
     user = db.query(User).filter(User.email == email).first()
@@ -276,11 +277,12 @@ def login_alias(
             allowed, remaining = login_throttler.check_allowed(identifier)
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"Too many failed attempts. Try again in {remaining} seconds.",
+                detail=f"Invalid email or password. Please wait {remaining} seconds and try again.",
             )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid credentials. {remaining_attempts} attempts remaining.",
+            # Avoid account enumeration; do not reveal whether email exists.
+            detail="Invalid email or password.",
         )
     if user.suspended_at:
         raise HTTPException(

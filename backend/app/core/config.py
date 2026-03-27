@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     openai_organization: str | None = Field(None, env="OPENAI_ORG_ID")
     # Use available models by default; can be overridden via env.
     openai_model: str = Field("gpt-4o-mini", env="OPENAI_MODEL")
+    # Optional model override for the swaps engine (defaults to OPENAI_MODEL when unset).
+    swaps_model: str | None = Field(None, env="SWAPS_MODEL")
     # Default vision-capable model; can be overridden in .env
     openai_vision_model: str = Field("gpt-4o-2024-11-20", env="OPENAI_VISION_MODEL")
     deepseek_api_key: str | None = Field(None, env="DEEPSEEK_API_KEY")

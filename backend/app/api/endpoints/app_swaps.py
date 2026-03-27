@@ -1,8 +1,13 @@
 import json
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
+import logging
+import re
+import time
+import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from openai import OpenAIError
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -10,23 +15,44 @@ from ...api.dependencies import get_current_user
 from ...database import get_db
 from ...models.ai_request import AIRequest
 from ...models.user import User
-from ...services.ai_swaps_service import AISwapsService
+from ...services.ai_swaps_service import AISwapsService, fallback_swaps, has_fallback_swaps
 from ...services.food_profile_service import extract_food_profile
 from ...services.cache_service import CacheService
 from ...services.cost_tracker import record_ai_request
+from ...services.swaps_ai_warmup import enqueue_swaps_ai_warmup
 from ...services.subscription_service import get_effective_subscription_tier
+from ...services.system_log_service import log_system_event
 
 
 router = APIRouter(prefix="/app", tags=["app"])
+logger = logging.getLogger(__name__)
 
 
 class SwapsRequest(BaseModel):
-    food: str = Field(..., min_length=1, max_length=25)
+    # Allow users to type short phrases (e.g. "Semolina (swallow)") and normalize server-side.
+    # Keeping this too small causes FastAPI/Pydantic 422 before we can normalize.
+    food: str = Field(..., min_length=1, max_length=120)
     force_swaps: bool = False
 
 
 def _normalize_food_input(value: str) -> str:
     s = " ".join((value or "").strip().split())
+    if not s:
+        return ""
+    # Prefer just the "food name" portion if user adds explanatory text.
+    # Examples:
+    # - "Semolina (used for swallow like semo)" -> "Semolina"
+    # - "fufu, swallow" -> "fufu"
+    for sep in ("(", ")", "|", ";", ",", ":", "\n", "\r", "\t"):
+        if sep in s:
+            s = s.split(sep, 1)[0].strip()
+    s = s.strip().strip("?").strip()
+    # Remove emojis / punctuation so common inputs like "ice cream🍦" don't fail validation.
+    # Keep unicode letters/digits, spaces, hyphen, apostrophe.
+    s = s.replace("_", " ")
+    s = re.sub(r"[^\w\s'\-]", " ", s, flags=re.UNICODE)
+    s = " ".join(s.split())
+    # Keep the swaps query short and cacheable.
     return s[:25]
 
 
@@ -38,15 +64,9 @@ def _looks_like_food_query(value: str) -> bool:
     lowered = s.lower()
     if "http://" in lowered or "https://" in lowered or "www." in lowered:
         return False
-    # Avoid long questions/sentences. Encourage single food/drink.
-    if "?" in s or "\n" in s or "\r" in s:
-        return False
-    words = [w for w in s.split(" ") if w]
-    if len(words) > 6:
-        return False
     # Reject if it's mostly non-alphanumeric.
     alnum = sum(1 for ch in s if ch.isalnum())
-    if alnum < max(3, int(len(s) * 0.35)):
+    if alnum < 2:
         return False
     return True
 
@@ -60,15 +80,37 @@ def _http_error(*, status_code: int, code: str, message: str, **extra):
 def generate_food_swaps(
     payload: SwapsRequest,
     request: Request,
+    response: Response,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    food = _normalize_food_input(payload.food)
+    trace_id = uuid.uuid4().hex[:12]
+    try:
+        response.headers["X-Swaps-Trace-Id"] = trace_id
+    except Exception:
+        pass
+
+    raw_food = payload.food or ""
+    food = _normalize_food_input(raw_food)
     if not _looks_like_food_query(food):
+        logger.warning("Swaps 422 invalid_food_input raw_len=%s normalized=%r", len(str(raw_food)), food)
+        log_system_event(
+            {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "level": "warn",
+                "source": "swaps",
+                "message": "Swaps rejected (invalid_food_input)",
+                "details": f"trace={trace_id} user_id={user.id} normalized={food!r} raw_len={len(str(raw_food))}",
+                "path": request.url.path,
+                "method": request.method,
+                "ip": request.client.host if request.client else None,
+            }
+        )
         _http_error(
             status_code=422,
             code="invalid_food_input",
             message="Enter a single food or drink (e.g. 'rice', 'spinach', 'soda').",
+            trace_id=trace_id,
         )
 
     tier = get_effective_subscription_tier(db, user)
@@ -76,6 +118,63 @@ def generate_food_swaps(
     per_day_limit = 10 if tier != "premium" else 50
 
     food_profile = extract_food_profile(user)
+
+    def _maybe_fill_swaps_from_fallback(result_payload: dict) -> dict:
+        """
+        If AI provides no usable swaps, fill swaps from the deterministic fallback catalog.
+
+        This endpoint is explicitly "Food swaps" — users expect swap options even if the
+        AI thinks the original food is a "good_choice". The fallback catalog is our safety
+        net for always showing something actionable.
+        """
+        try:
+            has_swaps = bool((result_payload.get("swaps") or {}).get("better_options"))
+            if not has_swaps and has_fallback_swaps(food):
+                fb = fallback_swaps(food=food, food_profile=food_profile, force_swaps=True)
+                if fb.get("swaps"):
+                    result_payload["should_show_swaps"] = True
+                    result_payload["swaps"] = fb.get("swaps")
+        except Exception:
+            pass
+        return result_payload
+
+    def _to_client_payload(result_payload: dict) -> dict:
+        """
+        Mobile UX wants swaps, not an "assessment" object.
+
+        Return a compact, swaps-first payload:
+        {
+          "food": "...",
+          "message": "..." | null,
+          "suggested_query": "..." | null,
+          "swaps": {...} | null
+        }
+        """
+        try:
+            assessment = result_payload.get("assessment") or {}
+            if isinstance(assessment, dict) and bool(assessment.get("needs_clarification")):
+                msg = (
+                    (assessment.get("clarification_question") or "").strip()
+                    or "What exactly do you mean? (e.g. 'unripe plantain', 'unripe banana')"
+                )
+                suggested = assessment.get("suggested_query")
+                return {
+                    "food": str(result_payload.get("food") or food),
+                    "message": msg[:160],
+                    "suggested_query": (str(suggested).strip()[:25] if isinstance(suggested, str) and suggested.strip() else None),
+                    "swaps": None,
+                }
+        except Exception:
+            pass
+
+        swaps = result_payload.get("swaps")
+        swaps_obj = swaps if isinstance(swaps, dict) else None
+        return {
+            "food": str(result_payload.get("food") or food),
+            "message": None,
+            "suggested_query": None,
+            "swaps": swaps_obj,
+        }
     # Cache key must include the user's profile; otherwise different users can see each other's personalized swaps.
     profile_hash = "none"
     try:
@@ -141,12 +240,17 @@ def generate_food_swaps(
             upgrade=False,
         )
 
-    # Cache identical requests (shared by tier + food + force flag).
-    cache_key = f"swaps:cache:v2:tier:{tier}:profile:{profile_hash}:force:{int(bool(payload.force_swaps))}:q:{food.lower()}"
-    cached = cache.get(cache_key)
-    if cached:
+    # Cache v11: swaps-only client payload (no assessment fields returned to mobile).
+    # We keep fallback cache only for AI failures, but we never serve it
+    # ahead of AI so OpenAI remains the primary engine.
+    cache_key_base = f"swaps:cache:v11:tier:{tier}:profile:{profile_hash}:force:{int(bool(payload.force_swaps))}:q:{food.lower()}"
+    cache_key_ai = f"{cache_key_base}:ai"
+    cache_key_fb = f"{cache_key_base}:fb"
+
+    cached_ai = cache.get(cache_key_ai)
+    if cached_ai:
         try:
-            data = json.loads(cached)
+            data = json.loads(cached_ai)
             device_id = request.headers.get("x-device-id")
             # Cached responses still count towards quota to prevent abuse.
             record_ai_request(
@@ -164,27 +268,47 @@ def generate_food_swaps(
             pass
 
     try:
+        # AI-first (your requirement): always call OpenAI and wait up to ~1 minute.
+        # Fallback is only used when OpenAI errors/times out.
+        started = time.perf_counter()
         service = AISwapsService()
         result = service.generate_swaps(
             food=food,
             force_swaps=bool(payload.force_swaps),
-            timeout_seconds=12.0,
+            timeout_seconds=55.0,
             food_profile=food_profile,
         )
+        elapsed_ms = (time.perf_counter() - started) * 1000.0
         assessment = result.get("assessment") or {}
         if not isinstance(assessment, dict):
             _http_error(status_code=502, code="swaps_failed", message="Couldn't generate swaps right now. Please try again.")
 
         if bool(assessment.get("needs_clarification")):
+            # Behave more like "normal GPT": don't hard-fail with a 422 for clarification.
+            # Return 200 with a question so the app can display it without "Request failed".
             suggested_query = assessment.get("suggested_query")
-            question = assessment.get("clarification_question")
-            msg = (question or "").strip() or "I couldn't understand that. Try a simpler food name (e.g. 'donut', 'bread')."
-            _http_error(
-                status_code=422,
-                code="needs_clarification",
-                message=msg,
-                suggested_query=suggested_query,
+            logger.warning("Swaps needs_clarification normalized=%r suggested=%r", food, suggested_query)
+            log_system_event(
+                {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "level": "warn",
+                    "source": "swaps",
+                    "message": "Swaps needs_clarification (200)",
+                    "details": f"trace={trace_id} user_id={user.id} food={food!r} suggested={suggested_query!r}",
+                    "path": request.url.path,
+                    "method": request.method,
+                    "ip": request.client.host if request.client else None,
+                }
             )
+            response_payload = {
+                "food": result.get("food"),
+                "assessment": result.get("assessment"),
+                "should_show_swaps": False,
+                "swaps": None,
+            }
+            client_payload = _to_client_payload(response_payload)
+            cache.set(cache_key_ai, json.dumps(client_payload, ensure_ascii=False), ttl_seconds=15 * 60)
+            return client_payload
         is_food_or_drink = bool(assessment.get("is_food_or_drink", True))
         confidence = 1.0
         try:
@@ -192,11 +316,29 @@ def generate_food_swaps(
         except Exception:
             confidence = 1.0
         if not is_food_or_drink or confidence < 0.65:
-            _http_error(
-                status_code=422,
-                code="not_food_or_drink",
-                message="Please enter a food or drink (e.g. 'rice', 'spinach', 'soda').",
+            # Also return 200 for non-food inputs so the app can display guidance without a hard error.
+            logger.warning("Swaps not_food_or_drink normalized=%r confidence=%.2f", food, confidence)
+            log_system_event(
+                {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "level": "warn",
+                    "source": "swaps",
+                    "message": "Swaps not_food_or_drink (200)",
+                    "details": f"trace={trace_id} user_id={user.id} food={food!r} confidence={confidence:.2f}",
+                    "path": request.url.path,
+                    "method": request.method,
+                    "ip": request.client.host if request.client else None,
+                }
             )
+            response_payload = {
+                "food": result.get("food"),
+                "assessment": result.get("assessment"),
+                "should_show_swaps": False,
+                "swaps": None,
+            }
+            client_payload = _to_client_payload(response_payload)
+            cache.set(cache_key_ai, json.dumps(client_payload, ensure_ascii=False), ttl_seconds=15 * 60)
+            return client_payload
 
         device_id = request.headers.get("x-device-id")
         record_ai_request(
@@ -217,10 +359,63 @@ def generate_food_swaps(
             "should_show_swaps": result.get("should_show_swaps"),
             "swaps": result.get("swaps"),
         }
-        cache.set(cache_key, json.dumps(response_payload, ensure_ascii=False), ttl_seconds=6 * 60 * 60)
-        return response_payload
+        response_payload = _maybe_fill_swaps_from_fallback(response_payload)
+        client_payload = _to_client_payload(response_payload)
+        cache.set(cache_key_ai, json.dumps(client_payload, ensure_ascii=False), ttl_seconds=6 * 60 * 60)
+        log_system_event(
+            {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "level": "info",
+                "source": "swaps",
+                "message": "Swaps served by OpenAI",
+                "details": f"trace={trace_id} user_id={user.id} food={food!r} ms={elapsed_ms:.1f}",
+                "path": request.url.path,
+                "method": request.method,
+                "ip": request.client.host if request.client else None,
+            }
+        )
+        return client_payload
+    except OpenAIError as e:
+        msg = str(e or "")
+        logger.warning("Swaps OpenAI call failed (%s): %s", e.__class__.__name__, msg[:200])
+        log_system_event(
+            {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "level": "warn",
+                "source": "swaps",
+                "message": "Swaps OpenAI call failed",
+                "details": f"trace={trace_id} user_id={user.id} food={food!r} err={e.__class__.__name__}:{msg[:160]}",
+                "path": request.url.path,
+                "method": request.method,
+                "ip": request.client.host if request.client else None,
+            }
+        )
+        # Prefer a deterministic fallback over returning 5xx so the feature stays usable.
+        fb = fallback_swaps(food=food, food_profile=food_profile, force_swaps=bool(payload.force_swaps))
+        # Never show provider/latency issues to users; keep messaging neutral and actionable.
+        try:
+            if isinstance(fb.get("assessment"), dict):
+                summary = str(fb["assessment"].get("summary") or "").strip()
+                if summary:
+                    fb["assessment"]["summary"] = summary[:240]
+        except Exception:
+            pass
+        response_payload = {
+            "food": fb.get("food"),
+            "assessment": fb.get("assessment"),
+            "should_show_swaps": fb.get("should_show_swaps"),
+            "swaps": fb.get("swaps"),
+        }
+        client_payload = _to_client_payload(response_payload)
+        # Cache the fallback for a short period to prevent repeated slow upstream calls.
+        try:
+            cache.set(cache_key_fb, json.dumps(client_payload, ensure_ascii=False), ttl_seconds=15 * 60)
+        except Exception:
+            pass
+        return client_payload
     except ValueError as e:
         msg = str(e or "")
+        logger.warning("Swaps generation returned invalid output: %s", msg)
         if msg in {"food is required"}:
             _http_error(
                 status_code=422,
