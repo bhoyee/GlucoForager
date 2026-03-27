@@ -45,6 +45,10 @@ jobs:
           script: |
             set -e
             cd /srv/glucoforager
-            git pull
+            # Deploy servers should not do interactive merges/rebases.
+            # If the local branch diverged, force it to match GitHub `origin/main`.
+            git fetch --prune origin
+            git checkout main
+            git reset --hard origin/main
             docker compose up -d --build
             docker compose run --rm api alembic upgrade head
