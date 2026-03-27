@@ -42,16 +42,25 @@ const maybeShowRateLimitAlert = (url, response) => {
   );
 };
 
-const buildNetworkErrorResponse = (url, error) => ({
+const buildNetworkErrorResponse = (url, error) => {
+  const name = String(error?.name || '');
+  const msg = String(error?.message || error || '');
+  const isAbort = name === 'AbortError' || msg.toLowerCase().includes('aborted');
+  const detail = isAbort
+    ? 'Request timed out. Please try again.'
+    : 'Network request failed. Please check your connection.';
+
+  return {
   ok: false,
   status: 0,
-  statusText: 'Network request failed',
+  statusText: isAbort ? 'Request timed out' : 'Network request failed',
   url,
   headers: new Headers(),
   error,
-  json: async () => ({ detail: 'Network request failed. Please check your connection.' }),
-  text: async () => 'Network request failed. Please check your connection.',
-});
+  json: async () => ({ detail }),
+  text: async () => detail,
+};
+};
 
 const withSafeBodyParsing = (response) => {
   let cachedJson;
@@ -99,6 +108,7 @@ export const apiFetch = async (
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   const { _retry, ...fetchOptions } = options;
+  const startedAt = Date.now();
 
   if (options.signal) {
     options.signal.addEventListener(
@@ -110,6 +120,7 @@ export const apiFetch = async (
 
   try {
     const response = await fetch(url, { ...fetchOptions, signal: controller.signal });
+    const safeResponse = withSafeBodyParsing(response);
     if (response.status === 401 && authRefreshHandler && !_retry) {
       const newToken = await authRefreshHandler();
       if (newToken) {
@@ -139,21 +150,42 @@ export const apiFetch = async (
     }
     if (!response.ok) {
       if (!shouldSuppressFailureDebugLog(url) && response.status !== 429) {
+        let detailText = url;
+        try {
+          const body = await safeResponse.json();
+          const traceId =
+            safeResponse?.headers?.get?.('X-Swaps-Trace-Id') ||
+            safeResponse?.headers?.get?.('x-swaps-trace-id') ||
+            null;
+          const code = body?.detail?.code || null;
+          const msg = body?.detail?.message || body?.detail || null;
+          const ms = Date.now() - startedAt;
+          const extraBits = [];
+          if (code) extraBits.push(`code=${code}`);
+          if (traceId) extraBits.push(`trace=${traceId}`);
+          extraBits.push(`ms=${ms}`);
+          const extra = extraBits.length ? ` | ${extraBits.join(' ')}` : '';
+          detailText = msg ? `${url} | ${String(msg).slice(0, 160)}${extra}` : `${url}${extra}`;
+        } catch (e) {
+          const ms = Date.now() - startedAt;
+          detailText = `${url} | ms=${ms}`;
+        }
         addDebugLog({
           source: 'API',
           level: 'warn',
           message: `Request failed (${response.status})`,
-          details: url,
+          details: detailText,
         });
       }
     }
-    return withSafeBodyParsing(response);
+    return safeResponse;
   } catch (error) {
+    const ms = Date.now() - startedAt;
     addDebugLog({
       source: 'API',
       level: 'error',
       message: 'Network request failed.',
-      details: `${url} | ${error?.message || error}`,
+      details: `${url} | ${error?.message || error} | ms=${ms} timeoutMs=${timeoutMs}`,
     });
     return buildNetworkErrorResponse(url, error);
   } finally {

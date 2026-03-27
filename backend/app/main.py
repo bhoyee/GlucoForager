@@ -328,6 +328,21 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    # Extra diagnostics for swaps because malformed JSON from mobile/webviews can be hard to debug.
+    swaps_body_preview = None
+    swaps_content_type = None
+    swaps_trace_id = None
+    try:
+        if request.url.path == "/api/app/swaps":
+            import uuid
+
+            swaps_trace_id = uuid.uuid4().hex[:12]
+            swaps_content_type = request.headers.get("content-type")
+            raw = await request.body()
+            if raw:
+                swaps_body_preview = raw[:240].decode("utf-8", errors="replace")
+    except Exception:
+        swaps_body_preview = None
     log_system_event({
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "level": "warn",
@@ -338,6 +353,22 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         "method": request.method,
         "ip": request.client.host if request.client else None,
     })
+    if swaps_trace_id:
+        log_system_event({
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "level": "warn",
+            "source": "swaps",
+            "message": "Swaps validation error",
+            "details": f"trace={swaps_trace_id} content_type={swaps_content_type!r} body={swaps_body_preview!r}",
+            "path": request.url.path,
+            "method": request.method,
+            "ip": request.client.host if request.client else None,
+        })
+        return JSONResponse(
+            status_code=422,
+            content={"detail": exc.errors(), "trace_id": swaps_trace_id},
+            headers={"X-Swaps-Trace-Id": swaps_trace_id},
+        )
     return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 
