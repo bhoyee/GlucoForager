@@ -16,6 +16,9 @@ class StaffUser(Base):
     timezone = Column(String, nullable=False, default="UTC")
     is_active = Column(Boolean, nullable=False, default=True)
 
+    mfa_enabled = Column(Boolean, nullable=False, default=False)
+    mfa_method = Column(String, nullable=True)  # e.g. "email"
+
     deleted_at = Column(DateTime, nullable=True, index=True)
     deleted_by_staff_user_id = Column(Integer, nullable=True, index=True)
     delete_reason = Column(String, nullable=True)

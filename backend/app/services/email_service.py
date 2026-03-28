@@ -265,6 +265,44 @@ def send_staff_notification_email(*, to_email: str, title: str, body: str | None
     logger.info("Sent staff notification email to %s", to_email)
 
 
+def send_staff_mfa_code(*, to_email: str, code: str) -> None:
+    subject = "Your GlucoForager admin verification code"
+    html_body = f"""
+    <html>
+      <body style="font-family: Arial, sans-serif; color: #0C1824;">
+        <div style="max-width:520px; margin:0 auto; border:1px solid #e5e7eb; border-radius:12px; padding:20px;">
+          <h2 style="color:#0FB7A5; margin-top:0;">Admin sign-in verification</h2>
+          <p>Enter this code to finish signing in:</p>
+          <div style="font-size:28px; font-weight:700; letter-spacing:4px; margin:16px 0;">{code}</div>
+          <p>This code expires soon. If you did not try to sign in, you can ignore this email.</p>
+          <p style="margin-top:24px; color:#6b7280;">GlucoForager Admin Console</p>
+        </div>
+      </body>
+    </html>
+    """
+    _send_email(to_email, subject, html_body)
+    logger.info("Sent staff MFA code to %s", to_email)
+
+
+def send_staff_password_reset_code(to_email: str, code: str) -> None:
+    subject = "Your GlucoForager admin password reset code"
+    html_body = f"""
+    <html>
+      <body style="font-family: Arial, sans-serif; color: #0C1824;">
+        <div style="max-width:520px; margin:0 auto; border:1px solid #e5e7eb; border-radius:12px; padding:20px;">
+          <h2 style="color:#0FB7A5; margin-top:0;">Reset your admin password</h2>
+          <p>Use the code below to reset your GlucoForager admin password:</p>
+          <div style="font-size:28px; font-weight:700; letter-spacing:4px; margin:16px 0;">{code}</div>
+          <p>This code expires soon. If you did not request a reset, you can ignore this email.</p>
+          <p style="margin-top:24px; color:#6b7280;">GlucoForager Admin Console</p>
+        </div>
+      </body>
+    </html>
+    """
+    _send_email(to_email, subject, html_body)
+    logger.info("Sent staff password reset email to %s", to_email)
+
+
 def send_newsletter_subscribed_email(to_email: str, subscriber_id: int) -> None:
     site_url = (settings.site_url or "https://www.glucoforager.com").rstrip("/")
     token = make_unsubscribe_token(subscriber_id, to_email)

@@ -21,6 +21,7 @@ from .api.endpoints import (
     auth,
     admin,
     admin_staff_portal,
+    admin_staff_security,
     admin_attendance,
     admin_work_logs,
     admin_library,
@@ -260,6 +261,22 @@ async def abuse_guard(request: Request, call_next):
     elif path.startswith("/api/mobile/push-tokens"):
         limit_per_min = int(getattr(settings, "api_rate_limit_push_tokens_per_min", 60))
         bucket_key = "push_tokens"
+    elif path.startswith("/api/admin/login") or path.startswith("/api/admin/bootstrap") or path.startswith("/api/admin/staff/login"):
+        # IP-based limiting for login/bootstrap endpoints.
+        limit_per_min = int(getattr(settings, "admin_login_rate_limit_per_min", 20))
+        identifier = f"ip:{_client_ip(request)}"
+        bucket_key = "admin_login"
+    elif path.startswith("/api/admin/staff/password-reset/"):
+        limit_per_min = int(getattr(settings, "admin_password_reset_rate_limit_per_min", 10))
+        identifier = f"ip:{_client_ip(request)}"
+        bucket_key = "admin_pw_reset"
+    elif path.startswith("/api/admin/staff/mfa/"):
+        limit_per_min = int(getattr(settings, "admin_mfa_rate_limit_per_min", 20))
+        identifier = f"ip:{_client_ip(request)}"
+        bucket_key = "admin_mfa"
+    elif path.startswith("/api/admin/"):
+        limit_per_min = int(getattr(settings, "admin_rate_limit_per_min", 180))
+        bucket_key = "admin_api"
     else:
         is_user = identifier.startswith("user:")
         if is_user:
@@ -422,6 +439,7 @@ except Exception as exc:  # noqa: BLE001
 app.include_router(auth.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 app.include_router(admin_staff_portal.router, prefix="/api")
+app.include_router(admin_staff_security.router, prefix="/api")
 app.include_router(admin_attendance.router, prefix="/api")
 app.include_router(admin_work_logs.router, prefix="/api")
 app.include_router(admin_library.router, prefix="/api")

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { adminFetch, clearAdminTokens, getAdminAccessToken, getAdminRefreshToken } from '../lib/adminAuth';
 
 export default function AdminShell({ children }) {
   const pathname = usePathname();
@@ -40,7 +41,7 @@ export default function AdminShell({ children }) {
   useEffect(() => {
     if (isLogin) return undefined;
 
-    const token = localStorage.getItem('adminToken');
+    const token = getAdminAccessToken();
     if (!token) {
       router.push('/admin');
       return undefined;
@@ -50,11 +51,9 @@ export default function AdminShell({ children }) {
     const load = async () => {
       setSessionLoading(true);
       try {
-        const response = await fetch(`${API_URL}/api/admin/me`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const response = await adminFetch(`${API_URL}/api/admin/me`);
         if (response.status === 401) {
-          localStorage.removeItem('adminToken');
+          clearAdminTokens();
           router.push('/admin');
           return;
         }
@@ -98,7 +97,19 @@ export default function AdminShell({ children }) {
   }, [sidebarOpen]);
 
   const handleLogout = () => {
-    localStorage.removeItem('adminToken');
+    try {
+      const rt = getAdminRefreshToken();
+      if (rt) {
+        fetch(`${API_URL}/api/admin/staff/logout`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: rt }),
+        }).catch(() => null);
+      }
+    } catch {
+      // Ignore.
+    }
+    clearAdminTokens();
     router.push('/admin');
   };
 
