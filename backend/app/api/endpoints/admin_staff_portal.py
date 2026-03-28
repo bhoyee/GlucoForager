@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
@@ -10,6 +10,7 @@ from ..admin_dependencies import get_current_staff_user, require_staff_permissio
 from ...core.security import get_password_hash
 from ...database import get_db
 from ...models.admin_user import AdminUser
+from ...models.staff_audit_log import StaffAuditLog
 from ...models.staff_permission import StaffPermission
 from ...models.staff_role import StaffRole
 from ...models.staff_user import StaffUser
@@ -48,6 +49,7 @@ class StaffUserOut(BaseModel):
     is_active: bool
     roles: list[str]
     created_at: datetime | None = None
+    deleted_at: datetime | None = None
 
 
 class StaffRoleCreate(BaseModel):
@@ -97,10 +99,14 @@ def admin_me(
 
 @router.get("/staff/users", response_model=dict)
 def list_staff_users(
+    include_deleted: bool = False,
     db: Session = Depends(get_db),
     current_staff: StaffUser = Depends(require_staff_permission("staff.manage")),  # noqa: ARG001
 ):
-    users = db.query(StaffUser).order_by(StaffUser.created_at.desc()).all()
+    q = db.query(StaffUser)
+    if not include_deleted:
+        q = q.filter(StaffUser.deleted_at.is_(None))
+    users = q.order_by(StaffUser.created_at.desc()).all()
     items: list[dict] = []
     for u in users:
         items.append(
@@ -111,6 +117,7 @@ def list_staff_users(
                 is_active=bool(u.is_active),
                 roles=StaffRBACService.get_user_role_keys(db, u.id),
                 created_at=u.created_at,
+                deleted_at=getattr(u, "deleted_at", None),
             ).model_dump()
         )
     return {"items": items}
@@ -159,19 +166,40 @@ def create_staff_user(
 
 @router.patch("/staff/users/{user_id}", response_model=StaffUserOut)
 def update_staff_user(
+    request: Request,
     user_id: int,
     payload: StaffUserUpdate,
     db: Session = Depends(get_db),
-    current_staff: StaffUser = Depends(require_staff_permission("staff.manage")),  # noqa: ARG001
+    current_staff: StaffUser = Depends(require_staff_permission("staff.manage")),
 ):
     user = db.query(StaffUser).filter(StaffUser.id == int(user_id)).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Staff user not found")
+    if getattr(user, "deleted_at", None) is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Staff user is deleted")
 
     if payload.timezone is not None:
         user.timezone = payload.timezone.strip()[:64] or user.timezone
     if payload.is_active is not None:
+        if int(user.id) == int(current_staff.id) and not bool(payload.is_active):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You cannot disable your own account")
         user.is_active = bool(payload.is_active)
+
+    db.add(
+        StaffAuditLog(
+            actor_id=int(current_staff.id),
+            action="staff.update",
+            entity="staff_users",
+            entity_id=str(user.id),
+            details={
+                "timezone": user.timezone,
+                "is_active": bool(user.is_active),
+            },
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent") if request.headers else None,
+            created_at=datetime.utcnow(),
+        )
+    )
 
     db.commit()
     db.refresh(user)
@@ -182,11 +210,13 @@ def update_staff_user(
         is_active=bool(user.is_active),
         roles=StaffRBACService.get_user_role_keys(db, user.id),
         created_at=user.created_at,
+        deleted_at=getattr(user, "deleted_at", None),
     )
 
 
 @router.post("/staff/users/{user_id}/roles", response_model=dict)
 def set_staff_user_roles(
+    request: Request,
     user_id: int,
     payload: SetRoleKeysPayload,
     db: Session = Depends(get_db),
@@ -195,9 +225,69 @@ def set_staff_user_roles(
     user = db.query(StaffUser).filter(StaffUser.id == int(user_id)).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Staff user not found")
+    if getattr(user, "deleted_at", None) is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Staff user is deleted")
     StaffRBACService.set_user_roles_by_keys(db, user.id, payload.role_keys)
+    db.add(
+        StaffAuditLog(
+            actor_id=int(current_staff.id),
+            action="staff.roles.set",
+            entity="staff_users",
+            entity_id=str(user.id),
+            details={"role_keys": [str(k) for k in (payload.role_keys or [])]},
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent") if request.headers else None,
+            created_at=datetime.utcnow(),
+        )
+    )
     db.commit()
     return {"ok": True, "roles": StaffRBACService.get_user_role_keys(db, user.id)}
+
+
+class StaffUserDeletePayload(BaseModel):
+    reason: str | None = Field(None, max_length=240)
+
+
+@router.delete("/staff/users/{user_id}", response_model=dict)
+def soft_delete_staff_user(
+    request: Request,
+    user_id: int,
+    payload: StaffUserDeletePayload | None = None,
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("staff.manage")),
+):
+    user = db.query(StaffUser).filter(StaffUser.id == int(user_id)).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Staff user not found")
+    if int(user.id) == int(current_staff.id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You cannot delete your own account")
+    if getattr(user, "deleted_at", None) is not None:
+        return {"ok": True}
+
+    reason = None
+    if payload and isinstance(payload.reason, str) and payload.reason.strip():
+        reason = payload.reason.strip()[:240]
+
+    user.is_active = False
+    user.deleted_at = datetime.utcnow()
+    user.deleted_by_staff_user_id = int(current_staff.id)
+    user.delete_reason = reason
+
+    db.add(
+        StaffAuditLog(
+            actor_id=int(current_staff.id),
+            action="staff.soft_delete",
+            entity="staff_users",
+            entity_id=str(user.id),
+            details={"reason": reason},
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent") if request.headers else None,
+            created_at=datetime.utcnow(),
+        )
+    )
+
+    db.commit()
+    return {"ok": True}
 
 
 @router.get("/staff/roles", response_model=dict)

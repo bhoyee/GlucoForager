@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timezone, timedelta, time
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -55,6 +55,12 @@ def _entry_view(entry: StaffTimeEntry, staff_tz: str) -> dict:
         "clock_out_ok": clock_out_ok,
         "day_status": day_status,
         "timezone": staff_tz or "UTC",
+        "edited_at": entry.edited_at.isoformat() if entry.edited_at else None,
+        "edited_by_staff_user_id": entry.edited_by_staff_user_id,
+        "edit_reason": entry.edit_reason,
+        "approved_at": entry.approved_at.isoformat() if getattr(entry, "approved_at", None) else None,
+        "approved_by_staff_user_id": getattr(entry, "approved_by_staff_user_id", None),
+        "approval_reason": getattr(entry, "approval_reason", None),
     }
 
 
@@ -81,7 +87,7 @@ def get_month(
         if not (StaffRBACService.has_permission(perms, "attendance.manage") or StaffRBACService.has_permission(perms, "*")):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
     staff = db.query(StaffUser).filter(StaffUser.id == staff_id).first()
-    if not staff or not staff.is_active:
+    if not staff or not staff.is_active or getattr(staff, "deleted_at", None) is not None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Staff user not found")
 
     start = date(int(year), int(month), 1)
@@ -212,3 +218,90 @@ def edit_entry(
     # Show values in the edited staff user's timezone (not HR's timezone).
     staff = db.query(StaffUser).filter(StaffUser.id == int(entry.staff_user_id)).first()
     return {"ok": True, "entry": _entry_view(entry, (staff.timezone if staff else "UTC"))}
+
+
+class ApproveMissedClockOutPayload(BaseModel):
+    clock_out_at: str | None = None
+    reason: str | None = Field(None, max_length=240)
+
+
+@router.post("/entries/{entry_id}/approve-missed-clock-out")
+def approve_missed_clock_out(
+    request: Request,
+    entry_id: int,
+    payload: ApproveMissedClockOutPayload,
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("attendance.manage")),
+):
+    entry = db.query(StaffTimeEntry).filter(StaffTimeEntry.id == int(entry_id)).first()
+    if not entry:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    if not entry.clock_in_at:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Cannot approve: missing clock-in")
+    if entry.clock_out_at:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Already clocked out")
+
+    staff = db.query(StaffUser).filter(StaffUser.id == int(entry.staff_user_id)).first()
+    staff_tz = staff.timezone if staff and staff.timezone else "UTC"
+
+    def _parse_dt(value: str | None) -> datetime | None:
+        if not value:
+            return None
+        try:
+            dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except Exception:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid datetime format")
+        if dt.tzinfo is not None:
+            dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+        return dt
+
+    clock_out = _parse_dt(payload.clock_out_at)
+    if not clock_out:
+        tz = _safe_tz(staff_tz)
+        local_out = datetime.combine(entry.work_date, time(17, 0), tzinfo=tz)
+        clock_out = local_out.astimezone(timezone.utc).replace(tzinfo=None)
+
+    if clock_out <= entry.clock_in_at:
+        # Fallback to a reasonable default shift length if the tz-based 17:00 is earlier than clock-in.
+        clock_out = entry.clock_in_at + timedelta(hours=8)
+
+    reason = (payload.reason.strip()[:240] if isinstance(payload.reason, str) and payload.reason.strip() else "HR approval: missed clock-out")
+
+    before = {
+        "clock_out_at": entry.clock_out_at.isoformat() if entry.clock_out_at else None,
+        "approved_at": entry.approved_at.isoformat() if getattr(entry, "approved_at", None) else None,
+    }
+
+    entry.clock_out_at = clock_out
+    entry.clock_out_ip = request.client.host if request.client else None
+    entry.edited_at = datetime.utcnow()
+    entry.edited_by_staff_user_id = int(current_staff.id)
+    entry.edit_reason = reason
+    entry.approved_at = datetime.utcnow()
+    entry.approved_by_staff_user_id = int(current_staff.id)
+    entry.approval_reason = reason
+    entry.updated_at = datetime.utcnow()
+
+    db.add(
+        StaffAuditLog(
+            actor_id=int(current_staff.id),
+            action="attendance.approve_missed_clock_out",
+            entity="staff_time_entries",
+            entity_id=str(entry.id),
+            details={
+                "before": before,
+                "after": {
+                    "clock_out_at": clock_out.isoformat() if clock_out else None,
+                    "approved_at": entry.approved_at.isoformat() if entry.approved_at else None,
+                },
+                "reason": reason,
+            },
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            created_at=datetime.utcnow(),
+        )
+    )
+
+    db.commit()
+    db.refresh(entry)
+    return {"ok": True, "entry": _entry_view(entry, staff_tz)}

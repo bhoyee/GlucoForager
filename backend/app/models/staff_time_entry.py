@@ -24,5 +24,9 @@ class StaffTimeEntry(Base):
     edited_by_staff_user_id = Column(Integer, nullable=True, index=True)
     edit_reason = Column(String, nullable=True)
 
+    approved_at = Column(DateTime, nullable=True)
+    approved_by_staff_user_id = Column(Integer, nullable=True, index=True)
+    approval_reason = Column(String, nullable=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

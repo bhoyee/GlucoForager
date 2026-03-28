@@ -14,6 +14,10 @@ export default function AdminStaffPage() {
   const [permissions, setPermissions] = useState([]);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
+  const [includeDeleted, setIncludeDeleted] = useState(false);
+
+  const [roleDrafts, setRoleDrafts] = useState({});
+  const [roleDirty, setRoleDirty] = useState({});
 
   const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -30,7 +34,7 @@ export default function AdminStaffPage() {
     try {
       const headers = { Authorization: `Bearer ${token}` };
       const [uRes, rRes, pRes] = await Promise.all([
-        fetch(`${API_URL}/api/admin/staff/users`, { headers }),
+        fetch(`${API_URL}/api/admin/staff/users?include_deleted=${includeDeleted ? '1' : '0'}`, { headers }),
         fetch(`${API_URL}/api/admin/staff/roles`, { headers }),
         fetch(`${API_URL}/api/admin/staff/permissions`, { headers }),
       ]);
@@ -39,15 +43,32 @@ export default function AdminStaffPage() {
         router.push('/admin');
         return;
       }
-      if (![uRes, rRes, pRes].every((r) => r.ok)) throw new Error();
-      const u = await uRes.json();
-      const r = await rRes.json();
-      const p = await pRes.json();
-      setUsers(Array.isArray(u.items) ? u.items : []);
+      const u = await uRes.json().catch(() => ({}));
+      const r = await rRes.json().catch(() => ({}));
+      const p = await pRes.json().catch(() => ({}));
+      if (!uRes.ok || !rRes.ok || !pRes.ok) throw new Error(u.detail || r.detail || p.detail || 'Failed to load staff portal data.');
+
+      const uItems = Array.isArray(u.items) ? u.items : [];
+      setUsers(uItems);
       setRoles(Array.isArray(r.items) ? r.items : []);
       setPermissions(Array.isArray(p.items) ? p.items : []);
-    } catch {
-      setMessage('Failed to load staff portal data.');
+
+      setRoleDrafts(() => {
+        const next = {};
+        uItems.forEach((x) => {
+          next[String(x.id)] = Array.isArray(x.roles) ? x.roles : [];
+        });
+        return next;
+      });
+      setRoleDirty(() => {
+        const next = {};
+        uItems.forEach((x) => {
+          next[String(x.id)] = false;
+        });
+        return next;
+      });
+    } catch (e) {
+      setMessage(e?.message || 'Failed to load staff portal data.');
     } finally {
       setLoading(false);
     }
@@ -55,7 +76,7 @@ export default function AdminStaffPage() {
 
   useEffect(() => {
     loadAll();
-  }, [token]);
+  }, [token, includeDeleted]);
 
   const createUser = async (event) => {
     event.preventDefault();
@@ -90,45 +111,80 @@ export default function AdminStaffPage() {
     }
   };
 
-  const setRolesForUser = async (userId, roleKeys) => {
+  const saveRolesForUser = async (userId) => {
     if (!token) return;
     setMessage('');
+    const draft = roleDrafts[String(userId)] || [];
     try {
       const res = await fetch(`${API_URL}/api/admin/staff/users/${userId}/roles`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role_keys: roleKeys }),
+        body: JSON.stringify({ role_keys: draft }),
       });
+      const data = await res.json().catch(() => ({}));
       if (res.status === 401) {
         localStorage.removeItem('adminToken');
         router.push('/admin');
         return;
       }
-      if (!res.ok) throw new Error();
+      if (!res.ok) throw new Error(data.detail || 'Failed to update roles.');
       loadAll();
-    } catch {
-      setMessage('Failed to update roles.');
+    } catch (e) {
+      setMessage(e?.message || 'Failed to update roles.');
     }
   };
 
   const toggleActive = async (user) => {
     if (!token) return;
     setMessage('');
+    if (user.deleted_at) {
+      setMessage('Cannot change status: staff user is deleted.');
+      return;
+    }
+    const ok = window.confirm(`${user.is_active ? 'Disable' : 'Enable'} ${user.email}?`);
+    if (!ok) return;
     try {
       const res = await fetch(`${API_URL}/api/admin/staff/users/${user.id}`, {
         method: 'PATCH',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_active: !user.is_active }),
       });
+      const data = await res.json().catch(() => ({}));
       if (res.status === 401) {
         localStorage.removeItem('adminToken');
         router.push('/admin');
         return;
       }
-      if (!res.ok) throw new Error();
+      if (!res.ok) throw new Error(data.detail || 'Failed to update staff user.');
       loadAll();
-    } catch {
-      setMessage('Failed to update staff user.');
+    } catch (e) {
+      setMessage(e?.message || 'Failed to update staff user.');
+    }
+  };
+
+  const softDelete = async (user) => {
+    if (!token) return;
+    setMessage('');
+    if (user.deleted_at) return;
+    const ok = window.confirm(`Soft delete ${user.email}? They will not be able to log in.`);
+    if (!ok) return;
+    const reason = window.prompt('Reason (optional):') || '';
+    try {
+      const res = await fetch(`${API_URL}/api/admin/staff/users/${user.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: reason || undefined }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      if (!res.ok) throw new Error(data.detail || 'Failed to delete staff user.');
+      loadAll();
+    } catch (e) {
+      setMessage(e?.message || 'Failed to delete staff user.');
     }
   };
 
@@ -140,6 +196,15 @@ export default function AdminStaffPage() {
         <h2 className="admin-title">Staff Portal</h2>
         <p className="admin-subtitle">Create staff accounts and assign roles/permissions.</p>
         {message && <p className="admin-subtitle">{message}</p>}
+
+        <div className="admin-actions" style={{ gap: 10, flexWrap: 'wrap', marginTop: 10 }}>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input type="checkbox" checked={includeDeleted} onChange={(e) => setIncludeDeleted(e.target.checked)} /> Show deleted
+          </label>
+          <button className="admin-button secondary" type="button" onClick={loadAll}>
+            Refresh
+          </button>
+        </div>
 
         <div className="admin-grid" style={{ marginTop: 16 }}>
           <div className="admin-card" style={{ padding: 16 }}>
@@ -185,9 +250,7 @@ export default function AdminStaffPage() {
 
           <div className="admin-card" style={{ padding: 16 }}>
             <h3>Roles & Permissions</h3>
-            <p className="admin-subtitle">
-              Roles live in the database. Permissions are assigned per role and enforced by the backend.
-            </p>
+            <p className="admin-subtitle">Roles live in the database. Permissions are assigned per role and enforced by the backend.</p>
             <div style={{ maxHeight: 220, overflow: 'auto' }}>
               <ul>
                 {roles.map((r) => (
@@ -232,35 +295,64 @@ export default function AdminStaffPage() {
                 </tr>
               </thead>
               <tbody>
-                {users.map((u) => (
-                  <tr key={u.id}>
-                    <td>{u.email}</td>
-                    <td>{u.timezone}</td>
-                    <td>{u.is_active ? 'Active' : 'Disabled'}</td>
-                    <td>
-                      <select
-                        multiple
-                        value={u.roles || []}
-                        onChange={(e) => {
-                          const selected = Array.from(e.target.selectedOptions).map((o) => o.value);
-                          setRolesForUser(u.id, selected);
-                        }}
-                        style={{ minWidth: 220, minHeight: 80 }}
-                      >
-                        {roleOptions.map((r) => (
-                          <option key={r.key} value={r.key}>
-                            {r.name}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td>
-                      <button className="admin-button secondary" type="button" onClick={() => toggleActive(u)}>
-                        {u.is_active ? 'Disable' : 'Enable'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {users.map((u) => {
+                  const idKey = String(u.id);
+                  const isDeleted = Boolean(u.deleted_at);
+                  const statusLabel = isDeleted ? 'Deleted' : u.is_active ? 'Active' : 'Disabled';
+                  return (
+                    <tr key={u.id} style={isDeleted ? { opacity: 0.7 } : undefined}>
+                      <td>{u.email}</td>
+                      <td>{u.timezone}</td>
+                      <td>{statusLabel}</td>
+                      <td>
+                        <select
+                          multiple
+                          value={roleDrafts[idKey] || []}
+                          disabled={isDeleted}
+                          onChange={(e) => {
+                            const selected = Array.from(e.target.selectedOptions).map((o) => o.value);
+                            setRoleDrafts((prev) => ({ ...prev, [idKey]: selected }));
+                            setRoleDirty((prev) => ({ ...prev, [idKey]: true }));
+                          }}
+                          style={{ minWidth: 220, minHeight: 80 }}
+                        >
+                          {roleOptions.map((r) => (
+                            <option key={r.key} value={r.key}>
+                              {r.name}
+                            </option>
+                          ))}
+                        </select>
+                        {roleDirty[idKey] && !isDeleted ? (
+                          <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            <button className="admin-button secondary" type="button" onClick={() => saveRolesForUser(u.id)}>
+                              Save roles
+                            </button>
+                            <button
+                              className="admin-button secondary"
+                              type="button"
+                              onClick={() => {
+                                setRoleDrafts((prev) => ({ ...prev, [idKey]: Array.isArray(u.roles) ? u.roles : [] }));
+                                setRoleDirty((prev) => ({ ...prev, [idKey]: false }));
+                              }}
+                            >
+                              Reset
+                            </button>
+                          </div>
+                        ) : null}
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          <button className="admin-button secondary" type="button" onClick={() => toggleActive(u)} disabled={isDeleted}>
+                            {u.is_active ? 'Disable' : 'Enable'}
+                          </button>
+                          <button className="admin-button" type="button" onClick={() => softDelete(u)} disabled={isDeleted}>
+                            Soft delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
