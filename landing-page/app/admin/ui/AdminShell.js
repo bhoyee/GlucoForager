@@ -124,6 +124,7 @@ export default function AdminShell({ children }) {
     { href: '/admin/work-logs', label: 'Work Logs', icon: 'WL' },
     { href: '/admin/library', label: 'Library', icon: 'LB' },
     { href: '/admin/help', label: 'Help', icon: '?' },
+    { href: '/admin/reports', label: 'Reports', icon: 'RP', perm: 'reports.read' },
     { href: '/admin/users', label: 'Users', icon: 'U', perm: 'users.read' },
     { href: '/admin/recipes', label: 'Recipes', icon: 'R', perm: 'recipes.write' },
     { href: '/admin/recipes/new', label: 'New Recipe', icon: '+', perm: 'recipes.write' },
@@ -141,8 +142,8 @@ export default function AdminShell({ children }) {
     { href: '/admin/system-logs', label: 'System Logs', icon: 'L', perm: 'logs.read' },
     { href: '/admin/mobile-logs', label: 'Mobile Logs', icon: 'P', perm: 'logs.read' },
     { href: '/admin/db-backups', label: 'Database Backups', icon: 'DB', perm: 'backups.run' },
-    { href: '/admin/staff', label: 'Staff', icon: 'ST', perm: 'admin.manage' },
-    { href: '/admin/expenses', label: 'Expenses', icon: 'EX', perm: 'admin.manage' },
+    { href: '/admin/staff', label: 'Staff', icon: 'ST', perm: 'staff.manage' },
+    { href: '/admin/expenses', label: 'Expenses', icon: 'EX', perm: 'expenses.read' },
   ].filter((item) => hasPermission(item.perm));
 
   return (

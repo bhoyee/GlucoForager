@@ -6,9 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
-from ..admin_dependencies import get_current_admin
+from ..admin_dependencies import get_current_staff_user, require_staff_permission
 from ...core.security import get_password_hash
 from ...database import get_db
+from ...models.admin_user import AdminUser
 from ...models.staff_permission import StaffPermission
 from ...models.staff_role import StaffRole
 from ...models.staff_user import StaffUser
@@ -80,7 +81,7 @@ class SetPermissionKeysPayload(BaseModel):
 @router.get("/me", response_model=StaffMeResponse)
 def admin_me(
     db: Session = Depends(get_db),
-    current_staff: StaffUser = Depends(get_current_admin),
+    current_staff: StaffUser = Depends(get_current_staff_user),
 ):
     roles = StaffRBACService.get_user_role_keys(db, current_staff.id)
     perms = StaffRBACService.get_user_permission_keys(db, current_staff.id)
@@ -97,7 +98,7 @@ def admin_me(
 @router.get("/staff/users", response_model=dict)
 def list_staff_users(
     db: Session = Depends(get_db),
-    current_staff: StaffUser = Depends(get_current_admin),  # noqa: ARG001
+    current_staff: StaffUser = Depends(require_staff_permission("staff.manage")),  # noqa: ARG001
 ):
     users = db.query(StaffUser).order_by(StaffUser.created_at.desc()).all()
     items: list[dict] = []
@@ -119,21 +120,25 @@ def list_staff_users(
 def create_staff_user(
     payload: StaffUserCreate,
     db: Session = Depends(get_db),
-    current_staff: StaffUser = Depends(get_current_admin),  # noqa: ARG001
+    current_staff: StaffUser = Depends(require_staff_permission("staff.manage")),  # noqa: ARG001
 ):
     email = payload.email.lower()
-    existing = db.query(StaffUser).filter(StaffUser.email == email).first()
-    if existing:
+    existing_staff = db.query(StaffUser).filter(StaffUser.email == email).first()
+    existing_admin = db.query(AdminUser).filter(AdminUser.email == email).first()
+    if existing_staff or existing_admin:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Staff user already exists")
 
+    hashed = get_password_hash(payload.password)
     user = StaffUser(
         email=email,
-        hashed_password=get_password_hash(payload.password),
+        hashed_password=hashed,
         timezone=(payload.timezone or "UTC").strip()[:64] or "UTC",
         is_active=bool(payload.is_active),
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
     )
+    admin = AdminUser(email=email, hashed_password=hashed)
+    db.add(admin)
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -157,7 +162,7 @@ def update_staff_user(
     user_id: int,
     payload: StaffUserUpdate,
     db: Session = Depends(get_db),
-    current_staff: StaffUser = Depends(get_current_admin),  # noqa: ARG001
+    current_staff: StaffUser = Depends(require_staff_permission("staff.manage")),  # noqa: ARG001
 ):
     user = db.query(StaffUser).filter(StaffUser.id == int(user_id)).first()
     if not user:
@@ -185,7 +190,7 @@ def set_staff_user_roles(
     user_id: int,
     payload: SetRoleKeysPayload,
     db: Session = Depends(get_db),
-    current_staff: StaffUser = Depends(get_current_admin),  # noqa: ARG001
+    current_staff: StaffUser = Depends(require_staff_permission("staff.manage")),  # noqa: ARG001
 ):
     user = db.query(StaffUser).filter(StaffUser.id == int(user_id)).first()
     if not user:
@@ -198,7 +203,7 @@ def set_staff_user_roles(
 @router.get("/staff/roles", response_model=dict)
 def list_roles(
     db: Session = Depends(get_db),
-    current_staff: StaffUser = Depends(get_current_admin),  # noqa: ARG001
+    current_staff: StaffUser = Depends(require_staff_permission("staff.manage")),  # noqa: ARG001
 ):
     roles = db.query(StaffRole).order_by(StaffRole.key.asc()).all()
     return {"items": [StaffRoleOut(id=r.id, key=r.key, name=r.name, description=r.description).model_dump() for r in roles]}
@@ -208,7 +213,7 @@ def list_roles(
 def create_role(
     payload: StaffRoleCreate,
     db: Session = Depends(get_db),
-    current_staff: StaffUser = Depends(get_current_admin),  # noqa: ARG001
+    current_staff: StaffUser = Depends(require_staff_permission("staff.manage")),  # noqa: ARG001
 ):
     key = payload.key.strip().lower()
     if not key or " " in key:
@@ -227,7 +232,7 @@ def create_role(
 @router.get("/staff/permissions", response_model=dict)
 def list_permissions(
     db: Session = Depends(get_db),
-    current_staff: StaffUser = Depends(get_current_admin),  # noqa: ARG001
+    current_staff: StaffUser = Depends(require_staff_permission("staff.manage")),  # noqa: ARG001
 ):
     perms = db.query(StaffPermission).order_by(StaffPermission.key.asc()).all()
     return {
@@ -243,7 +248,7 @@ def set_role_permissions(
     role_id: int,
     payload: SetPermissionKeysPayload,
     db: Session = Depends(get_db),
-    current_staff: StaffUser = Depends(get_current_admin),  # noqa: ARG001
+    current_staff: StaffUser = Depends(require_staff_permission("staff.manage")),  # noqa: ARG001
 ):
     role = db.query(StaffRole).filter(StaffRole.id == int(role_id)).first()
     if not role:
@@ -251,4 +256,3 @@ def set_role_permissions(
     StaffRBACService.set_role_permissions_by_keys(db, role.id, payload.permission_keys)
     db.commit()
     return {"ok": True}
-

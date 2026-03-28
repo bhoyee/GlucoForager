@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from ..admin_dependencies import get_current_admin
+from ..admin_dependencies import require_staff_permission
 from ...database import get_db
 from ...models.staff_user import StaffUser
 from ...models.staff_work_log import StaffWorkLog
@@ -48,7 +48,7 @@ def get_month(
     month: int,
     staff_user_id: int | None = None,
     db: Session = Depends(get_db),
-    current_staff: StaffUser = Depends(get_current_admin),
+    current_staff: StaffUser = Depends(require_staff_permission("work_logs.read")),
 ):
     staff_id = int(staff_user_id) if staff_user_id is not None else int(current_staff.id)
     staff = db.query(StaffUser).filter(StaffUser.id == staff_id).first()
@@ -86,7 +86,7 @@ def get_month(
 def upsert_work_log(
     payload: WorkLogUpsertPayload,
     db: Session = Depends(get_db),
-    current_staff: StaffUser = Depends(get_current_admin),
+    current_staff: StaffUser = Depends(require_staff_permission("work_logs.write")),
 ):
     work_date = payload.work_date or datetime.now(timezone.utc).date()
     row = (
@@ -111,4 +111,3 @@ def upsert_work_log(
     db.commit()
     db.refresh(row)
     return {"ok": True, "id": row.id}
-

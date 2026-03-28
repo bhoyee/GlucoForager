@@ -3,12 +3,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 import uuid
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, UploadFile, File, status
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, or_
 from sqlalchemy.orm import Session
 
-from ..admin_dependencies import get_current_admin
+from ..admin_dependencies import get_current_admin, require_staff_permission
 from ...core.config import settings
 from ...database import get_db
 from ...database import SessionLocal
@@ -19,6 +19,7 @@ from ...models.newsletter_signup import NewsletterSignup
 from ...services.cache_service import CacheService
 from ...services.email_service import send_blog_post_newsletter_email
 from ...services.newsletter_tokens import make_unsubscribe_token
+from ...services.staff_rbac_service import StaffRBACService
 
 router = APIRouter(prefix="/admin/blog", tags=["admin-blog"])
 cache = CacheService()
@@ -138,10 +139,20 @@ def _send_post_to_newsletter_task(post_id: int) -> None:
         db.close()
 
 
+def _ensure_staff_permission(db: Session, request: Request, required: str) -> None:
+    staff = getattr(request.state, "staff_user", None)
+    if not staff:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+    perm_keys = StaffRBACService.get_user_permission_keys(db, int(staff.id))
+    if not StaffRBACService.has_permission(perm_keys, required):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+
+
 @router.post("/upload", status_code=201, response_model=dict)
 async def upload_blog_image(
     file: UploadFile = File(...),
     current_admin: AdminUser = Depends(get_current_admin),  # noqa: ARG001
+    staff: AdminUser = Depends(require_staff_permission("blog.write")),  # noqa: ARG001
 ):
     content_type = (file.content_type or "").lower()
     if not content_type.startswith("image/"):
@@ -175,6 +186,7 @@ def admin_list_posts(
     status_filter: str | None = None,
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin),  # noqa: ARG001
+    staff: AdminUser = Depends(require_staff_permission("blog.read")),  # noqa: ARG001
 ):
     page = max(1, page)
     page_size = min(max(1, page_size), 100)
@@ -213,10 +225,12 @@ def admin_list_posts(
 
 @router.post("/posts", status_code=201, response_model=BlogPostAdminItem)
 def admin_create_post(
+    request: Request,
     payload: BlogPostUpsertPayload,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin),
+    staff: AdminUser = Depends(require_staff_permission("blog.write")),  # noqa: ARG001
 ):
     normalized_status = (payload.status or "draft").strip().lower()
     if normalized_status not in {"draft", "published"}:
@@ -237,6 +251,8 @@ def admin_create_post(
     published_at = payload.published_at
     if normalized_status == "published" and not published_at:
         published_at = _utcnow()
+    if normalized_status == "published" or payload.notify_newsletter:
+        _ensure_staff_permission(db, request, "blog.publish")
 
     post = BlogPost(
         slug=slug,
@@ -282,6 +298,7 @@ def admin_get_post(
     post_id: int,
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin),  # noqa: ARG001
+    staff: AdminUser = Depends(require_staff_permission("blog.read")),  # noqa: ARG001
 ):
     post = db.query(BlogPost).filter(BlogPost.id == post_id).first()
     if not post:
@@ -303,11 +320,13 @@ def admin_get_post(
 
 @router.put("/posts/{post_id}", response_model=BlogPostAdminItem)
 def admin_update_post(
+    request: Request,
     post_id: int,
     payload: BlogPostUpsertPayload,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin),
+    staff: AdminUser = Depends(require_staff_permission("blog.write")),  # noqa: ARG001
 ):
     post = db.query(BlogPost).filter(BlogPost.id == post_id).first()
     if not post:
@@ -316,6 +335,8 @@ def admin_update_post(
     normalized_status = (payload.status or "draft").strip().lower()
     if normalized_status not in {"draft", "published"}:
         raise HTTPException(status_code=400, detail="Invalid status")
+    if normalized_status == "published" or payload.notify_newsletter:
+        _ensure_staff_permission(db, request, "blog.publish")
 
     slug = (payload.slug or "").strip().lower()
     slug = _slugify(slug) if slug else _slugify(payload.title)
@@ -369,6 +390,7 @@ def admin_delete_post(
     post_id: int,
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin),  # noqa: ARG001
+    staff: AdminUser = Depends(require_staff_permission("blog.write")),  # noqa: ARG001
 ):
     post = db.query(BlogPost).filter(BlogPost.id == post_id).first()
     if not post:
@@ -386,6 +408,7 @@ def admin_list_comments(
     status_filter: str | None = None,
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin),  # noqa: ARG001
+    staff: AdminUser = Depends(require_staff_permission("blog.read")),  # noqa: ARG001
 ):
     page = max(1, page)
     page_size = min(max(1, page_size), 200)
@@ -425,6 +448,7 @@ def admin_approve_comment(
     comment_id: int,
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin),  # noqa: ARG001
+    staff: AdminUser = Depends(require_staff_permission("blog.write")),  # noqa: ARG001
 ):
     comment = db.query(BlogComment).filter(BlogComment.id == comment_id).first()
     if not comment:
@@ -439,6 +463,7 @@ def admin_delete_comment(
     comment_id: int,
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin),  # noqa: ARG001
+    staff: AdminUser = Depends(require_staff_permission("blog.write")),  # noqa: ARG001
 ):
     comment = db.query(BlogComment).filter(BlogComment.id == comment_id).first()
     if not comment:
