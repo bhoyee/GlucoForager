@@ -20,6 +20,12 @@ from sqlalchemy.exc import OperationalError
 from .api.endpoints import (
     auth,
     admin,
+    admin_staff_portal,
+    admin_attendance,
+    admin_work_logs,
+    admin_library,
+    admin_help,
+    admin_expenses,
     admin_settings,
     admin_challenge,
     admin_revenuecat,
@@ -412,6 +418,12 @@ except Exception as exc:  # noqa: BLE001
 
 app.include_router(auth.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
+app.include_router(admin_staff_portal.router, prefix="/api")
+app.include_router(admin_attendance.router, prefix="/api")
+app.include_router(admin_work_logs.router, prefix="/api")
+app.include_router(admin_library.router, prefix="/api")
+app.include_router(admin_help.router, prefix="/api")
+app.include_router(admin_expenses.router, prefix="/api")
 app.include_router(admin_settings.router, prefix="/api")
 app.include_router(admin_challenge.router, prefix="/api")
 app.include_router(admin_revenuecat.router, prefix="/api")

@@ -8,6 +8,11 @@ from .staff_user import StaffUser  # noqa: F401
 from .staff_role import StaffRole  # noqa: F401
 from .staff_permission import StaffPermission  # noqa: F401
 from .staff_audit_log import StaffAuditLog  # noqa: F401
+from .staff_time_entry import StaffTimeEntry  # noqa: F401
+from .staff_work_log import StaffWorkLog  # noqa: F401
+from .staff_library_item import StaffLibraryItem  # noqa: F401
+from .staff_ticket import StaffTicket, StaffTicketMessage  # noqa: F401
+from .staff_expense import StaffExpense  # noqa: F401
 from .favorite import Favorite  # noqa: F401
 from .meal_plan import MealPlan  # noqa: F401
 from .shopping_item import ShoppingItem  # noqa: F401
