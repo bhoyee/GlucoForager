@@ -11,11 +11,13 @@ from sqlalchemy.orm import Session
 
 from ..admin_dependencies import require_staff_permission
 from ...database import get_db
+from ...core.config import settings
 from ...models.payroll_item import PayrollItem
 from ...models.payroll_run import PayrollRun
 from ...models.staff_audit_log import StaffAuditLog
 from ...models.staff_compensation import StaffCompensation
 from ...models.staff_user import StaffUser
+from ...services.email_service import send_staff_payroll_available_email
 
 
 router = APIRouter(prefix="/admin/payroll", tags=["admin-payroll"])
@@ -325,6 +327,8 @@ def list_run_items(
                 "deductions": str(item.deductions or 0),
                 "net": str(item.net or 0),
                 "notes": item.notes,
+                "emailed_at": item.emailed_at.isoformat() if getattr(item, "emailed_at", None) else None,
+                "emailed_by_staff_user_id": getattr(item, "emailed_by_staff_user_id", None),
                 "updated_at": item.updated_at.isoformat() if item.updated_at else None,
             }
             for item, email in rows
@@ -501,6 +505,72 @@ def finalize_run(
     )
     db.commit()
     return {"ok": True}
+
+
+class SendEmailsPayload(BaseModel):
+    resend: bool = False
+
+
+@router.post("/runs/{run_id}/send-emails")
+def send_payroll_emails(
+    request: Request,
+    run_id: int,
+    payload: SendEmailsPayload,
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("payroll.manage")),
+):
+    run = db.query(PayrollRun).filter(PayrollRun.id == int(run_id)).first()
+    if not run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    if str(run.status or "").lower() != "finalized":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Finalize the run before sending emails")
+
+    rows = (
+        db.query(PayrollItem, StaffUser.email)
+        .join(StaffUser, StaffUser.id == PayrollItem.staff_user_id)
+        .filter(PayrollItem.run_id == int(run.id))
+        .order_by(StaffUser.email.asc())
+        .all()
+    )
+    if not rows:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="No payroll items")
+
+    period_label = f"{int(run.year)}-{str(int(run.month)).zfill(2)}"
+    # Best-effort portal link; uses SITE_URL as base (can be your admin domain).
+    base = str(getattr(settings, "site_url", "") or "").rstrip("/")
+    portal_url = f"{base}/admin/my-payroll" if base else None
+
+    sent = 0
+    skipped = 0
+    failed: list[dict] = []
+
+    for item, email in rows:
+        if not payload.resend and getattr(item, "emailed_at", None) is not None:
+            skipped += 1
+            continue
+        if not email:
+            failed.append({"item_id": int(item.id), "error": "Missing email"})
+            continue
+        try:
+            send_staff_payroll_available_email(to_email=str(email), period_label=period_label, portal_url=portal_url)
+            item.emailed_at = _now()
+            item.emailed_by_staff_user_id = int(current_staff.id)
+            item.updated_at = _now()
+            sent += 1
+        except Exception as exc:  # noqa: BLE001
+            failed.append({"item_id": int(item.id), "error": str(exc)[:160]})
+
+    _audit(
+        request,
+        db,
+        actor_id=int(current_staff.id),
+        action="payroll.run.send_emails",
+        entity="payroll_runs",
+        entity_id=str(run.id),
+        details={"sent": int(sent), "skipped": int(skipped), "failed": failed[:40], "resend": bool(payload.resend)},
+    )
+    db.commit()
+    return {"ok": True, "sent": int(sent), "skipped": int(skipped), "failed": failed}
 
 
 @router.get("/my/items")

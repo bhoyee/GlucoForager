@@ -20,6 +20,8 @@ class PayrollItem(Base):
     net = Column(Numeric(12, 2), nullable=False, default=0)
     notes = Column(Text, nullable=True)
 
+    emailed_at = Column(DateTime, nullable=True, index=True)
+    emailed_by_staff_user_id = Column(Integer, nullable=True, index=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-

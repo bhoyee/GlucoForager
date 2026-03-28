@@ -22,6 +22,7 @@ export default function PayrollPage() {
   const [creatingRun, setCreatingRun] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
+  const [sendingEmails, setSendingEmails] = useState(false);
 
   const now = useMemo(() => new Date(), []);
   const [runYear, setRunYear] = useState(now.getFullYear());
@@ -289,6 +290,37 @@ export default function PayrollPage() {
     }
   };
 
+  const sendPayrollEmails = async (resend) => {
+    if (!token || !selectedRunId) return;
+    setSendingEmails(true);
+    setMessage('');
+    try {
+      const res = await fetch(`${API_URL}/api/admin/payroll/runs/${selectedRunId}/send-emails`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resend: Boolean(resend) }),
+      });
+      if (res.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || 'Failed to send emails.');
+      const failed = Array.isArray(data.failed) ? data.failed : [];
+      if (failed.length > 0) {
+        setMessage(`Emails sent: ${data.sent || 0}. Skipped: ${data.skipped || 0}. Failed: ${failed.length}.`);
+      } else {
+        setMessage(`Emails sent: ${data.sent || 0}. Skipped: ${data.skipped || 0}.`);
+      }
+      await loadRunItems(selectedRunId);
+    } catch (e) {
+      setMessage(e?.message || 'Failed to send emails.');
+    } finally {
+      setSendingEmails(false);
+    }
+  };
+
   const updateRunItem = async (item) => {
     if (!token || !item?.id) return;
     try {
@@ -525,6 +557,24 @@ export default function PayrollPage() {
                 <button className="admin-button" type="button" onClick={finalizeRun} disabled={!selectedRunId || finalizing || !runIsDraft}>
                   {finalizing ? 'Finalizing…' : 'Finalize'}
                 </button>
+                <button
+                  className="admin-button secondary"
+                  type="button"
+                  onClick={() => sendPayrollEmails(false)}
+                  disabled={!selectedRunId || sendingEmails || runIsDraft}
+                  title="Sends emails only for unsent items"
+                >
+                  {sendingEmails ? 'Sending…' : 'Send emails'}
+                </button>
+                <button
+                  className="admin-button secondary"
+                  type="button"
+                  onClick={() => sendPayrollEmails(true)}
+                  disabled={!selectedRunId || sendingEmails || runIsDraft}
+                  title="Resends emails to everyone in the run"
+                >
+                  Resend
+                </button>
               </div>
             </div>
 
@@ -543,6 +593,7 @@ export default function PayrollPage() {
                       <th>Deductions</th>
                       <th>Net</th>
                       <th>Notes</th>
+                      <th>Emailed</th>
                       <th />
                     </tr>
                   </thead>
@@ -591,6 +642,13 @@ export default function PayrollPage() {
                             placeholder="Optional"
                             style={{ width: '100%', padding: 8, borderRadius: 10, border: '1px solid #cfe0d8' }}
                           />
+                        </td>
+                        <td style={{ whiteSpace: 'nowrap' }}>
+                          {it.emailed_at ? (
+                            <span className="admin-badge success">Sent</span>
+                          ) : (
+                            <span className="admin-badge secondary">Not sent</span>
+                          )}
                         </td>
                         <td style={{ whiteSpace: 'nowrap' }}>
                           <button className="admin-button secondary" type="button" onClick={() => updateRunItem(it)} disabled={!runIsDraft}>
