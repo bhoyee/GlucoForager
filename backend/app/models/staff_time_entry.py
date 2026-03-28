@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+from datetime import datetime, date
+
+from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, String
+
+from ..database import Base
+
+
+class StaffTimeEntry(Base):
+    __tablename__ = "staff_time_entries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    staff_user_id = Column(Integer, ForeignKey("staff_users.id"), nullable=False, index=True)
+    work_date = Column(Date, nullable=False, index=True)
+
+    clock_in_at = Column(DateTime, nullable=True)
+    clock_out_at = Column(DateTime, nullable=True)
+
+    clock_in_ip = Column(String, nullable=True)
+    clock_out_ip = Column(String, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+

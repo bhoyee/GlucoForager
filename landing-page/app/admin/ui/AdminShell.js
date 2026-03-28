@@ -8,8 +8,11 @@ export default function AdminShell({ children }) {
   const pathname = usePathname();
   const router = useRouter();
   const isLogin = pathname === '/admin';
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [session, setSession] = useState(null);
+  const [sessionLoading, setSessionLoading] = useState(false);
 
   useEffect(() => {
     // Persist the desktop collapsed state for a more "app-like" feel.
@@ -33,6 +36,42 @@ export default function AdminShell({ children }) {
     // Close the sidebar on navigation.
     setSidebarOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (isLogin) return undefined;
+
+    const token = localStorage.getItem('adminToken');
+    if (!token) {
+      router.push('/admin');
+      return undefined;
+    }
+
+    let cancelled = false;
+    const load = async () => {
+      setSessionLoading(true);
+      try {
+        const response = await fetch(`${API_URL}/api/admin/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (response.status === 401) {
+          localStorage.removeItem('adminToken');
+          router.push('/admin');
+          return;
+        }
+        const data = await response.json();
+        if (!cancelled) setSession(data);
+      } catch {
+        // If we can't load session, keep UI but user may see 401s inside pages.
+        if (!cancelled) setSession(null);
+      } finally {
+        if (!cancelled) setSessionLoading(false);
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [isLogin, router]);
 
   useEffect(() => {
     if (!sidebarOpen) return undefined;
@@ -71,26 +110,40 @@ export default function AdminShell({ children }) {
     return <div className="admin-shell">{children}</div>;
   }
 
+  const permissions = Array.isArray(session?.permissions) ? session.permissions : [];
+  const hasPermission = (required) => {
+    if (!required) return true;
+    if (permissions.includes('*')) return true;
+    if (Array.isArray(required)) return required.some((r) => permissions.includes(r));
+    return permissions.includes(required);
+  };
+
   const navItems = [
     { href: '/admin/dashboard', label: 'Dashboard', icon: 'D' },
-    { href: '/admin/users', label: 'Users', icon: 'U' },
-    { href: '/admin/recipes', label: 'Recipes', icon: 'R' },
-    { href: '/admin/recipes/new', label: 'New Recipe', icon: '+' },
-    { href: '/admin/tips', label: 'Daily Tips', icon: 'T' },
-    { href: '/admin/challenge', label: 'Daily Challenge', icon: 'C' },
-    { href: '/admin/blog', label: 'Blog', icon: 'B' },
-    { href: '/admin/blog/new', label: 'New Post', icon: '+' },
-    { href: '/admin/blog/comments', label: 'Comments', icon: 'M' },
-    { href: '/admin/newsletter', label: 'Newsletter', icon: 'N' },
-    { href: '/admin/newsletter/send', label: 'Send Email', icon: 'S' },
-    { href: '/admin/user-email', label: 'User Email', icon: 'E' },
+    { href: '/admin/attendance', label: 'Clock In/Out', icon: 'CI' },
+    { href: '/admin/work-logs', label: 'Work Logs', icon: 'WL' },
+    { href: '/admin/library', label: 'Library', icon: 'LB' },
+    { href: '/admin/help', label: 'Help', icon: '?' },
+    { href: '/admin/users', label: 'Users', icon: 'U', perm: 'users.read' },
+    { href: '/admin/recipes', label: 'Recipes', icon: 'R', perm: 'recipes.write' },
+    { href: '/admin/recipes/new', label: 'New Recipe', icon: '+', perm: 'recipes.write' },
+    { href: '/admin/tips', label: 'Daily Tips', icon: 'T', perm: 'tips.write' },
+    { href: '/admin/challenge', label: 'Daily Challenge', icon: 'C', perm: 'challenge.write' },
+    { href: '/admin/blog', label: 'Blog', icon: 'B', perm: ['blog.read', 'blog.write', 'blog.publish'] },
+    { href: '/admin/blog/new', label: 'New Post', icon: '+', perm: ['blog.write', 'blog.publish'] },
+    { href: '/admin/blog/comments', label: 'Comments', icon: 'M', perm: ['blog.read', 'blog.write', 'blog.publish'] },
+    { href: '/admin/newsletter', label: 'Newsletter', icon: 'N', perm: 'newsletter.send' },
+    { href: '/admin/newsletter/send', label: 'Send Email', icon: 'S', perm: 'newsletter.send' },
+    { href: '/admin/user-email', label: 'User Email', icon: 'E', perm: 'email.send' },
     { href: '/admin/notifications', label: 'Notifications', icon: '!' },
-    { href: '/admin/push-campaigns', label: 'Push Campaigns', icon: 'PN' },
-    { href: '/admin/system-health', label: 'System Health', icon: 'H' },
-    { href: '/admin/system-logs', label: 'System Logs', icon: 'L' },
-    { href: '/admin/mobile-logs', label: 'Mobile Logs', icon: 'P' },
-    { href: '/admin/db-backups', label: 'Database Backups', icon: 'DB' },
-  ];
+    { href: '/admin/push-campaigns', label: 'Push Campaigns', icon: 'PN', perm: 'push.send' },
+    { href: '/admin/system-health', label: 'System Health', icon: 'H', perm: 'system.read' },
+    { href: '/admin/system-logs', label: 'System Logs', icon: 'L', perm: 'logs.read' },
+    { href: '/admin/mobile-logs', label: 'Mobile Logs', icon: 'P', perm: 'logs.read' },
+    { href: '/admin/db-backups', label: 'Database Backups', icon: 'DB', perm: 'backups.run' },
+    { href: '/admin/staff', label: 'Staff', icon: 'ST', perm: 'admin.manage' },
+    { href: '/admin/expenses', label: 'Expenses', icon: 'EX', perm: 'admin.manage' },
+  ].filter((item) => hasPermission(item.perm));
 
   return (
     <div className="admin-shell">
@@ -188,7 +241,13 @@ export default function AdminShell({ children }) {
               </svg>
             </button>
             <h1>GlucoForager Admin</h1>
-            <p>Manage recipes, blog posts, and moderation.</p>
+            <p>
+              {sessionLoading
+                ? 'Loading staff session...'
+                : session?.email
+                  ? `Signed in as ${session.email}`
+                  : 'Manage recipes, blog posts, and moderation.'}
+            </p>
           </header>
           {children}
         </main>

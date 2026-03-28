@@ -13,6 +13,7 @@ from ...core.config import settings
 from ...core.security import create_access_token, get_password_hash, verify_password
 from ...database import get_db
 from ...models.admin_user import AdminUser
+from ...models.staff_user import StaffUser
 from ...models.ai_job import AIJob
 from ...models.ai_request import AIRequest
 from ...models.favorite import Favorite
@@ -114,7 +115,16 @@ class AdminPremiumBlockPayload(BaseModel):
 
 @router.post("/login", response_model=AdminToken)
 def admin_login(payload: AdminLoginPayload, db: Session = Depends(get_db)):
-    admin = db.query(AdminUser).filter(AdminUser.email == payload.email.lower()).first()
+    email = payload.email.lower()
+
+    # Prefer staff accounts (RBAC-enabled).
+    staff = db.query(StaffUser).filter(StaffUser.email == email).first()
+    if staff and verify_password(payload.password, staff.hashed_password):
+        token = create_access_token({"sub": str(staff.id), "kind": "staff"})
+        return AdminToken(access_token=token)
+
+    # Backward-compat: legacy admin_users login.
+    admin = db.query(AdminUser).filter(AdminUser.email == email).first()
     if not admin or not verify_password(payload.password, admin.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     token = create_access_token({"sub": str(admin.id), "role": "admin"})
@@ -715,18 +725,28 @@ def bootstrap_admin(
     if not provided or provided != token:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid bootstrap token")
 
+    existing_staff = db.query(StaffUser).first()
     existing_admin = db.query(AdminUser).first()
-    if existing_admin:
+    if existing_staff or existing_admin:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Admin already exists")
-    admin = AdminUser(email=payload.email.lower(), hashed_password=get_password_hash(payload.password))
+
+    email = payload.email.lower()
+    hashed = get_password_hash(payload.password)
+
+    # Create both records so older admin endpoints that still reference AdminUser continue to work.
+    admin = AdminUser(email=email, hashed_password=hashed)
+    staff = StaffUser(email=email, hashed_password=hashed, timezone="UTC", is_active=True)
     db.add(admin)
+    db.add(staff)
     db.commit()
     return {"status": "created"}
 
 
 @router.get("/status")
 def admin_status(db: Session = Depends(get_db)):
-    return {"has_admin": db.query(AdminUser).first() is not None}
+    has_staff = db.query(StaffUser).first() is not None
+    has_admin = db.query(AdminUser).first() is not None
+    return {"has_admin": bool(has_staff or has_admin)}
 
 
 @router.get("/ai/recipe-image-usage")
