@@ -8,7 +8,11 @@ import { adminFetch, clearAdminTokens, getAdminAccessToken, getAdminRefreshToken
 export default function AdminShell({ children }) {
   const pathname = usePathname();
   const router = useRouter();
-  const isLogin = pathname === '/admin';
+  const isPublicRoute =
+    pathname === '/admin' ||
+    pathname === '/admin/' ||
+    pathname === '/admin/forgot-password' ||
+    pathname === '/admin/reset-password';
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -39,7 +43,7 @@ export default function AdminShell({ children }) {
   }, [pathname]);
 
   useEffect(() => {
-    if (isLogin) return undefined;
+    if (isPublicRoute) return undefined;
 
     const token = getAdminAccessToken();
     if (!token) {
@@ -70,7 +74,7 @@ export default function AdminShell({ children }) {
     return () => {
       cancelled = true;
     };
-  }, [isLogin, router]);
+  }, [isPublicRoute, router]);
 
   useEffect(() => {
     if (!sidebarOpen) return undefined;
@@ -117,7 +121,7 @@ export default function AdminShell({ children }) {
   const toggleSidebar = () => setSidebarOpen((open) => !open);
   const toggleCollapsed = () => setSidebarCollapsed((collapsed) => !collapsed);
 
-  if (isLogin) {
+  if (isPublicRoute) {
     return <div className="admin-shell">{children}</div>;
   }
 
