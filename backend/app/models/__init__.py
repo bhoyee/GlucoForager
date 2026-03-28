@@ -4,6 +4,10 @@ from .user import User, SearchLog  # noqa: F401
 from .subscription import Subscription  # noqa: F401
 from .ai_request import AIRequest  # noqa: F401
 from .ai_job import AIJob  # noqa: F401
+from .staff_user import StaffUser  # noqa: F401
+from .staff_role import StaffRole  # noqa: F401
+from .staff_permission import StaffPermission  # noqa: F401
+from .staff_audit_log import StaffAuditLog  # noqa: F401
 from .favorite import Favorite  # noqa: F401
 from .meal_plan import MealPlan  # noqa: F401
 from .shopping_item import ShoppingItem  # noqa: F401
