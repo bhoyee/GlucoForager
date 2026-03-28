@@ -5,6 +5,7 @@ import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from ..admin_dependencies import require_staff_permission
@@ -23,23 +24,84 @@ def _is_admin(db: Session, staff: StaffUser) -> bool:
     return StaffRBACService.has_permission(perms, "*") or StaffRBACService.has_permission(perms, "admin.manage")
 
 
+def _normalize_folder(folder: str | None) -> str | None:
+    if folder is None:
+        return None
+    cleaned = str(folder).strip().lower()
+    if not cleaned:
+        return None
+    return cleaned[:40]
+
+
+def _normalize_tags(raw: str | None) -> str | None:
+    if raw is None:
+        return None
+    text = str(raw).strip()
+    if not text:
+        return None
+    tokens: list[str] = []
+    for part in text.replace(";", ",").split(","):
+        t = str(part).strip().lower()
+        if not t:
+            continue
+        t = t.replace("#", "")
+        if not t:
+            continue
+        t = t[:32]
+        if t not in tokens:
+            tokens.append(t)
+    if not tokens:
+        return None
+    return "," + ",".join(tokens[:20]) + ","
+
+
 @router.get("")
 def list_library(
     folder: str | None = None,
+    kind: str | None = None,
+    q: str | None = None,
+    tag: str | None = None,
     include_deleted: int = 0,
     db: Session = Depends(get_db),
     current_staff: StaffUser = Depends(require_staff_permission("library.read")),
 ):
-    q = db.query(StaffLibraryItem)
-    if folder:
-        q = q.filter(StaffLibraryItem.folder == folder)
+    query = db.query(StaffLibraryItem)
+
+    folder_norm = _normalize_folder(folder)
+    if folder_norm:
+        query = query.filter(StaffLibraryItem.folder == folder_norm)
+
+    if kind:
+        kind_norm = str(kind).strip().lower()
+        if kind_norm not in {"document", "image"}:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid kind")
+        query = query.filter(StaffLibraryItem.kind == kind_norm)
+
+    if tag:
+        t = str(tag).strip().lower().replace("#", "")[:32]
+        if t:
+            query = query.filter(func.coalesce(StaffLibraryItem.tags, "").ilike(f"%,{t},%"))
+
+    if q:
+        needle = str(q).strip()
+        if needle:
+            like = f"%{needle}%"
+            query = query.filter(
+                or_(
+                    StaffLibraryItem.title.ilike(like),
+                    func.coalesce(StaffLibraryItem.original_filename, "").ilike(like),
+                    func.coalesce(StaffLibraryItem.tags, "").ilike(like),
+                )
+            )
+
     if not include_deleted:
-        q = q.filter(StaffLibraryItem.is_deleted.is_(False))
+        query = query.filter(StaffLibraryItem.is_deleted.is_(False))
     else:
         if not _is_admin(db, current_staff):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
-    q = q.order_by(StaffLibraryItem.created_at.desc())
-    items = q.all()
+
+    query = query.order_by(StaffLibraryItem.created_at.desc())
+    items = query.all()
     return {
         "items": [
             {
@@ -49,6 +111,9 @@ def list_library(
                 "folder": i.folder,
                 "title": i.title,
                 "url": i.url,
+                "original_filename": getattr(i, "original_filename", None),
+                "content_type": getattr(i, "content_type", None),
+                "tags": [t for t in str(getattr(i, "tags", "") or "").split(",") if t],
                 "is_deleted": bool(i.is_deleted),
                 "deleted_at": i.deleted_at.isoformat() if i.deleted_at else None,
                 "deleted_by_staff_user_id": i.deleted_by_staff_user_id,
@@ -59,12 +124,29 @@ def list_library(
     }
 
 
+@router.get("/folders")
+def list_folders(
+    include_deleted: int = 0,
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("library.read")),
+):
+    query = db.query(StaffLibraryItem.folder, func.count(StaffLibraryItem.id)).group_by(StaffLibraryItem.folder)
+    if not include_deleted:
+        query = query.filter(StaffLibraryItem.is_deleted.is_(False))
+    else:
+        if not _is_admin(db, current_staff):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+    rows = query.order_by(func.count(StaffLibraryItem.id).desc()).all()
+    return {"items": [{"folder": str(r[0] or "general"), "count": int(r[1] or 0)} for r in rows]}
+
+
 @router.post("/upload")
 def upload_to_library(
     request: Request,
     file: UploadFile = File(...),
     title: str = Form(...),
     folder: str = Form("general"),
+    tags: str | None = Form(None),
     db: Session = Depends(get_db),
     current_staff: StaffUser = Depends(require_staff_permission("library.upload")),
 ):
@@ -96,9 +178,12 @@ def upload_to_library(
     item = StaffLibraryItem(
         staff_user_id=current_staff.id,
         kind="image" if is_image else "document",
-        folder=(folder or "general").strip()[:40] or "general",
+        folder=_normalize_folder(folder) or "general",
         title=title.strip()[:160] or (file.filename or "Untitled")[:160],
         url=url,
+        original_filename=(file.filename or None),
+        content_type=(file.content_type or None),
+        tags=_normalize_tags(tags),
         is_deleted=False,
         created_at=datetime.utcnow(),
     )
@@ -134,3 +219,26 @@ def soft_delete_item(
     item.deleted_by_staff_user_id = int(current_staff.id)
     db.commit()
     return {"ok": True}
+
+
+@router.post("/items/{item_id}/restore")
+def restore_item(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("library.delete_any")),
+):
+    if not _is_admin(db, current_staff):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+
+    item = db.query(StaffLibraryItem).filter(StaffLibraryItem.id == int(item_id)).first()
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    if not item.is_deleted:
+        return {"ok": True}
+
+    item.is_deleted = False
+    item.deleted_at = None
+    item.deleted_by_staff_user_id = None
+    db.commit()
+    return {"ok": True}
+
