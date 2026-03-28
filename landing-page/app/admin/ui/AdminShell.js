@@ -145,6 +145,7 @@ export default function AdminShell({ children }) {
     { href: '/admin/db-backups', label: 'Database Backups', icon: 'DB', perm: 'backups.run' },
     { href: '/admin/staff', label: 'Staff', icon: 'ST', perm: 'staff.manage' },
     { href: '/admin/expenses', label: 'Expenses', icon: 'EX', perm: 'expenses.read' },
+    { href: '/admin/audit', label: 'Audit Log', icon: 'AL', perm: 'admin.manage' },
   ].filter((item) => hasPermission(item.perm));
 
   return (

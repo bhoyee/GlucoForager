@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from ..admin_dependencies import require_staff_permission
 from ...database import get_db
+from ...models.staff_audit_log import StaffAuditLog
 from ...models.staff_notification import StaffNotification
 from ...models.staff_ticket import StaffTicket, StaffTicketMessage
 from ...models.staff_user import StaffUser
@@ -98,6 +99,30 @@ def _notify(db: Session, *, staff_user_id: int, type_: str, title: str, body: st
             body=_safe_text(body, max_len=500) if body else None,
             data=data,
             read_at=None,
+            created_at=_now(),
+        )
+    )
+
+
+def _audit(
+    request: Request | None,
+    db: Session,
+    *,
+    actor_id: int,
+    action: str,
+    entity: str | None,
+    entity_id: str | None,
+    details: dict | None,
+) -> None:
+    db.add(
+        StaffAuditLog(
+            actor_id=int(actor_id),
+            action=_safe_text(action, max_len=80) or "event",
+            entity=_safe_text(entity, max_len=80) if entity else None,
+            entity_id=_safe_text(entity_id, max_len=120) if entity_id else None,
+            details=details,
+            ip=(request.client.host if request and request.client else None),
+            user_agent=(request.headers.get("user-agent") if request else None),
             created_at=_now(),
         )
     )
@@ -342,6 +367,22 @@ def create_ticket(
     )
     db.add(msg)
     t.last_message_at = msg.created_at
+    db.flush()
+
+    _audit(
+        request,
+        db,
+        actor_id=int(current_staff.id),
+        action="ticket.create",
+        entity="staff_tickets",
+        entity_id=str(t.id),
+        details={
+            "priority": t.priority,
+            "subject": t.subject,
+            "message_preview": (msg.message or "")[:160],
+            "message_len": len(msg.message or ""),
+        },
+    )
 
     # Notify managers (in-app).
     for sid in _manager_staff_ids(db):
@@ -380,8 +421,22 @@ def assign_ticket(
         if not assignee or not assignee.is_active or getattr(assignee, "deleted_at", None) is not None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignee not found")
 
+    before_assignee = t.assigned_to_staff_user_id
     t.assigned_to_staff_user_id = assignee_id
     t.updated_at = _now()
+
+    _audit(
+        request,
+        db,
+        actor_id=int(current_staff.id),
+        action="ticket.assign",
+        entity="staff_tickets",
+        entity_id=str(t.id),
+        details={
+            "before": {"assigned_to_staff_user_id": before_assignee},
+            "after": {"assigned_to_staff_user_id": assignee_id},
+        },
+    )
 
     if assignee_id is not None:
         _notify(
@@ -411,6 +466,7 @@ def assign_ticket(
 
 @router.post("/tickets/{ticket_id}/priority")
 def set_priority(
+    request: Request,
     ticket_id: int,
     payload: TicketPriorityPayload,
     db: Session = Depends(get_db),
@@ -422,14 +478,25 @@ def set_priority(
     t = db.query(StaffTicket).filter(StaffTicket.id == int(ticket_id)).first()
     if not t:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    before = t.priority
     t.priority = p
     t.updated_at = _now()
+    _audit(
+        request,
+        db,
+        actor_id=int(current_staff.id),
+        action="ticket.set_priority",
+        entity="staff_tickets",
+        entity_id=str(t.id),
+        details={"before": {"priority": before}, "after": {"priority": p}},
+    )
     db.commit()
     return {"ok": True}
 
 
 @router.post("/tickets/{ticket_id}/status")
 def set_status(
+    request: Request,
     ticket_id: int,
     payload: TicketStatusPayload,
     db: Session = Depends(get_db),
@@ -441,12 +508,25 @@ def set_status(
     t = db.query(StaffTicket).filter(StaffTicket.id == int(ticket_id)).first()
     if not t:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    before = {"status": t.status, "closed_at": (t.closed_at.isoformat() if t.closed_at else None)}
     t.status = s
     if s == "closed":
         t.closed_at = _now()
     else:
         t.closed_at = None
     t.updated_at = _now()
+    _audit(
+        request,
+        db,
+        actor_id=int(current_staff.id),
+        action="ticket.set_status",
+        entity="staff_tickets",
+        entity_id=str(t.id),
+        details={
+            "before": before,
+            "after": {"status": t.status, "closed_at": (t.closed_at.isoformat() if t.closed_at else None)},
+        },
+    )
     db.commit()
     return {"ok": True}
 
@@ -478,6 +558,7 @@ def add_message(
         created_at=_now(),
     )
     db.add(msg)
+    db.flush()
     t.updated_at = _now()
     t.last_message_at = msg.created_at
 
@@ -518,12 +599,28 @@ def add_message(
         except Exception:
             pass
 
+    _audit(
+        request,
+        db,
+        actor_id=int(current_staff.id),
+        action="ticket.message",
+        entity="staff_ticket_messages",
+        entity_id=str(msg.id),
+        details={
+            "ticket_id": int(t.id),
+            "status": t.status,
+            "message_preview": (msg.message or "")[:160],
+            "message_len": len(msg.message or ""),
+        },
+    )
+
     db.commit()
     return {"ok": True}
 
 
 @router.post("/tickets/{ticket_id}/close")
 def close_ticket(
+    request: Request,
     ticket_id: int,
     db: Session = Depends(get_db),
     current_staff: StaffUser = Depends(require_staff_permission("tickets.manage")),  # noqa: ARG001
@@ -533,8 +630,18 @@ def close_ticket(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     if t.status == "closed":
         return {"ok": True}
+    before = {"status": t.status, "closed_at": (t.closed_at.isoformat() if t.closed_at else None)}
     t.status = "closed"
     t.closed_at = _now()
     t.updated_at = _now()
+    _audit(
+        request,
+        db,
+        actor_id=int(current_staff.id),
+        action="ticket.close",
+        entity="staff_tickets",
+        entity_id=str(t.id),
+        details={"before": before, "after": {"status": t.status, "closed_at": (t.closed_at.isoformat() if t.closed_at else None)}},
+    )
     db.commit()
     return {"ok": True}

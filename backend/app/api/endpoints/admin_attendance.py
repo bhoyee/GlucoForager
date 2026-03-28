@@ -112,6 +112,7 @@ def clock_in(
     current_staff: StaffUser = Depends(require_staff_permission("attendance.write")),
 ):
     today = datetime.now(timezone.utc).date()
+    created_entry = False
     entry = (
         db.query(StaffTimeEntry)
         .filter(StaffTimeEntry.staff_user_id == current_staff.id, StaffTimeEntry.work_date == today)
@@ -121,12 +122,29 @@ def clock_in(
         entry = StaffTimeEntry(staff_user_id=current_staff.id, work_date=today, created_at=datetime.utcnow(), updated_at=datetime.utcnow())
         db.add(entry)
         db.flush()
+        created_entry = True
 
     if entry.clock_in_at:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Already clocked in for today")
 
     entry.clock_in_at = datetime.utcnow()
     entry.clock_in_ip = request.client.host if request.client else None
+    db.add(
+        StaffAuditLog(
+            actor_id=int(current_staff.id),
+            action="attendance.clock_in",
+            entity="staff_time_entries",
+            entity_id=str(entry.id),
+            details={
+                "work_date": today.isoformat(),
+                "clock_in_at": entry.clock_in_at.isoformat() if entry.clock_in_at else None,
+                "created_entry": bool(created_entry),
+            },
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            created_at=datetime.utcnow(),
+        )
+    )
     db.commit()
     db.refresh(entry)
     return {"ok": True, "entry": _entry_view(entry, current_staff.timezone)}
@@ -151,6 +169,21 @@ def clock_out(
 
     entry.clock_out_at = datetime.utcnow()
     entry.clock_out_ip = request.client.host if request.client else None
+    db.add(
+        StaffAuditLog(
+            actor_id=int(current_staff.id),
+            action="attendance.clock_out",
+            entity="staff_time_entries",
+            entity_id=str(entry.id),
+            details={
+                "work_date": today.isoformat(),
+                "clock_out_at": entry.clock_out_at.isoformat() if entry.clock_out_at else None,
+            },
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            created_at=datetime.utcnow(),
+        )
+    )
     db.commit()
     db.refresh(entry)
     return {"ok": True, "entry": _entry_view(entry, current_staff.timezone)}
