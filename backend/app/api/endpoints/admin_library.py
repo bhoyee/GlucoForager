@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from ..admin_dependencies import require_staff_permission
 from ...core.config import settings
 from ...database import get_db
+from ...models.staff_audit_log import StaffAuditLog
 from ...models.staff_library_item import StaffLibraryItem
 from ...models.staff_user import StaffUser
 from ...services.staff_rbac_service import StaffRBACService
@@ -188,6 +189,27 @@ def upload_to_library(
         created_at=datetime.utcnow(),
     )
     db.add(item)
+    db.flush()
+    db.add(
+        StaffAuditLog(
+            actor_id=int(current_staff.id),
+            action="library.upload",
+            entity="staff_library_items",
+            entity_id=str(item.id),
+            details={
+                "kind": item.kind,
+                "folder": item.folder,
+                "title": item.title,
+                "url": item.url,
+                "original_filename": getattr(item, "original_filename", None),
+                "content_type": getattr(item, "content_type", None),
+                "tags": [t for t in str(getattr(item, "tags", "") or "").split(",") if t],
+            },
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            created_at=datetime.utcnow(),
+        )
+    )
     db.commit()
     db.refresh(item)
     return {"ok": True, "item": {"id": item.id, "url": item.url}}
@@ -195,6 +217,7 @@ def upload_to_library(
 
 @router.delete("/items/{item_id}")
 def soft_delete_item(
+    request: Request,
     item_id: int,
     db: Session = Depends(get_db),
     current_staff: StaffUser = Depends(require_staff_permission("library.delete_own")),
@@ -205,6 +228,7 @@ def soft_delete_item(
     if item.is_deleted:
         return {"ok": True}
 
+    admin_override = False
     if int(item.staff_user_id) != int(current_staff.id):
         # Only admins can delete items uploaded by other staff.
         if not _is_admin(db, current_staff):
@@ -213,16 +237,38 @@ def soft_delete_item(
         perms = StaffRBACService.get_user_permission_keys(db, current_staff.id)
         if not StaffRBACService.has_permission(perms, "library.delete_any") and not StaffRBACService.has_permission(perms, "*"):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+        admin_override = True
 
     item.is_deleted = True
     item.deleted_at = datetime.utcnow()
     item.deleted_by_staff_user_id = int(current_staff.id)
+    db.add(
+        StaffAuditLog(
+            actor_id=int(current_staff.id),
+            action="library.soft_delete",
+            entity="staff_library_items",
+            entity_id=str(item.id),
+            details={
+                "admin_override": bool(admin_override),
+                "owner_staff_user_id": int(item.staff_user_id) if item.staff_user_id is not None else None,
+                "kind": item.kind,
+                "folder": item.folder,
+                "title": item.title,
+                "url": item.url,
+                "deleted_at": item.deleted_at.isoformat() if item.deleted_at else None,
+            },
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            created_at=datetime.utcnow(),
+        )
+    )
     db.commit()
     return {"ok": True}
 
 
 @router.post("/items/{item_id}/restore")
 def restore_item(
+    request: Request,
     item_id: int,
     db: Session = Depends(get_db),
     current_staff: StaffUser = Depends(require_staff_permission("library.delete_any")),
@@ -236,9 +282,32 @@ def restore_item(
     if not item.is_deleted:
         return {"ok": True}
 
+    before = {
+        "is_deleted": bool(item.is_deleted),
+        "deleted_at": item.deleted_at.isoformat() if item.deleted_at else None,
+        "deleted_by_staff_user_id": item.deleted_by_staff_user_id,
+    }
     item.is_deleted = False
     item.deleted_at = None
     item.deleted_by_staff_user_id = None
+    db.add(
+        StaffAuditLog(
+            actor_id=int(current_staff.id),
+            action="library.restore",
+            entity="staff_library_items",
+            entity_id=str(item.id),
+            details={
+                "before": before,
+                "after": {"is_deleted": False},
+                "kind": item.kind,
+                "folder": item.folder,
+                "title": item.title,
+                "url": item.url,
+            },
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            created_at=datetime.utcnow(),
+        )
+    )
     db.commit()
     return {"ok": True}
-
