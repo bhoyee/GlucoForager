@@ -123,28 +123,37 @@ def get_current_admin(
     # Public admin endpoints are handled elsewhere (login/bootstrap/status).
     if path.startswith("/api/admin/"):
         subpath = path[len("/api/admin/") :]
+        method = (request.method or "GET").upper()
         # staff management (future): staff.manage
         if subpath.startswith("staff"):
             required = "staff.manage"
         elif subpath.startswith("users"):
-            required = "users.read"
+            required = "users.read" if method == "GET" else "users.write"
         elif subpath.startswith("recipes"):
+            required = "recipes.write"
+        elif subpath.startswith("uploads"):
             required = "recipes.write"
         elif subpath.startswith("tips"):
             required = "tips.write"
         elif subpath.startswith("challenge"):
             required = "challenge.write"
         elif subpath.startswith("blog"):
-            required = "blog.read"
+            required = "blog.read" if method == "GET" else "blog.write"
         elif subpath.startswith("newsletter"):
             required = "newsletter.send"
         elif subpath.startswith("push-campaigns") or subpath.startswith("notifications"):
             required = "push.send"
+        elif subpath.startswith("settings"):
+            required = "system.read"
+        elif subpath.startswith("ai") or subpath.startswith("revenuecat"):
+            required = "system.read"
+        elif subpath.startswith("email-campaigns"):
+            required = "email.send"
         elif subpath.startswith("mobile-logs") or subpath.startswith("system-logs"):
             required = "logs.read"
-        elif subpath.startswith("system-health"):
+        elif subpath.startswith("system-health") or subpath.startswith("health"):
             required = "system.read"
-        elif subpath.startswith("db-backups"):
+        elif subpath.startswith("db-backups") or subpath.startswith("backups"):
             required = "backups.run"
         elif subpath.startswith("user-email"):
             required = "email.send"
@@ -153,6 +162,10 @@ def get_current_admin(
         perm_keys = StaffRBACService.get_user_permission_keys(db, staff.id)  # type: ignore[arg-type]
         if not StaffRBACService.has_permission(perm_keys, required):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+        try:
+            request.state.staff_permissions = perm_keys
+        except Exception:
+            pass
 
     # touch last_login_at (best-effort)
     try:
