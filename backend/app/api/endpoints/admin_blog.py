@@ -13,6 +13,7 @@ from ...core.config import settings
 from ...database import get_db
 from ...database import SessionLocal
 from ...models.admin_user import AdminUser
+from ...models.staff_audit_log import StaffAuditLog
 from ...models.blog_comment import BlogComment
 from ...models.blog_post import BlogPost
 from ...models.newsletter_signup import NewsletterSignup
@@ -23,6 +24,9 @@ from ...services.staff_rbac_service import StaffRBACService
 
 router = APIRouter(prefix="/admin/blog", tags=["admin-blog"])
 cache = CacheService()
+
+ALLOWED_POST_STATUSES = {"draft", "published", "scheduled"}
+ALLOWED_COMMENT_STATUSES = {"pending", "approved", "rejected", "deleted"}
 
 
 def _utcnow() -> datetime:
@@ -148,6 +152,33 @@ def _ensure_staff_permission(db: Session, request: Request, required: str) -> No
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
 
 
+def _audit(
+    db: Session,
+    request: Request,
+    *,
+    action: str,
+    entity: str,
+    entity_id: str | None,
+    details: dict | None = None,
+) -> None:
+    staff = getattr(request.state, "staff_user", None)
+    actor_id = int(getattr(staff, "id", 0) or 0) if staff else None
+    try:
+        db.add(
+            StaffAuditLog(
+                actor_id=actor_id,
+                action=str(action),
+                entity=str(entity),
+                entity_id=str(entity_id) if entity_id is not None else None,
+                details=details,
+                ip=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+                created_at=_utcnow(),
+            )
+        )
+    except Exception:
+        pass
+
 @router.post("/upload", status_code=201, response_model=dict)
 async def upload_blog_image(
     file: UploadFile = File(...),
@@ -233,7 +264,7 @@ def admin_create_post(
     staff: AdminUser = Depends(require_staff_permission("blog.write")),  # noqa: ARG001
 ):
     normalized_status = (payload.status or "draft").strip().lower()
-    if normalized_status not in {"draft", "published"}:
+    if normalized_status not in ALLOWED_POST_STATUSES:
         raise HTTPException(status_code=400, detail="Invalid status")
 
     slug = (payload.slug or "").strip().lower()
@@ -251,7 +282,13 @@ def admin_create_post(
     published_at = payload.published_at
     if normalized_status == "published" and not published_at:
         published_at = _utcnow()
-    if normalized_status == "published" or payload.notify_newsletter:
+    if normalized_status == "scheduled" and not published_at:
+        raise HTTPException(status_code=400, detail="scheduled posts require published_at")
+
+    if normalized_status == "published" and published_at and published_at > _utcnow():
+        normalized_status = "scheduled"
+
+    if normalized_status in {"published", "scheduled"} or payload.notify_newsletter:
         _ensure_staff_permission(db, request, "blog.publish")
 
     post = BlogPost(
@@ -272,6 +309,16 @@ def admin_create_post(
     db.add(post)
     db.commit()
     db.refresh(post)
+
+    _audit(
+        db,
+        request,
+        action="blog.post.create",
+        entity="blog_posts",
+        entity_id=str(post.id),
+        details={"status": post.status, "slug": post.slug, "title": post.title},
+    )
+    db.commit()
 
     if payload.notify_newsletter:
         if post.status != "published":
@@ -333,9 +380,19 @@ def admin_update_post(
         raise HTTPException(status_code=404, detail="Post not found")
 
     normalized_status = (payload.status or "draft").strip().lower()
-    if normalized_status not in {"draft", "published"}:
+    if normalized_status not in ALLOWED_POST_STATUSES:
         raise HTTPException(status_code=400, detail="Invalid status")
-    if normalized_status == "published" or payload.notify_newsletter:
+    if normalized_status == "scheduled" and not payload.published_at:
+        raise HTTPException(status_code=400, detail="scheduled posts require published_at")
+
+    published_at = payload.published_at
+    if normalized_status == "published" and not post.published_at:
+        published_at = payload.published_at or _utcnow()
+
+    if normalized_status == "published" and published_at and published_at > _utcnow():
+        normalized_status = "scheduled"
+
+    if normalized_status in {"published", "scheduled"} or payload.notify_newsletter:
         _ensure_staff_permission(db, request, "blog.publish")
 
     slug = (payload.slug or "").strip().lower()
@@ -357,12 +414,27 @@ def admin_update_post(
     post.content = payload.content.strip()
     post.status = normalized_status
     post.author_name = payload.author_name.strip() if payload.author_name else None
-    if normalized_status == "published" and not post.published_at:
-        post.published_at = payload.published_at or _utcnow()
-    if normalized_status == "draft":
+    if normalized_status in {"published", "scheduled"}:
+        post.published_at = published_at
+    elif normalized_status == "draft":
         post.published_at = payload.published_at
     post.updated_at = _utcnow()
 
+    db.commit()
+
+    _audit(
+        db,
+        request,
+        action="blog.post.update",
+        entity="blog_posts",
+        entity_id=str(post.id),
+        details={
+            "status": post.status,
+            "slug": post.slug,
+            "title": post.title,
+            "published_at": post.published_at.isoformat() if post.published_at else None,
+        },
+    )
     db.commit()
 
     if payload.notify_newsletter:
@@ -387,6 +459,7 @@ def admin_update_post(
 
 @router.delete("/posts/{post_id}", status_code=204)
 def admin_delete_post(
+    request: Request,
     post_id: int,
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin),  # noqa: ARG001
@@ -395,6 +468,14 @@ def admin_delete_post(
     post = db.query(BlogPost).filter(BlogPost.id == post_id).first()
     if not post:
         return
+    _audit(
+        db,
+        request,
+        action="blog.post.delete",
+        entity="blog_posts",
+        entity_id=str(post.id),
+        details={"slug": post.slug, "title": post.title},
+    )
     db.delete(post)
     db.commit()
     return
@@ -416,7 +497,9 @@ def admin_list_comments(
     if post_id:
         query = query.filter(BlogComment.post_id == post_id)
     if status_filter:
-        query = query.filter(BlogComment.status == status_filter.strip().lower())
+        normalized = status_filter.strip().lower()
+        if normalized != "all":
+            query = query.filter(BlogComment.status == normalized)
     total = query.count()
     items = (
         query.order_by(desc(BlogComment.created_at), desc(BlogComment.id))
@@ -445,6 +528,7 @@ def admin_list_comments(
 
 @router.post("/comments/{comment_id}/approve", response_model=dict)
 def admin_approve_comment(
+    request: Request,
     comment_id: int,
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin),  # noqa: ARG001
@@ -454,12 +538,53 @@ def admin_approve_comment(
     if not comment:
         raise HTTPException(status_code=404, detail="Comment not found")
     comment.status = "approved"
+    comment.moderated_at = _utcnow()
+    comment.moderation_action = "approve"
+    staff_user = getattr(request.state, "staff_user", None)
+    comment.moderated_by_staff_user_id = int(getattr(staff_user, "id", 0) or 0) if staff_user else None
+    _audit(
+        db,
+        request,
+        action="blog.comment.approve",
+        entity="blog_comments",
+        entity_id=str(comment.id),
+        details={"post_id": comment.post_id},
+    )
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/comments/{comment_id}/reject", response_model=dict)
+def admin_reject_comment(
+    request: Request,
+    comment_id: int,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),  # noqa: ARG001
+    staff: AdminUser = Depends(require_staff_permission("blog.write")),  # noqa: ARG001
+):
+    comment = db.query(BlogComment).filter(BlogComment.id == comment_id).first()
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    comment.status = "rejected"
+    comment.moderated_at = _utcnow()
+    comment.moderation_action = "reject"
+    staff_user = getattr(request.state, "staff_user", None)
+    comment.moderated_by_staff_user_id = int(getattr(staff_user, "id", 0) or 0) if staff_user else None
+    _audit(
+        db,
+        request,
+        action="blog.comment.reject",
+        entity="blog_comments",
+        entity_id=str(comment.id),
+        details={"post_id": comment.post_id},
+    )
     db.commit()
     return {"ok": True}
 
 
 @router.delete("/comments/{comment_id}", status_code=204)
 def admin_delete_comment(
+    request: Request,
     comment_id: int,
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin),  # noqa: ARG001
@@ -468,6 +593,50 @@ def admin_delete_comment(
     comment = db.query(BlogComment).filter(BlogComment.id == comment_id).first()
     if not comment:
         return
-    db.delete(comment)
+    comment.status = "deleted"
+    comment.moderated_at = _utcnow()
+    comment.moderation_action = "delete"
+    staff_user = getattr(request.state, "staff_user", None)
+    comment.moderated_by_staff_user_id = int(getattr(staff_user, "id", 0) or 0) if staff_user else None
+    _audit(
+        db,
+        request,
+        action="blog.comment.delete",
+        entity="blog_comments",
+        entity_id=str(comment.id),
+        details={"post_id": comment.post_id},
+    )
     db.commit()
     return
+
+
+@router.get("/audit", response_model=dict)
+def blog_audit(
+    entity: str = "blog_posts",
+    entity_id: str | None = None,
+    limit: int = 80,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),  # noqa: ARG001
+    staff: AdminUser = Depends(require_staff_permission("blog.read")),  # noqa: ARG001
+):
+    safe_entity = str(entity or "").strip()
+    if safe_entity not in {"blog_posts", "blog_comments"}:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid entity")
+    query = db.query(StaffAuditLog).filter(StaffAuditLog.entity == safe_entity)
+    if entity_id:
+        query = query.filter(StaffAuditLog.entity_id == str(entity_id))
+    rows = query.order_by(StaffAuditLog.created_at.desc(), StaffAuditLog.id.desc()).limit(max(1, min(200, int(limit)))).all()
+    return {
+        "items": [
+            {
+                "id": r.id,
+                "actor_id": r.actor_id,
+                "action": r.action,
+                "entity": r.entity,
+                "entity_id": r.entity_id,
+                "details": r.details,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in rows
+        ]
+    }

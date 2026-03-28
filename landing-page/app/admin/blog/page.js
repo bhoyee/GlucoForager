@@ -20,6 +20,7 @@ export default function AdminBlogPostsPage() {
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [canWrite, setCanWrite] = useState(false);
 
   const load = async (nextPage = page, nextQ = q, nextStatus = statusFilter) => {
     if (!token) return;
@@ -53,6 +54,19 @@ export default function AdminBlogPostsPage() {
       router.push('/admin');
       return;
     }
+    const loadSession = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/admin/me`, { headers: { Authorization: `Bearer ${token}` } });
+        if (res.status === 401) return;
+        const data = await res.json().catch(() => ({}));
+        const perms = Array.isArray(data?.permissions) ? data.permissions : [];
+        const can = perms.includes('*') || perms.includes('blog.write') || perms.includes('blog.publish');
+        setCanWrite(!!can);
+      } catch {
+        setCanWrite(false);
+      }
+    };
+    loadSession();
     load(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
@@ -98,6 +112,7 @@ export default function AdminBlogPostsPage() {
             >
               <option value="all">All statuses</option>
               <option value="draft">Draft</option>
+              <option value="scheduled">Scheduled</option>
               <option value="published">Published</option>
             </select>
           </div>
@@ -111,9 +126,11 @@ export default function AdminBlogPostsPage() {
             >
               Refresh
             </button>
-            <Link className="admin-button admin-add-button" href="/admin/blog/new">
-              New Post
-            </Link>
+            {canWrite ? (
+              <Link className="admin-button admin-add-button" href="/admin/blog/new">
+                New Post
+              </Link>
+            ) : null}
           </div>
         </div>
       </div>
@@ -156,7 +173,7 @@ export default function AdminBlogPostsPage() {
                   <td>
                     <div className="admin-table-actions">
                       <Link className="admin-link" href={`/admin/blog/${post.id}`}>
-                        Edit
+                        {canWrite ? 'Edit' : 'View'}
                       </Link>
                       <a className="admin-link" href={`/blog/${post.slug}`} target="_blank" rel="noreferrer">
                         View
@@ -197,4 +214,3 @@ export default function AdminBlogPostsPage() {
     </div>
   );
 }
-

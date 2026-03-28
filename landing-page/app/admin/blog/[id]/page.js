@@ -1,4 +1,5 @@
 'use client';
+'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -69,6 +70,8 @@ export default function AdminEditBlogPostPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState('');
+  const [readOnly, setReadOnly] = useState(false);
+  const [auditItems, setAuditItems] = useState([]);
 
   const load = async () => {
     if (!token) return;
@@ -113,6 +116,41 @@ export default function AdminEditBlogPostPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, postId]);
 
+  useEffect(() => {
+    const loadSession = async () => {
+      if (!token) return;
+      try {
+        const res = await fetch(`${API_URL}/api/admin/me`, { headers: { Authorization: `Bearer ${token}` } });
+        if (res.status === 401) return;
+        const data = await res.json().catch(() => ({}));
+        const perms = Array.isArray(data?.permissions) ? data.permissions : [];
+        const canWrite = perms.includes('*') || perms.includes('blog.write');
+        const canPublish = perms.includes('*') || perms.includes('blog.publish');
+        if (!canWrite && !canPublish) setReadOnly(true);
+      } catch {
+        // ignore
+      }
+    };
+    loadSession();
+  }, [token]);
+
+  useEffect(() => {
+    const loadAudit = async () => {
+      if (!token || !postId) return;
+      try {
+        const res = await fetch(`${API_URL}/api/admin/blog/audit?entity=blog_posts&entity_id=${encodeURIComponent(String(postId))}&limit=30`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json().catch(() => ({}));
+        setAuditItems(Array.isArray(data?.items) ? data.items : []);
+      } catch {
+        // ignore
+      }
+    };
+    loadAudit();
+  }, [token, postId, isSubmitting]);
+
   const handleSubmit = async (form) => {
     if (!token) {
       router.push('/admin');
@@ -150,6 +188,7 @@ export default function AdminEditBlogPostPage() {
 
   const handleDelete = async () => {
     if (!token) return;
+    if (readOnly) return;
     if (!confirm('Delete this post? This cannot be undone.')) return;
     setIsSubmitting(true);
     setMessage('');
@@ -187,9 +226,11 @@ export default function AdminEditBlogPostPage() {
           <Link className="admin-link" href={`/admin/blog/comments?post_id=${postId}`}>
             View comments
           </Link>
-          <button type="button" className="admin-button secondary" onClick={handleDelete} disabled={isSubmitting}>
-            Delete
-          </button>
+          {!readOnly ? (
+            <button type="button" className="admin-button secondary" onClick={handleDelete} disabled={isSubmitting}>
+              Delete
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -198,14 +239,35 @@ export default function AdminEditBlogPostPage() {
           <p>Loading post...</p>
         </div>
       ) : initialValues ? (
-        <BlogPostForm
-          adminToken={token}
-          initialValues={initialValues}
-          onSubmit={handleSubmit}
-          isSubmitting={isSubmitting}
-          message={message}
-          submitLabel="Save"
-        />
+        <>
+          <BlogPostForm
+            adminToken={token}
+            initialValues={initialValues}
+            onSubmit={handleSubmit}
+            isSubmitting={isSubmitting}
+            message={message}
+            submitLabel="Save"
+            readOnly={readOnly}
+          />
+
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 mt-6">
+            <h3 className="text-base font-extrabold text-gray-900">Audit trail</h3>
+            {auditItems.length === 0 ? (
+              <p className="admin-subtitle">No audit entries yet.</p>
+            ) : (
+              <div className="mt-3 space-y-2">
+                {auditItems.map((a) => (
+                  <div key={a.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                    <div className="text-xs text-gray-600">
+                      {a.created_at} • {a.action} • staff #{a.actor_id || '—'}
+                    </div>
+                    {a.details ? <pre className="mt-2 text-xs text-gray-700 whitespace-pre-wrap">{JSON.stringify(a.details, null, 2)}</pre> : null}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
       ) : (
         <p className="admin-subtitle">{message || 'Post not found.'}</p>
       )}

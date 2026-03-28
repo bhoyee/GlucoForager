@@ -14,6 +14,7 @@ export default function AdminTinyEditor({
   placeholder = '',
   compact = false,
   adminToken,
+  readOnly = false,
 }) {
   const rawToolbarId = useId();
   const toolbarId = useMemo(() => {
@@ -125,6 +126,9 @@ export default function AdminTinyEditor({
   };
 
   const modules = useMemo(() => {
+    if (readOnly) {
+      return { toolbar: false };
+    }
     if (compact) {
       return { toolbar: toolbarConfig };
     }
@@ -195,6 +199,7 @@ export default function AdminTinyEditor({
         onChange={(next) => onChange?.(next)}
         placeholder={placeholder}
         modules={modules}
+        readOnly={!!readOnly}
       />
     </div>
   );
