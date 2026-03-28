@@ -303,6 +303,29 @@ def send_staff_password_reset_code(to_email: str, code: str) -> None:
     logger.info("Sent staff password reset email to %s", to_email)
 
 
+def send_staff_payroll_available_email(*, to_email: str, period_label: str, portal_url: str | None = None) -> None:
+    subject = f"Your payslip is available ({period_label})"
+    safe_url = (portal_url or "").strip()
+    html_body = f"""
+    <html>
+      <body style="font-family: Arial, sans-serif; color: #0C1824;">
+        <div style="max-width:620px; margin:0 auto; border:1px solid #e5e7eb; border-radius:14px; padding:22px;">
+          <h2 style="color:#0FB7A5; margin-top:0;">Payslip available</h2>
+          <p>Your payslip for <strong>{period_label}</strong> is now available.</p>
+          <p style="margin-top:14px;">
+            {f"<a href='{safe_url}' style='display:inline-block; padding:10px 14px; border-radius:12px; background:#2e7d32; color:#ffffff; text-decoration:none; font-weight:700;'>View payslip</a>" if safe_url else ""}
+          </p>
+          <p style="margin-top:18px; color:#6b7280; font-size:12px;">
+            If you did not expect this email, please contact your admin.
+          </p>
+        </div>
+      </body>
+    </html>
+    """
+    _send_email(to_email, subject, html_body)
+    logger.info("Sent staff payroll email to %s period=%s", to_email, period_label)
+
+
 def send_newsletter_subscribed_email(to_email: str, subscriber_id: int) -> None:
     site_url = (settings.site_url or "https://www.glucoforager.com").rstrip("/")
     token = make_unsubscribe_token(subscriber_id, to_email)
