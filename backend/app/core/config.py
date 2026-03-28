@@ -77,6 +77,12 @@ class Settings(BaseSettings):
     api_rate_limit_mobile_logs_per_min: int = Field(600, env="API_RATE_LIMIT_MOBILE_LOGS_PER_MIN")
     api_rate_limit_push_tokens_per_min: int = Field(60, env="API_RATE_LIMIT_PUSH_TOKENS_PER_MIN")
 
+    # Admin/staff portal burst limits (requests per minute).
+    admin_rate_limit_per_min: int = Field(180, env="ADMIN_RATE_LIMIT_PER_MIN")
+    admin_login_rate_limit_per_min: int = Field(20, env="ADMIN_LOGIN_RATE_LIMIT_PER_MIN")
+    admin_password_reset_rate_limit_per_min: int = Field(10, env="ADMIN_PASSWORD_RESET_RATE_LIMIT_PER_MIN")
+    admin_mfa_rate_limit_per_min: int = Field(20, env="ADMIN_MFA_RATE_LIMIT_PER_MIN")
+
     # Per-user burst rate limits for AI endpoints (protects cost + latency under abuse).
     # Limits are "requests per minute" per user.
     ai_rate_limit_free_text_per_min: int = Field(4, env="AI_RATE_LIMIT_FREE_TEXT_PER_MIN")

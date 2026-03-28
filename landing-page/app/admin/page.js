@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { clearAdminTokens, setAdminTokens } from './lib/adminAuth';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 const ENABLE_BOOTSTRAP = process.env.NEXT_PUBLIC_ENABLE_ADMIN_BOOTSTRAP === 'true';
@@ -14,8 +15,12 @@ export default function AdminLoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasAdmin, setHasAdmin] = useState(null);
   const [message, setMessage] = useState('');
+  const [mfaRequired, setMfaRequired] = useState(false);
+  const [mfaChallengeId, setMfaChallengeId] = useState(null);
+  const [mfaCode, setMfaCode] = useState('');
 
   useEffect(() => {
+    clearAdminTokens();
     const checkStatus = async () => {
       try {
         const response = await fetch(`${API_URL}/api/admin/status`);
@@ -38,13 +43,29 @@ export default function AdminLoginPage() {
       if (!hasAdmin && !ENABLE_BOOTSTRAP) {
         throw new Error('Admin setup is disabled.');
       }
-      const endpoint = hasAdmin ? '/api/admin/login' : '/api/admin/bootstrap';
+
+      if (mfaRequired && mfaChallengeId) {
+        const response = await fetch(`${API_URL}/api/admin/staff/mfa/verify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ challenge_id: mfaChallengeId, code: mfaCode }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.detail || 'Unable to verify code.');
+        }
+        setAdminTokens({ accessToken: data.access_token, refreshToken: data.refresh_token });
+        router.push('/admin/dashboard');
+        return;
+      }
+
+      const endpoint = hasAdmin ? '/api/admin/staff/login' : '/api/admin/bootstrap';
       const response = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(data.detail || 'Unable to continue.');
       }
@@ -55,7 +76,14 @@ export default function AdminLoginPage() {
         return;
       }
 
-      localStorage.setItem('adminToken', data.access_token);
+      if (data.mfa_required) {
+        setMfaRequired(true);
+        setMfaChallengeId(data.challenge_id);
+        setMessage('Enter the verification code sent to your email.');
+        return;
+      }
+
+      setAdminTokens({ accessToken: data.access_token, refreshToken: data.refresh_token });
       router.push('/admin/dashboard');
     } catch (error) {
       setMessage(error.message || 'Something went wrong.');
@@ -85,6 +113,7 @@ export default function AdminLoginPage() {
               onChange={(event) => setEmail(event.target.value)}
               placeholder="admin@glucoforager.com"
               required
+              disabled={mfaRequired}
             />
           </div>
           <div className="admin-field">
@@ -95,8 +124,22 @@ export default function AdminLoginPage() {
               onChange={(event) => setPassword(event.target.value)}
               placeholder="••••••••"
               required
+              disabled={mfaRequired}
             />
           </div>
+
+          {mfaRequired && (
+            <div className="admin-field">
+              <label>Verification code</label>
+              <input
+                value={mfaCode}
+                onChange={(event) => setMfaCode(event.target.value)}
+                placeholder="123456"
+                required
+              />
+              <p className="admin-help">This code expires in ~10 minutes.</p>
+            </div>
+          )}
 
           {message && <p className="admin-subtitle">{message}</p>}
 
@@ -104,12 +147,19 @@ export default function AdminLoginPage() {
             <button className="admin-button" type="submit" disabled={isSubmitting}>
               {isSubmitting
                 ? 'Please wait...'
-                : hasAdmin
+                : mfaRequired
+                  ? 'Verify'
+                  : hasAdmin
                   ? 'Log in'
                   : ENABLE_BOOTSTRAP
                     ? 'Create admin'
                     : 'Log in'}
             </button>
+            {hasAdmin && !mfaRequired && (
+              <Link className="admin-link" href="/admin/forgot-password">
+                Forgot password?
+              </Link>
+            )}
             {hasAdmin && (
               <Link className="admin-link" href="/admin/dashboard">
                 Go to dashboard
