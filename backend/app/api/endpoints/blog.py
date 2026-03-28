@@ -66,7 +66,12 @@ def list_posts(page: int = 1, page_size: int = 10, db: Session = Depends(get_db)
     page = max(1, page)
     page_size = min(max(1, page_size), 50)
 
-    base = db.query(BlogPost).filter(BlogPost.status == "published")
+    now = _utcnow()
+    base = db.query(BlogPost).filter(
+        (BlogPost.status == "published")
+        & ((BlogPost.published_at.is_(None)) | (BlogPost.published_at <= now))
+        | ((BlogPost.status == "scheduled") & (BlogPost.published_at <= now))
+    )
     total = base.count()
     items = (
         base.order_by(desc(BlogPost.published_at), desc(BlogPost.created_at))
@@ -95,9 +100,15 @@ def list_posts(page: int = 1, page_size: int = 10, db: Session = Depends(get_db)
 
 @router.get("/posts/{slug}", response_model=BlogPostDetail)
 def get_post(slug: str, db: Session = Depends(get_db)):
+    now = _utcnow()
     post = (
         db.query(BlogPost)
-        .filter(BlogPost.slug == slug.strip().lower(), BlogPost.status == "published")
+        .filter(
+            BlogPost.slug == slug.strip().lower(),
+            (BlogPost.status == "published")
+            & ((BlogPost.published_at.is_(None)) | (BlogPost.published_at <= now))
+            | ((BlogPost.status == "scheduled") & (BlogPost.published_at <= now)),
+        )
         .first()
     )
     if not post:
@@ -119,9 +130,15 @@ def get_post(slug: str, db: Session = Depends(get_db)):
 
 @router.get("/posts/{slug}/comments", response_model=list[CommentPublic])
 def list_comments(slug: str, db: Session = Depends(get_db)):
+    now = _utcnow()
     post = (
         db.query(BlogPost)
-        .filter(BlogPost.slug == slug.strip().lower(), BlogPost.status == "published")
+        .filter(
+            BlogPost.slug == slug.strip().lower(),
+            (BlogPost.status == "published")
+            & ((BlogPost.published_at.is_(None)) | (BlogPost.published_at <= now))
+            | ((BlogPost.status == "scheduled") & (BlogPost.published_at <= now)),
+        )
         .first()
     )
     if not post:
@@ -140,9 +157,15 @@ def list_comments(slug: str, db: Session = Depends(get_db)):
 
 @router.post("/posts/{slug}/comments", status_code=201)
 def create_comment(slug: str, payload: CommentCreatePayload, request: Request, db: Session = Depends(get_db)):
+    now = _utcnow()
     post = (
         db.query(BlogPost)
-        .filter(BlogPost.slug == slug.strip().lower(), BlogPost.status == "published")
+        .filter(
+            BlogPost.slug == slug.strip().lower(),
+            (BlogPost.status == "published")
+            & ((BlogPost.published_at.is_(None)) | (BlogPost.published_at <= now))
+            | ((BlogPost.status == "scheduled") & (BlogPost.published_at <= now)),
+        )
         .first()
     )
     if not post:
