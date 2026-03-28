@@ -3113,3 +3113,362 @@
     justify-content: center;
   }
 }
+
+/* Staff dashboard (intranet-style widgets) */
+.admin-dashboard-hero {
+  padding: 22px 24px;
+}
+
+.admin-dashboard-hero-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+@media (max-width: 720px) {
+  .admin-dashboard-hero-top {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+.admin-dashboard-hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-dashboard-hero-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+.admin-dashboard-hero-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  flex: 1;
+  min-width: min(620px, 100%);
+}
+
+@media (max-width: 960px) {
+  .admin-dashboard-hero-meta {
+    grid-template-columns: 1fr;
+    min-width: 100%;
+  }
+}
+
+.admin-dashboard-meta-item {
+  background: rgba(46, 125, 50, 0.06);
+  border: 1px solid rgba(46, 125, 50, 0.14);
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
+.admin-dashboard-meta-label {
+  font-size: 12px;
+  color: #4f6b5c;
+  font-weight: 600;
+}
+
+.admin-dashboard-meta-value {
+  margin-top: 6px;
+  font-weight: 700;
+  color: #1b3b2f;
+  word-break: break-word;
+}
+
+.admin-dashboard-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+@media (max-width: 960px) {
+  .admin-dashboard-quick-actions {
+    justify-content: flex-start;
+  }
+}
+
+.admin-quick-action {
+  border: 1px solid #e5eee9;
+  background: #ffffff;
+  border-radius: 999px;
+  padding: 10px 14px;
+  font-weight: 600;
+  color: #2f4f3f;
+  text-decoration: none;
+  transition: transform 120ms ease, border-color 150ms ease, background 150ms ease;
+}
+
+.admin-quick-action:hover {
+  border-color: #cfe0d8;
+  background: #f3faf6;
+}
+
+.admin-quick-action:active {
+  transform: translateY(1px);
+}
+
+.admin-dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+@media (min-width: 960px) {
+  .admin-dashboard-grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 18px;
+  }
+}
+
+.admin-dashboard-span-3,
+.admin-dashboard-span-4,
+.admin-dashboard-span-5 {
+  grid-column: span 12;
+}
+
+@media (min-width: 960px) {
+  .admin-dashboard-span-3 {
+    grid-column: span 3;
+  }
+
+  .admin-dashboard-span-4 {
+    grid-column: span 4;
+  }
+
+  .admin-dashboard-span-5 {
+    grid-column: span 5;
+  }
+}
+
+.admin-widget {
+  padding: 18px 18px 16px;
+}
+
+.admin-widget-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.admin-widget-title {
+  margin: 0;
+  font-size: 16px;
+}
+
+.admin-widget-subtitle {
+  margin: 6px 0 0;
+}
+
+.admin-widget-body {
+  display: block;
+}
+
+.admin-dashboard-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 520px) {
+  .admin-dashboard-stats {
+    grid-template-columns: 1fr;
+  }
+}
+
+.admin-dashboard-stat {
+  background: #f6f9f7;
+  border: 1px solid #e5eee9;
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
+.admin-dashboard-stat-label {
+  font-size: 12px;
+  color: #4f6b5c;
+  font-weight: 600;
+}
+
+.admin-dashboard-stat-value {
+  margin-top: 8px;
+  font-size: 18px;
+  font-weight: 800;
+  color: #1b3b2f;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-mini-week {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.admin-mini-day {
+  border-radius: 12px;
+  border: 1px solid #e5eee9;
+  padding: 10px 6px;
+  text-align: center;
+  background: #f6f9f7;
+}
+
+.admin-mini-day.tone-off {
+  opacity: 0.65;
+}
+
+.admin-mini-day.tone-progress {
+  background: rgba(46, 125, 50, 0.08);
+  border-color: rgba(46, 125, 50, 0.22);
+}
+
+.admin-mini-day.tone-good {
+  background: rgba(76, 175, 80, 0.14);
+  border-color: rgba(76, 175, 80, 0.25);
+}
+
+.admin-mini-day.tone-warn {
+  background: rgba(255, 152, 0, 0.14);
+  border-color: rgba(255, 152, 0, 0.28);
+}
+
+.admin-mini-day-label {
+  font-size: 12px;
+  font-weight: 800;
+  color: #2f4f3f;
+}
+
+.admin-dashboard-week-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (min-width: 720px) {
+  .admin-dashboard-week-row {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.admin-dashboard-week-metric {
+  background: #f6f9f7;
+  border: 1px solid #e5eee9;
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
+.admin-dashboard-week-label {
+  font-size: 12px;
+  color: #4f6b5c;
+  font-weight: 700;
+}
+
+.admin-dashboard-week-value {
+  margin-top: 6px;
+  font-weight: 900;
+  color: #1b3b2f;
+}
+
+.admin-widget-list {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-widget-list-item {
+  border: 1px solid #e5eee9;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 10px 12px;
+}
+
+.admin-widget-list-title {
+  font-weight: 700;
+  color: #1b3b2f;
+  margin-bottom: 6px;
+}
+
+.admin-widget-list-meta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-widget-list-dot {
+  color: #7a9487;
+}
+
+.admin-dashboard-folder-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (min-width: 720px) {
+  .admin-dashboard-folder-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.admin-dashboard-folder {
+  border: 1px solid #e5eee9;
+  background: #f6f9f7;
+  border-radius: 14px;
+  padding: 12px 12px;
+}
+
+.admin-dashboard-folder-name {
+  font-weight: 800;
+  color: #1b3b2f;
+}
+
+.admin-dashboard-folder-count {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #4f6b5c;
+  font-weight: 600;
+}
+
+.admin-dashboard-payroll-period {
+  font-weight: 800;
+  color: #1b3b2f;
+  margin-bottom: 10px;
+}
+
+.admin-dashboard-payroll-totals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (max-width: 520px) {
+  .admin-dashboard-payroll-totals {
+    grid-template-columns: 1fr;
+  }
+}
+
+.admin-dashboard-payroll-total {
+  border: 1px solid #e5eee9;
+  background: #f6f9f7;
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
+.admin-dashboard-payroll-value {
+  margin-top: 6px;
+  font-weight: 900;
+  font-size: 18px;
+  color: #1b3b2f;
+}
