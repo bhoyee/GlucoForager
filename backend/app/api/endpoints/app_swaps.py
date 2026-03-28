@@ -15,7 +15,7 @@ from ...api.dependencies import get_current_user
 from ...database import get_db
 from ...models.ai_request import AIRequest
 from ...models.user import User
-from ...services.ai_swaps_service import AISwapsService, fallback_swaps, has_fallback_swaps
+from ...services.ai_swaps_service import AISwapsService
 from ...services.food_profile_service import extract_food_profile
 from ...services.cache_service import CacheService
 from ...services.cost_tracker import record_ai_request
@@ -52,8 +52,8 @@ def _normalize_food_input(value: str) -> str:
     s = s.replace("_", " ")
     s = re.sub(r"[^\w\s'\-]", " ", s, flags=re.UNICODE)
     s = " ".join(s.split())
-    # Keep the swaps query short and cacheable.
-    return s[:25]
+    # Keep the swaps query short and cacheable, but allow common multi-word foods.
+    return s[:60]
 
 
 def _looks_like_food_query(value: str) -> bool:
@@ -109,7 +109,7 @@ def generate_food_swaps(
         _http_error(
             status_code=422,
             code="invalid_food_input",
-            message="Enter a single food or drink (e.g. 'rice', 'spinach', 'soda').",
+            message="Enter a food or drink (e.g. 'ice cream', 'unripe plantain', 'rice').",
             trace_id=trace_id,
         )
 
@@ -127,15 +127,6 @@ def generate_food_swaps(
         AI thinks the original food is a "good_choice". The fallback catalog is our safety
         net for always showing something actionable.
         """
-        try:
-            has_swaps = bool((result_payload.get("swaps") or {}).get("better_options"))
-            if not has_swaps and has_fallback_swaps(food):
-                fb = fallback_swaps(food=food, food_profile=food_profile, force_swaps=True)
-                if fb.get("swaps"):
-                    result_payload["should_show_swaps"] = True
-                    result_payload["swaps"] = fb.get("swaps")
-        except Exception:
-            pass
         return result_payload
 
     def _to_client_payload(result_payload: dict) -> dict:
@@ -161,7 +152,7 @@ def generate_food_swaps(
                 return {
                     "food": str(result_payload.get("food") or food),
                     "message": msg[:160],
-                    "suggested_query": (str(suggested).strip()[:25] if isinstance(suggested, str) and suggested.strip() else None),
+                    "suggested_query": (str(suggested).strip()[:60] if isinstance(suggested, str) and suggested.strip() else None),
                     "swaps": None,
                 }
         except Exception:
@@ -241,11 +232,8 @@ def generate_food_swaps(
         )
 
     # Cache v11: swaps-only client payload (no assessment fields returned to mobile).
-    # We keep fallback cache only for AI failures, but we never serve it
-    # ahead of AI so OpenAI remains the primary engine.
     cache_key_base = f"swaps:cache:v11:tier:{tier}:profile:{profile_hash}:force:{int(bool(payload.force_swaps))}:q:{food.lower()}"
     cache_key_ai = f"{cache_key_base}:ai"
-    cache_key_fb = f"{cache_key_base}:fb"
 
     cached_ai = cache.get(cache_key_ai)
     if cached_ai:
@@ -359,7 +347,6 @@ def generate_food_swaps(
             "should_show_swaps": result.get("should_show_swaps"),
             "swaps": result.get("swaps"),
         }
-        response_payload = _maybe_fill_swaps_from_fallback(response_payload)
         client_payload = _to_client_payload(response_payload)
         cache.set(cache_key_ai, json.dumps(client_payload, ensure_ascii=False), ttl_seconds=6 * 60 * 60)
         log_system_event(
@@ -390,29 +377,12 @@ def generate_food_swaps(
                 "ip": request.client.host if request.client else None,
             }
         )
-        # Prefer a deterministic fallback over returning 5xx so the feature stays usable.
-        fb = fallback_swaps(food=food, food_profile=food_profile, force_swaps=bool(payload.force_swaps))
-        # Never show provider/latency issues to users; keep messaging neutral and actionable.
-        try:
-            if isinstance(fb.get("assessment"), dict):
-                summary = str(fb["assessment"].get("summary") or "").strip()
-                if summary:
-                    fb["assessment"]["summary"] = summary[:240]
-        except Exception:
-            pass
-        response_payload = {
-            "food": fb.get("food"),
-            "assessment": fb.get("assessment"),
-            "should_show_swaps": fb.get("should_show_swaps"),
-            "swaps": fb.get("swaps"),
-        }
-        client_payload = _to_client_payload(response_payload)
-        # Cache the fallback for a short period to prevent repeated slow upstream calls.
-        try:
-            cache.set(cache_key_fb, json.dumps(client_payload, ensure_ascii=False), ttl_seconds=15 * 60)
-        except Exception:
-            pass
-        return client_payload
+        _http_error(
+            status_code=502,
+            code="swaps_failed",
+            message="Couldn't generate swaps right now. Please try again in a moment.",
+            trace_id=trace_id,
+        )
     except ValueError as e:
         msg = str(e or "")
         logger.warning("Swaps generation returned invalid output: %s", msg)
@@ -420,36 +390,26 @@ def generate_food_swaps(
             _http_error(
                 status_code=422,
                 code="invalid_food_input",
-                message="Enter a single food or drink (e.g. 'rice', 'spinach', 'soda').",
+                message="Enter a food or drink (e.g. 'ice cream', 'unripe plantain', 'rice').",
             )
-        # If the model returns malformed/partial JSON, do not throw a 502 to mobile.
-        # Return deterministic fallback swaps instead so the feature stays usable.
         log_system_event(
             {
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "level": "warn",
                 "source": "swaps",
-                "message": "Swaps AI output invalid; serving fallback",
+                "message": "Swaps AI output invalid",
                 "details": f"trace={trace_id} user_id={user.id} food={food!r} err={msg[:160]}",
                 "path": request.url.path,
                 "method": request.method,
                 "ip": request.client.host if request.client else None,
             }
         )
-        fb = fallback_swaps(food=food, food_profile=food_profile, force_swaps=True)
-        client_payload = _to_client_payload(
-            {
-                "food": fb.get("food"),
-                "assessment": fb.get("assessment"),
-                "should_show_swaps": True,
-                "swaps": fb.get("swaps"),
-            }
+        _http_error(
+            status_code=502,
+            code="ai_output_invalid",
+            message="Couldn't generate swaps right now. Please try again in a moment.",
+            trace_id=trace_id,
         )
-        try:
-            cache.set(cache_key_fb, json.dumps(client_payload, ensure_ascii=False), ttl_seconds=15 * 60)
-        except Exception:
-            pass
-        return client_payload
     except HTTPException:
         raise
     except Exception:
