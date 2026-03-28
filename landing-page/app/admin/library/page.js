@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import EmptyState from '../ui/EmptyState';
+import LoadingState from '../ui/LoadingState';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -230,10 +232,10 @@ export default function LibraryPage() {
         <p className="admin-subtitle">
           Shared assets (documents, images, training). Preview PDFs/images, search, tags, and admin restore deleted.
         </p>
-        {message && <p className="admin-subtitle">{message}</p>}
+        {message ? <div className="admin-alert warning">{message}</div> : null}
 
         <div className="admin-grid" style={{ marginTop: 14, alignItems: 'start' }}>
-          <div className="admin-card" style={{ padding: 14 }}>
+          <div className="admin-card admin-card--subtle admin-card--compact">
             <h3 style={{ marginTop: 0 }}>Folders</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {folderItems.length === 0 ? (
@@ -278,7 +280,7 @@ export default function LibraryPage() {
             </div>
           </div>
 
-          <div className="admin-card" style={{ padding: 14 }}>
+          <div className="admin-card admin-card--subtle admin-card--compact">
             <h3 style={{ marginTop: 0 }}>Search</h3>
             <div className="admin-field">
               <label>Search title / file name / tags</label>
@@ -349,13 +351,17 @@ export default function LibraryPage() {
         </div>
 
         {loading ? (
-          <p className="admin-subtitle">Loading...</p>
+          <LoadingState label="Loading library…" />
         ) : filtered.length === 0 ? (
-          <p className="admin-subtitle">No items.</p>
+          <EmptyState title="No library items" body="Upload a document, image, or training material to get started." />
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12, marginTop: 12 }}>
             {filtered.map((i) => (
-              <div key={i.id} className="admin-card" style={{ padding: 12, opacity: i.is_deleted ? 0.65 : 1 }}>
+              <div
+                key={i.id}
+                className="admin-card admin-card--subtle admin-card--compact"
+                style={{ opacity: i.is_deleted ? 0.65 : 1 }}
+              >
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
                   <div>
                     <p style={{ margin: 0, fontWeight: 700 }}>{i.title}</p>
@@ -459,4 +465,3 @@ export default function LibraryPage() {
     </div>
   );
 }
-

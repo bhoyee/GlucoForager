@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import EmptyState from '../ui/EmptyState';
+import LoadingState from '../ui/LoadingState';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -279,9 +281,9 @@ export default function AdminStaffPage() {
       <div className="admin-card" style={{ marginTop: 16 }}>
         <h3>Staff Users</h3>
         {loading ? (
-          <p className="admin-subtitle">Loading...</p>
+          <LoadingState label="Loading staff users…" />
         ) : users.length === 0 ? (
-          <p className="admin-subtitle">No staff users yet.</p>
+          <EmptyState title="No staff users yet" body="Create a staff account to grant access to the portal." />
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table className="admin-table">
@@ -361,4 +363,3 @@ export default function AdminStaffPage() {
     </div>
   );
 }
-

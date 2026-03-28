@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import LoadingState from '../ui/LoadingState';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -146,7 +147,7 @@ export default function AttendancePage() {
             HR tools: <a className="admin-link" href="/admin/attendance/manage">Manage staff time logs</a>
           </p>
         )}
-        {message && <p className="admin-subtitle">{message}</p>}
+        {message ? <div className="admin-alert info">{message}</div> : null}
 
         <div className="admin-actions" style={{ gap: 12, flexWrap: 'wrap' }}>
           <button className="admin-button" type="button" onClick={doClockIn}>
@@ -183,7 +184,7 @@ export default function AttendancePage() {
         </div>
 
         {loading ? (
-          <p className="admin-subtitle">Loading...</p>
+          <LoadingState label={`Loading ${monthLabel}…`} />
         ) : (
           <div style={{ marginTop: 12 }}>
             <div

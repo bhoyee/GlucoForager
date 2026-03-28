@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import EmptyState from '../ui/EmptyState';
+import LoadingState from '../ui/LoadingState';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -397,12 +399,12 @@ export default function HelpPage() {
       </div>
 
       <div className="admin-grid" style={{ marginTop: 16 }}>
-        <div className="admin-card" style={{ padding: 16 }}>
+        <div className="admin-card admin-card--subtle admin-card--compact">
           <h3>Tickets</h3>
           {loading ? (
-            <p className="admin-subtitle">Loading...</p>
+            <LoadingState label="Loading tickets…" />
           ) : tickets.length === 0 ? (
-            <p className="admin-subtitle">No tickets.</p>
+            <EmptyState title="No tickets yet" body="Create a ticket or wait for an assignment." />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {tickets.map((t) => {
