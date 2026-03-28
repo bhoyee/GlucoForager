@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import EmptyState from '../ui/EmptyState';
+import LoadingState from '../ui/LoadingState';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -321,9 +323,9 @@ export default function WorkLogsPage() {
         </div>
 
         {loading ? (
-          <p className="admin-subtitle">Loading...</p>
+          <LoadingState label="Loading month logs…" />
         ) : monthLogs.length === 0 ? (
-          <p className="admin-subtitle">No logs for this month yet.</p>
+          <EmptyState title="No logs yet" body="Your saved daily logs will appear here." />
         ) : (
           <div style={{ marginTop: 12, overflowX: 'auto' }}>
             <table className="admin-table">
@@ -374,16 +376,16 @@ export default function WorkLogsPage() {
           </div>
 
           {weekLoading ? (
-            <p className="admin-subtitle" style={{ marginTop: 12 }}>
-              Loading...
-            </p>
+            <div style={{ marginTop: 12 }}>
+              <LoadingState label="Loading week summary…" />
+            </div>
           ) : !weekData ? (
-            <p className="admin-subtitle" style={{ marginTop: 12 }}>
-              Select a staff member to load the week.
-            </p>
+            <div style={{ marginTop: 12 }}>
+              <EmptyState title="No staff selected" body="Pick a staff member to view weekly summaries and reminders." />
+            </div>
           ) : (
             <div style={{ marginTop: 12 }}>
-              <div className="admin-card" style={{ padding: 12 }}>
+              <div className="admin-card admin-card--subtle admin-card--compact">
                 <p className="admin-subtitle" style={{ margin: 0 }}>
                   <strong>{weekData.email}</strong> — {weekData.week_start} → {weekData.week_end} | Logs: {weekData.summary?.logs_written} | Missing:{' '}
                   {weekData.summary?.missing_logs} | Tasks done: {weekData.summary?.tasks_done}/{weekData.summary?.tasks_total} | Comments:{' '}

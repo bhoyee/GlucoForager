@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import EmptyState from '../ui/EmptyState';
+import LoadingState from '../ui/LoadingState';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -171,9 +173,9 @@ export default function ReportsPage() {
 
       <div className="admin-card" style={{ marginTop: 16 }}>
         {loading ? (
-          <p className="admin-subtitle">Loading...</p>
+          <LoadingState label="Loading reports…" />
         ) : items.length === 0 ? (
-          <p className="admin-subtitle">No data.</p>
+          <EmptyState title="No report data" body="Once staff clock in/out and write logs, monthly summaries will appear here." />
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table className="admin-table">
@@ -331,4 +333,3 @@ export default function ReportsPage() {
     </div>
   );
 }
-
