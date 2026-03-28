@@ -28,6 +28,7 @@ export default function PayrollPage() {
   const [runYear, setRunYear] = useState(now.getFullYear());
   const [runMonth, setRunMonth] = useState(now.getMonth() + 1);
   const [overwriteGenerate, setOverwriteGenerate] = useState(false);
+  const [runTotals, setRunTotals] = useState([]);
 
   const [selectedStaffId, setSelectedStaffId] = useState('');
   const [includeInactive, setIncludeInactive] = useState(true);
@@ -105,18 +106,28 @@ export default function PayrollPage() {
     if (!token || !runId) return;
     setRunLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/admin/payroll/runs/${runId}/items`, { headers: { Authorization: `Bearer ${token}` } });
-      if (res.status === 401) {
+      const [itemsRes, summaryRes] = await Promise.all([
+        fetch(`${API_URL}/api/admin/payroll/runs/${runId}/items`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API_URL}/api/admin/payroll/runs/${runId}/summary`, { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+      if (itemsRes.status === 401 || summaryRes.status === 401) {
         localStorage.removeItem('adminToken');
         router.push('/admin');
         return;
       }
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || 'Failed to load items.');
+      const data = await itemsRes.json().catch(() => ({}));
+      if (!itemsRes.ok) throw new Error(data.detail || 'Failed to load items.');
       setRunItems(Array.isArray(data.items) ? data.items : []);
+      if (summaryRes.ok) {
+        const summaryData = await summaryRes.json().catch(() => ({}));
+        setRunTotals(Array.isArray(summaryData.totals) ? summaryData.totals : []);
+      } else {
+        setRunTotals([]);
+      }
     } catch (e) {
       setMessage(e?.message || 'Failed to load items.');
       setRunItems([]);
+      setRunTotals([]);
     } finally {
       setRunLoading(false);
     }
@@ -342,6 +353,36 @@ export default function PayrollPage() {
     }
   };
 
+  const downloadRunCsv = async () => {
+    if (!token || !selectedRunId) return;
+    setMessage('');
+    try {
+      const res = await fetch(`${API_URL}/api/admin/payroll/runs/${selectedRunId}/export.csv`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || 'Failed to download CSV.');
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `payroll_run_${selectedRunId}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      setMessage(e?.message || 'Failed to download CSV.');
+    }
+  };
+
   return (
     <div className="admin-card">
       <h2 className="admin-title">Payroll</h2>
@@ -547,6 +588,9 @@ export default function PayrollPage() {
                 </p>
               </div>
               <div className="admin-actions" style={{ margin: 0 }}>
+                <button className="admin-button secondary" type="button" onClick={downloadRunCsv} disabled={!selectedRunId}>
+                  Download CSV
+                </button>
                 <label style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                   <input type="checkbox" checked={overwriteGenerate} onChange={(e) => setOverwriteGenerate(e.target.checked)} />
                   Overwrite
@@ -584,6 +628,20 @@ export default function PayrollPage() {
               <EmptyState title="No items" body="Click “Generate items” to build payroll items from compensation." />
             ) : (
               <div style={{ overflowX: 'auto', marginTop: 12 }}>
+                {Array.isArray(runTotals) && runTotals.length > 0 ? (
+                  <div className="admin-actions" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <p className="admin-help" style={{ margin: 0 }}>
+                      Totals by currency:
+                    </p>
+                    <div className="admin-actions" style={{ margin: 0 }}>
+                      {runTotals.map((t) => (
+                        <span key={t.currency} className="admin-badge secondary" title={`Gross ${t.gross} · Net ${t.net}`}>
+                          {t.currency} Net {Number(t.net || 0).toFixed(2)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
                 <table className="admin-table">
                   <thead>
                     <tr>

@@ -3,8 +3,11 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from calendar import monthrange
+import csv
+import io
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -334,6 +337,106 @@ def list_run_items(
             for item, email in rows
         ]
     }
+
+
+@router.get("/runs/{run_id}/summary")
+def run_summary(
+    run_id: int,
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("payroll.manage")),  # noqa: ARG001
+):
+    run = db.query(PayrollRun).filter(PayrollRun.id == int(run_id)).first()
+    if not run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    rows = (
+        db.query(
+            PayrollItem.currency.label("currency"),
+            func.count(PayrollItem.id).label("count_items"),
+            func.coalesce(func.sum(PayrollItem.gross), 0).label("sum_gross"),
+            func.coalesce(func.sum(PayrollItem.deductions), 0).label("sum_deductions"),
+            func.coalesce(func.sum(PayrollItem.net), 0).label("sum_net"),
+        )
+        .filter(PayrollItem.run_id == int(run.id))
+        .group_by(PayrollItem.currency)
+        .order_by(PayrollItem.currency.asc())
+        .all()
+    )
+
+    totals = []
+    for r in rows:
+        totals.append(
+            {
+                "currency": str(r.currency or ""),
+                "count_items": int(r.count_items or 0),
+                "gross": str(r.sum_gross or 0),
+                "deductions": str(r.sum_deductions or 0),
+                "net": str(r.sum_net or 0),
+            }
+        )
+
+    return {"run_id": int(run.id), "year": int(run.year), "month": int(run.month), "totals": totals}
+
+
+@router.get("/runs/{run_id}/export.csv")
+def export_run_csv(
+    run_id: int,
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("payroll.manage")),  # noqa: ARG001
+):
+    run = db.query(PayrollRun).filter(PayrollRun.id == int(run_id)).first()
+    if not run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    rows = (
+        db.query(PayrollItem, StaffUser.email)
+        .join(StaffUser, StaffUser.id == PayrollItem.staff_user_id)
+        .filter(PayrollItem.run_id == int(run.id))
+        .order_by(StaffUser.email.asc(), PayrollItem.id.asc())
+        .all()
+    )
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(
+        [
+            "year",
+            "month",
+            "run_id",
+            "run_status",
+            "staff_user_id",
+            "staff_email",
+            "currency",
+            "gross",
+            "deductions",
+            "net",
+            "notes",
+            "emailed_at",
+        ]
+    )
+
+    for item, email in rows:
+        writer.writerow(
+            [
+                int(run.year),
+                int(run.month),
+                int(run.id),
+                str(run.status or ""),
+                int(item.staff_user_id),
+                str(email or ""),
+                str(item.currency or ""),
+                str(item.gross or 0),
+                str(item.deductions or 0),
+                str(item.net or 0),
+                str(item.notes or ""),
+                (item.emailed_at.isoformat() if getattr(item, "emailed_at", None) else ""),
+            ]
+        )
+
+    csv_text = buffer.getvalue()
+    filename = f"payroll_{int(run.year)}_{str(int(run.month)).zfill(2)}_run_{int(run.id)}.csv"
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    return StreamingResponse(iter([csv_text]), media_type="text/csv; charset=utf-8", headers=headers)
 
 
 class GenerateItemsPayload(BaseModel):
