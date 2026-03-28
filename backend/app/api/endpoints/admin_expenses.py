@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from ..admin_dependencies import get_current_admin
+from ..admin_dependencies import require_staff_permission
 from ...database import get_db
 from ...models.staff_expense import StaffExpense
 from ...models.staff_user import StaffUser
@@ -28,7 +28,7 @@ def list_expenses(
     year: int | None = None,
     month: int | None = None,
     db: Session = Depends(get_db),
-    current_staff: StaffUser = Depends(get_current_admin),  # noqa: ARG001
+    current_staff: StaffUser = Depends(require_staff_permission("expenses.read")),  # noqa: ARG001
 ):
     q = db.query(StaffExpense)
     if year and month:
@@ -61,7 +61,7 @@ def list_expenses(
 def create_expense(
     payload: ExpenseCreatePayload,
     db: Session = Depends(get_db),
-    current_staff: StaffUser = Depends(get_current_admin),
+    current_staff: StaffUser = Depends(require_staff_permission("expenses.write")),
 ):
     row = StaffExpense(
         created_by_staff_user_id=current_staff.id,
@@ -82,7 +82,7 @@ def create_expense(
 def delete_expense(
     expense_id: int,
     db: Session = Depends(get_db),
-    current_staff: StaffUser = Depends(get_current_admin),
+    current_staff: StaffUser = Depends(require_staff_permission("expenses.write")),
 ):
     row = db.query(StaffExpense).filter(StaffExpense.id == int(expense_id)).first()
     if not row:
@@ -93,4 +93,3 @@ def delete_expense(
     db.delete(row)
     db.commit()
     return {"ok": True}
-

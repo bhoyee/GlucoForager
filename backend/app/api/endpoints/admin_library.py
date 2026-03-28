@@ -7,7 +7,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from sqlalchemy.orm import Session
 
-from ..admin_dependencies import get_current_admin
+from ..admin_dependencies import require_staff_permission
 from ...core.config import settings
 from ...database import get_db
 from ...models.staff_library_item import StaffLibraryItem
@@ -28,7 +28,7 @@ def list_library(
     folder: str | None = None,
     include_deleted: int = 0,
     db: Session = Depends(get_db),
-    current_staff: StaffUser = Depends(get_current_admin),
+    current_staff: StaffUser = Depends(require_staff_permission("library.read")),
 ):
     q = db.query(StaffLibraryItem)
     if folder:
@@ -66,7 +66,7 @@ def upload_to_library(
     title: str = Form(...),
     folder: str = Form("general"),
     db: Session = Depends(get_db),
-    current_staff: StaffUser = Depends(get_current_admin),
+    current_staff: StaffUser = Depends(require_staff_permission("library.upload")),
 ):
     content_type = (file.content_type or "").lower()
     is_image = content_type.startswith("image/")
@@ -112,7 +112,7 @@ def upload_to_library(
 def soft_delete_item(
     item_id: int,
     db: Session = Depends(get_db),
-    current_staff: StaffUser = Depends(get_current_admin),
+    current_staff: StaffUser = Depends(require_staff_permission("library.delete_own")),
 ):
     item = db.query(StaffLibraryItem).filter(StaffLibraryItem.id == int(item_id)).first()
     if not item:
@@ -120,12 +120,17 @@ def soft_delete_item(
     if item.is_deleted:
         return {"ok": True}
 
-    if not _is_admin(db, current_staff) and int(item.staff_user_id) != int(current_staff.id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only delete your own uploads")
+    if int(item.staff_user_id) != int(current_staff.id):
+        # Only admins can delete items uploaded by other staff.
+        if not _is_admin(db, current_staff):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only delete your own uploads")
+        # Admin override requires explicit permission.
+        perms = StaffRBACService.get_user_permission_keys(db, current_staff.id)
+        if not StaffRBACService.has_permission(perms, "library.delete_any") and not StaffRBACService.has_permission(perms, "*"):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
 
     item.is_deleted = True
     item.deleted_at = datetime.utcnow()
     item.deleted_by_staff_user_id = int(current_staff.id)
     db.commit()
     return {"ok": True}
-

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from ..admin_dependencies import get_current_admin
+from ..admin_dependencies import require_staff_permission
 from ...database import get_db
 from ...models.staff_ticket import StaffTicket, StaffTicketMessage
 from ...models.staff_user import StaffUser
@@ -28,7 +28,7 @@ class TicketMessagePayload(BaseModel):
 def list_tickets(
     status_filter: str | None = None,
     db: Session = Depends(get_db),
-    current_staff: StaffUser = Depends(get_current_admin),
+    current_staff: StaffUser = Depends(require_staff_permission("tickets.read")),
 ):
     q = db.query(StaffTicket)
     if status_filter in {"open", "closed"}:
@@ -58,7 +58,7 @@ def list_tickets(
 def get_ticket(
     ticket_id: int,
     db: Session = Depends(get_db),
-    current_staff: StaffUser = Depends(get_current_admin),  # noqa: ARG001
+    current_staff: StaffUser = Depends(require_staff_permission("tickets.read")),  # noqa: ARG001
 ):
     t = db.query(StaffTicket).filter(StaffTicket.id == int(ticket_id)).first()
     if not t:
@@ -95,7 +95,7 @@ def get_ticket(
 def create_ticket(
     payload: TicketCreatePayload,
     db: Session = Depends(get_db),
-    current_staff: StaffUser = Depends(get_current_admin),
+    current_staff: StaffUser = Depends(require_staff_permission("tickets.write")),
 ):
     t = StaffTicket(
         created_by_staff_user_id=current_staff.id,
@@ -124,7 +124,7 @@ def add_message(
     ticket_id: int,
     payload: TicketMessagePayload,
     db: Session = Depends(get_db),
-    current_staff: StaffUser = Depends(get_current_admin),
+    current_staff: StaffUser = Depends(require_staff_permission("tickets.write")),
 ):
     t = db.query(StaffTicket).filter(StaffTicket.id == int(ticket_id)).first()
     if not t:
@@ -147,7 +147,7 @@ def add_message(
 def close_ticket(
     ticket_id: int,
     db: Session = Depends(get_db),
-    current_staff: StaffUser = Depends(get_current_admin),  # noqa: ARG001
+    current_staff: StaffUser = Depends(require_staff_permission("tickets.close")),  # noqa: ARG001
 ):
     t = db.query(StaffTicket).filter(StaffTicket.id == int(ticket_id)).first()
     if not t:
@@ -156,4 +156,3 @@ def close_ticket(
     t.updated_at = datetime.utcnow()
     db.commit()
     return {"ok": True}
-

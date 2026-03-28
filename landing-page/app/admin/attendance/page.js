@@ -18,6 +18,7 @@ export default function AttendancePage() {
   const [monthIndex, setMonthIndex] = useState(now.getMonth()); // 0-11
   const [entries, setEntries] = useState([]);
   const [timezone, setTimezone] = useState('UTC');
+  const [canManage, setCanManage] = useState(false);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -38,6 +39,8 @@ export default function AttendancePage() {
       }
       const me = await meRes.json();
       setTimezone(me.timezone || 'UTC');
+      const perms = Array.isArray(me.permissions) ? me.permissions : [];
+      setCanManage(perms.includes('*') || perms.includes('attendance.manage'));
 
       const res = await fetch(`${API_URL}/api/admin/attendance/month?year=${year}&month=${monthIndex + 1}`, { headers });
       if (res.status === 401) {
@@ -138,6 +141,11 @@ export default function AttendancePage() {
         <p className="admin-subtitle">
           Timezone: <code>{timezone}</code>. On-time windows: 9:00 ±30 mins, 5:00 ±30 mins.
         </p>
+        {canManage && (
+          <p className="admin-subtitle">
+            HR tools: <a className="admin-link" href="/admin/attendance/manage">Manage staff time logs</a>
+          </p>
+        )}
         {message && <p className="admin-subtitle">{message}</p>}
 
         <div className="admin-actions" style={{ gap: 12, flexWrap: 'wrap' }}>
@@ -227,4 +235,3 @@ export default function AttendancePage() {
     </div>
   );
 }
-

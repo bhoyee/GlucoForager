@@ -26,6 +26,7 @@ from .api.endpoints import (
     admin_library,
     admin_help,
     admin_expenses,
+    admin_reports,
     admin_settings,
     admin_challenge,
     admin_revenuecat,
@@ -424,6 +425,7 @@ app.include_router(admin_work_logs.router, prefix="/api")
 app.include_router(admin_library.router, prefix="/api")
 app.include_router(admin_help.router, prefix="/api")
 app.include_router(admin_expenses.router, prefix="/api")
+app.include_router(admin_reports.router, prefix="/api")
 app.include_router(admin_settings.router, prefix="/api")
 app.include_router(admin_challenge.router, prefix="/api")
 app.include_router(admin_revenuecat.router, prefix="/api")

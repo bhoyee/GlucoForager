@@ -7,10 +7,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from ..admin_dependencies import get_current_admin
+from ..admin_dependencies import get_current_staff_user, require_staff_permission
 from ...database import get_db
+from ...models.staff_audit_log import StaffAuditLog
 from ...models.staff_time_entry import StaffTimeEntry
 from ...models.staff_user import StaffUser
+from ...services.staff_rbac_service import StaffRBACService
 
 
 router = APIRouter(prefix="/admin/attendance", tags=["admin-attendance"])
@@ -64,13 +66,20 @@ class MonthQuery(BaseModel):
 
 @router.get("/month")
 def get_month(
+    request: Request,
     year: int,
     month: int,
     staff_user_id: int | None = None,
     db: Session = Depends(get_db),
-    current_staff: StaffUser = Depends(get_current_admin),
+    current_staff: StaffUser = Depends(require_staff_permission("attendance.read")),
 ):
     staff_id = int(staff_user_id) if staff_user_id is not None else int(current_staff.id)
+    if int(staff_id) != int(current_staff.id):
+        perms = getattr(request.state, "staff_permissions", None)
+        if not perms:
+            perms = StaffRBACService.get_user_permission_keys(db, current_staff.id)
+        if not (StaffRBACService.has_permission(perms, "attendance.manage") or StaffRBACService.has_permission(perms, "*")):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
     staff = db.query(StaffUser).filter(StaffUser.id == staff_id).first()
     if not staff or not staff.is_active:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Staff user not found")
@@ -94,7 +103,7 @@ def get_month(
 def clock_in(
     request: Request,
     db: Session = Depends(get_db),
-    current_staff: StaffUser = Depends(get_current_admin),
+    current_staff: StaffUser = Depends(require_staff_permission("attendance.write")),
 ):
     today = datetime.now(timezone.utc).date()
     entry = (
@@ -121,7 +130,7 @@ def clock_in(
 def clock_out(
     request: Request,
     db: Session = Depends(get_db),
-    current_staff: StaffUser = Depends(get_current_admin),
+    current_staff: StaffUser = Depends(require_staff_permission("attendance.write")),
 ):
     today = datetime.now(timezone.utc).date()
     entry = (
@@ -140,3 +149,66 @@ def clock_out(
     db.refresh(entry)
     return {"ok": True, "entry": _entry_view(entry, current_staff.timezone)}
 
+
+class AttendanceEditPayload(BaseModel):
+    clock_in_at: str | None = None
+    clock_out_at: str | None = None
+    reason: str | None = Field(None, max_length=240)
+
+
+@router.patch("/entries/{entry_id}")
+def edit_entry(
+    request: Request,
+    entry_id: int,
+    payload: AttendanceEditPayload,
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("attendance.manage")),
+):
+    entry = db.query(StaffTimeEntry).filter(StaffTimeEntry.id == int(entry_id)).first()
+    if not entry:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    def _parse_dt(value: str | None) -> datetime | None:
+        if not value:
+            return None
+        try:
+            dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except Exception:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid datetime format")
+        if dt.tzinfo is not None:
+            dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+        return dt
+
+    new_in = _parse_dt(payload.clock_in_at) if payload.clock_in_at is not None else entry.clock_in_at
+    new_out = _parse_dt(payload.clock_out_at) if payload.clock_out_at is not None else entry.clock_out_at
+    if new_in and new_out and new_out < new_in:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="clock_out_at must be after clock_in_at")
+
+    before = {
+        "clock_in_at": entry.clock_in_at.isoformat() if entry.clock_in_at else None,
+        "clock_out_at": entry.clock_out_at.isoformat() if entry.clock_out_at else None,
+    }
+    entry.clock_in_at = new_in
+    entry.clock_out_at = new_out
+    entry.edited_at = datetime.utcnow()
+    entry.edited_by_staff_user_id = int(current_staff.id)
+    entry.edit_reason = (payload.reason.strip()[:240] if isinstance(payload.reason, str) and payload.reason.strip() else None)
+    entry.updated_at = datetime.utcnow()
+
+    db.add(
+        StaffAuditLog(
+            actor_id=int(current_staff.id),
+            action="attendance.edit",
+            entity="staff_time_entries",
+            entity_id=str(entry.id),
+            details={"before": before, "after": {"clock_in_at": new_in.isoformat() if new_in else None, "clock_out_at": new_out.isoformat() if new_out else None}},
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            created_at=datetime.utcnow(),
+        )
+    )
+    db.commit()
+    db.refresh(entry)
+    # Show values in the edited staff user's timezone (not HR's timezone).
+    staff = db.query(StaffUser).filter(StaffUser.id == int(entry.staff_user_id)).first()
+    return {"ok": True, "entry": _entry_view(entry, (staff.timezone if staff else "UTC"))}

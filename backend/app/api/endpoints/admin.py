@@ -116,14 +116,6 @@ class AdminPremiumBlockPayload(BaseModel):
 @router.post("/login", response_model=AdminToken)
 def admin_login(payload: AdminLoginPayload, db: Session = Depends(get_db)):
     email = payload.email.lower()
-
-    # Prefer staff accounts (RBAC-enabled).
-    staff = db.query(StaffUser).filter(StaffUser.email == email).first()
-    if staff and verify_password(payload.password, staff.hashed_password):
-        token = create_access_token({"sub": str(staff.id), "kind": "staff"})
-        return AdminToken(access_token=token)
-
-    # Backward-compat: legacy admin_users login.
     admin = db.query(AdminUser).filter(AdminUser.email == email).first()
     if not admin or not verify_password(payload.password, admin.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
