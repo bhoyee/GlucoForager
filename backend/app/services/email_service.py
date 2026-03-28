@@ -245,6 +245,26 @@ def send_staff_ticket_notification(
     logger.info("Sent staff ticket notification to %s ticket=%s", to_email, ticket_id)
 
 
+def send_staff_notification_email(*, to_email: str, title: str, body: str | None = None) -> None:
+    subject = title.strip()[:140] or "Notification"
+    safe_body = (body or "").strip()
+    html_body = f"""
+    <html>
+      <body style="font-family: Arial, sans-serif; color: #0C1824;">
+        <div style="max-width:620px; margin:0 auto; border:1px solid #e5e7eb; border-radius:14px; padding:22px;">
+          <h2 style="color:#0FB7A5; margin-top:0;">{subject}</h2>
+          {f"<div style='margin-top:14px; padding:12px; background:#f8fafc; border-radius:12px; border:1px solid #e5e7eb; white-space:pre-wrap; font-size:14px;'>{safe_body}</div>" if safe_body else ""}
+          <p style="margin-top:18px; color:#6b7280; font-size:12px;">
+            Open the Admin Console to view more details.
+          </p>
+        </div>
+      </body>
+    </html>
+    """
+    _send_email(to_email, subject, html_body)
+    logger.info("Sent staff notification email to %s", to_email)
+
+
 def send_newsletter_subscribed_email(to_email: str, subscriber_id: int) -> None:
     site_url = (settings.site_url or "https://www.glucoforager.com").rstrip("/")
     token = make_unsubscribe_token(subscriber_id, to_email)

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -20,6 +20,7 @@ function mondayOfWeek(d) {
 
 export default function WorkLogsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const token = useMemo(() => (typeof window === 'undefined' ? null : localStorage.getItem('adminToken')), []);
 
   const [session, setSession] = useState(null);
@@ -160,6 +161,14 @@ export default function WorkLogsPage() {
   useEffect(() => {
     loadWeek();
   }, [token, isManager, staffUserId, weekStart]);
+
+  useEffect(() => {
+    const logId = searchParams?.get('log');
+    if (!logId) return;
+    const n = Number(logId);
+    if (Number.isNaN(n) || n <= 0) return;
+    loadLogDetail(n);
+  }, [searchParams, token]);
 
   const saveToday = async () => {
     if (!token) return;
@@ -483,4 +492,3 @@ export default function WorkLogsPage() {
     </div>
   );
 }
-

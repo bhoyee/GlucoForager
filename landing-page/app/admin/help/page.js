@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -26,6 +26,7 @@ function parseIso(iso) {
 
 export default function HelpPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const token = useMemo(() => (typeof window === 'undefined' ? null : localStorage.getItem('adminToken')), []);
 
   const [session, setSession] = useState(null);
@@ -179,6 +180,14 @@ export default function HelpPage() {
     }
     loadTicket(selectedId);
   }, [selectedId]);
+
+  useEffect(() => {
+    const fromUrl = searchParams?.get('ticket');
+    if (fromUrl) {
+      const n = Number(fromUrl);
+      if (!Number.isNaN(n) && n > 0) setSelectedId(n);
+    }
+  }, [searchParams]);
 
   const createTicket = async (event) => {
     event.preventDefault();
@@ -562,4 +571,3 @@ export default function HelpPage() {
     </div>
   );
 }
-
