@@ -89,4 +89,4 @@ class StaffRBACService:
 
     @staticmethod
     def is_active_staff(user: StaffUser | None) -> bool:
-        return bool(user and user.is_active and user.email)
+        return bool(user and user.is_active and user.email and getattr(user, "deleted_at", None) is None)

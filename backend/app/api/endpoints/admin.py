@@ -26,6 +26,7 @@ from ...models.refresh_token import RefreshToken
 from ...models.subscription import Subscription
 from ...models.user import SearchLog, User
 from ...services.redis_ai_queue import RedisAIQueue
+from ...services.staff_rbac_service import StaffRBACService
 from ...services.subscription_service import is_subscription_active, is_premium_blocked, refresh_user_tier
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -119,6 +120,11 @@ def admin_login(payload: AdminLoginPayload, db: Session = Depends(get_db)):
     admin = db.query(AdminUser).filter(AdminUser.email == email).first()
     if not admin or not verify_password(payload.password, admin.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    # If this admin account maps to a staff user, enforce staff status here too
+    # so disabled/deleted staff cannot even obtain a token.
+    staff = db.query(StaffUser).filter(StaffUser.email == email).first()
+    if staff and not StaffRBACService.is_active_staff(staff):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Staff account disabled")
     token = create_access_token({"sub": str(admin.id), "role": "admin"})
     return AdminToken(access_token=token)
 
