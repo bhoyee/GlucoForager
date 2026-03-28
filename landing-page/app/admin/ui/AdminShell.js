@@ -136,7 +136,7 @@ export default function AdminShell({ children }) {
     { href: '/admin/newsletter', label: 'Newsletter', icon: 'N', perm: 'newsletter.send' },
     { href: '/admin/newsletter/send', label: 'Send Email', icon: 'S', perm: 'newsletter.send' },
     { href: '/admin/user-email', label: 'User Email', icon: 'E', perm: 'email.send' },
-    { href: '/admin/notifications', label: 'Notifications', icon: '!' },
+    { href: '/admin/notifications', label: 'Notifications', icon: '!', perm: 'push.send' },
     { href: '/admin/push-campaigns', label: 'Push Campaigns', icon: 'PN', perm: 'push.send' },
     { href: '/admin/system-health', label: 'System Health', icon: 'H', perm: 'system.read' },
     { href: '/admin/system-logs', label: 'System Logs', icon: 'L', perm: 'logs.read' },
