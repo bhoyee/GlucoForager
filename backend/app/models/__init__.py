@@ -13,6 +13,9 @@ from .staff_work_log import StaffWorkLog  # noqa: F401
 from .staff_library_item import StaffLibraryItem  # noqa: F401
 from .staff_ticket import StaffTicket, StaffTicketMessage  # noqa: F401
 from .staff_expense import StaffExpense  # noqa: F401
+from .staff_compensation import StaffCompensation  # noqa: F401
+from .payroll_run import PayrollRun  # noqa: F401
+from .payroll_item import PayrollItem  # noqa: F401
 from .staff_refresh_token import StaffRefreshToken  # noqa: F401
 from .staff_password_reset import StaffPasswordResetToken  # noqa: F401
 from .staff_mfa_challenge import StaffMfaChallenge  # noqa: F401
