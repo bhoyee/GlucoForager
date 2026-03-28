@@ -15,6 +15,8 @@ from ...models.staff_user import StaffUser
 from ...models.staff_work_log import StaffWorkLog
 from ...models.staff_work_log_comment import StaffWorkLogComment
 from ...models.staff_work_log_reminder import StaffWorkLogReminder
+from ...models.staff_notification import StaffNotification
+from ...services.email_service import send_staff_notification_email
 from ...services.staff_rbac_service import StaffRBACService
 
 
@@ -326,6 +328,30 @@ def add_comment(
         created_at=datetime.utcnow(),
     )
     db.add(comment)
+
+    # Notify the owner of the work log (in-app + optional email).
+    if int(row.staff_user_id) != int(current_staff.id):
+        db.add(
+            StaffNotification(
+                staff_user_id=int(row.staff_user_id),
+                type="work_log.comment",
+                title=f"New feedback on your work log ({row.work_date.isoformat()})",
+                body=payload.comment.strip()[:500],
+                data={"work_log_id": int(row.id), "work_date": row.work_date.isoformat()},
+                read_at=None,
+                created_at=datetime.utcnow(),
+            )
+        )
+        try:
+            target = db.query(StaffUser).filter(StaffUser.id == int(row.staff_user_id)).first()
+            if target and target.email:
+                send_staff_notification_email(
+                    to_email=str(target.email),
+                    title=f"New feedback on your work log ({row.work_date.isoformat()})",
+                    body=payload.comment.strip()[:1000],
+                )
+        except Exception:
+            pass
     db.add(
         StaffAuditLog(
             actor_id=int(current_staff.id),
@@ -385,6 +411,30 @@ def upsert_reminder(
         existing.created_by_staff_user_id = int(current_staff.id)
         existing.message = msg
         existing.created_at = datetime.utcnow()
+
+    # Notify staff (in-app + optional email).
+    if int(payload.staff_user_id) != int(current_staff.id):
+        db.add(
+            StaffNotification(
+                staff_user_id=int(payload.staff_user_id),
+                type="work_log.reminder",
+                title=f"Reminder: submit your work log ({payload.work_date.isoformat()})",
+                body=msg[:500],
+                data={"work_date": payload.work_date.isoformat()},
+                read_at=None,
+                created_at=datetime.utcnow(),
+            )
+        )
+        try:
+            target = db.query(StaffUser).filter(StaffUser.id == int(payload.staff_user_id)).first()
+            if target and target.email:
+                send_staff_notification_email(
+                    to_email=str(target.email),
+                    title=f"Reminder: submit your work log ({payload.work_date.isoformat()})",
+                    body=msg,
+                )
+        except Exception:
+            pass
 
     db.add(
         StaffAuditLog(

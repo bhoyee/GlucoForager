@@ -120,6 +120,7 @@ export default function AdminShell({ children }) {
 
   const navItems = [
     { href: '/admin/dashboard', label: 'Dashboard', icon: 'D' },
+    { href: '/admin/inbox', label: 'Inbox', icon: 'IN', perm: 'notifications.read' },
     { href: '/admin/attendance', label: 'Clock In/Out', icon: 'CI' },
     { href: '/admin/work-logs', label: 'Work Logs', icon: 'WL' },
     { href: '/admin/library', label: 'Library', icon: 'LB' },
