@@ -214,6 +214,37 @@ def send_newsletter_email(to_email: str, subject: str, html_body: str) -> None:
     logger.info("Sent newsletter email to %s", to_email)
 
 
+def send_staff_ticket_notification(
+    *,
+    to_email: str,
+    ticket_id: int,
+    ticket_subject: str,
+    title: str,
+    message: str | None = None,
+) -> None:
+    subject = f"[Ticket #{ticket_id}] {title}"
+    safe_subject = (ticket_subject or "").strip()
+    safe_message = (message or "").strip()
+    html_body = f"""
+    <html>
+      <body style="font-family: Arial, sans-serif; color: #0C1824;">
+        <div style="max-width:620px; margin:0 auto; border:1px solid #e5e7eb; border-radius:14px; padding:22px;">
+          <h2 style="color:#0FB7A5; margin-top:0;">{title}</h2>
+          <p style="margin:10px 0; font-size:14px; color:#0C1824;">
+            <strong>Ticket #{ticket_id}</strong>: {safe_subject}
+          </p>
+          {f"<div style='margin-top:14px; padding:12px; background:#f8fafc; border-radius:12px; border:1px solid #e5e7eb; white-space:pre-wrap; font-size:14px;'>{safe_message}</div>" if safe_message else ""}
+          <p style="margin-top:18px; color:#6b7280; font-size:12px;">
+            You can open the Admin Console to view and reply.
+          </p>
+        </div>
+      </body>
+    </html>
+    """
+    _send_email(to_email, subject, html_body)
+    logger.info("Sent staff ticket notification to %s ticket=%s", to_email, ticket_id)
+
+
 def send_newsletter_subscribed_email(to_email: str, subscriber_id: int) -> None:
     site_url = (settings.site_url or "https://www.glucoforager.com").rstrip("/")
     token = make_unsubscribe_token(subscriber_id, to_email)

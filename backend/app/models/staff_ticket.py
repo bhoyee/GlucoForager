@@ -14,9 +14,16 @@ class StaffTicket(Base):
     created_by_staff_user_id = Column(Integer, ForeignKey("staff_users.id"), nullable=False, index=True)
     assigned_to_staff_user_id = Column(Integer, ForeignKey("staff_users.id"), nullable=True, index=True)
 
-    status = Column(String, nullable=False, default="open")  # open | closed
+    # open | in_progress | waiting | closed
+    status = Column(String, nullable=False, default="open")
+    # low | normal | high | urgent
+    priority = Column(String, nullable=False, default="normal", index=True)
     subject = Column(String, nullable=False)
     details = Column(JSON, nullable=True)
+
+    first_response_at = Column(DateTime, nullable=True)
+    last_message_at = Column(DateTime, nullable=True, index=True)
+    closed_at = Column(DateTime, nullable=True, index=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -31,4 +38,3 @@ class StaffTicketMessage(Base):
 
     message = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
-
