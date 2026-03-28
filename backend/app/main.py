@@ -82,6 +82,9 @@ from .models import (  # ensure models are registered with SQLAlchemy
     push_token,
     admin_push_campaign,
     admin_push_send,
+    staff_compensation,
+    payroll_run,
+    payroll_item,
 )
 from .services.cache_service import CacheService
 from .services.system_log_service import log_system_event
