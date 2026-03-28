@@ -501,3 +501,42 @@ def finalize_run(
     )
     db.commit()
     return {"ok": True}
+
+
+@router.get("/my/items")
+def list_my_payroll_items(
+    year: int | None = None,
+    month: int | None = None,
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("payroll.read_own")),
+):
+    q = (
+        db.query(PayrollItem, PayrollRun.year, PayrollRun.month, PayrollRun.status, PayrollRun.finalized_at)
+        .join(PayrollRun, PayrollRun.id == PayrollItem.run_id)
+        .filter(PayrollItem.staff_user_id == int(current_staff.id))
+    )
+    if year is not None:
+        q = q.filter(PayrollRun.year == int(year))
+    if month is not None:
+        q = q.filter(PayrollRun.month == int(month))
+    rows = q.order_by(PayrollRun.year.desc(), PayrollRun.month.desc(), PayrollRun.id.desc(), PayrollItem.id.asc()).all()
+
+    return {
+        "items": [
+            {
+                "id": item.id,
+                "run_id": item.run_id,
+                "year": int(r_year),
+                "month": int(r_month),
+                "run_status": str(r_status or ""),
+                "finalized_at": r_finalized_at.isoformat() if r_finalized_at else None,
+                "currency": item.currency,
+                "gross": str(item.gross or 0),
+                "deductions": str(item.deductions or 0),
+                "net": str(item.net or 0),
+                "notes": item.notes,
+                "updated_at": item.updated_at.isoformat() if item.updated_at else None,
+            }
+            for item, r_year, r_month, r_status, r_finalized_at in rows
+        ]
+    }
