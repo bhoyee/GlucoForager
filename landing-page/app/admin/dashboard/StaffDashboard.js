@@ -130,6 +130,7 @@ export default function StaffDashboard() {
 
   const permissions = Array.isArray(me?.permissions) ? me.permissions : [];
   const loadInFlightRef = useRef(false);
+  const hasLoadedOnceRef = useRef(false);
 
   const todayUtcISO = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const currentYear = useMemo(() => Number(todayUtcISO.slice(0, 4)), [todayUtcISO]);
@@ -197,7 +198,7 @@ export default function StaffDashboard() {
       if (loadInFlightRef.current) return;
       loadInFlightRef.current = true;
       try {
-        const isSilent = Boolean(silent) && !loading;
+        const isSilent = Boolean(silent) && hasLoadedOnceRef.current;
         if (isSilent) {
           setRefreshing(true);
           setMessage('');
@@ -326,10 +327,11 @@ export default function StaffDashboard() {
         setLoading(false);
         setRefreshing(false);
       } finally {
+        hasLoadedOnceRef.current = true;
         loadInFlightRef.current = false;
       }
     },
-    [currentMonth, currentYear, loading, safeJson, weekStartISO]
+    [currentMonth, currentYear, safeJson, weekStartISO]
   );
 
   useEffect(() => {
