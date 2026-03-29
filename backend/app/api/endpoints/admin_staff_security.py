@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
-from ..admin_dependencies import require_staff_permission
+from ..admin_dependencies import get_current_staff_user, require_staff_permission
 from ...core.config import settings
 from ...core.security import create_access_token, generate_refresh_token, get_password_hash, hash_refresh_token, verify_password
 from ...database import get_db
@@ -425,3 +425,49 @@ def set_staff_mfa(
     )
     db.commit()
     return {"ok": True, "mfa_enabled": bool(user.mfa_enabled), "mfa_method": user.mfa_method}
+
+
+class PasswordChangePayload(BaseModel):
+    current_password: str = Field(..., min_length=1, max_length=256)
+    new_password: str = Field(..., min_length=8, max_length=256)
+
+
+@router.post("/password/change", response_model=dict)
+def change_my_password(
+    request: Request,
+    payload: PasswordChangePayload,
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(get_current_staff_user),
+):
+    if not verify_password(payload.current_password, current_staff.hashed_password):
+        _audit(
+            request,
+            db,
+            actor_id=int(current_staff.id),
+            action="staff.password_change.failed",
+            entity="staff_users",
+            entity_id=str(current_staff.id),
+            details=None,
+        )
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid password")
+
+    current_staff.hashed_password = get_password_hash(payload.new_password)
+    current_staff.updated_at = _now()
+
+    # Keep legacy AdminUser in sync.
+    admin = db.query(AdminUser).filter(AdminUser.email == current_staff.email).first()
+    if admin:
+        admin.hashed_password = current_staff.hashed_password
+
+    _audit(
+        request,
+        db,
+        actor_id=int(current_staff.id),
+        action="staff.password_change.success",
+        entity="staff_users",
+        entity_id=str(current_staff.id),
+        details=None,
+    )
+    db.commit()
+    return {"ok": True}
