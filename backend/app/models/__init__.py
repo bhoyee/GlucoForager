@@ -19,6 +19,7 @@ from .payroll_item import PayrollItem  # noqa: F401
 from .staff_refresh_token import StaffRefreshToken  # noqa: F401
 from .staff_password_reset import StaffPasswordResetToken  # noqa: F401
 from .staff_mfa_challenge import StaffMfaChallenge  # noqa: F401
+from .staff_intranet_update import StaffIntranetUpdate  # noqa: F401
 from .favorite import Favorite  # noqa: F401
 from .meal_plan import MealPlan  # noqa: F401
 from .shopping_item import ShoppingItem  # noqa: F401

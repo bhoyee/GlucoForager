@@ -3139,6 +3139,13 @@
   gap: 10px;
 }
 
+.admin-dashboard-refresh-note {
+  font-size: 12px;
+  color: #5c7368;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .admin-dashboard-hero-row {
   display: flex;
   justify-content: space-between;

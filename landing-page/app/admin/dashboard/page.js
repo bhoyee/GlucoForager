@@ -113,9 +113,12 @@ export default function AdminDashboard() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [message, setMessage] = useState('');
   const [me, setMe] = useState(null);
   const [todayLabel, setTodayLabel] = useState('');
+  const [lastUpdatedLabel, setLastUpdatedLabel] = useState('');
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
 
   const [attendanceMonth, setAttendanceMonth] = useState([]);
   const [week, setWeek] = useState(null);
@@ -123,6 +126,7 @@ export default function AdminDashboard() {
   const [notifications, setNotifications] = useState([]);
   const [libraryFolders, setLibraryFolders] = useState([]);
   const [myPayrollItems, setMyPayrollItems] = useState([]);
+  const [intranetUpdates, setIntranetUpdates] = useState([]);
 
   const permissions = Array.isArray(me?.permissions) ? me.permissions : [];
 
@@ -148,6 +152,21 @@ export default function AdminDashboard() {
     }
   }, [todayUtcISO]);
 
+  useEffect(() => {
+    if (!lastUpdatedAt) return;
+    try {
+      const dt = new Date(lastUpdatedAt);
+      setLastUpdatedLabel(
+        dt.toLocaleTimeString(undefined, {
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+      );
+    } catch {
+      setLastUpdatedLabel(String(lastUpdatedAt));
+    }
+  }, [lastUpdatedAt]);
+
   const safeJson = useCallback(
     async (url) => {
       try {
@@ -166,101 +185,124 @@ export default function AdminDashboard() {
     [router]
   );
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setMessage('');
+  const load = useCallback(
+    async ({ silent } = {}) => {
+      const isSilent = Boolean(silent) && !loading;
+      if (isSilent) {
+        setRefreshing(true);
+        setMessage('');
+      } else {
+        setLoading(true);
+        setMessage('');
+      }
 
-    const meRes = await safeJson(`${API_URL}/api/admin/me`);
-    if (!meRes.ok) {
-      if (meRes.status === 401) return;
-      setMe(null);
-      setAttendanceMonth([]);
-      setWeek(null);
-      setTickets([]);
-      setNotifications([]);
-      setLibraryFolders([]);
-      setMyPayrollItems([]);
-      setMessage(meRes?.data?.detail || meRes?.error || 'Failed to load your session.');
+      const meRes = await safeJson(`${API_URL}/api/admin/me`);
+      if (!meRes.ok) {
+        if (meRes.status === 401) return;
+        setMe(null);
+        setAttendanceMonth([]);
+        setWeek(null);
+        setTickets([]);
+        setNotifications([]);
+        setLibraryFolders([]);
+        setMyPayrollItems([]);
+        setIntranetUpdates([]);
+        setMessage(meRes?.data?.detail || meRes?.error || 'Failed to load your session.');
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
+
+      const meData = meRes.data && typeof meRes.data === 'object' ? meRes.data : null;
+      setMe(meData);
+
+      const perms = Array.isArray(meData?.permissions) ? meData.permissions : [];
+      const requests = [];
+
+      if (hasPermission(perms, 'attendance.read')) {
+        requests.push(
+          safeJson(`${API_URL}/api/admin/attendance/month?year=${currentYear}&month=${currentMonth}`).then((r) =>
+            setAttendanceMonth(Array.isArray(r?.data?.items) ? r.data.items : [])
+          )
+        );
+      } else {
+        setAttendanceMonth([]);
+      }
+
+      if (hasPermission(perms, 'work_logs.read')) {
+        requests.push(
+          safeJson(`${API_URL}/api/admin/work-logs/week?start=${encodeURIComponent(weekStartISO)}`).then((r) =>
+            setWeek(r?.data && typeof r.data === 'object' ? r.data : null)
+          )
+        );
+      } else {
+        setWeek(null);
+      }
+
+      if (hasPermission(perms, 'tickets.read')) {
+        requests.push(
+          safeJson(`${API_URL}/api/admin/help/tickets?mine=1`).then((r) =>
+            setTickets(Array.isArray(r?.data?.items) ? r.data.items : [])
+          )
+        );
+      } else {
+        setTickets([]);
+      }
+
+      if (hasPermission(perms, 'notifications.read')) {
+        requests.push(
+          safeJson(`${API_URL}/api/admin/staff-notifications?unread_only=1&limit=200&offset=0`).then((r) =>
+            setNotifications(Array.isArray(r?.data?.items) ? r.data.items : [])
+          )
+        );
+      } else {
+        setNotifications([]);
+      }
+
+      if (hasPermission(perms, 'library.read')) {
+        requests.push(
+          safeJson(`${API_URL}/api/admin/library/folders`).then((r) =>
+            setLibraryFolders(Array.isArray(r?.data?.items) ? r.data.items : [])
+          )
+        );
+      } else {
+        setLibraryFolders([]);
+      }
+
+      if (hasPermission(perms, 'payroll.read_own')) {
+        requests.push(
+          safeJson(`${API_URL}/api/admin/payroll/my/items`).then((r) =>
+            setMyPayrollItems(Array.isArray(r?.data?.items) ? r.data.items : [])
+          )
+        );
+      } else {
+        setMyPayrollItems([]);
+      }
+
+      if (hasPermission(perms, 'intranet_updates.read')) {
+        requests.push(
+          safeJson(`${API_URL}/api/admin/intranet-updates?limit=6&offset=0`).then((r) =>
+            setIntranetUpdates(Array.isArray(r?.data?.items) ? r.data.items : [])
+          )
+        );
+      } else {
+        setIntranetUpdates([]);
+      }
+
+      await Promise.allSettled(requests);
+      setLastUpdatedAt(new Date().toISOString());
       setLoading(false);
-      return;
-    }
-
-    const meData = meRes.data && typeof meRes.data === 'object' ? meRes.data : null;
-    setMe(meData);
-
-    const perms = Array.isArray(meData?.permissions) ? meData.permissions : [];
-    const requests = [];
-
-    if (hasPermission(perms, 'attendance.read')) {
-      requests.push(
-        safeJson(`${API_URL}/api/admin/attendance/month?year=${currentYear}&month=${currentMonth}`).then((r) =>
-          setAttendanceMonth(Array.isArray(r?.data?.items) ? r.data.items : [])
-        )
-      );
-    } else {
-      setAttendanceMonth([]);
-    }
-
-    if (hasPermission(perms, 'work_logs.read')) {
-      requests.push(
-        safeJson(`${API_URL}/api/admin/work-logs/week?start=${encodeURIComponent(weekStartISO)}`).then((r) =>
-          setWeek(r?.data && typeof r.data === 'object' ? r.data : null)
-        )
-      );
-    } else {
-      setWeek(null);
-    }
-
-    if (hasPermission(perms, 'tickets.read')) {
-      requests.push(
-        safeJson(`${API_URL}/api/admin/help/tickets?mine=1`).then((r) =>
-          setTickets(Array.isArray(r?.data?.items) ? r.data.items : [])
-        )
-      );
-    } else {
-      setTickets([]);
-    }
-
-    if (hasPermission(perms, 'notifications.read')) {
-      requests.push(
-        safeJson(`${API_URL}/api/admin/staff-notifications?unread_only=1&limit=200&offset=0`).then((r) =>
-          setNotifications(Array.isArray(r?.data?.items) ? r.data.items : [])
-        )
-      );
-    } else {
-      setNotifications([]);
-    }
-
-    if (hasPermission(perms, 'library.read')) {
-      requests.push(
-        safeJson(`${API_URL}/api/admin/library/folders`).then((r) =>
-          setLibraryFolders(Array.isArray(r?.data?.items) ? r.data.items : [])
-        )
-      );
-    } else {
-      setLibraryFolders([]);
-    }
-
-    if (hasPermission(perms, 'payroll.read_own')) {
-      requests.push(
-        safeJson(`${API_URL}/api/admin/payroll/my/items`).then((r) =>
-          setMyPayrollItems(Array.isArray(r?.data?.items) ? r.data.items : [])
-        )
-      );
-    } else {
-      setMyPayrollItems([]);
-    }
-
-    await Promise.allSettled(requests);
-    setLoading(false);
-  }, [currentMonth, currentYear, safeJson, weekStartISO]);
+      setRefreshing(false);
+    },
+    [currentMonth, currentYear, loading, safeJson, weekStartISO]
+  );
 
   useEffect(() => {
     load();
   }, [load]);
 
   useEffect(() => {
-    const timer = setInterval(() => load(), REFRESH_MS);
+    const timer = setInterval(() => load({ silent: true }), REFRESH_MS);
     return () => clearInterval(timer);
   }, [load]);
 
@@ -338,7 +380,10 @@ export default function AdminDashboard() {
             </p>
           </div>
           <div className="admin-dashboard-hero-actions">
-            <button className="admin-button secondary" type="button" onClick={load} disabled={loading}>
+            <div className="admin-dashboard-refresh-note" suppressHydrationWarning>
+              {refreshing ? 'Refreshing…' : lastUpdatedLabel ? `Updated ${lastUpdatedLabel}` : ''}
+            </div>
+            <button className="admin-button secondary" type="button" onClick={() => load({ silent: true })} disabled={loading || refreshing}>
               Refresh
             </button>
           </div>
@@ -521,6 +566,37 @@ export default function AdminDashboard() {
                             <span className="admin-widget-list-dot">·</span>
                             <span className="admin-help" style={{ margin: 0 }}>
                               {formatRelativeTime(n.created_at)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Widget>
+            </div>
+          ) : null}
+
+          {hasPermission(permissions, 'intranet_updates.read') ? (
+            <div className="admin-dashboard-span-4">
+              <Widget title="Intranet updates" subtitle="Internal announcements from Admin/HR." href="/admin/updates" actionLabel="All updates">
+                {intranetUpdates.length === 0 ? (
+                  <EmptyState title="No updates yet" body="When Admin/HR posts an update, it will show here." />
+                ) : (
+                  <div className="admin-widget-list">
+                    {intranetUpdates.slice(0, 6).map((u) => (
+                      <div key={u.id} className="admin-widget-list-item">
+                        <div className="admin-widget-list-main">
+                          <div className="admin-widget-list-title">{u.title || 'Update'}</div>
+                          <div className="admin-help" style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+                            {String(u.body || '').slice(0, 160)}
+                            {String(u.body || '').length > 160 ? '…' : ''}
+                          </div>
+                          <div className="admin-widget-list-meta" style={{ marginTop: 8 }}>
+                            <span className="admin-badge secondary">update</span>
+                            <span className="admin-widget-list-dot">·</span>
+                            <span className="admin-help" style={{ margin: 0 }}>
+                              {formatRelativeTime(u.created_at)}
                             </span>
                           </div>
                         </div>
