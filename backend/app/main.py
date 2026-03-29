@@ -24,6 +24,7 @@ from .api.endpoints import (
     admin_staff_security,
     admin_attendance,
     admin_work_logs,
+    admin_work_plans,
     admin_library,
     admin_help,
     admin_intranet_updates,
@@ -88,6 +89,9 @@ from .models import (  # ensure models are registered with SQLAlchemy
     staff_compensation,
     payroll_run,
     payroll_item,
+    staff_assigned_task,
+    staff_role_milestone,
+    staff_milestone_progress,
 )
 from .services.cache_service import CacheService
 from .services.system_log_service import log_system_event
@@ -448,6 +452,7 @@ app.include_router(admin_staff_portal.router, prefix="/api")
 app.include_router(admin_staff_security.router, prefix="/api")
 app.include_router(admin_attendance.router, prefix="/api")
 app.include_router(admin_work_logs.router, prefix="/api")
+app.include_router(admin_work_plans.router, prefix="/api")
 app.include_router(admin_library.router, prefix="/api")
 app.include_router(admin_help.router, prefix="/api")
 app.include_router(admin_intranet_updates.router, prefix="/api")
