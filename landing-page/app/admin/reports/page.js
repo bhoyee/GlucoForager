@@ -162,7 +162,7 @@ export default function ReportsPage() {
             Month
             <input type="number" value={month} onChange={(e) => setMonth(Number(e.target.value || month))} min={1} max={12} style={{ width: 80 }} />
           </label>
-          <button className="admin-button secondary" type="button" onClick={load}>
+          <button className="admin-button info" type="button" onClick={load}>
             Refresh
           </button>
           <button className="admin-button" type="button" onClick={downloadCsv}>
