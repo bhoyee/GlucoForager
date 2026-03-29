@@ -413,7 +413,7 @@ export default function PayrollPage() {
               Show history (inactive)
             </label>
             <div className="admin-actions" style={{ marginTop: 12 }}>
-              <button className="admin-button secondary" type="button" onClick={load} disabled={loading}>
+              <button className="admin-button info" type="button" onClick={load} disabled={loading}>
                 Refresh
               </button>
             </div>
@@ -538,7 +538,7 @@ export default function PayrollPage() {
                   {creatingRun ? 'Creating…' : 'Create run'}
                 </button>
               </div>
-              <button className="admin-button secondary" type="button" onClick={loadRuns} disabled={runLoading}>
+              <button className="admin-button info" type="button" onClick={loadRuns} disabled={runLoading}>
                 Refresh
               </button>
             </div>
