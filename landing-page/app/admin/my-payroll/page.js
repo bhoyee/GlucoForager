@@ -85,7 +85,7 @@ export default function MyPayrollPage() {
       {message ? <div className="admin-alert warning">{message}</div> : null}
 
       <div className="admin-actions" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-        <button className="admin-button secondary" type="button" onClick={load} disabled={loading}>
+        <button className="admin-button info" type="button" onClick={load} disabled={loading}>
           Refresh
         </button>
         <p className="admin-subtitle" style={{ margin: 0 }}>
