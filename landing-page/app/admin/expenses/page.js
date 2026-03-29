@@ -150,7 +150,7 @@ export default function ExpensesPage() {
           <div style={{ display: 'flex', gap: 8 }}>
             <input type="number" value={year} onChange={(e) => setYear(Number(e.target.value || year))} style={{ width: 90 }} />
             <input type="number" value={month} onChange={(e) => setMonth(Number(e.target.value || month))} min={1} max={12} style={{ width: 70 }} />
-            <button className="admin-button secondary" type="button" onClick={load}>
+            <button className="admin-button info" type="button" onClick={load}>
               Refresh
             </button>
           </div>
@@ -196,4 +196,3 @@ export default function ExpensesPage() {
     </div>
   );
 }
-
