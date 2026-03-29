@@ -153,7 +153,7 @@ export default function AdminNewsletterPage() {
             <option value="subscribed">Subscribed</option>
             <option value="unsubscribed">Unsubscribed</option>
           </select>
-          <button type="button" className="admin-button secondary" onClick={() => load(1)} disabled={isLoading}>
+          <button type="button" className="admin-button info" onClick={() => load(1)} disabled={isLoading}>
             Refresh
           </button>
         </div>
