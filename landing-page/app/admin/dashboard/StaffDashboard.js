@@ -168,9 +168,11 @@ export default function StaffDashboard() {
   }, [lastUpdatedAt]);
 
   const safeJson = useCallback(
-    async (url) => {
+    async (url, { timeoutMs } = {}) => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), Math.max(1000, Number(timeoutMs || 12000)));
       try {
-        const res = await adminFetch(url);
+        const res = await adminFetch(url, { signal: controller.signal });
         if (res.status === 401) {
           clearAdminTokens();
           router.push('/admin');
@@ -180,6 +182,8 @@ export default function StaffDashboard() {
         return { ok: res.ok, status: res.status, data };
       } catch (e) {
         return { ok: false, status: 0, data: null, error: e?.message || 'Network error' };
+      } finally {
+        clearTimeout(timeout);
       }
     },
     [router]
@@ -196,7 +200,7 @@ export default function StaffDashboard() {
         setMessage('');
       }
 
-      const meRes = await safeJson(`${API_URL}/api/admin/me`);
+      const meRes = await safeJson(`${API_URL}/api/admin/me`, { timeoutMs: 12000 });
       if (!meRes.ok) {
         if (meRes.status === 401) return;
         setMe(null);
@@ -207,7 +211,7 @@ export default function StaffDashboard() {
         setLibraryFolders([]);
         setMyPayrollItems([]);
         setIntranetUpdates([]);
-        setMessage(meRes?.data?.detail || meRes?.error || 'Failed to load your session.');
+        setMessage(meRes?.data?.detail || meRes?.error || 'Dashboard is taking too long to load. Check the backend and try refresh.');
         setLoading(false);
         setRefreshing(false);
         return;
@@ -217,11 +221,19 @@ export default function StaffDashboard() {
       setMe(meData);
 
       const perms = Array.isArray(meData?.permissions) ? meData.permissions : [];
+      const roles = Array.isArray(meData?.roles) ? meData.roles : [];
+      const isAdmin = perms.includes('*') || perms.includes('admin.manage') || roles.includes('admin');
+      if (isAdmin) {
+        router.replace('/admin/admin-dashboard');
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
       const requests = [];
 
       if (hasPermission(perms, 'attendance.read')) {
         requests.push(
-          safeJson(`${API_URL}/api/admin/attendance/month?year=${currentYear}&month=${currentMonth}`).then((r) =>
+          safeJson(`${API_URL}/api/admin/attendance/month?year=${currentYear}&month=${currentMonth}`, { timeoutMs: 12000 }).then((r) =>
             setAttendanceMonth(Array.isArray(r?.data?.items) ? r.data.items : [])
           )
         );
@@ -231,7 +243,7 @@ export default function StaffDashboard() {
 
       if (hasPermission(perms, 'work_logs.read')) {
         requests.push(
-          safeJson(`${API_URL}/api/admin/work-logs/week?start=${encodeURIComponent(weekStartISO)}`).then((r) =>
+          safeJson(`${API_URL}/api/admin/work-logs/week?start=${encodeURIComponent(weekStartISO)}`, { timeoutMs: 12000 }).then((r) =>
             setWeek(r?.data && typeof r.data === 'object' ? r.data : null)
           )
         );
@@ -241,7 +253,7 @@ export default function StaffDashboard() {
 
       if (hasPermission(perms, 'tickets.read')) {
         requests.push(
-          safeJson(`${API_URL}/api/admin/help/tickets?mine=1`).then((r) =>
+          safeJson(`${API_URL}/api/admin/help/tickets?mine=1`, { timeoutMs: 12000 }).then((r) =>
             setTickets(Array.isArray(r?.data?.items) ? r.data.items : [])
           )
         );
@@ -251,7 +263,7 @@ export default function StaffDashboard() {
 
       if (hasPermission(perms, 'notifications.read')) {
         requests.push(
-          safeJson(`${API_URL}/api/admin/staff-notifications?unread_only=1&limit=200&offset=0`).then((r) =>
+          safeJson(`${API_URL}/api/admin/staff-notifications?unread_only=1&limit=200&offset=0`, { timeoutMs: 12000 }).then((r) =>
             setNotifications(Array.isArray(r?.data?.items) ? r.data.items : [])
           )
         );
@@ -261,7 +273,7 @@ export default function StaffDashboard() {
 
       if (hasPermission(perms, 'library.read')) {
         requests.push(
-          safeJson(`${API_URL}/api/admin/library/folders`).then((r) =>
+          safeJson(`${API_URL}/api/admin/library/folders`, { timeoutMs: 12000 }).then((r) =>
             setLibraryFolders(Array.isArray(r?.data?.items) ? r.data.items : [])
           )
         );
@@ -271,7 +283,7 @@ export default function StaffDashboard() {
 
       if (hasPermission(perms, 'payroll.read_own')) {
         requests.push(
-          safeJson(`${API_URL}/api/admin/payroll/my/items`).then((r) =>
+          safeJson(`${API_URL}/api/admin/payroll/my/items`, { timeoutMs: 12000 }).then((r) =>
             setMyPayrollItems(Array.isArray(r?.data?.items) ? r.data.items : [])
           )
         );
@@ -281,7 +293,7 @@ export default function StaffDashboard() {
 
       if (hasPermission(perms, 'intranet_updates.read')) {
         requests.push(
-          safeJson(`${API_URL}/api/admin/intranet-updates?limit=6&offset=0`).then((r) =>
+          safeJson(`${API_URL}/api/admin/intranet-updates?limit=6&offset=0`, { timeoutMs: 12000 }).then((r) =>
             setIntranetUpdates(Array.isArray(r?.data?.items) ? r.data.items : [])
           )
         );
@@ -664,4 +676,3 @@ export default function StaffDashboard() {
     </div>
   );
 }
-
