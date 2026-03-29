@@ -168,14 +168,16 @@ export default function StaffDashboard() {
   }, [lastUpdatedAt]);
 
   const safeJson = useCallback(
-    async (url, { timeoutMs } = {}) => {
+    async (url, { timeoutMs, allowUnauthorized } = {}) => {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), Math.max(1000, Number(timeoutMs || 12000)));
       try {
         const res = await adminFetch(url, { signal: controller.signal });
         if (res.status === 401) {
-          clearAdminTokens();
-          router.push('/admin');
+          if (!allowUnauthorized) {
+            clearAdminTokens();
+            router.push('/admin');
+          }
           return { ok: false, status: 401, data: null };
         }
         const data = await res.json().catch(() => ({}));
@@ -200,7 +202,7 @@ export default function StaffDashboard() {
         setMessage('');
       }
 
-      const meRes = await safeJson(`${API_URL}/api/admin/me`, { timeoutMs: 12000 });
+      const meRes = await safeJson(`${API_URL}/api/admin/me`, { timeoutMs: 12000, allowUnauthorized: false });
       if (!meRes.ok) {
         if (meRes.status === 401) return;
         setMe(null);
@@ -233,7 +235,7 @@ export default function StaffDashboard() {
 
       if (hasPermission(perms, 'attendance.read')) {
         requests.push(
-          safeJson(`${API_URL}/api/admin/attendance/month?year=${currentYear}&month=${currentMonth}`, { timeoutMs: 12000 }).then((r) =>
+          safeJson(`${API_URL}/api/admin/attendance/month?year=${currentYear}&month=${currentMonth}`, { timeoutMs: 12000, allowUnauthorized: true }).then((r) =>
             setAttendanceMonth(Array.isArray(r?.data?.items) ? r.data.items : [])
           )
         );
@@ -243,7 +245,7 @@ export default function StaffDashboard() {
 
       if (hasPermission(perms, 'work_logs.read')) {
         requests.push(
-          safeJson(`${API_URL}/api/admin/work-logs/week?start=${encodeURIComponent(weekStartISO)}`, { timeoutMs: 12000 }).then((r) =>
+          safeJson(`${API_URL}/api/admin/work-logs/week?start=${encodeURIComponent(weekStartISO)}`, { timeoutMs: 12000, allowUnauthorized: true }).then((r) =>
             setWeek(r?.data && typeof r.data === 'object' ? r.data : null)
           )
         );
@@ -253,7 +255,7 @@ export default function StaffDashboard() {
 
       if (hasPermission(perms, 'tickets.read')) {
         requests.push(
-          safeJson(`${API_URL}/api/admin/help/tickets?mine=1`, { timeoutMs: 12000 }).then((r) =>
+          safeJson(`${API_URL}/api/admin/help/tickets?mine=1`, { timeoutMs: 12000, allowUnauthorized: true }).then((r) =>
             setTickets(Array.isArray(r?.data?.items) ? r.data.items : [])
           )
         );
@@ -263,7 +265,7 @@ export default function StaffDashboard() {
 
       if (hasPermission(perms, 'notifications.read')) {
         requests.push(
-          safeJson(`${API_URL}/api/admin/staff-notifications?unread_only=1&limit=200&offset=0`, { timeoutMs: 12000 }).then((r) =>
+          safeJson(`${API_URL}/api/admin/staff-notifications?unread_only=1&limit=200&offset=0`, { timeoutMs: 12000, allowUnauthorized: true }).then((r) =>
             setNotifications(Array.isArray(r?.data?.items) ? r.data.items : [])
           )
         );
@@ -273,7 +275,7 @@ export default function StaffDashboard() {
 
       if (hasPermission(perms, 'library.read')) {
         requests.push(
-          safeJson(`${API_URL}/api/admin/library/folders`, { timeoutMs: 12000 }).then((r) =>
+          safeJson(`${API_URL}/api/admin/library/folders`, { timeoutMs: 12000, allowUnauthorized: true }).then((r) =>
             setLibraryFolders(Array.isArray(r?.data?.items) ? r.data.items : [])
           )
         );
@@ -283,7 +285,7 @@ export default function StaffDashboard() {
 
       if (hasPermission(perms, 'payroll.read_own')) {
         requests.push(
-          safeJson(`${API_URL}/api/admin/payroll/my/items`, { timeoutMs: 12000 }).then((r) =>
+          safeJson(`${API_URL}/api/admin/payroll/my/items`, { timeoutMs: 12000, allowUnauthorized: true }).then((r) =>
             setMyPayrollItems(Array.isArray(r?.data?.items) ? r.data.items : [])
           )
         );
@@ -293,7 +295,7 @@ export default function StaffDashboard() {
 
       if (hasPermission(perms, 'intranet_updates.read')) {
         requests.push(
-          safeJson(`${API_URL}/api/admin/intranet-updates?limit=6&offset=0`, { timeoutMs: 12000 }).then((r) =>
+          safeJson(`${API_URL}/api/admin/intranet-updates?limit=6&offset=0`, { timeoutMs: 12000, allowUnauthorized: true }).then((r) =>
             setIntranetUpdates(Array.isArray(r?.data?.items) ? r.data.items : [])
           )
         );
