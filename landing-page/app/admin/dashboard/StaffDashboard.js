@@ -37,8 +37,27 @@ function formatRelativeTime(iso) {
   }
 }
 
-function startOfWeekUtcISO(todayUtcISO) {
-  const d = new Date(`${todayUtcISO}T00:00:00Z`);
+function isoDateInTimeZone(date, timeZone) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: timeZone || 'UTC',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(date);
+    const get = (t) => parts.find((p) => p.type === t)?.value;
+    const y = get('year');
+    const m = get('month');
+    const d = get('day');
+    if (y && m && d) return `${y}-${m}-${d}`;
+  } catch {
+    // ignore
+  }
+  return new Date().toISOString().slice(0, 10);
+}
+
+function startOfWeekISO(todayISO) {
+  const d = new Date(`${todayISO}T00:00:00Z`);
   const day = d.getUTCDay(); // 0=Sun
   const delta = (day + 6) % 7; // Mon=0
   d.setUTCDate(d.getUTCDate() - delta);
@@ -64,7 +83,7 @@ function Widget({ title, subtitle, href, actionLabel, children }) {
   );
 }
 
-function MiniWeek({ days }) {
+function MiniWeek({ days, timeZone }) {
   const rows = Array.isArray(days) ? days : [];
   return (
     <div className="admin-mini-week" aria-label="This week overview">
@@ -73,7 +92,7 @@ function MiniWeek({ days }) {
         const label = (() => {
           try {
             const dt = new Date(`${date}T00:00:00Z`);
-            return dt.toLocaleDateString(undefined, { weekday: 'short' });
+            return dt.toLocaleDateString(undefined, { weekday: 'short', timeZone: timeZone || 'UTC' });
           } catch {
             return date;
           }
@@ -170,27 +189,28 @@ export default function StaffDashboard() {
   const loadInFlightRef = useRef(false);
   const hasLoadedOnceRef = useRef(false);
 
-  const todayUtcISO = useMemo(() => new Date().toISOString().slice(0, 10), []);
-  const currentYear = useMemo(() => Number(todayUtcISO.slice(0, 4)), [todayUtcISO]);
-  const currentMonth = useMemo(() => Number(todayUtcISO.slice(5, 7)), [todayUtcISO]);
-  const weekStartISO = useMemo(() => startOfWeekUtcISO(todayUtcISO), [todayUtcISO]);
+  const staffTimeZone = useMemo(() => String(me?.timezone || 'UTC'), [me?.timezone]);
+  const todayISO = useMemo(() => isoDateInTimeZone(new Date(), staffTimeZone), [staffTimeZone, lastUpdatedAt]);
+  const currentYear = useMemo(() => Number(todayISO.slice(0, 4)), [todayISO]);
+  const currentMonth = useMemo(() => Number(todayISO.slice(5, 7)), [todayISO]);
+  const weekStartISO = useMemo(() => startOfWeekISO(todayISO), [todayISO]);
 
   useEffect(() => {
     // Avoid hydration mismatches due to server/client locale differences.
     try {
-      const dt = new Date(`${todayUtcISO}T00:00:00Z`);
+      const dt = new Date(`${todayISO}T00:00:00Z`);
       setTodayLabel(
         dt.toLocaleDateString(undefined, {
           weekday: 'long',
           month: 'long',
           day: 'numeric',
-          timeZone: 'UTC',
+          timeZone: staffTimeZone || 'UTC',
         })
       );
     } catch {
-      setTodayLabel(todayUtcISO);
+      setTodayLabel(todayISO);
     }
-  }, [todayUtcISO]);
+  }, [todayISO, staffTimeZone]);
 
   useEffect(() => {
     if (!lastUpdatedAt) return;
@@ -337,9 +357,9 @@ export default function StaffDashboard() {
   }, [load]);
 
   const attendanceToday = useMemo(() => {
-    const key = todayUtcISO;
+    const key = todayISO;
     return (Array.isArray(attendanceMonth) ? attendanceMonth : []).find((e) => String(e?.work_date || '') === key) || null;
-  }, [attendanceMonth, todayUtcISO]);
+  }, [attendanceMonth, todayISO]);
 
   const todayStatus = useMemo(() => {
     const inAt = attendanceToday?.clock_in_at;
@@ -351,7 +371,7 @@ export default function StaffDashboard() {
 
   const weekSummary = week?.summary && typeof week.summary === 'object' ? week.summary : null;
   const weekDays = Array.isArray(week?.days) ? week.days : [];
-  const todayInWeek = useMemo(() => weekDays.find((d) => String(d?.work_date || '') === todayUtcISO) || null, [todayUtcISO, weekDays]);
+  const todayInWeek = useMemo(() => weekDays.find((d) => String(d?.work_date || '') === todayISO) || null, [todayISO, weekDays]);
 
   const weekTasks = useMemo(() => {
     const summaryTotal = Number(weekSummary?.tasks_total ?? 0) || 0;
@@ -517,14 +537,14 @@ export default function StaffDashboard() {
           </div>
 
           <div className="admin-dashboard-span-6">
-            <Widget title="This week" subtitle={`Week of ${weekStartISO} (UTC work-week)`} href="/admin/work-logs" actionLabel="Work logs">
+            <Widget title="This week" subtitle={`Week of ${weekStartISO} (${staffTimeZone})`} href="/admin/work-logs" actionLabel="Work logs">
               {!hasPermission(permissions, 'work_logs.read') ? (
                 <EmptyState title="No access" body="You don’t have permission to view work logs." />
               ) : !weekSummary ? (
                 <EmptyState title="No data yet" body="Clock in this week to start building your work log timeline." />
               ) : (
                 <div>
-                  <MiniWeek days={weekDays} />
+                  <MiniWeek days={weekDays} timeZone={staffTimeZone} />
                   <div className="admin-dashboard-week-row">
                     <div className="admin-dashboard-week-metric">
                       <div className="admin-dashboard-week-label">Logs written</div>

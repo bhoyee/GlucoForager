@@ -12,6 +12,25 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function isoDateInTimeZone(date, timeZone) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: timeZone || 'UTC',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(date);
+    const get = (t) => parts.find((p) => p.type === t)?.value;
+    const y = get('year');
+    const m = get('month');
+    const d = get('day');
+    if (y && m && d) return `${y}-${m}-${d}`;
+  } catch {
+    // ignore
+  }
+  return new Date().toISOString().slice(0, 10);
+}
+
 function isoDateAddDays(iso, days) {
   const d = new Date(`${iso}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + Number(days || 0));
@@ -21,6 +40,23 @@ function isoDateAddDays(iso, days) {
 
 function isISODate(s) {
   return /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
+}
+
+function formatDateTimeInTimeZone(iso, timeZone) {
+  if (!iso) return '';
+  try {
+    const dt = new Date(iso);
+    return dt.toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: timeZone || 'UTC',
+    });
+  } catch {
+    return String(iso);
+  }
 }
 
 function mondayOfWeek(d) {
@@ -43,10 +79,13 @@ export default function WorkLogsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = useMemo(() => (typeof window === 'undefined' ? null : localStorage.getItem('adminToken')), []);
+  const getTokenNow = () => (typeof window === 'undefined' ? null : localStorage.getItem('adminToken'));
 
   const [session, setSession] = useState(null);
   const permissions = Array.isArray(session?.permissions) ? session.permissions : [];
   const isManager = permissions.includes('*') || permissions.includes('work_logs.manage');
+  const staffTimeZone = useMemo(() => String(session?.timezone || 'UTC'), [session?.timezone]);
+  const staffTodayISO = useMemo(() => isoDateInTimeZone(new Date(), staffTimeZone), [staffTimeZone]);
 
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -67,7 +106,9 @@ export default function WorkLogsPage() {
   const [workDateReason, setWorkDateReason] = useState('');
   const [workDateLoading, setWorkDateLoading] = useState(false);
   const workDateRef = useRef(workDate);
+  const workDateTouchedRef = useRef(false);
   const [workDateLog, setWorkDateLog] = useState(null);
+  const [submittedModalOpen, setSubmittedModalOpen] = useState(false);
 
   const now = useMemo(() => new Date(), []);
   const [year, setYear] = useState(now.getFullYear());
@@ -114,12 +155,13 @@ export default function WorkLogsPage() {
   const [commentDraft, setCommentDraft] = useState('');
 
   const loadSession = async () => {
-    if (!token) {
+    const t = getTokenNow();
+    if (!t) {
       router.push('/admin');
       return;
     }
     try {
-      const res = await fetch(`${API_URL}/api/admin/me`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`${API_URL}/api/admin/me`, { headers: { Authorization: `Bearer ${t}` } });
       if (res.status === 401) {
         localStorage.removeItem('adminToken');
         router.push('/admin');
@@ -133,7 +175,8 @@ export default function WorkLogsPage() {
   };
 
   const loadMonth = async () => {
-    if (!token) {
+    const t = getTokenNow();
+    if (!t) {
       router.push('/admin');
       return;
     }
@@ -141,7 +184,7 @@ export default function WorkLogsPage() {
     setMessage('');
     try {
       const res = await fetch(`${API_URL}/api/admin/work-logs/month?year=${year}&month=${month}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${t}` },
       });
       if (res.status === 401) {
         localStorage.removeItem('adminToken');
@@ -297,10 +340,11 @@ export default function WorkLogsPage() {
   };
 
   const loadPlanForDate = async (workDate) => {
-    if (!token || !workDate) return null;
+    const t = getTokenNow();
+    if (!t || !workDate) return null;
     try {
       const res = await fetch(`${API_URL}/api/admin/work-plans/my?work_date=${encodeURIComponent(workDate)}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${t}` },
       });
       if (res.status === 401) {
         localStorage.removeItem('adminToken');
@@ -345,11 +389,12 @@ export default function WorkLogsPage() {
   };
 
   const loadPlan = async () => {
-    if (!token) return;
+    const t = getTokenNow();
+    if (!t) return;
     setPlanLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/admin/work-plans/my?work_date=${encodeURIComponent(workDate)}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${t}` },
       });
       if (res.status === 401) {
         localStorage.removeItem('adminToken');
@@ -370,11 +415,12 @@ export default function WorkLogsPage() {
   };
 
   const loadWorkDateLog = async (d) => {
-    if (!token || !d) return;
+    const t = getTokenNow();
+    if (!t || !d) return;
     setWorkDateLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/admin/work-logs/by-date?work_date=${encodeURIComponent(d)}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${t}` },
       });
       if (res.status === 401) {
         localStorage.removeItem('adminToken');
@@ -407,7 +453,8 @@ export default function WorkLogsPage() {
 
 
   const completeAssignedTask = async (taskId, isCompleted) => {
-    if (!token) return;
+    const t = getTokenNow();
+    if (!t) return;
     setMessage('');
     const draft = taskDrafts?.[String(taskId)] || {};
     const proof_links = Array.isArray(draft.proof_links) ? draft.proof_links : [];
@@ -415,7 +462,7 @@ export default function WorkLogsPage() {
     try {
       const res = await fetch(`${API_URL}/api/admin/work-plans/tasks/${taskId}/complete`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_completed: Boolean(isCompleted), proof_links, completion_note }),
       });
       const data = await res.json().catch(() => ({}));
@@ -432,15 +479,16 @@ export default function WorkLogsPage() {
   };
 
   const addMyTask = async () => {
-    if (!token) return;
+    const t = getTokenNow();
+    if (!t) return;
     const text = String(myTaskText || '').trim();
     if (!text) return;
     setMessage('');
     try {
-      const d = workDateRef.current || todayISO();
+      const d = workDateRef.current || staffTodayISO;
       const res = await fetch(`${API_URL}/api/admin/work-plans/tasks/self-add`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ work_date: d, text }),
       });
       const data = await res.json().catch(() => ({}));
@@ -623,15 +671,25 @@ export default function WorkLogsPage() {
   useEffect(() => {
     const qp = searchParams?.get('date') || searchParams?.get('work_date');
     if (!qp || !isISODate(qp)) return;
-    const today = todayISO();
+    const today = staffTodayISO;
     const minDate = isoDateAddDays(today, -6);
     const next = qp < minDate ? minDate : qp > today ? today : qp;
+    workDateTouchedRef.current = true;
     setWorkDate(next);
-  }, [searchParams]);
+  }, [searchParams, staffTodayISO]);
+
+  useEffect(() => {
+    if (workDateTouchedRef.current) return;
+    if (!isISODate(staffTodayISO)) return;
+    if (workDate !== staffTodayISO) {
+      workDateRef.current = staffTodayISO;
+      setWorkDate(staffTodayISO);
+    }
+  }, [staffTodayISO, workDate]);
 
   useEffect(() => {
     if (!token) return;
-    const today = todayISO();
+    const today = staffTodayISO;
     const minDate = isoDateAddDays(today, -6);
     if (!isISODate(workDate)) return;
     if (workDate < minDate) {
@@ -644,7 +702,7 @@ export default function WorkLogsPage() {
     }
     loadWorkDateLog(workDate);
     if (workDate === today) setWorkDateReason('');
-  }, [token, workDate]);
+  }, [token, workDate, staffTodayISO]);
 
   useEffect(() => {
     workDateRef.current = workDate;
@@ -680,9 +738,10 @@ export default function WorkLogsPage() {
   }, [searchParams, token]);
 
   const saveToday = async () => {
-    if (!token) return;
+    const t = getTokenNow();
+    if (!t) return;
     setMessage('');
-    const today = todayISO();
+    const today = staffTodayISO;
     const minDate = isoDateAddDays(today, -6);
     const d = workDateRef.current || workDate;
     if (!isISODate(d)) {
@@ -698,9 +757,17 @@ export default function WorkLogsPage() {
       return;
     }
     try {
+      if (typeof window !== 'undefined') {
+        const ok = window.confirm(`Submit work log for ${d}? This will lock the day as read-only.`);
+        if (!ok) return;
+      }
+    } catch {
+      // ignore
+    }
+    try {
       const res = await fetch(`${API_URL}/api/admin/work-logs/upsert`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           work_date: d,
           summary,
@@ -765,6 +832,11 @@ export default function WorkLogsPage() {
   };
 
   const isWorkDateLocked = Boolean(workDateLog?.id);
+  const submittedAtLabel = useMemo(() => {
+    if (!workDateLog?.id) return '';
+    const iso = workDateLog.updated_at || workDateLog.created_at || '';
+    return formatDateTimeInTimeZone(iso, staffTimeZone);
+  }, [staffTimeZone, workDateLog?.created_at, workDateLog?.id, workDateLog?.updated_at]);
 
   return (
     <div className="admin-page">
@@ -791,10 +863,11 @@ export default function WorkLogsPage() {
               <input
                 type="date"
                 value={workDate}
-                min={isoDateAddDays(todayISO(), -6)}
-                max={todayISO()}
+                min={isoDateAddDays(staffTodayISO, -6)}
+                max={staffTodayISO}
                 onChange={(e) => {
                   const v = e.target.value;
+                  workDateTouchedRef.current = true;
                   workDateRef.current = v;
                   setWorkDate(v);
                 }}
@@ -805,11 +878,19 @@ export default function WorkLogsPage() {
 
           {isWorkDateLocked ? (
             <div className="admin-alert info" style={{ marginTop: 10 }}>
-              Work log already submitted for {workDate}. This day is now read-only.
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                <div>
+                  Work log already submitted for {workDate}. This day is now read-only.
+                  {submittedAtLabel ? <span className="admin-subtitle"> {' '}Submitted at {submittedAtLabel}.</span> : null}
+                </div>
+                <button className="admin-button secondary" type="button" onClick={() => setSubmittedModalOpen(true)}>
+                  View submitted
+                </button>
+              </div>
             </div>
           ) : null}
 
-          {workDate !== todayISO() ? (
+          {workDate !== staffTodayISO ? (
             <div className="admin-field" style={{ marginTop: 10 }}>
               <label style={{ color: '#e53935', fontWeight: 800 }}>Reason (required for previous day)</label>
               <textarea
@@ -1030,6 +1111,39 @@ export default function WorkLogsPage() {
           </button>
         </div>
       </div>
+
+      {submittedModalOpen ? (
+        <div className="admin-modal-backdrop" role="presentation" onClick={() => setSubmittedModalOpen(false)}>
+          <div className="admin-modal" role="dialog" aria-modal="true" aria-label="Submitted work log" onClick={(e) => e.stopPropagation()}>
+            <div className="admin-modal-header">
+              <h3>Submitted work log — {workDate}</h3>
+              <button className="admin-icon-button danger" type="button" aria-label="Close" onClick={() => setSubmittedModalOpen(false)}>
+                ×
+              </button>
+            </div>
+            <div className="admin-modal-body">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {submittedAtLabel ? <p className="admin-subtitle" style={{ margin: 0 }}>Submitted at {submittedAtLabel} ({staffTimeZone || 'UTC'}).</p> : null}
+                <div>
+                  <h4 style={{ margin: 0 }}>Summary</h4>
+                  <p style={{ margin: '8px 0 0 0', whiteSpace: 'pre-wrap' }}>{workDateLog?.payload?.summary || '—'}</p>
+                </div>
+                {String(workDateLog?.payload?.reason || '').trim() ? (
+                  <div>
+                    <h4 style={{ margin: 0 }}>Reason</h4>
+                    <p style={{ margin: '8px 0 0 0', whiteSpace: 'pre-wrap' }}>{String(workDateLog?.payload?.reason || '').trim()}</p>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+            <div className="admin-modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button className="admin-button danger" type="button" onClick={() => setSubmittedModalOpen(false)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="admin-card" style={{ marginTop: 16 }}>
         <div className="admin-actions" style={{ justifyContent: 'space-between', alignItems: 'center' }}>

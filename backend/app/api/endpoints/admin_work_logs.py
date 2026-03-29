@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
@@ -54,6 +55,15 @@ def _clean_payload(payload: WorkLogUpsertPayload) -> dict:
     if reason:
         out["reason"] = reason[:240]
     return out
+
+
+def _staff_today(staff: StaffUser) -> date:
+    tz_name = str(getattr(staff, "timezone", None) or "UTC").strip() or "UTC"
+    try:
+        tz = ZoneInfo(tz_name)
+    except Exception:
+        tz = ZoneInfo("UTC")
+    return datetime.now(tz).date()
 
 
 @router.get("/by-date")
@@ -816,7 +826,7 @@ def upsert_work_log(
     db: Session = Depends(get_db),
     current_staff: StaffUser = Depends(require_staff_permission("work_logs.write")),
 ):
-    today = datetime.now(timezone.utc).date()
+    today = _staff_today(current_staff)
     work_date = payload.work_date or today
 
     if work_date > today:
