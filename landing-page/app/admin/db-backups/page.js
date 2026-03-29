@@ -220,7 +220,7 @@ export default function AdminDbBackupsPage() {
           </p>
         </div>
         <div className="admin-toolbar" style={{ margin: 0 }}>
-          <button type="button" className="admin-button secondary" onClick={loadBackups} disabled={isLoading}>
+          <button type="button" className="admin-button info" onClick={loadBackups} disabled={isLoading}>
             Refresh
           </button>
           <button type="button" className="admin-button" onClick={handleRunBackup} disabled={isRunningBackup}>
