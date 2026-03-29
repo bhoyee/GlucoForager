@@ -276,7 +276,7 @@ export default function AdminKPIDashboard() {
 
   const formatMoney = useCallback((value, currency) => {
     const numeric = typeof value === 'number' ? value : Number(value);
-    if (!Number.isFinite(numeric)) return 'â€”';
+    if (!Number.isFinite(numeric)) return '—';
     try {
       return new Intl.NumberFormat('en-US', {
         style: 'currency',
@@ -352,13 +352,13 @@ export default function AdminKPIDashboard() {
             <div className="admin-subcard">
               <span>This month</span>
               <strong suppressHydrationWarning>
-                {sales.available ? formatMoney(sales.metrics?.revenue, sales.currency) : 'â€”'}
+                {sales.available ? formatMoney(sales.metrics?.revenue, sales.currency) : '—'}
               </strong>
             </div>
             <div className="admin-subcard">
               <span>Total sales</span>
               <strong suppressHydrationWarning>
-                {sales.available ? formatMoney(sales.metrics?.revenue_total, sales.currency) : 'â€”'}
+                {sales.available ? formatMoney(sales.metrics?.revenue_total, sales.currency) : '—'}
               </strong>
             </div>
           </div>
@@ -369,7 +369,7 @@ export default function AdminKPIDashboard() {
           )}
           {sales.available && (
             <p className="admin-help" style={{ marginTop: 10 }}>
-              Note: RevenueCat â€œoverviewâ€ revenue is typically the last 28 days (not calendar-month). All-time totals
+              Note: RevenueCat “overview” revenue is typically the last 28 days (not calendar-month). All-time totals
               may require data export.
             </p>
           )}
@@ -419,11 +419,11 @@ export default function AdminKPIDashboard() {
           <div className="admin-inline admin-subcards" style={{ marginTop: 10 }}>
             <div className="admin-subcard">
               <span>Text stream</span>
-              <strong>{queueMetrics.redis?.streams?.text?.length ?? 'â€”'}</strong>
+              <strong>{queueMetrics.redis?.streams?.text?.length ?? '—'}</strong>
             </div>
             <div className="admin-subcard">
               <span>Vision stream</span>
-              <strong>{queueMetrics.redis?.streams?.vision?.length ?? 'â€”'}</strong>
+              <strong>{queueMetrics.redis?.streams?.vision?.length ?? '—'}</strong>
             </div>
           </div>
           <Link className="admin-link" href="/admin/system-health">
@@ -434,4 +434,3 @@ export default function AdminKPIDashboard() {
     </div>
   );
 }
-

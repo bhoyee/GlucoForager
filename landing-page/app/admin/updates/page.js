@@ -187,7 +187,7 @@ export default function UpdatesPage() {
                 Include deleted
               </label>
             )}
-            <button className="admin-button secondary" type="button" onClick={load} disabled={loading}>
+            <button className="admin-button info" type="button" onClick={load} disabled={loading}>
               Refresh
             </button>
           </div>
@@ -255,7 +255,7 @@ export default function UpdatesPage() {
                         </button>
                       ) : null}
                       {canDelete && !deleted ? (
-                        <button className="admin-button danger" type="button" onClick={() => softDelete(row.id)}>
+                        <button className="admin-button warning" type="button" onClick={() => softDelete(row.id)}>
                           Soft delete
                         </button>
                       ) : null}
@@ -298,4 +298,3 @@ export default function UpdatesPage() {
     </div>
   );
 }
-

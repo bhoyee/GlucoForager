@@ -109,6 +109,48 @@ function MiniWeek({ days }) {
   );
 }
 
+function IntranetTicker({ items }) {
+  const rows = Array.isArray(items) ? items.filter(Boolean) : [];
+  if (!rows.length) return null;
+
+  const tickerLabel = (u) => {
+    const title = String(u?.title || 'Update').trim() || 'Update';
+    const bodyRaw = String(u?.body || '');
+    const body = bodyRaw.replace(/\s+/g, ' ').trim();
+    if (!body) return title;
+    return `${title} (${body})`;
+  };
+
+  return (
+    <div className="admin-ticker" aria-label="Intranet updates ticker">
+      <div className="admin-ticker-badge">Updates</div>
+      <div className="admin-ticker-viewport">
+        <div className="admin-ticker-track">
+          <div className="admin-ticker-group">
+            {rows.map((u) => (
+              <Link key={u.id} className="admin-ticker-item" href="/admin/updates" title={tickerLabel(u)}>
+                <span className="admin-ticker-text">{tickerLabel(u)}</span>
+                {u.created_at ? <span className="admin-ticker-time">{formatRelativeTime(u.created_at)}</span> : null}
+              </Link>
+            ))}
+          </div>
+          <div className="admin-ticker-group" aria-hidden="true">
+            {rows.map((u) => (
+              <Link key={`dup-${u.id}`} className="admin-ticker-item" href="/admin/updates" tabIndex={-1}>
+                <span className="admin-ticker-text">{tickerLabel(u)}</span>
+                {u.created_at ? <span className="admin-ticker-time">{formatRelativeTime(u.created_at)}</span> : null}
+              </Link>
+            ))}
+          </div>
+        </div>
+      </div>
+      <Link className="admin-ticker-link" href="/admin/updates">
+        View all
+      </Link>
+    </div>
+  );
+}
+
 export default function StaffDashboard() {
   const router = useRouter();
 
@@ -122,10 +164,6 @@ export default function StaffDashboard() {
 
   const [attendanceMonth, setAttendanceMonth] = useState([]);
   const [week, setWeek] = useState(null);
-  const [tickets, setTickets] = useState([]);
-  const [notifications, setNotifications] = useState([]);
-  const [libraryFolders, setLibraryFolders] = useState([]);
-  const [myPayrollItems, setMyPayrollItems] = useState([]);
   const [intranetUpdates, setIntranetUpdates] = useState([]);
 
   const permissions = Array.isArray(me?.permissions) ? me.permissions : [];
@@ -218,10 +256,6 @@ export default function StaffDashboard() {
           setMe(null);
           setAttendanceMonth([]);
           setWeek(null);
-          setTickets([]);
-          setNotifications([]);
-          setLibraryFolders([]);
-          setMyPayrollItems([]);
           setIntranetUpdates([]);
           setMessage(meRes?.data?.detail || meRes?.error || 'Dashboard is taking too long to load. Check the backend and try refresh.');
           setLoading(false);
@@ -264,47 +298,6 @@ export default function StaffDashboard() {
           );
         } else {
           setWeek(null);
-        }
-
-        if (hasPermission(perms, 'tickets.read')) {
-          requests.push(
-            safeJson(`${API_URL}/api/admin/help/tickets?mine=1`, { timeoutMs: 12000, allowUnauthorized: true }).then((r) =>
-              setTickets(Array.isArray(r?.data?.items) ? r.data.items : [])
-            )
-          );
-        } else {
-          setTickets([]);
-        }
-
-        if (hasPermission(perms, 'notifications.read')) {
-          requests.push(
-            safeJson(`${API_URL}/api/admin/staff-notifications?unread_only=1&limit=200&offset=0`, {
-              timeoutMs: 12000,
-              allowUnauthorized: true,
-            }).then((r) => setNotifications(Array.isArray(r?.data?.items) ? r.data.items : []))
-          );
-        } else {
-          setNotifications([]);
-        }
-
-        if (hasPermission(perms, 'library.read')) {
-          requests.push(
-            safeJson(`${API_URL}/api/admin/library/folders`, { timeoutMs: 12000, allowUnauthorized: true }).then((r) =>
-              setLibraryFolders(Array.isArray(r?.data?.items) ? r.data.items : [])
-            )
-          );
-        } else {
-          setLibraryFolders([]);
-        }
-
-        if (hasPermission(perms, 'payroll.read_own')) {
-          requests.push(
-            safeJson(`${API_URL}/api/admin/payroll/my/items`, { timeoutMs: 12000, allowUnauthorized: true }).then((r) =>
-              setMyPayrollItems(Array.isArray(r?.data?.items) ? r.data.items : [])
-            )
-          );
-        } else {
-          setMyPayrollItems([]);
         }
 
         if (hasPermission(perms, 'intranet_updates.read')) {
@@ -360,51 +353,56 @@ export default function StaffDashboard() {
   const weekDays = Array.isArray(week?.days) ? week.days : [];
   const todayInWeek = useMemo(() => weekDays.find((d) => String(d?.work_date || '') === todayUtcISO) || null, [todayUtcISO, weekDays]);
 
+  const weekTasks = useMemo(() => {
+    const summaryTotal = Number(weekSummary?.tasks_total ?? 0) || 0;
+    const summaryDone = Number(weekSummary?.tasks_done ?? 0) || 0;
+    if (summaryTotal > 0 || summaryDone > 0) return { total: summaryTotal, done: summaryDone };
+
+    // Fallback for older servers: try per-day task counts (if present), else legacy work-log payload tasks.
+    let total = 0;
+    let done = 0;
+    for (const d of weekDays) {
+      const dt = Number(d?.tasks_total ?? 0) || 0;
+      const dd = Number(d?.tasks_done ?? 0) || 0;
+      if (dt || dd) {
+        total += dt;
+        done += dd;
+        continue;
+      }
+      const tasks = d?.work_log?.payload?.tasks;
+      if (Array.isArray(tasks)) {
+        total += tasks.length;
+        done += tasks.filter((t) => t && typeof t === 'object' && Boolean(t.done)).length;
+      }
+    }
+    return { total, done };
+  }, [weekDays, weekSummary]);
+
   const workLogToday = todayInWeek?.work_log?.id ? todayInWeek.work_log : null;
   const missingLogToday = Boolean(todayInWeek?.missing_log);
-
-  const unreadCount = useMemo(() => {
-    const c = Array.isArray(notifications) ? notifications.length : 0;
-    return c >= 200 ? '200+' : String(c);
-  }, [notifications]);
-
-  const openTickets = useMemo(() => {
-    const rows = Array.isArray(tickets) ? tickets : [];
-    return rows.filter((t) => String(t?.status || '').toLowerCase() !== 'closed');
-  }, [tickets]);
-
-  const myPayrollLatest = useMemo(() => {
-    const rows = Array.isArray(myPayrollItems) ? myPayrollItems : [];
-    const withPeriod = rows
-      .map((r) => ({
-        ...r,
-        _period: `${Number(r?.year || 0)}-${String(Number(r?.month || 0)).padStart(2, '0')}`,
-      }))
-      .filter((r) => /^\\d{4}-\\d{2}$/.test(r._period))
-      .sort((a, b) => b._period.localeCompare(a._period));
-    if (!withPeriod.length) return null;
-    const period = withPeriod[0]._period;
-    const periodRows = withPeriod.filter((r) => r._period === period);
-    const totals = new Map();
-    for (const r of periodRows) {
-      const cur = String(r?.currency || '').toUpperCase() || '—';
-      const net = Number(r?.net || 0) || 0;
-      totals.set(cur, (totals.get(cur) || 0) + net);
-    }
-    return { period, totals: Array.from(totals.entries()).map(([currency, net]) => ({ currency, net })) };
-  }, [myPayrollItems]);
 
   const quickActions = useMemo(() => {
     const actions = [
       { href: '/admin/attendance', label: 'Clock in/out', perm: 'attendance.read' },
       { href: '/admin/work-logs', label: 'Write work log', perm: 'work_logs.read' },
-      { href: '/admin/help', label: 'Help tickets', perm: 'tickets.read' },
-      { href: '/admin/library', label: 'Open library', perm: 'library.read' },
       { href: '/admin/blog/new', label: 'New blog post', perm: ['blog.write', 'blog.publish'] },
       { href: '/admin/payroll', label: 'Run payroll', perm: 'payroll.manage' },
     ];
     return actions.filter((a) => hasPermission(permissions, a.perm));
   }, [permissions]);
+
+  const primaryQuickActions = useMemo(() => {
+    const preferred = ['/admin/attendance', '/admin/work-logs'];
+    const byHref = new Map((quickActions || []).map((a) => [a.href, a]));
+    return preferred.map((h) => byHref.get(h)).filter(Boolean);
+  }, [quickActions]);
+
+  const secondaryQuickActions = useMemo(() => {
+    const primaryHrefs = new Set((primaryQuickActions || []).map((a) => a.href));
+    return (quickActions || []).filter((a) => !primaryHrefs.has(a.href));
+  }, [primaryQuickActions, quickActions]);
+
+  const tickerUpdates = useMemo(() => (Array.isArray(intranetUpdates) ? intranetUpdates.slice(0, 8) : []), [intranetUpdates]);
 
   return (
     <div className="admin-dashboard">
@@ -413,14 +411,14 @@ export default function StaffDashboard() {
           <div>
             <h2 className="admin-title">Dashboard</h2>
             <p className="admin-subtitle" style={{ marginBottom: 0 }}>
-              Your staff workspace — attendance, work logs, tickets, and updates.
+              Your staff workspace — attendance, work logs, and updates.
             </p>
           </div>
           <div className="admin-dashboard-hero-actions">
             <div className="admin-dashboard-refresh-note" suppressHydrationWarning>
               {refreshing ? 'Refreshing…' : lastUpdatedLabel ? `Updated ${lastUpdatedLabel}` : ''}
             </div>
-            <button className="admin-button secondary" type="button" onClick={() => load({ silent: true })} disabled={loading || refreshing}>
+            <button className="admin-button info" type="button" onClick={() => load({ silent: true })} disabled={loading || refreshing}>
               Refresh
             </button>
           </div>
@@ -450,9 +448,9 @@ export default function StaffDashboard() {
             </div>
           </div>
 
-          {quickActions.length ? (
+          {secondaryQuickActions.length ? (
             <div className="admin-dashboard-quick-actions" aria-label="Quick actions">
-              {quickActions.slice(0, 6).map((a) => (
+              {secondaryQuickActions.slice(0, 6).map((a) => (
                 <Link key={a.href} href={a.href} className="admin-quick-action">
                   {a.label}
                 </Link>
@@ -460,7 +458,24 @@ export default function StaffDashboard() {
             </div>
           ) : null}
         </div>
+
+        {primaryQuickActions.length ? (
+          <div className="admin-actions" style={{ marginTop: 12, justifyContent: 'flex-start' }} aria-label="Primary quick actions">
+            {primaryQuickActions.map((a) => (
+              <Link
+                key={a.href}
+                href={a.href}
+                className={`admin-button ${a.href === '/admin/work-logs' ? 'info' : ''}`.trim()}
+                style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                {a.label}
+              </Link>
+            ))}
+          </div>
+        ) : null}
       </div>
+
+      {hasPermission(permissions, 'intranet_updates.read') ? <IntranetTicker items={tickerUpdates} /> : null}
 
       {loading ? (
         <div className="admin-card" style={{ marginTop: 16 }}>
@@ -476,7 +491,7 @@ export default function StaffDashboard() {
         </div>
       ) : (
         <div className="admin-dashboard-grid" style={{ marginTop: 16 }}>
-          <div className="admin-dashboard-span-4">
+          <div className="admin-dashboard-span-6">
             <Widget title="Today at a glance" subtitle="Stay on top of the basics." href="/admin/attendance" actionLabel="Open">
               <div className="admin-dashboard-stats">
                 <div className="admin-dashboard-stat">
@@ -497,29 +512,11 @@ export default function StaffDashboard() {
                     )}
                   </div>
                 </div>
-                {hasPermission(permissions, 'notifications.read') ? (
-                  <div className="admin-dashboard-stat">
-                    <div className="admin-dashboard-stat-label">Unread</div>
-                    <div className="admin-dashboard-stat-value">{unreadCount}</div>
-                    <Link className="admin-link" href="/admin/inbox">
-                      View inbox
-                    </Link>
-                  </div>
-                ) : null}
-                {hasPermission(permissions, 'tickets.read') ? (
-                  <div className="admin-dashboard-stat">
-                    <div className="admin-dashboard-stat-label">Open tickets</div>
-                    <div className="admin-dashboard-stat-value">{openTickets.length}</div>
-                    <Link className="admin-link" href="/admin/help">
-                      View tickets
-                    </Link>
-                  </div>
-                ) : null}
               </div>
             </Widget>
           </div>
 
-          <div className="admin-dashboard-span-5">
+          <div className="admin-dashboard-span-6">
             <Widget title="This week" subtitle={`Week of ${weekStartISO} (UTC work-week)`} href="/admin/work-logs" actionLabel="Work logs">
               {!hasPermission(permissions, 'work_logs.read') ? (
                 <EmptyState title="No access" body="You don’t have permission to view work logs." />
@@ -540,7 +537,7 @@ export default function StaffDashboard() {
                     <div className="admin-dashboard-week-metric">
                       <div className="admin-dashboard-week-label">Tasks</div>
                       <div className="admin-dashboard-week-value">
-                        {weekSummary.tasks_done || 0} / {weekSummary.tasks_total || 0} done
+                        {weekTasks.done} / {weekTasks.total} done
                       </div>
                     </div>
                     <div className="admin-dashboard-week-metric">
@@ -553,149 +550,7 @@ export default function StaffDashboard() {
             </Widget>
           </div>
 
-          <div className="admin-dashboard-span-3">
-            <Widget title="My tickets" subtitle="Assigned and created tickets." href="/admin/help" actionLabel="Open">
-              {!hasPermission(permissions, 'tickets.read') ? (
-                <EmptyState title="No access" body="You don’t have permission to view tickets." />
-              ) : openTickets.length === 0 ? (
-                <EmptyState title="No open tickets" body="You’re all caught up. Create a ticket when you need help." />
-              ) : (
-                <div className="admin-widget-list">
-                  {openTickets.slice(0, 6).map((t) => {
-                    const status = String(t?.status || '').toLowerCase();
-                    const badge = status === 'open' ? 'warning' : status === 'in_progress' ? 'secondary' : 'secondary';
-                    return (
-                      <div key={t.id} className="admin-widget-list-item">
-                        <div className="admin-widget-list-main">
-                          <div className="admin-widget-list-title">{t.subject || `Ticket #${t.id}`}</div>
-                          <div className="admin-widget-list-meta">
-                            <span className={`admin-badge ${badge}`}>{status || 'open'}</span>
-                            <span className="admin-widget-list-dot">·</span>
-                            <span className="admin-help" style={{ margin: 0 }}>
-                              {formatRelativeTime(t.updated_at || t.created_at)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <Link className="admin-link" href="/admin/help" style={{ marginTop: 10, display: 'inline-block' }}>
-                    View all tickets
-                  </Link>
-                </div>
-              )}
-            </Widget>
-          </div>
 
-          {hasPermission(permissions, 'notifications.read') ? (
-            <div className="admin-dashboard-span-4">
-              <Widget title="Inbox" subtitle="Unread updates and notifications." href="/admin/inbox" actionLabel="Inbox">
-                {notifications.length === 0 ? (
-                  <EmptyState title="All caught up" body="No unread notifications right now." />
-                ) : (
-                  <div className="admin-widget-list">
-                    {notifications.slice(0, 6).map((n) => (
-                      <div key={n.id} className="admin-widget-list-item">
-                        <div className="admin-widget-list-main">
-                          <div className="admin-widget-list-title">{n.title || 'Notification'}</div>
-                          <div className="admin-widget-list-meta">
-                            <span className="admin-badge secondary">{String(n.type || 'update').replace('.', ' ')}</span>
-                            <span className="admin-widget-list-dot">·</span>
-                            <span className="admin-help" style={{ margin: 0 }}>
-                              {formatRelativeTime(n.created_at)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </Widget>
-            </div>
-          ) : null}
-
-          {hasPermission(permissions, 'intranet_updates.read') ? (
-            <div className="admin-dashboard-span-4">
-              <Widget title="Intranet updates" subtitle="Internal announcements from Admin/HR." href="/admin/updates" actionLabel="All updates">
-                {intranetUpdates.length === 0 ? (
-                  <EmptyState title="No updates yet" body="When Admin/HR posts an update, it will show here." />
-                ) : (
-                  <div className="admin-widget-list">
-                    {intranetUpdates.slice(0, 6).map((u) => (
-                      <div key={u.id} className="admin-widget-list-item">
-                        <div className="admin-widget-list-main">
-                          <div className="admin-widget-list-title">{u.title || 'Update'}</div>
-                          <div className="admin-help" style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
-                            {String(u.body || '').slice(0, 160)}
-                            {String(u.body || '').length > 160 ? '…' : ''}
-                          </div>
-                          <div className="admin-widget-list-meta" style={{ marginTop: 8 }}>
-                            <span className="admin-badge secondary">update</span>
-                            <span className="admin-widget-list-dot">·</span>
-                            <span className="admin-help" style={{ margin: 0 }}>
-                              {formatRelativeTime(u.created_at)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </Widget>
-            </div>
-          ) : null}
-
-          {hasPermission(permissions, 'library.read') ? (
-            <div className="admin-dashboard-span-4">
-              <Widget title="Library" subtitle="Shared documents, images, and training." href="/admin/library" actionLabel="Open">
-                {libraryFolders.length === 0 ? (
-                  <EmptyState title="No uploads yet" body="Upload documents and images so the team can find them later." />
-                ) : (
-                  <div>
-                    <div className="admin-dashboard-folder-grid">
-                      {libraryFolders.slice(0, 6).map((f) => (
-                        <div key={f.folder} className="admin-dashboard-folder">
-                          <div className="admin-dashboard-folder-name">{f.folder}</div>
-                          <div className="admin-dashboard-folder-count">{f.count} item(s)</div>
-                        </div>
-                      ))}
-                    </div>
-                    {hasPermission(permissions, 'library.upload') ? (
-                      <div style={{ marginTop: 12 }}>
-                        <Link className="admin-button secondary" href="/admin/library">
-                          Upload to library
-                        </Link>
-                      </div>
-                    ) : null}
-                  </div>
-                )}
-              </Widget>
-            </div>
-          ) : null}
-
-          {hasPermission(permissions, 'payroll.read_own') ? (
-            <div className="admin-dashboard-span-4">
-              <Widget title="My payroll" subtitle="Latest payslip snapshot." href="/admin/my-payroll" actionLabel="Payslips">
-                {!myPayrollLatest ? (
-                  <EmptyState title="No payslips yet" body="Once HR generates a payroll run, your payslips will show up here." />
-                ) : (
-                  <div className="admin-dashboard-payroll">
-                    <div className="admin-dashboard-payroll-period">{myPayrollLatest.period}</div>
-                    <div className="admin-dashboard-payroll-totals">
-                      {myPayrollLatest.totals.map((t) => (
-                        <div key={t.currency} className="admin-dashboard-payroll-total">
-                          <div className="admin-help" style={{ margin: 0 }}>
-                            {t.currency} net
-                          </div>
-                          <div className="admin-dashboard-payroll-value">{Number(t.net || 0).toFixed(2)}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </Widget>
-            </div>
-          ) : null}
         </div>
       )}
     </div>
