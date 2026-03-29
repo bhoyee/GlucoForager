@@ -392,7 +392,7 @@ export default function HelpPage() {
             Search
             <input value={filterQ} onChange={(e) => setFilterQ(e.target.value)} placeholder="Subject..." />
           </label>
-          <button className="admin-button secondary" type="button" onClick={loadTickets}>
+          <button className="admin-button info" type="button" onClick={loadTickets}>
             Refresh
           </button>
         </div>
