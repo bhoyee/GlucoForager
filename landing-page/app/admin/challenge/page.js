@@ -378,7 +378,7 @@ export default function AdminChallengePage() {
               </>
             ) : (
               <>
-                <button className="admin-button secondary" type="button" onClick={loadSnapshots} disabled={snapshotsLoading}>
+                <button className="admin-button info" type="button" onClick={loadSnapshots} disabled={snapshotsLoading}>
                   {snapshotsLoading ? 'Loading...' : 'Refresh'}
                 </button>
                 <button className="admin-button danger" type="button" onClick={resetSnapshots}>
