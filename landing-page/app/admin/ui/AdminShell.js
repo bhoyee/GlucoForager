@@ -126,6 +126,8 @@ export default function AdminShell({ children }) {
   }
 
   const permissions = Array.isArray(session?.permissions) ? session.permissions : [];
+  const roles = Array.isArray(session?.roles) ? session.roles : [];
+  const isAdmin = permissions.includes('*') || permissions.includes('admin.manage') || roles.includes('admin');
   const hasPermission = (required) => {
     if (!required) return true;
     if (permissions.includes('*')) return true;
@@ -134,7 +136,7 @@ export default function AdminShell({ children }) {
   };
 
   const navItems = [
-    { href: '/admin/dashboard', label: 'Dashboard', icon: 'D' },
+    { href: isAdmin ? '/admin/admin-dashboard' : '/admin/dashboard', label: 'Dashboard', icon: 'D' },
     { href: '/admin/updates', label: 'Updates', icon: 'UP', perm: 'intranet_updates.read' },
     { href: '/admin/inbox', label: 'Inbox', icon: 'IN', perm: 'notifications.read' },
     { href: '/admin/attendance', label: 'Clock In/Out', icon: 'CI' },
