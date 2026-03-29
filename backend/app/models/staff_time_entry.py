@@ -19,6 +19,8 @@ class StaffTimeEntry(Base):
 
     clock_in_ip = Column(String, nullable=True)
     clock_out_ip = Column(String, nullable=True)
+    clock_in_reason = Column(String, nullable=True)
+    clock_out_reason = Column(String, nullable=True)
 
     edited_at = Column(DateTime, nullable=True)
     edited_by_staff_user_id = Column(Integer, nullable=True, index=True)

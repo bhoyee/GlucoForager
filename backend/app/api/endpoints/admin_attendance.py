@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone, timedelta, time
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -51,6 +51,8 @@ def _entry_view(entry: StaffTimeEntry, staff_tz: str) -> dict:
         "work_date": entry.work_date.isoformat(),
         "clock_in_at": entry.clock_in_at.isoformat() if entry.clock_in_at else None,
         "clock_out_at": entry.clock_out_at.isoformat() if entry.clock_out_at else None,
+        "clock_in_reason": getattr(entry, "clock_in_reason", None),
+        "clock_out_reason": getattr(entry, "clock_out_reason", None),
         "clock_in_ok": clock_in_ok,
         "clock_out_ok": clock_out_ok,
         "day_status": day_status,
@@ -68,6 +70,65 @@ class MonthQuery(BaseModel):
     year: int = Field(..., ge=2000, le=2100)
     month: int = Field(..., ge=1, le=12)
     staff_user_id: int | None = None
+
+
+class AttendanceClockPayload(BaseModel):
+    reason: str | None = Field(None, max_length=240)
+
+
+@router.get("/today")
+def get_today_overview(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("attendance.manage")),
+):
+    today = datetime.now(timezone.utc).date()
+
+    staff_rows = (
+        db.query(StaffUser)
+        .filter(StaffUser.is_active == True)  # noqa: E712
+        .order_by(StaffUser.email.asc())
+        .all()
+    )
+    staff_rows = [s for s in staff_rows if getattr(s, "deleted_at", None) is None]
+
+    entry_rows = db.query(StaffTimeEntry).filter(StaffTimeEntry.work_date == today).all()
+    by_staff = {int(e.staff_user_id): e for e in entry_rows}
+
+    items: list[dict] = []
+    for staff in staff_rows:
+        entry = by_staff.get(int(staff.id))
+        if entry is None:
+            items.append(
+                {
+                    "staff_user_id": int(staff.id),
+                    "email": staff.email,
+                    "full_name": getattr(staff, "full_name", None),
+                    "timezone": staff.timezone or "UTC",
+                    "work_date": today.isoformat(),
+                    "clock_in_at": None,
+                    "clock_out_at": None,
+                    "clock_in_ok": False,
+                    "clock_out_ok": False,
+                    "day_status": "none",
+                    "clock_in_reason": None,
+                    "clock_out_reason": None,
+                }
+            )
+            continue
+
+        view = _entry_view(entry, staff.timezone)
+        items.append(
+            {
+                "staff_user_id": int(staff.id),
+                "email": staff.email,
+                "full_name": getattr(staff, "full_name", None),
+                "timezone": staff.timezone or "UTC",
+                **view,
+            }
+        )
+
+    return {"date": today.isoformat(), "items": items}
 
 
 @router.get("/month")
@@ -108,6 +169,7 @@ def get_month(
 @router.post("/clock-in")
 def clock_in(
     request: Request,
+    payload: AttendanceClockPayload = Body(default=AttendanceClockPayload()),
     db: Session = Depends(get_db),
     current_staff: StaffUser = Depends(require_staff_permission("attendance.write")),
 ):
@@ -127,8 +189,20 @@ def clock_in(
     if entry.clock_in_at:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Already clocked in for today")
 
-    entry.clock_in_at = datetime.utcnow()
+    now_utc = datetime.now(timezone.utc)
+    tz = _safe_tz(current_staff.timezone or "UTC")
+    now_local = now_utc.astimezone(tz)
+    outside_window = not _within_window(now_local, target_hour=9, target_minute=0, minutes_before=30, minutes_after=30)
+    reason = (payload.reason.strip()[:240] if isinstance(payload.reason, str) and payload.reason.strip() else None)
+    if outside_window and not reason:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Reason required when clocking in outside the on-time window (09:00 ± 30 mins)",
+        )
+
+    entry.clock_in_at = now_utc.replace(tzinfo=None)
     entry.clock_in_ip = request.client.host if request.client else None
+    entry.clock_in_reason = reason
     db.add(
         StaffAuditLog(
             actor_id=int(current_staff.id),
@@ -138,6 +212,7 @@ def clock_in(
             details={
                 "work_date": today.isoformat(),
                 "clock_in_at": entry.clock_in_at.isoformat() if entry.clock_in_at else None,
+                "clock_in_reason": reason,
                 "created_entry": bool(created_entry),
             },
             ip=request.client.host if request.client else None,
@@ -153,6 +228,7 @@ def clock_in(
 @router.post("/clock-out")
 def clock_out(
     request: Request,
+    payload: AttendanceClockPayload = Body(default=AttendanceClockPayload()),
     db: Session = Depends(get_db),
     current_staff: StaffUser = Depends(require_staff_permission("attendance.write")),
 ):
@@ -167,8 +243,21 @@ def clock_out(
     if entry.clock_out_at:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Already clocked out for today")
 
-    entry.clock_out_at = datetime.utcnow()
+    now_utc = datetime.now(timezone.utc)
+    tz = _safe_tz(current_staff.timezone or "UTC")
+    now_local = now_utc.astimezone(tz)
+    mins = now_local.hour * 60 + now_local.minute
+    requires_reason = mins < (17 * 60) or mins > (17 * 60 + 30)  # before 17:00 or after 17:30
+    reason = (payload.reason.strip()[:240] if isinstance(payload.reason, str) and payload.reason.strip() else None)
+    if requires_reason and not reason:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Reason required when clocking out outside the allowed window (17:00–17:30)",
+        )
+
+    entry.clock_out_at = now_utc.replace(tzinfo=None)
     entry.clock_out_ip = request.client.host if request.client else None
+    entry.clock_out_reason = reason
     db.add(
         StaffAuditLog(
             actor_id=int(current_staff.id),
@@ -178,6 +267,7 @@ def clock_out(
             details={
                 "work_date": today.isoformat(),
                 "clock_out_at": entry.clock_out_at.isoformat() if entry.clock_out_at else None,
+                "clock_out_reason": reason,
             },
             ip=request.client.host if request.client else None,
             user_agent=request.headers.get("user-agent"),
@@ -256,6 +346,69 @@ def edit_entry(
 class ApproveMissedClockOutPayload(BaseModel):
     clock_out_at: str | None = None
     reason: str | None = Field(None, max_length=240)
+
+
+class ApproveClockInExceptionPayload(BaseModel):
+    reason: str | None = Field(None, max_length=240)
+
+
+@router.post("/entries/{entry_id}/approve-clock-in-exception")
+def approve_clock_in_exception(
+    request: Request,
+    entry_id: int,
+    payload: ApproveClockInExceptionPayload,
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("attendance.manage")),
+):
+    entry = db.query(StaffTimeEntry).filter(StaffTimeEntry.id == int(entry_id)).first()
+    if not entry:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    if not entry.clock_in_at:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Cannot approve: missing clock-in")
+
+    staff = db.query(StaffUser).filter(StaffUser.id == int(entry.staff_user_id)).first()
+    staff_tz = staff.timezone if staff and staff.timezone else "UTC"
+    tz = _safe_tz(staff_tz)
+    clock_in_local = entry.clock_in_at.replace(tzinfo=timezone.utc).astimezone(tz)
+    clock_in_ok = bool(_within_window(clock_in_local, target_hour=9, target_minute=0, minutes_before=30, minutes_after=30))
+    if clock_in_ok:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Clock-in is within the on-time window")
+
+    reason = (payload.reason.strip()[:240] if isinstance(payload.reason, str) and payload.reason.strip() else "HR approval: clock-in exception")
+
+    before = {
+        "approved_at": entry.approved_at.isoformat() if getattr(entry, "approved_at", None) else None,
+        "approval_reason": getattr(entry, "approval_reason", None),
+    }
+
+    entry.approved_at = datetime.utcnow()
+    entry.approved_by_staff_user_id = int(current_staff.id)
+    entry.approval_reason = reason
+    entry.updated_at = datetime.utcnow()
+
+    db.add(
+        StaffAuditLog(
+            actor_id=int(current_staff.id),
+            action="attendance.approve_clock_in_exception",
+            entity="staff_time_entries",
+            entity_id=str(entry.id),
+            details={
+                "before": before,
+                "after": {
+                    "approved_at": entry.approved_at.isoformat() if entry.approved_at else None,
+                    "approval_reason": reason,
+                },
+                "reason": reason,
+            },
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            created_at=datetime.utcnow(),
+        )
+    )
+
+    db.commit()
+    db.refresh(entry)
+    return {"ok": True, "entry": _entry_view(entry, staff_tz)}
 
 
 @router.post("/entries/{entry_id}/approve-missed-clock-out")
