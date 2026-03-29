@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import EmptyState from '../ui/EmptyState';
@@ -129,6 +129,7 @@ export default function StaffDashboard() {
   const [intranetUpdates, setIntranetUpdates] = useState([]);
 
   const permissions = Array.isArray(me?.permissions) ? me.permissions : [];
+  const loadInFlightRef = useRef(false);
 
   const todayUtcISO = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const currentYear = useMemo(() => Number(todayUtcISO.slice(0, 4)), [todayUtcISO]);
@@ -193,120 +194,140 @@ export default function StaffDashboard() {
 
   const load = useCallback(
     async ({ silent } = {}) => {
-      const isSilent = Boolean(silent) && !loading;
-      if (isSilent) {
-        setRefreshing(true);
-        setMessage('');
-      } else {
-        setLoading(true);
-        setMessage('');
-      }
+      if (loadInFlightRef.current) return;
+      loadInFlightRef.current = true;
+      try {
+        const isSilent = Boolean(silent) && !loading;
+        if (isSilent) {
+          setRefreshing(true);
+          setMessage('');
+        } else {
+          setLoading(true);
+          setMessage('');
+        }
 
-      const meRes = await safeJson(`${API_URL}/api/admin/me`, { timeoutMs: 12000, allowUnauthorized: false });
-      if (!meRes.ok) {
-        if (meRes.status === 401) return;
-        setMe(null);
-        setAttendanceMonth([]);
-        setWeek(null);
-        setTickets([]);
-        setNotifications([]);
-        setLibraryFolders([]);
-        setMyPayrollItems([]);
-        setIntranetUpdates([]);
-        setMessage(meRes?.data?.detail || meRes?.error || 'Dashboard is taking too long to load. Check the backend and try refresh.');
+        const meRes = await safeJson(`${API_URL}/api/admin/me`, { timeoutMs: 12000, allowUnauthorized: false });
+        if (!meRes.ok) {
+          if (meRes.status === 401) {
+            // adminFetch already clears tokens and redirects; just stop the spinner to avoid an infinite loading state.
+            setLoading(false);
+            setRefreshing(false);
+            return;
+          }
+          setMe(null);
+          setAttendanceMonth([]);
+          setWeek(null);
+          setTickets([]);
+          setNotifications([]);
+          setLibraryFolders([]);
+          setMyPayrollItems([]);
+          setIntranetUpdates([]);
+          setMessage(meRes?.data?.detail || meRes?.error || 'Dashboard is taking too long to load. Check the backend and try refresh.');
+          setLoading(false);
+          setRefreshing(false);
+          return;
+        }
+
+        const meData = meRes.data && typeof meRes.data === 'object' ? meRes.data : null;
+        setMe(meData);
+
+        const perms = Array.isArray(meData?.permissions) ? meData.permissions : [];
+        const roles = Array.isArray(meData?.roles) ? meData.roles : [];
+        const isAdmin = perms.includes('*') || perms.includes('admin.manage') || roles.includes('admin');
+        if (isAdmin) {
+          router.replace('/admin/admin-dashboard');
+          setLoading(false);
+          setRefreshing(false);
+          return;
+        }
+
+        const requests = [];
+
+        if (hasPermission(perms, 'attendance.read')) {
+          requests.push(
+            safeJson(`${API_URL}/api/admin/attendance/month?year=${currentYear}&month=${currentMonth}`, {
+              timeoutMs: 12000,
+              allowUnauthorized: true,
+            }).then((r) => setAttendanceMonth(Array.isArray(r?.data?.items) ? r.data.items : []))
+          );
+        } else {
+          setAttendanceMonth([]);
+        }
+
+        if (hasPermission(perms, 'work_logs.read')) {
+          requests.push(
+            safeJson(`${API_URL}/api/admin/work-logs/week?start=${encodeURIComponent(weekStartISO)}`, {
+              timeoutMs: 12000,
+              allowUnauthorized: true,
+            }).then((r) => setWeek(r?.data && typeof r.data === 'object' ? r.data : null))
+          );
+        } else {
+          setWeek(null);
+        }
+
+        if (hasPermission(perms, 'tickets.read')) {
+          requests.push(
+            safeJson(`${API_URL}/api/admin/help/tickets?mine=1`, { timeoutMs: 12000, allowUnauthorized: true }).then((r) =>
+              setTickets(Array.isArray(r?.data?.items) ? r.data.items : [])
+            )
+          );
+        } else {
+          setTickets([]);
+        }
+
+        if (hasPermission(perms, 'notifications.read')) {
+          requests.push(
+            safeJson(`${API_URL}/api/admin/staff-notifications?unread_only=1&limit=200&offset=0`, {
+              timeoutMs: 12000,
+              allowUnauthorized: true,
+            }).then((r) => setNotifications(Array.isArray(r?.data?.items) ? r.data.items : []))
+          );
+        } else {
+          setNotifications([]);
+        }
+
+        if (hasPermission(perms, 'library.read')) {
+          requests.push(
+            safeJson(`${API_URL}/api/admin/library/folders`, { timeoutMs: 12000, allowUnauthorized: true }).then((r) =>
+              setLibraryFolders(Array.isArray(r?.data?.items) ? r.data.items : [])
+            )
+          );
+        } else {
+          setLibraryFolders([]);
+        }
+
+        if (hasPermission(perms, 'payroll.read_own')) {
+          requests.push(
+            safeJson(`${API_URL}/api/admin/payroll/my/items`, { timeoutMs: 12000, allowUnauthorized: true }).then((r) =>
+              setMyPayrollItems(Array.isArray(r?.data?.items) ? r.data.items : [])
+            )
+          );
+        } else {
+          setMyPayrollItems([]);
+        }
+
+        if (hasPermission(perms, 'intranet_updates.read')) {
+          requests.push(
+            safeJson(`${API_URL}/api/admin/intranet-updates?limit=6&offset=0`, {
+              timeoutMs: 12000,
+              allowUnauthorized: true,
+            }).then((r) => setIntranetUpdates(Array.isArray(r?.data?.items) ? r.data.items : []))
+          );
+        } else {
+          setIntranetUpdates([]);
+        }
+
+        await Promise.allSettled(requests);
+        setLastUpdatedAt(new Date().toISOString());
         setLoading(false);
         setRefreshing(false);
-        return;
-      }
-
-      const meData = meRes.data && typeof meRes.data === 'object' ? meRes.data : null;
-      setMe(meData);
-
-      const perms = Array.isArray(meData?.permissions) ? meData.permissions : [];
-      const roles = Array.isArray(meData?.roles) ? meData.roles : [];
-      const isAdmin = perms.includes('*') || perms.includes('admin.manage') || roles.includes('admin');
-      if (isAdmin) {
-        router.replace('/admin/admin-dashboard');
+      } catch (e) {
+        setMessage(e?.message || 'Dashboard failed to load.');
         setLoading(false);
         setRefreshing(false);
-        return;
+      } finally {
+        loadInFlightRef.current = false;
       }
-      const requests = [];
-
-      if (hasPermission(perms, 'attendance.read')) {
-        requests.push(
-          safeJson(`${API_URL}/api/admin/attendance/month?year=${currentYear}&month=${currentMonth}`, { timeoutMs: 12000, allowUnauthorized: true }).then((r) =>
-            setAttendanceMonth(Array.isArray(r?.data?.items) ? r.data.items : [])
-          )
-        );
-      } else {
-        setAttendanceMonth([]);
-      }
-
-      if (hasPermission(perms, 'work_logs.read')) {
-        requests.push(
-          safeJson(`${API_URL}/api/admin/work-logs/week?start=${encodeURIComponent(weekStartISO)}`, { timeoutMs: 12000, allowUnauthorized: true }).then((r) =>
-            setWeek(r?.data && typeof r.data === 'object' ? r.data : null)
-          )
-        );
-      } else {
-        setWeek(null);
-      }
-
-      if (hasPermission(perms, 'tickets.read')) {
-        requests.push(
-          safeJson(`${API_URL}/api/admin/help/tickets?mine=1`, { timeoutMs: 12000, allowUnauthorized: true }).then((r) =>
-            setTickets(Array.isArray(r?.data?.items) ? r.data.items : [])
-          )
-        );
-      } else {
-        setTickets([]);
-      }
-
-      if (hasPermission(perms, 'notifications.read')) {
-        requests.push(
-          safeJson(`${API_URL}/api/admin/staff-notifications?unread_only=1&limit=200&offset=0`, { timeoutMs: 12000, allowUnauthorized: true }).then((r) =>
-            setNotifications(Array.isArray(r?.data?.items) ? r.data.items : [])
-          )
-        );
-      } else {
-        setNotifications([]);
-      }
-
-      if (hasPermission(perms, 'library.read')) {
-        requests.push(
-          safeJson(`${API_URL}/api/admin/library/folders`, { timeoutMs: 12000, allowUnauthorized: true }).then((r) =>
-            setLibraryFolders(Array.isArray(r?.data?.items) ? r.data.items : [])
-          )
-        );
-      } else {
-        setLibraryFolders([]);
-      }
-
-      if (hasPermission(perms, 'payroll.read_own')) {
-        requests.push(
-          safeJson(`${API_URL}/api/admin/payroll/my/items`, { timeoutMs: 12000, allowUnauthorized: true }).then((r) =>
-            setMyPayrollItems(Array.isArray(r?.data?.items) ? r.data.items : [])
-          )
-        );
-      } else {
-        setMyPayrollItems([]);
-      }
-
-      if (hasPermission(perms, 'intranet_updates.read')) {
-        requests.push(
-          safeJson(`${API_URL}/api/admin/intranet-updates?limit=6&offset=0`, { timeoutMs: 12000, allowUnauthorized: true }).then((r) =>
-            setIntranetUpdates(Array.isArray(r?.data?.items) ? r.data.items : [])
-          )
-        );
-      } else {
-        setIntranetUpdates([]);
-      }
-
-      await Promise.allSettled(requests);
-      setLastUpdatedAt(new Date().toISOString());
-      setLoading(false);
-      setRefreshing(false);
     },
     [currentMonth, currentYear, loading, safeJson, weekStartISO]
   );
