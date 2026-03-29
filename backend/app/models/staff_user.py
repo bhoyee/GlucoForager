@@ -16,6 +16,20 @@ class StaffUser(Base):
     timezone = Column(String, nullable=False, default="UTC")
     is_active = Column(Boolean, nullable=False, default=True)
 
+    # Profile fields
+    full_name = Column(String, nullable=True)
+    country = Column(String, nullable=True)
+    address = Column(String, nullable=True)
+    phone_number = Column(String, nullable=True)
+    gender = Column(String, nullable=True)
+
+    next_of_kin_name = Column(String, nullable=True)
+    next_of_kin_contact = Column(String, nullable=True)
+    next_of_kin_relationship = Column(String, nullable=True)
+    next_of_kin_address = Column(String, nullable=True)
+
+    avatar_url = Column(String, nullable=True)
+
     mfa_enabled = Column(Boolean, nullable=False, default=False)
     mfa_method = Column(String, nullable=True)  # e.g. "email"
 
