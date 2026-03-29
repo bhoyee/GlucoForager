@@ -156,7 +156,7 @@ export default function SystemHealthClient() {
             />
             Auto-refresh
           </label>
-          <button type="button" className="admin-button secondary" onClick={() => loadHealth()}>
+          <button type="button" className="admin-button info" onClick={() => loadHealth()}>
             Refresh
           </button>
         </div>
