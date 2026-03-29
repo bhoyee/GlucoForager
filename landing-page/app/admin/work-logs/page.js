@@ -1,4 +1,5 @@
 'use client';
+'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -85,7 +86,8 @@ export default function WorkLogsPage() {
   const permissions = Array.isArray(session?.permissions) ? session.permissions : [];
   const isManager = permissions.includes('*') || permissions.includes('work_logs.manage');
   const staffTimeZone = useMemo(() => String(session?.timezone || 'UTC'), [session?.timezone]);
-  const staffTodayISO = useMemo(() => isoDateInTimeZone(new Date(), staffTimeZone), [staffTimeZone]);
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  const staffTodayISO = useMemo(() => isoDateInTimeZone(new Date(nowTick), staffTimeZone), [nowTick, staffTimeZone]);
 
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -107,6 +109,7 @@ export default function WorkLogsPage() {
   const [workDateLoading, setWorkDateLoading] = useState(false);
   const workDateRef = useRef(workDate);
   const workDateTouchedRef = useRef(false);
+  const lastStaffTodayRef = useRef(staffTodayISO);
   const [workDateLog, setWorkDateLog] = useState(null);
   const [submittedModalOpen, setSubmittedModalOpen] = useState(false);
 
@@ -688,6 +691,22 @@ export default function WorkLogsPage() {
   }, [staffTodayISO, workDate]);
 
   useEffect(() => {
+    const prev = lastStaffTodayRef.current;
+    if (!prev || prev === staffTodayISO) return;
+
+    const hasQuery = Boolean(searchParams?.get('date') || searchParams?.get('work_date'));
+    // If the staff was working on "today" before midnight, automatically roll over to the new day
+    // so they don't keep seeing yesterday's tasks.
+    if (!hasQuery && String(workDateRef.current || '') === String(prev)) {
+      workDateTouchedRef.current = false;
+      workDateRef.current = staffTodayISO;
+      setWorkDate(staffTodayISO);
+    }
+
+    lastStaffTodayRef.current = staffTodayISO;
+  }, [searchParams, staffTodayISO]);
+
+  useEffect(() => {
     if (!token) return;
     const today = staffTodayISO;
     const minDate = isoDateAddDays(today, -6);
@@ -707,6 +726,18 @@ export default function WorkLogsPage() {
   useEffect(() => {
     workDateRef.current = workDate;
   }, [workDate]);
+
+  useEffect(() => {
+    // Keep "today" fresh across midnight without requiring a full page refresh.
+    const tick = () => setNowTick(Date.now());
+    const timer = setInterval(tick, 60_000);
+    const onFocus = () => tick();
+    if (typeof window !== 'undefined') window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(timer);
+      if (typeof window !== 'undefined') window.removeEventListener('focus', onFocus);
+    };
+  }, []);
 
   useEffect(() => {
     loadStaff();
