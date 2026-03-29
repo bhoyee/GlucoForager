@@ -274,7 +274,7 @@ export default function LibraryPage() {
                   <input type="checkbox" checked={includeDeleted} onChange={(e) => setIncludeDeleted(e.target.checked)} /> Show deleted
                 </label>
               ) : null}
-              <button className="admin-button secondary" type="button" onClick={load}>
+              <button className="admin-button info" type="button" onClick={load}>
                 Refresh
               </button>
             </div>
@@ -398,7 +398,7 @@ export default function LibraryPage() {
                     </button>
                   ) : null}
                   {!i.is_deleted ? (
-                    <button className="admin-button secondary" type="button" onClick={() => softDelete(i.id)}>
+                    <button className="admin-button warning" type="button" onClick={() => softDelete(i.id)}>
                       Delete
                     </button>
                   ) : canRestore ? (
