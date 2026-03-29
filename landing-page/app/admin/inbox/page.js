@@ -86,6 +86,10 @@ export default function InboxPage() {
       router.push(`/admin/work-logs?log=${encodeURIComponent(String(data.work_log_id))}`);
       return;
     }
+    if (data?.work_date) {
+      router.push(`/admin/work-logs?date=${encodeURIComponent(String(data.work_date))}`);
+      return;
+    }
     router.push('/admin/help');
   };
 
@@ -100,7 +104,7 @@ export default function InboxPage() {
           <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <input type="checkbox" checked={unreadOnly} onChange={(e) => setUnreadOnly(e.target.checked)} /> Unread only
           </label>
-          <button className="admin-button secondary" type="button" onClick={load}>
+          <button className="admin-button info" type="button" onClick={load}>
             Refresh
           </button>
           <button className="admin-button" type="button" onClick={markAllRead}>
@@ -145,4 +149,3 @@ export default function InboxPage() {
     </div>
   );
 }
-
