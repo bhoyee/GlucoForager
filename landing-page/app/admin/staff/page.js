@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import EmptyState from '../ui/EmptyState';
 import LoadingState from '../ui/LoadingState';
+import { COUNTRIES } from '../lib/countries';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -13,16 +14,18 @@ export default function AdminStaffPage() {
 
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
-  const [permissions, setPermissions] = useState([]);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [includeDeleted, setIncludeDeleted] = useState(false);
+  const [detailsUser, setDetailsUser] = useState(null);
 
   const [roleDrafts, setRoleDrafts] = useState({});
   const [roleDirty, setRoleDirty] = useState({});
 
   const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [newFullName, setNewFullName] = useState('');
+  const [newCountry, setNewCountry] = useState('');
   const [newTimezone, setNewTimezone] = useState('UTC');
   const [newRoleKeys, setNewRoleKeys] = useState([]);
 
@@ -35,25 +38,22 @@ export default function AdminStaffPage() {
     setMessage('');
     try {
       const headers = { Authorization: `Bearer ${token}` };
-      const [uRes, rRes, pRes] = await Promise.all([
+      const [uRes, rRes] = await Promise.all([
         fetch(`${API_URL}/api/admin/staff/users?include_deleted=${includeDeleted ? '1' : '0'}`, { headers }),
         fetch(`${API_URL}/api/admin/staff/roles`, { headers }),
-        fetch(`${API_URL}/api/admin/staff/permissions`, { headers }),
       ]);
-      if ([uRes, rRes, pRes].some((r) => r.status === 401)) {
+      if ([uRes, rRes].some((r) => r.status === 401)) {
         localStorage.removeItem('adminToken');
         router.push('/admin');
         return;
       }
       const u = await uRes.json().catch(() => ({}));
       const r = await rRes.json().catch(() => ({}));
-      const p = await pRes.json().catch(() => ({}));
-      if (!uRes.ok || !rRes.ok || !pRes.ok) throw new Error(u.detail || r.detail || p.detail || 'Failed to load staff portal data.');
+      if (!uRes.ok || !rRes.ok) throw new Error(u.detail || r.detail || 'Failed to load staff portal data.');
 
       const uItems = Array.isArray(u.items) ? u.items : [];
       setUsers(uItems);
       setRoles(Array.isArray(r.items) ? r.items : []);
-      setPermissions(Array.isArray(p.items) ? p.items : []);
 
       setRoleDrafts(() => {
         const next = {};
@@ -91,6 +91,8 @@ export default function AdminStaffPage() {
         body: JSON.stringify({
           email: newEmail,
           password: newPassword,
+          full_name: newFullName,
+          country: newCountry,
           timezone: newTimezone,
           is_active: true,
           role_keys: newRoleKeys,
@@ -105,6 +107,8 @@ export default function AdminStaffPage() {
       if (!res.ok) throw new Error(data.detail || 'Failed to create staff user.');
       setNewEmail('');
       setNewPassword('');
+      setNewFullName('');
+      setNewCountry('');
       setNewTimezone('UTC');
       setNewRoleKeys([]);
       loadAll();
@@ -192,6 +196,11 @@ export default function AdminStaffPage() {
 
   const roleOptions = roles.map((r) => ({ key: r.key, name: r.name }));
 
+  const countryName = useMemo(() => {
+    const map = new Map(COUNTRIES.map((c) => [c.code, c.name]));
+    return (code) => map.get(String(code || '').toUpperCase()) || String(code || '—');
+  }, []);
+
   return (
     <div className="admin-page">
       <div className="admin-card">
@@ -203,18 +212,33 @@ export default function AdminStaffPage() {
           <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <input type="checkbox" checked={includeDeleted} onChange={(e) => setIncludeDeleted(e.target.checked)} /> Show deleted
           </label>
-          <button className="admin-button secondary" type="button" onClick={loadAll}>
+          <button className="admin-button info" type="button" onClick={loadAll}>
             Refresh
           </button>
         </div>
 
-        <div className="admin-grid" style={{ marginTop: 16 }}>
+        <div className="admin-grid" style={{ marginTop: 16, gridTemplateColumns: '1fr' }}>
           <div className="admin-card" style={{ padding: 16 }}>
             <h3>Create Staff</h3>
             <form onSubmit={createUser}>
               <div className="admin-field">
                 <label>Email</label>
                 <input value={newEmail} onChange={(e) => setNewEmail(e.target.value)} required />
+              </div>
+              <div className="admin-field">
+                <label>Full name</label>
+                <input value={newFullName} onChange={(e) => setNewFullName(e.target.value)} required />
+              </div>
+              <div className="admin-field">
+                <label>Country</label>
+                <select value={newCountry} onChange={(e) => setNewCountry(e.target.value)} required>
+                  <option value="">Select country</option>
+                  {COUNTRIES.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="admin-field">
                 <label>Password</label>
@@ -250,31 +274,6 @@ export default function AdminStaffPage() {
             </form>
           </div>
 
-          <div className="admin-card" style={{ padding: 16 }}>
-            <h3>Roles & Permissions</h3>
-            <p className="admin-subtitle">Roles live in the database. Permissions are assigned per role and enforced by the backend.</p>
-            <div style={{ maxHeight: 220, overflow: 'auto' }}>
-              <ul>
-                {roles.map((r) => (
-                  <li key={r.id}>
-                    <strong>{r.name}</strong> <span style={{ opacity: 0.7 }}>({r.key})</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <details style={{ marginTop: 12 }}>
-              <summary>View permission keys</summary>
-              <div style={{ marginTop: 8, maxHeight: 220, overflow: 'auto' }}>
-                <ul>
-                  {permissions.map((p) => (
-                    <li key={p.id}>
-                      <code>{p.key}</code> — {p.name}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </details>
-          </div>
         </div>
       </div>
 
@@ -326,11 +325,11 @@ export default function AdminStaffPage() {
                         </select>
                         {roleDirty[idKey] && !isDeleted ? (
                           <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                            <button className="admin-button secondary" type="button" onClick={() => saveRolesForUser(u.id)}>
+                            <button className="admin-button info" type="button" onClick={() => saveRolesForUser(u.id)}>
                               Save roles
                             </button>
                             <button
-                              className="admin-button secondary"
+                              className="admin-button danger"
                               type="button"
                               onClick={() => {
                                 setRoleDrafts((prev) => ({ ...prev, [idKey]: Array.isArray(u.roles) ? u.roles : [] }));
@@ -344,10 +343,18 @@ export default function AdminStaffPage() {
                       </td>
                       <td>
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                          <button className="admin-button secondary" type="button" onClick={() => toggleActive(u)} disabled={isDeleted}>
+                          <button className="admin-button info" type="button" onClick={() => setDetailsUser(u)}>
+                            Details
+                          </button>
+                          <button
+                            className={`admin-button ${u.is_active ? 'warning' : 'secondary'}`}
+                            type="button"
+                            onClick={() => toggleActive(u)}
+                            disabled={isDeleted}
+                          >
                             {u.is_active ? 'Disable' : 'Enable'}
                           </button>
-                          <button className="admin-button" type="button" onClick={() => softDelete(u)} disabled={isDeleted}>
+                          <button className="admin-button warning" type="button" onClick={() => softDelete(u)} disabled={isDeleted}>
                             Soft delete
                           </button>
                         </div>
@@ -360,6 +367,50 @@ export default function AdminStaffPage() {
           </div>
         )}
       </div>
+
+      {detailsUser ? (
+        <div
+          className="admin-modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Staff user details"
+          onClick={() => setDetailsUser(null)}
+        >
+          <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="admin-modal-header">
+              <h3>Staff details</h3>
+              <button className="admin-icon-button danger" type="button" aria-label="Close" onClick={() => setDetailsUser(null)}>
+                ×
+              </button>
+            </div>
+            <div className="admin-modal-body">
+              <p className="admin-help" style={{ margin: 0 }}>
+                <strong>Name:</strong> {detailsUser.full_name || '—'}
+              </p>
+              <p className="admin-help" style={{ margin: '8px 0 0' }}>
+                <strong>Email:</strong> {detailsUser.email || '—'}
+              </p>
+              <p className="admin-help" style={{ margin: '8px 0 0' }}>
+                <strong>Country:</strong> {countryName(detailsUser.country)}
+              </p>
+              <p className="admin-help" style={{ margin: '8px 0 0' }}>
+                <strong>Timezone:</strong> {detailsUser.timezone || '—'}
+              </p>
+              <p className="admin-help" style={{ margin: '8px 0 0' }}>
+                <strong>Status:</strong> {detailsUser.deleted_at ? 'Deleted' : detailsUser.is_active ? 'Active' : 'Disabled'}
+              </p>
+              <p className="admin-help" style={{ margin: '8px 0 0' }}>
+                <strong>Roles:</strong> {(Array.isArray(detailsUser.roles) ? detailsUser.roles.join(', ') : '') || '—'}
+              </p>
+            </div>
+            <div className="admin-modal-footer">
+              <button className="admin-button danger" type="button" onClick={() => setDetailsUser(null)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

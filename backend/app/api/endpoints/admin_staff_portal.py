@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+import os
+import uuid
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
@@ -15,9 +17,36 @@ from ...models.staff_permission import StaffPermission
 from ...models.staff_role import StaffRole
 from ...models.staff_user import StaffUser
 from ...services.staff_rbac_service import StaffRBACService
+from ...core.country_codes import ISO_COUNTRY_CODES
 
 
 router = APIRouter(prefix="/admin", tags=["admin-staff"])
+
+
+def _clean_text(value: str | None, *, max_len: int, allow_newlines: bool = False) -> str | None:
+    if value is None:
+        return None
+    text = str(value)
+    text = text.replace("\x00", "")
+    text = text.strip()
+    if not allow_newlines:
+        text = " ".join(text.split())
+    if not text:
+        return None
+    return text[: int(max_len)]
+
+
+def _normalize_country(code: str | None) -> str | None:
+    if code is None:
+        return None
+    cleaned = str(code).strip().upper()
+    if not cleaned:
+        return None
+    if len(cleaned) != 2 or not cleaned.isalpha():
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid country code")
+    if cleaned not in ISO_COUNTRY_CODES:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid country code")
+    return cleaned
 
 
 class StaffMeResponse(BaseModel):
@@ -25,6 +54,12 @@ class StaffMeResponse(BaseModel):
     email: EmailStr
     timezone: str
     is_active: bool
+    full_name: str | None = None
+    country: str | None = None
+    address: str | None = None
+    phone_number: str | None = None
+    gender: str | None = None
+    avatar_url: str | None = None
     roles: list[str]
     permissions: list[str]
 
@@ -32,6 +67,8 @@ class StaffMeResponse(BaseModel):
 class StaffUserCreate(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=256)
+    full_name: str | None = Field(None, max_length=160)
+    country: str | None = Field(None, min_length=2, max_length=2)  # ISO alpha-2 (e.g. "US", "GB")
     timezone: str = Field("UTC", max_length=64)
     is_active: bool = True
     role_keys: list[str] = Field(default_factory=list, max_length=12)
@@ -40,6 +77,8 @@ class StaffUserCreate(BaseModel):
 class StaffUserUpdate(BaseModel):
     timezone: str | None = Field(None, max_length=64)
     is_active: bool | None = None
+    full_name: str | None = Field(None, max_length=160)
+    country: str | None = Field(None, min_length=2, max_length=2)  # ISO alpha-2
 
 
 class StaffUserOut(BaseModel):
@@ -47,6 +86,9 @@ class StaffUserOut(BaseModel):
     email: EmailStr
     timezone: str
     is_active: bool
+    full_name: str | None = None
+    country: str | None = None
+    avatar_url: str | None = None
     roles: list[str]
     created_at: datetime | None = None
     deleted_at: datetime | None = None
@@ -92,6 +134,12 @@ def admin_me(
         email=current_staff.email,
         timezone=current_staff.timezone,
         is_active=bool(current_staff.is_active),
+        full_name=getattr(current_staff, "full_name", None),
+        country=getattr(current_staff, "country", None),
+        address=getattr(current_staff, "address", None),
+        phone_number=getattr(current_staff, "phone_number", None),
+        gender=getattr(current_staff, "gender", None),
+        avatar_url=getattr(current_staff, "avatar_url", None),
         roles=roles,
         permissions=perms,
     )
@@ -115,6 +163,9 @@ def list_staff_users(
                 email=u.email,
                 timezone=u.timezone,
                 is_active=bool(u.is_active),
+                full_name=getattr(u, "full_name", None),
+                country=getattr(u, "country", None),
+                avatar_url=getattr(u, "avatar_url", None),
                 roles=StaffRBACService.get_user_role_keys(db, u.id),
                 created_at=u.created_at,
                 deleted_at=getattr(u, "deleted_at", None),
@@ -139,6 +190,8 @@ def create_staff_user(
     user = StaffUser(
         email=email,
         hashed_password=hashed,
+        full_name=_clean_text(payload.full_name, max_len=160),
+        country=_normalize_country(payload.country),
         timezone=(payload.timezone or "UTC").strip()[:64] or "UTC",
         is_active=bool(payload.is_active),
         created_at=datetime.utcnow(),
@@ -159,6 +212,9 @@ def create_staff_user(
         email=user.email,
         timezone=user.timezone,
         is_active=bool(user.is_active),
+        full_name=getattr(user, "full_name", None),
+        country=getattr(user, "country", None),
+        avatar_url=getattr(user, "avatar_url", None),
         roles=StaffRBACService.get_user_role_keys(db, user.id),
         created_at=user.created_at,
     )
@@ -185,6 +241,11 @@ def update_staff_user(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You cannot disable your own account")
         user.is_active = bool(payload.is_active)
 
+    if payload.full_name is not None:
+        user.full_name = _clean_text(payload.full_name, max_len=160)
+    if payload.country is not None:
+        user.country = _normalize_country(payload.country)
+
     db.add(
         StaffAuditLog(
             actor_id=int(current_staff.id),
@@ -208,10 +269,174 @@ def update_staff_user(
         email=user.email,
         timezone=user.timezone,
         is_active=bool(user.is_active),
+        full_name=getattr(user, "full_name", None),
+        country=getattr(user, "country", None),
+        avatar_url=getattr(user, "avatar_url", None),
         roles=StaffRBACService.get_user_role_keys(db, user.id),
         created_at=user.created_at,
         deleted_at=getattr(user, "deleted_at", None),
     )
+
+
+class StaffProfileOut(BaseModel):
+    id: int
+    email: EmailStr
+    timezone: str
+    full_name: str | None = None
+    country: str | None = None
+    address: str | None = None
+    phone_number: str | None = None
+    gender: str | None = None
+    next_of_kin_name: str | None = None
+    next_of_kin_contact: str | None = None
+    next_of_kin_relationship: str | None = None
+    next_of_kin_address: str | None = None
+    avatar_url: str | None = None
+
+
+class StaffProfileUpdatePayload(BaseModel):
+    full_name: str | None = Field(None, max_length=160)
+    country: str | None = Field(None, min_length=2, max_length=2)  # ISO alpha-2
+    address: str | None = Field(None, max_length=240)
+    phone_number: str | None = Field(None, max_length=32)
+    gender: str | None = Field(None, max_length=32)
+    next_of_kin_name: str | None = Field(None, max_length=160)
+    next_of_kin_contact: str | None = Field(None, max_length=64)
+    next_of_kin_relationship: str | None = Field(None, max_length=64)
+    next_of_kin_address: str | None = Field(None, max_length=240)
+
+
+@router.get("/staff/profile/me", response_model=StaffProfileOut)
+def get_my_profile(
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(get_current_staff_user),
+):
+    return StaffProfileOut(
+        id=int(current_staff.id),
+        email=current_staff.email,
+        timezone=current_staff.timezone,
+        full_name=getattr(current_staff, "full_name", None),
+        country=getattr(current_staff, "country", None),
+        address=getattr(current_staff, "address", None),
+        phone_number=getattr(current_staff, "phone_number", None),
+        gender=getattr(current_staff, "gender", None),
+        next_of_kin_name=getattr(current_staff, "next_of_kin_name", None),
+        next_of_kin_contact=getattr(current_staff, "next_of_kin_contact", None),
+        next_of_kin_relationship=getattr(current_staff, "next_of_kin_relationship", None),
+        next_of_kin_address=getattr(current_staff, "next_of_kin_address", None),
+        avatar_url=getattr(current_staff, "avatar_url", None),
+    )
+
+
+@router.patch("/staff/profile/me", response_model=StaffProfileOut)
+def update_my_profile(
+    request: Request,
+    payload: StaffProfileUpdatePayload,
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(get_current_staff_user),
+):
+    if payload.full_name is not None:
+        current_staff.full_name = _clean_text(payload.full_name, max_len=160)
+    if payload.country is not None:
+        current_staff.country = _normalize_country(payload.country)
+    if payload.address is not None:
+        current_staff.address = _clean_text(payload.address, max_len=240, allow_newlines=True)
+    if payload.phone_number is not None:
+        current_staff.phone_number = _clean_text(payload.phone_number, max_len=32)
+    if payload.gender is not None:
+        g = _clean_text(payload.gender, max_len=32)
+        allowed = {"female", "male", "non_binary", "other"}
+        current_staff.gender = (g if g in allowed else None) if g is not None else None
+    if payload.next_of_kin_name is not None:
+        current_staff.next_of_kin_name = _clean_text(payload.next_of_kin_name, max_len=160)
+    if payload.next_of_kin_contact is not None:
+        current_staff.next_of_kin_contact = _clean_text(payload.next_of_kin_contact, max_len=64)
+    if payload.next_of_kin_relationship is not None:
+        rel = _clean_text(payload.next_of_kin_relationship, max_len=64)
+        allowed_rel = {"parent", "spouse", "sibling", "partner", "friend", "other"}
+        current_staff.next_of_kin_relationship = (rel if rel in allowed_rel else None) if rel is not None else None
+    if payload.next_of_kin_address is not None:
+        current_staff.next_of_kin_address = _clean_text(payload.next_of_kin_address, max_len=240, allow_newlines=True)
+
+    # Enforce required profile fields (keep next-of-kin optional).
+    required_missing: list[str] = []
+    if not _clean_text(getattr(current_staff, "full_name", None), max_len=160):
+        required_missing.append("full_name")
+    if not _normalize_country(getattr(current_staff, "country", None)):
+        required_missing.append("country")
+    if not _clean_text(getattr(current_staff, "address", None), max_len=240, allow_newlines=True):
+        required_missing.append("address")
+    if not _clean_text(getattr(current_staff, "phone_number", None), max_len=32):
+        required_missing.append("phone_number")
+    if not _clean_text(getattr(current_staff, "gender", None), max_len=32):
+        required_missing.append("gender")
+
+    if required_missing:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Missing required profile fields: {', '.join(required_missing)}",
+        )
+
+    current_staff.updated_at = datetime.utcnow()
+    db.add(
+        StaffAuditLog(
+            actor_id=int(current_staff.id),
+            action="staff.profile.updated",
+            entity="staff_users",
+            entity_id=str(current_staff.id),
+            details={"fields": [k for k, v in payload.model_dump().items() if v is not None]},
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent") if request.headers else None,
+            created_at=datetime.utcnow(),
+        )
+    )
+    db.commit()
+    db.refresh(current_staff)
+    return get_my_profile(db=db, current_staff=current_staff)
+
+
+@router.post("/staff/profile/avatar", response_model=dict)
+def upload_profile_avatar(
+    request: Request,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(get_current_staff_user),
+):
+    content_type = (file.content_type or "").lower()
+    if not content_type.startswith("image/"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported file type")
+    extension = os.path.splitext(file.filename or "")[1].lower()
+    if extension not in {".jpg", ".jpeg", ".png", ".webp"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported image type")
+
+    from ...core.config import settings  # local import to avoid circular imports
+
+    subdir = os.path.join(settings.uploads_dir, "profiles")
+    os.makedirs(subdir, exist_ok=True)
+    filename = f"{uuid.uuid4().hex}{extension}"
+    destination = os.path.join(subdir, filename)
+    with open(destination, "wb") as target:
+        target.write(file.file.read())
+
+    base_url = str(request.base_url).rstrip("/")
+    url = f"{base_url}/uploads/profiles/{filename}"
+    current_staff.avatar_url = url
+    current_staff.updated_at = datetime.utcnow()
+
+    db.add(
+        StaffAuditLog(
+            actor_id=int(current_staff.id),
+            action="staff.profile.avatar_uploaded",
+            entity="staff_users",
+            entity_id=str(current_staff.id),
+            details={"avatar_url": url},
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent") if request.headers else None,
+            created_at=datetime.utcnow(),
+        )
+    )
+    db.commit()
+    return {"ok": True, "avatar_url": url}
 
 
 @router.post("/staff/users/{user_id}/roles", response_model=dict)
