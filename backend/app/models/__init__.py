@@ -10,6 +10,9 @@ from .staff_permission import StaffPermission  # noqa: F401
 from .staff_audit_log import StaffAuditLog  # noqa: F401
 from .staff_time_entry import StaffTimeEntry  # noqa: F401
 from .staff_work_log import StaffWorkLog  # noqa: F401
+from .staff_assigned_task import StaffAssignedTask  # noqa: F401
+from .staff_role_milestone import StaffRoleMilestone  # noqa: F401
+from .staff_milestone_progress import StaffMilestoneProgress  # noqa: F401
 from .staff_library_item import StaffLibraryItem  # noqa: F401
 from .staff_ticket import StaffTicket, StaffTicketMessage  # noqa: F401
 from .staff_expense import StaffExpense  # noqa: F401
