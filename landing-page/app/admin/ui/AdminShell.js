@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { adminFetch, clearAdminTokens, getAdminAccessToken, getAdminRefreshToken } from '../lib/adminAuth';
 
 export default function AdminShell({ children }) {
@@ -18,6 +18,33 @@ export default function AdminShell({ children }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [session, setSession] = useState(null);
   const [sessionLoading, setSessionLoading] = useState(false);
+  const [navSectionOpen, setNavSectionOpen] = useState({});
+
+  const loadSession = useCallback(async () => {
+    if (isPublicRoute) return;
+
+    const token = getAdminAccessToken();
+    if (!token) {
+      router.push('/admin');
+      return;
+    }
+
+    setSessionLoading(true);
+    try {
+      const response = await adminFetch(`${API_URL}/api/admin/me`);
+      if (response.status === 401) {
+        clearAdminTokens();
+        router.push('/admin');
+        return;
+      }
+      const data = await response.json();
+      setSession(data);
+    } catch {
+      setSession(null);
+    } finally {
+      setSessionLoading(false);
+    }
+  }, [API_URL, isPublicRoute, router]);
 
   useEffect(() => {
     // Persist the desktop collapsed state for a more "app-like" feel.
@@ -28,6 +55,25 @@ export default function AdminShell({ children }) {
       // Ignore storage failures (private mode / blocked storage).
     }
   }, []);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('adminNavSectionOpen');
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') setNavSectionOpen(parsed);
+    } catch {
+      // Ignore.
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('adminNavSectionOpen', JSON.stringify(navSectionOpen || {}));
+    } catch {
+      // Ignore.
+    }
+  }, [navSectionOpen]);
 
   useEffect(() => {
     try {
@@ -43,38 +89,15 @@ export default function AdminShell({ children }) {
   }, [pathname]);
 
   useEffect(() => {
+    loadSession();
+  }, [loadSession]);
+
+  useEffect(() => {
     if (isPublicRoute) return undefined;
-
-    const token = getAdminAccessToken();
-    if (!token) {
-      router.push('/admin');
-      return undefined;
-    }
-
-    let cancelled = false;
-    const load = async () => {
-      setSessionLoading(true);
-      try {
-        const response = await adminFetch(`${API_URL}/api/admin/me`);
-        if (response.status === 401) {
-          clearAdminTokens();
-          router.push('/admin');
-          return;
-        }
-        const data = await response.json();
-        if (!cancelled) setSession(data);
-      } catch {
-        // If we can't load session, keep UI but user may see 401s inside pages.
-        if (!cancelled) setSession(null);
-      } finally {
-        if (!cancelled) setSessionLoading(false);
-      }
-    };
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [isPublicRoute, router]);
+    const handler = () => loadSession();
+    window.addEventListener('admin-profile-updated', handler);
+    return () => window.removeEventListener('admin-profile-updated', handler);
+  }, [isPublicRoute, loadSession]);
 
   useEffect(() => {
     if (!sidebarOpen) return undefined;
@@ -121,52 +144,140 @@ export default function AdminShell({ children }) {
   const toggleSidebar = () => setSidebarOpen((open) => !open);
   const toggleCollapsed = () => setSidebarCollapsed((collapsed) => !collapsed);
 
+  const firstName = useMemo(() => {
+    const full = String(session?.full_name || '').trim();
+    if (!full) return '';
+    const first = full.split(/\s+/).filter(Boolean)[0] || '';
+    return first.slice(0, 60);
+  }, [session?.full_name]);
+
+  const profileIncomplete = useMemo(() => {
+    const full = String(session?.full_name || '').trim();
+    const country = String(session?.country || '').trim();
+    const address = String(session?.address || '').trim();
+    const phone = String(session?.phone_number || '').trim();
+    const gender = String(session?.gender || '').trim();
+    return !full || !country || !address || !phone || !gender;
+  }, [session?.address, session?.country, session?.full_name, session?.gender, session?.phone_number]);
+
+  const navSections = useMemo(() => {
+    const permissions = Array.isArray(session?.permissions) ? session.permissions : [];
+    const roles = Array.isArray(session?.roles) ? session.roles : [];
+    const isAdmin = permissions.includes('*') || permissions.includes('admin.manage') || roles.includes('admin');
+    const canSeeUpdatesMenu = isAdmin || roles.includes('hr');
+
+    const hasPermission = (required) => {
+      if (!required) return true;
+      if (permissions.includes('*')) return true;
+      if (Array.isArray(required)) return required.some((r) => permissions.includes(r));
+      return permissions.includes(required);
+    };
+
+    const sections = [
+      {
+        id: 'staff',
+        label: 'Staff',
+        defaultOpen: true,
+        items: [
+          { href: isAdmin ? '/admin/admin-dashboard' : '/admin/dashboard', label: 'Dashboard', icon: 'D' },
+          { href: '/admin/profile', label: 'My Profile', icon: 'ME' },
+          ...(canSeeUpdatesMenu ? [{ href: '/admin/updates', label: 'Updates', icon: 'UP', perm: 'intranet_updates.read' }] : []),
+          { href: '/admin/attendance', label: 'Clock In/Out', icon: 'CI' },
+          { href: '/admin/work-logs', label: 'Work Logs', icon: 'WL' },
+          { href: '/admin/work-plans', label: 'Work Plans', icon: 'WP', perm: 'work_logs.manage' },
+          { href: '/admin/milestones', label: 'Milestones', icon: 'MS', perm: 'work_logs.manage' },
+          { href: '/admin/help', label: 'Help', icon: '?' },
+          { href: '/admin/library', label: 'Library', icon: 'LB' },
+          { href: '/admin/inbox', label: 'Inbox', icon: 'IN', perm: 'notifications.read' },
+          { href: '/admin/my-payroll', label: 'My Payroll', icon: '$', perm: 'payroll.read_own' },
+        ],
+      },
+      {
+        id: 'ops',
+        label: 'Operations',
+        defaultOpen: isAdmin,
+        items: [
+          { href: '/admin/reports', label: 'Reports', icon: 'RP', perm: 'reports.read' },
+          { href: '/admin/payroll', label: 'Payroll', icon: 'PR', perm: 'payroll.manage' },
+          { href: '/admin/staff', label: 'Staff', icon: 'ST', perm: 'staff.manage' },
+          { href: '/admin/expenses', label: 'Expenses', icon: 'EX', perm: 'expenses.read' },
+          { href: '/admin/audit', label: 'Audit Log', icon: 'AL', perm: 'admin.manage' },
+        ],
+      },
+      {
+        id: 'content',
+        label: 'Content',
+        defaultOpen: isAdmin,
+        items: [
+          { href: '/admin/users', label: 'Users', icon: 'U', perm: 'users.read' },
+          { href: '/admin/recipes', label: 'Recipes', icon: 'R', perm: 'recipes.write' },
+          { href: '/admin/recipes/new', label: 'New Recipe', icon: '+', perm: 'recipes.write' },
+          { href: '/admin/tips', label: 'Daily Tips', icon: 'T', perm: 'tips.write' },
+          { href: '/admin/challenge', label: 'Daily Challenge', icon: 'C', perm: 'challenge.write' },
+          { href: '/admin/blog', label: 'Blog', icon: 'B', perm: ['blog.read', 'blog.write', 'blog.publish'] },
+          { href: '/admin/blog/new', label: 'New Post', icon: '+', perm: ['blog.write', 'blog.publish'] },
+          { href: '/admin/blog/comments', label: 'Comments', icon: 'M', perm: ['blog.read', 'blog.write', 'blog.publish'] },
+        ],
+      },
+      {
+        id: 'marketing',
+        label: 'Marketing',
+        defaultOpen: isAdmin,
+        items: [
+          { href: '/admin/newsletter', label: 'Newsletter', icon: 'N', perm: 'newsletter.send' },
+          { href: '/admin/newsletter/send', label: 'Send Email', icon: 'S', perm: 'newsletter.send' },
+          { href: '/admin/user-email', label: 'User Email', icon: 'E', perm: 'email.send' },
+          { href: '/admin/notifications', label: 'Notifications', icon: '!', perm: 'push.send' },
+          { href: '/admin/push-campaigns', label: 'Push Campaigns', icon: 'PN', perm: 'push.send' },
+        ],
+      },
+      {
+        id: 'engineering',
+        label: 'Engineering',
+        defaultOpen: false,
+        items: [
+          { href: '/admin/system-health', label: 'System Health', icon: 'H', perm: 'system.read' },
+          { href: '/admin/system-logs', label: 'System Logs', icon: 'L', perm: 'logs.read' },
+          { href: '/admin/mobile-logs', label: 'Mobile Logs', icon: 'P', perm: 'logs.read' },
+          { href: '/admin/db-backups', label: 'Database Backups', icon: 'DB', perm: 'backups.run' },
+        ],
+      },
+    ];
+
+    const cleaned = sections
+      .map((s) => ({
+        ...s,
+        items: (s.items || []).filter((item) => hasPermission(item.perm)),
+      }))
+      .filter((s) => (s.items || []).length > 0);
+
+    return cleaned;
+  }, [session]);
+
+  useEffect(() => {
+    if (!navSections.length) return;
+    setNavSectionOpen((prev) => {
+      const next = { ...(prev || {}) };
+      const activeId = navSections.find((s) => (s.items || []).some((i) => i.href === pathname))?.id || null;
+      let changed = false;
+
+      for (const s of navSections) {
+        if (typeof next[s.id] === 'boolean') continue;
+        next[s.id] = s.id === activeId ? true : Boolean(s.defaultOpen);
+        changed = true;
+      }
+
+      return changed ? next : prev;
+    });
+  }, [navSections, pathname]);
+
+  const toggleSection = (id) => {
+    setNavSectionOpen((prev) => ({ ...(prev || {}), [id]: !(prev || {})[id] }));
+  };
+
   if (isPublicRoute) {
     return <div className="admin-shell">{children}</div>;
   }
-
-  const permissions = Array.isArray(session?.permissions) ? session.permissions : [];
-  const roles = Array.isArray(session?.roles) ? session.roles : [];
-  const isAdmin = permissions.includes('*') || permissions.includes('admin.manage') || roles.includes('admin');
-  const hasPermission = (required) => {
-    if (!required) return true;
-    if (permissions.includes('*')) return true;
-    if (Array.isArray(required)) return required.some((r) => permissions.includes(r));
-    return permissions.includes(required);
-  };
-
-  const navItems = [
-    { href: isAdmin ? '/admin/admin-dashboard' : '/admin/dashboard', label: 'Dashboard', icon: 'D' },
-    { href: '/admin/updates', label: 'Updates', icon: 'UP', perm: 'intranet_updates.read' },
-    { href: '/admin/inbox', label: 'Inbox', icon: 'IN', perm: 'notifications.read' },
-    { href: '/admin/attendance', label: 'Clock In/Out', icon: 'CI' },
-    { href: '/admin/work-logs', label: 'Work Logs', icon: 'WL' },
-    { href: '/admin/library', label: 'Library', icon: 'LB' },
-    { href: '/admin/my-payroll', label: 'My Payroll', icon: '$', perm: 'payroll.read_own' },
-    { href: '/admin/help', label: 'Help', icon: '?' },
-    { href: '/admin/reports', label: 'Reports', icon: 'RP', perm: 'reports.read' },
-    { href: '/admin/payroll', label: 'Payroll', icon: 'PR', perm: 'payroll.manage' },
-    { href: '/admin/users', label: 'Users', icon: 'U', perm: 'users.read' },
-    { href: '/admin/recipes', label: 'Recipes', icon: 'R', perm: 'recipes.write' },
-    { href: '/admin/recipes/new', label: 'New Recipe', icon: '+', perm: 'recipes.write' },
-    { href: '/admin/tips', label: 'Daily Tips', icon: 'T', perm: 'tips.write' },
-    { href: '/admin/challenge', label: 'Daily Challenge', icon: 'C', perm: 'challenge.write' },
-    { href: '/admin/blog', label: 'Blog', icon: 'B', perm: ['blog.read', 'blog.write', 'blog.publish'] },
-    { href: '/admin/blog/new', label: 'New Post', icon: '+', perm: ['blog.write', 'blog.publish'] },
-    { href: '/admin/blog/comments', label: 'Comments', icon: 'M', perm: ['blog.read', 'blog.write', 'blog.publish'] },
-    { href: '/admin/newsletter', label: 'Newsletter', icon: 'N', perm: 'newsletter.send' },
-    { href: '/admin/newsletter/send', label: 'Send Email', icon: 'S', perm: 'newsletter.send' },
-    { href: '/admin/user-email', label: 'User Email', icon: 'E', perm: 'email.send' },
-    { href: '/admin/notifications', label: 'Notifications', icon: '!', perm: 'push.send' },
-    { href: '/admin/push-campaigns', label: 'Push Campaigns', icon: 'PN', perm: 'push.send' },
-    { href: '/admin/system-health', label: 'System Health', icon: 'H', perm: 'system.read' },
-    { href: '/admin/system-logs', label: 'System Logs', icon: 'L', perm: 'logs.read' },
-    { href: '/admin/mobile-logs', label: 'Mobile Logs', icon: 'P', perm: 'logs.read' },
-    { href: '/admin/db-backups', label: 'Database Backups', icon: 'DB', perm: 'backups.run' },
-    { href: '/admin/staff', label: 'Staff', icon: 'ST', perm: 'staff.manage' },
-    { href: '/admin/expenses', label: 'Expenses', icon: 'EX', perm: 'expenses.read' },
-    { href: '/admin/audit', label: 'Audit Log', icon: 'AL', perm: 'admin.manage' },
-  ].filter((item) => hasPermission(item.perm));
 
   return (
     <div className="admin-shell">
@@ -217,21 +328,43 @@ export default function AdminShell({ children }) {
               </svg>
             </button>
           </div>
-          <nav className="admin-nav">
-            {navItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={pathname === item.href ? 'active' : ''}
-                onClick={closeSidebar}
-                title={item.label}
-              >
-                <span className="admin-nav-icon" aria-hidden="true">
-                  {item.icon}
-                </span>
-                <span className="admin-nav-label">{item.label}</span>
-              </Link>
-            ))}
+          <nav className="admin-nav" aria-label="Admin navigation">
+            {navSections.map((section) => {
+              const open = Boolean(navSectionOpen?.[section.id]);
+              return (
+                <div key={section.id} className="admin-nav-section">
+                  <button
+                    type="button"
+                    className="admin-nav-section-toggle"
+                    onClick={() => toggleSection(section.id)}
+                    aria-expanded={open}
+                  >
+                    <span className="admin-nav-section-title">{section.label}</span>
+                    <span className="admin-nav-section-chevron" aria-hidden="true">
+                      {open ? '▾' : '▸'}
+                    </span>
+                  </button>
+                  {open ? (
+                    <div className="admin-nav-section-items">
+                      {section.items.map((item) => (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          className={pathname === item.href ? 'active' : ''}
+                          onClick={closeSidebar}
+                          title={item.label}
+                        >
+                          <span className="admin-nav-icon" aria-hidden="true">
+                            {item.icon}
+                          </span>
+                          <span className="admin-nav-label">{item.label}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
           </nav>
           <button className="admin-button secondary" type="button" onClick={handleLogout}>
             Log out
@@ -264,13 +397,23 @@ export default function AdminShell({ children }) {
               </svg>
             </button>
             <h1>GlucoForager Admin</h1>
-            <p>
+            <p className="admin-signed-in-pill">
               {sessionLoading
                 ? 'Loading staff session...'
                 : session?.email
-                  ? `Signed in as ${session.email}`
+                  ? firstName
+                    ? `Signed in as ${firstName} (${session.email})`
+                    : `Signed in as ${session.email}`
                   : 'Manage recipes, blog posts, and moderation.'}
             </p>
+            {!sessionLoading && session?.email && profileIncomplete ? (
+              <div className="admin-alert warning" style={{ marginTop: 10 }}>
+                Your profile is incomplete — please update it now (urgent).{' '}
+                <Link className="admin-link" href="/admin/profile">
+                  Update profile
+                </Link>
+              </div>
+            ) : null}
           </header>
           {children}
         </main>
