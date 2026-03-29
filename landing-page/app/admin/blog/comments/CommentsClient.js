@@ -172,7 +172,7 @@ export default function CommentsClient() {
             </select>
             <button
               type="button"
-              className="admin-button admin-add-button"
+              className="admin-button info"
               onClick={() => load(1, statusFilter)}
               disabled={isLoading}
             >
