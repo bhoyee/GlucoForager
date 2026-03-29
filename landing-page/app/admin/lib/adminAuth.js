@@ -22,7 +22,7 @@ export function clearAdminTokens() {
   localStorage.removeItem('adminRefreshToken');
 }
 
-export async function refreshAdminAccessToken() {
+export async function refreshAdminAccessToken(options = {}) {
   const refreshToken = getAdminRefreshToken();
   if (!refreshToken) return null;
   try {
@@ -30,6 +30,7 @@ export async function refreshAdminAccessToken() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refresh_token: refreshToken }),
+      signal: options.signal,
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data?.access_token) return null;
@@ -47,10 +48,9 @@ export async function adminFetch(url, options = {}) {
   const first = await fetch(url, { ...options, headers });
   if (first.status !== 401) return first;
 
-  const refreshed = await refreshAdminAccessToken();
+  const refreshed = await refreshAdminAccessToken({ signal: options.signal });
   if (!refreshed) return first;
 
   const headers2 = { ...(options.headers || {}), Authorization: `Bearer ${refreshed}` };
   return fetch(url, { ...options, headers: headers2 });
 }
-
