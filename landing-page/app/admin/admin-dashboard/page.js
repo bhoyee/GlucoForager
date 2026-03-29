@@ -3,12 +3,13 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import LoadingState from '../ui/LoadingState';
+import EmptyState from '../ui/EmptyState';
 import { adminFetch, clearAdminTokens } from '../lib/adminAuth';
-import StaffDashboard from './StaffDashboard';
+import AdminKPIDashboard from '../dashboard/AdminKPIDashboard';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
-export default function DashboardPage() {
+export default function AdminDashboardPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState(null);
@@ -50,14 +51,18 @@ export default function DashboardPage() {
   const perms = Array.isArray(session?.permissions) ? session.permissions : [];
   const isAdmin = perms.includes('*') || perms.includes('admin.manage') || roles.includes('admin');
 
-  if (isAdmin) {
-    router.push('/admin/admin-dashboard');
+  if (!isAdmin) {
     return (
       <div className="admin-card">
-        <LoadingState label="Redirectingâ€¦" />
+        <EmptyState title="Admin only" body="This dashboard is only available to admin users.">
+          <button className="admin-button secondary" type="button" onClick={() => router.push('/admin/dashboard')}>
+            Go to staff dashboard
+          </button>
+        </EmptyState>
       </div>
     );
   }
 
-  return <StaffDashboard />;
+  return <AdminKPIDashboard />;
 }
+
