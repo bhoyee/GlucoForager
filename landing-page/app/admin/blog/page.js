@@ -120,7 +120,7 @@ export default function AdminBlogPostsPage() {
           <div className="admin-toolbar-actions">
             <button
               type="button"
-              className="admin-button admin-add-button"
+              className="admin-button info"
               onClick={() => load(1, q, statusFilter)}
               disabled={isLoading}
             >
