@@ -115,6 +115,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [me, setMe] = useState(null);
+  const [todayLabel, setTodayLabel] = useState('');
 
   const [attendanceMonth, setAttendanceMonth] = useState([]);
   const [week, setWeek] = useState(null);
@@ -129,6 +130,23 @@ export default function AdminDashboard() {
   const currentYear = useMemo(() => Number(todayUtcISO.slice(0, 4)), [todayUtcISO]);
   const currentMonth = useMemo(() => Number(todayUtcISO.slice(5, 7)), [todayUtcISO]);
   const weekStartISO = useMemo(() => startOfWeekUtcISO(todayUtcISO), [todayUtcISO]);
+
+  useEffect(() => {
+    // Avoid hydration mismatches due to server/client locale differences.
+    try {
+      const dt = new Date(`${todayUtcISO}T00:00:00Z`);
+      setTodayLabel(
+        dt.toLocaleDateString(undefined, {
+          weekday: 'long',
+          month: 'long',
+          day: 'numeric',
+          timeZone: 'UTC',
+        })
+      );
+    } catch {
+      setTodayLabel(todayUtcISO);
+    }
+  }, [todayUtcISO]);
 
   const safeJson = useCallback(
     async (url) => {
@@ -344,8 +362,8 @@ export default function AdminDashboard() {
             </div>
             <div className="admin-dashboard-meta-item">
               <div className="admin-dashboard-meta-label">Today</div>
-              <div className="admin-dashboard-meta-value">
-                {new Date(`${todayUtcISO}T00:00:00Z`).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
+              <div className="admin-dashboard-meta-value" suppressHydrationWarning>
+                {todayLabel || '—'}
               </div>
             </div>
           </div>
@@ -570,4 +588,3 @@ export default function AdminDashboard() {
     </div>
   );
 }
-
