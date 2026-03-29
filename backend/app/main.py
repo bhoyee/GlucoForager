@@ -26,6 +26,7 @@ from .api.endpoints import (
     admin_work_logs,
     admin_library,
     admin_help,
+    admin_intranet_updates,
     admin_staff_notifications,
     admin_audit,
     admin_payroll,
@@ -83,6 +84,7 @@ from .models import (  # ensure models are registered with SQLAlchemy
     push_token,
     admin_push_campaign,
     admin_push_send,
+    staff_intranet_update,
     staff_compensation,
     payroll_run,
     payroll_item,
@@ -448,6 +450,7 @@ app.include_router(admin_attendance.router, prefix="/api")
 app.include_router(admin_work_logs.router, prefix="/api")
 app.include_router(admin_library.router, prefix="/api")
 app.include_router(admin_help.router, prefix="/api")
+app.include_router(admin_intranet_updates.router, prefix="/api")
 app.include_router(admin_staff_notifications.router, prefix="/api")
 app.include_router(admin_audit.router, prefix="/api")
 app.include_router(admin_payroll.router, prefix="/api")
