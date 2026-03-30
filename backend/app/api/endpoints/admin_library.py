@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
@@ -14,6 +13,7 @@ from ...database import get_db
 from ...models.staff_audit_log import StaffAuditLog
 from ...models.staff_library_item import StaffLibraryItem
 from ...models.staff_user import StaffUser
+from ...services.library_storage_service import store_library_upload
 from ...services.staff_rbac_service import StaffRBACService
 
 
@@ -74,7 +74,7 @@ def list_library(
 
     if kind:
         kind_norm = str(kind).strip().lower()
-        if kind_norm not in {"document", "image"}:
+        if kind_norm not in {"document", "image", "video"}:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid kind")
         query = query.filter(StaffLibraryItem.kind == kind_norm)
 
@@ -151,34 +151,41 @@ def upload_to_library(
     db: Session = Depends(get_db),
     current_staff: StaffUser = Depends(require_staff_permission("library.upload")),
 ):
-    content_type = (file.content_type or "").lower()
-    is_image = content_type.startswith("image/")
+    content_type = (file.content_type or "").lower().strip()
+    extension = os.path.splitext(file.filename or "")[1].lower().strip()
+
+    is_image = content_type.startswith("image/") or extension in {".jpg", ".jpeg", ".png", ".webp"}
+    is_video = content_type == "video/mp4" or extension == ".mp4"
+    is_pdf = content_type == "application/pdf" or extension == ".pdf"
     allowed_docs = {
         "application/pdf",
-        "application/msword",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     }
-    if not is_image and content_type not in allowed_docs:
+    if not is_image and not is_video and not is_pdf and content_type not in allowed_docs:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported file type")
 
-    extension = os.path.splitext(file.filename or "")[1].lower()
     if is_image and extension not in {".jpg", ".jpeg", ".png", ".webp"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported image type")
-    if (not is_image) and extension not in {".pdf", ".doc", ".docx"}:
+    if is_video and extension != ".mp4":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported video type")
+    if (not is_image) and (not is_video) and extension != ".pdf":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported document type")
 
-    subdir = os.path.join(settings.uploads_dir, "library")
-    os.makedirs(subdir, exist_ok=True)
-    filename = f"{uuid.uuid4().hex}{extension}"
-    destination = os.path.join(subdir, filename)
-    with open(destination, "wb") as target:
-        target.write(file.file.read())
+    try:
+        stored = store_library_upload(file)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Upload failed")
 
-    base_url = str(request.base_url).rstrip("/")
-    url = f"{base_url}/uploads/library/{filename}"
+    url = stored.url
+    if url.startswith("/"):
+        base_url = str(request.base_url).rstrip("/")
+        url = f"{base_url}{url}"
     item = StaffLibraryItem(
         staff_user_id=current_staff.id,
-        kind="image" if is_image else "document",
+        kind=stored.kind,
         folder=_normalize_folder(folder) or "general",
         title=title.strip()[:160] or (file.filename or "Untitled")[:160],
         url=url,
