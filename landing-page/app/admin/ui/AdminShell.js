@@ -20,6 +20,7 @@ export default function AdminShell({ children }) {
   const [sessionLoading, setSessionLoading] = useState(false);
   const [navSectionOpen, setNavSectionOpen] = useState({});
   const [helpUnreadCount, setHelpUnreadCount] = useState(0);
+  const [inboxUnreadCount, setInboxUnreadCount] = useState(0);
 
   const loadSession = useCallback(async () => {
     if (isPublicRoute) return;
@@ -65,6 +66,34 @@ export default function AdminShell({ children }) {
       const data = await response.json().catch(() => ({}));
       const items = Array.isArray(data?.items) ? data.items : [];
       setHelpUnreadCount(items.length);
+    } catch {
+      // ignore
+    }
+  }, [API_URL, isPublicRoute, session?.permissions]);
+
+  const loadInboxUnreadCount = useCallback(async () => {
+    if (isPublicRoute) return;
+    const token = getAdminAccessToken();
+    if (!token) return;
+
+    const permissions = Array.isArray(session?.permissions) ? session.permissions : [];
+    const canReadInbox = permissions.includes('*') || permissions.includes('notifications.read');
+    if (!canReadInbox) {
+      setInboxUnreadCount(0);
+      return;
+    }
+
+    try {
+      const [notifRes, mailRes] = await Promise.all([
+        adminFetch(`${API_URL}/api/admin/staff-notifications?unread_only=1&limit=200`),
+        adminFetch(`${API_URL}/api/admin/inbox/messages?box=inbox&unread_only=1&limit=200`),
+      ]);
+      if (notifRes.status === 401 || mailRes.status === 401) return;
+      const notifData = await notifRes.json().catch(() => ({}));
+      const mailData = await mailRes.json().catch(() => ({}));
+      const notifItems = Array.isArray(notifData?.items) ? notifData.items : [];
+      const mailItems = Array.isArray(mailData?.items) ? mailData.items : [];
+      setInboxUnreadCount(notifItems.length + mailItems.length);
     } catch {
       // ignore
     }
@@ -121,6 +150,10 @@ export default function AdminShell({ children }) {
   }, [loadHelpUnreadCount, pathname]);
 
   useEffect(() => {
+    loadInboxUnreadCount();
+  }, [loadInboxUnreadCount, pathname]);
+
+  useEffect(() => {
     if (isPublicRoute) return undefined;
     const handler = () => loadHelpUnreadCount();
     window.addEventListener('admin-help-notifications-updated', handler);
@@ -129,9 +162,36 @@ export default function AdminShell({ children }) {
 
   useEffect(() => {
     if (isPublicRoute) return undefined;
+    const handler = () => loadInboxUnreadCount();
+    window.addEventListener('admin-inbox-updated', handler);
+    return () => window.removeEventListener('admin-inbox-updated', handler);
+  }, [isPublicRoute, loadInboxUnreadCount]);
+
+  useEffect(() => {
+    if (isPublicRoute) return undefined;
     const timer = setInterval(() => loadHelpUnreadCount(), 20_000);
     return () => clearInterval(timer);
   }, [isPublicRoute, loadHelpUnreadCount]);
+
+  useEffect(() => {
+    if (isPublicRoute) return undefined;
+    const timer = setInterval(() => loadInboxUnreadCount(), 12_000);
+    return () => clearInterval(timer);
+  }, [isPublicRoute, loadInboxUnreadCount]);
+
+  useEffect(() => {
+    if (isPublicRoute) return undefined;
+    const handler = () => {
+      if (document.visibilityState !== 'visible') return;
+      loadInboxUnreadCount();
+    };
+    document.addEventListener('visibilitychange', handler);
+    window.addEventListener('focus', handler);
+    return () => {
+      document.removeEventListener('visibilitychange', handler);
+      window.removeEventListener('focus', handler);
+    };
+  }, [isPublicRoute, loadInboxUnreadCount]);
 
   useEffect(() => {
     if (isPublicRoute) return undefined;
@@ -408,6 +468,11 @@ export default function AdminShell({ children }) {
                           {item.href === '/admin/help' && helpUnreadCount > 0 ? (
                             <span className="admin-badge danger" style={{ marginLeft: 'auto' }}>
                               {helpUnreadCount}
+                            </span>
+                          ) : null}
+                          {item.href === '/admin/inbox' && inboxUnreadCount > 0 ? (
+                            <span className="admin-badge danger" style={{ marginLeft: 'auto' }}>
+                              {inboxUnreadCount}
                             </span>
                           ) : null}
                         </Link>
