@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import LoadingState from './ui/LoadingState';
-import { clearAdminTokens, setAdminTokens } from './lib/adminAuth';
+import { adminFetch, clearAdminTokens, setAdminTokens } from './lib/adminAuth';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 const ENABLE_BOOTSTRAP = process.env.NEXT_PUBLIC_ENABLE_ADMIN_BOOTSTRAP === 'true';
@@ -49,6 +49,24 @@ export default function AdminLoginPage() {
     checkStatus();
   }, []);
 
+  const redirectAfterLogin = async () => {
+    try {
+      const res = await adminFetch(`${API_URL}/api/admin/me`);
+      if (res.ok) {
+        const me = await res.json().catch(() => ({}));
+        const perms = Array.isArray(me?.permissions) ? me.permissions : [];
+        const roles = Array.isArray(me?.roles) ? me.roles : [];
+        const isAdmin = perms.includes('*') || perms.includes('admin.manage') || roles.includes('admin');
+        router.push(isAdmin ? '/admin/admin-dashboard' : '/admin/dashboard');
+        return;
+      }
+    } catch {
+      // Ignore and fall back.
+    }
+
+    router.push('/admin/dashboard');
+  };
+
   const dismissMessage = () => {
     setMessage('');
     setMessageTone('info');
@@ -85,7 +103,7 @@ export default function AdminLoginPage() {
           throw new Error(data.detail || 'Unable to verify code.');
         }
         setAdminTokens({ accessToken: data.access_token, refreshToken: data.refresh_token });
-        router.push('/admin/dashboard');
+        await redirectAfterLogin();
         return;
       }
 
@@ -117,7 +135,7 @@ export default function AdminLoginPage() {
       }
 
       setAdminTokens({ accessToken: data.access_token, refreshToken: data.refresh_token });
-      router.push('/admin/dashboard');
+      await redirectAfterLogin();
     } catch (error) {
       setMessageTone('danger');
       setMessage(error?.message || 'Something went wrong.');
@@ -239,7 +257,18 @@ export default function AdminLoginPage() {
 
               <div className="admin-actions" style={{ alignItems: 'center' }}>
                 <button className="admin-button" type="submit" disabled={isSubmitting || statusLoading || (hasAdmin === false && !ENABLE_BOOTSTRAP)}>
-                  {isSubmitting ? 'Please wait…' : mfaRequired ? 'Verify' : hasAdmin ? 'Sign in' : 'Create admin'}
+                  {isSubmitting ? (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                      <span className="admin-spinner" aria-hidden="true" style={{ borderTopColor: 'rgba(255,255,255,0.95)', borderColor: 'rgba(255,255,255,0.35)' }} />
+                      {mfaRequired ? 'Verifying…' : 'Signing in…'}
+                    </span>
+                  ) : mfaRequired ? (
+                    'Verify'
+                  ) : hasAdmin ? (
+                    'Sign in'
+                  ) : (
+                    'Create admin'
+                  )}
                 </button>
 
                 {hasAdmin && !mfaRequired ? (
@@ -261,4 +290,3 @@ export default function AdminLoginPage() {
     </div>
   );
 }
-
