@@ -31,6 +31,25 @@ function kindLabel(item) {
   return 'PDF';
 }
 
+function categoryLabel(item) {
+  const f = String(item?.folder || '').trim().toLowerCase();
+  if (!f || f === 'general') return 'General';
+  if (f === 'hr') return 'HR';
+  return f.charAt(0).toUpperCase() + f.slice(1);
+}
+
+function categoryOptions() {
+  return [
+    { value: '', label: 'All categories' },
+    { value: 'general', label: 'General' },
+    { value: 'marketing', label: 'Marketing' },
+    { value: 'hr', label: 'HR' },
+    { value: 'support', label: 'Support' },
+    { value: 'designer', label: 'Designer' },
+    { value: 'developer', label: 'Developer' },
+  ];
+}
+
 function formatDateTime(iso) {
   if (!iso) return '—';
   const d = new Date(String(iso));
@@ -59,6 +78,7 @@ export default function LibraryPage() {
   const canUpload = permissions.includes('*') || permissions.includes('library.upload');
 
   const [kind, setKind] = useState(''); // '' | image | document | video
+  const [category, setCategory] = useState(''); // '' (all) | general | hr | marketing | ...
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [includeDeleted, setIncludeDeleted] = useState(false);
@@ -101,6 +121,7 @@ export default function LibraryPage() {
     try {
       const params = new URLSearchParams();
       if (kind) params.set('kind', kind);
+      if (category) params.set('folder', category);
       if (debouncedQuery) params.set('q', debouncedQuery);
       if (includeDeleted && isAdmin) params.set('include_deleted', '1');
 
@@ -136,7 +157,7 @@ export default function LibraryPage() {
 
   useEffect(() => {
     load();
-  }, [token, kind, includeDeleted, isAdmin, debouncedQuery]);
+  }, [token, kind, category, includeDeleted, isAdmin, debouncedQuery]);
 
   const softDelete = async (id) => {
     if (!token) return;
@@ -194,6 +215,13 @@ export default function LibraryPage() {
             <input className="admin-search-input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search files by name or tag…" />
           </div>
           <div className="admin-toolbar-filters">
+            <select className="admin-filter-select" value={category} onChange={(e) => setCategory(e.target.value)}>
+              {categoryOptions().map((o) => (
+                <option key={o.value || 'all'} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
             <select className="admin-filter-select" value={kind} onChange={(e) => setKind(e.target.value)}>
               <option value="">All types</option>
               <option value="image">Images</option>
@@ -255,6 +283,15 @@ export default function LibraryPage() {
                 accessor: (r) => kindLabel(r),
                 render: (r) => <span className="admin-badge secondary">{kindLabel(r)}</span>,
                 sortValue: (r) => kindLabel(r),
+              },
+              {
+                key: 'folder',
+                header: 'Category',
+                sortable: true,
+                filterable: false,
+                accessor: (r) => categoryLabel(r),
+                render: (r) => <span className="admin-badge secondary">{categoryLabel(r)}</span>,
+                sortValue: (r) => categoryLabel(r),
               },
               {
                 key: 'created_at',

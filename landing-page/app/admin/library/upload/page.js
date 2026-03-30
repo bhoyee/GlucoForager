@@ -16,6 +16,23 @@ function folderForFile(file) {
   return 'general';
 }
 
+function normalizeCategory(value) {
+  const v = String(value || '').trim().toLowerCase();
+  if (!v) return 'general';
+  return v;
+}
+
+function categoryOptions() {
+  return [
+    { value: 'general', label: 'General' },
+    { value: 'marketing', label: 'Marketing' },
+    { value: 'hr', label: 'HR' },
+    { value: 'support', label: 'Support' },
+    { value: 'designer', label: 'Designer' },
+    { value: 'developer', label: 'Developer' },
+  ];
+}
+
 export default function LibraryUploadPage() {
   const router = useRouter();
   const token = useMemo(() => (typeof window === 'undefined' ? null : localStorage.getItem('adminToken')), []);
@@ -27,6 +44,7 @@ export default function LibraryUploadPage() {
   const [title, setTitle] = useState('');
   const [tags, setTags] = useState('');
   const [file, setFile] = useState(null);
+  const [category, setCategory] = useState('general');
   const [message, setMessage] = useState('');
   const [messageTone, setMessageTone] = useState('warning');
   const [loading, setLoading] = useState(true);
@@ -70,7 +88,7 @@ export default function LibraryUploadPage() {
       const form = new FormData();
       form.append('file', file);
       form.append('title', String(title || file.name).trim());
-      form.append('folder', folderForFile(file));
+      form.append('folder', normalizeCategory(category));
       if (tags && String(tags).trim()) form.append('tags', String(tags).trim());
 
       const res = await fetch(`${API_URL}/api/admin/library/upload`, {
@@ -90,6 +108,7 @@ export default function LibraryUploadPage() {
       setTitle('');
       setTags('');
       setFile(null);
+      setCategory('general');
     } catch (e) {
       setMessageTone('danger');
       setMessage(e?.message || 'Upload failed.');
@@ -133,13 +152,26 @@ export default function LibraryUploadPage() {
                     <label>Choose file</label>
                     <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
                     <p className="admin-subtitle" style={{ marginTop: 6 }}>
-                      Allowed: images (jpg/png/webp), PDF, MP4 video.
+                      Allowed: images (jpg/png/webp) â‰¤ 1MB, PDF â‰¤ 900KB, MP4 video â‰¤ 25MB.
                     </p>
                   </div>
                 </div>
 
                 <div className="admin-card admin-card--subtle admin-card--compact">
                   <h3 style={{ marginTop: 0 }}>Details</h3>
+                  <div className="admin-field">
+                    <label>Category</label>
+                    <select value={category} onChange={(e) => setCategory(e.target.value)}>
+                      {categoryOptions().map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="admin-subtitle" style={{ marginTop: 6 }}>
+                      This controls where the asset appears when staff filter the Library by category.
+                    </p>
+                  </div>
                   <div className="admin-field">
                     <label>Title</label>
                     <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Optional (defaults to file name)" />
