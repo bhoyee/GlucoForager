@@ -109,6 +109,9 @@ export default function LibraryPage() {
   const isAdmin = permissions.includes('*') || permissions.includes('admin.manage');
   const canRestore = isAdmin && (permissions.includes('*') || permissions.includes('library.delete_any'));
   const canUpload = permissions.includes('*') || permissions.includes('library.upload');
+  const canDeleteOwn = permissions.includes('*') || permissions.includes('library.delete_own') || permissions.includes('library.delete_any');
+  const canDeleteAny = permissions.includes('*') || permissions.includes('library.delete_any');
+  const myStaffId = session?.id ? Number(session.id) : null;
 
   const [kind, setKind] = useState(''); // '' | image | document | video
   const [category, setCategory] = useState(''); // '' (all) | general | hr | marketing | ...
@@ -128,6 +131,9 @@ export default function LibraryPage() {
   const [detailsTarget, setDetailsTarget] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsData, setDetailsData] = useState(null);
+  const [softDeleteTarget, setSoftDeleteTarget] = useState(null);
+  const [softDeleteReason, setSoftDeleteReason] = useState('');
+  const [softDeleteSubmitting, setSoftDeleteSubmitting] = useState(false);
   const debounceTimer = useRef(null);
 
   const loadSession = async () => {
@@ -205,6 +211,14 @@ export default function LibraryPage() {
     } finally {
       setDetailsLoading(false);
     }
+  };
+
+  const canSoftDeleteRow = (row) => {
+    if (!row || row.is_deleted) return false;
+    if (!canDeleteOwn) return false;
+    if (isAdmin && canDeleteAny) return true;
+    if (myStaffId === null) return false;
+    return Number(row.staff_user_id) === myStaffId;
   };
 
   const downloadItem = async (item) => {
@@ -287,11 +301,13 @@ export default function LibraryPage() {
     load();
   }, [token, kind, category, includeDeleted, isAdmin, debouncedQuery]);
 
-  const softDelete = async (id) => {
+  const softDelete = async (id, reason) => {
     if (!token) return;
     setMessage('');
+    setSoftDeleteSubmitting(true);
     try {
-      const res = await fetch(`${API_URL}/api/admin/library/items/${id}`, {
+      const qs = reason ? `?reason=${encodeURIComponent(String(reason || '').trim())}` : '';
+      const res = await fetch(`${API_URL}/api/admin/library/items/${id}${qs}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -305,6 +321,8 @@ export default function LibraryPage() {
       load();
     } catch (e) {
       setMessage(e?.message || 'Delete failed.');
+    } finally {
+      setSoftDeleteSubmitting(false);
     }
   };
 
@@ -520,9 +538,18 @@ export default function LibraryPage() {
                           Details
                         </button>
                       ) : null}
-                      <button className="admin-button danger" type="button" onClick={() => softDelete(r.id)}>
-                        Delete
-                      </button>
+                      {canSoftDeleteRow(r) ? (
+                        <button
+                          className="admin-button danger"
+                          type="button"
+                          onClick={() => {
+                            setSoftDeleteTarget(r);
+                            setSoftDeleteReason('');
+                          }}
+                        >
+                          Delete
+                        </button>
+                      ) : null}
                     </div>
                   ),
               },
@@ -668,12 +695,81 @@ export default function LibraryPage() {
                         <div className="admin-subtitle" style={{ marginTop: 6 }}>
                           By: <strong>{actorNameOnly(l.actor || `Staff #${l.actor_id || ''}`)}</strong>
                         </div>
+                        {l?.details?.reason ? (
+                          <div className="admin-subtitle" style={{ marginTop: 6 }}>
+                            Reason: <strong>{String(l.details.reason)}</strong>
+                          </div>
+                        ) : null}
                       </div>
                     ))}
                   </div>
                 )}
               </div>
             ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {softDeleteTarget ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => (softDeleteSubmitting ? null : setSoftDeleteTarget(null))}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+            zIndex: 1000,
+          }}
+        >
+          <div className="admin-card" onClick={(e) => e.stopPropagation()} style={{ width: 'min(560px, 96vw)', padding: 16 }}>
+            <h3 style={{ marginTop: 0, marginBottom: 8 }}>Delete asset</h3>
+            <p className="admin-subtitle" style={{ marginTop: 0 }}>
+              Tell us why you’re deleting this file. Admin will be able to see the reason.
+            </p>
+
+            <div className="admin-card admin-card--subtle admin-card--compact" style={{ padding: 12, marginTop: 10 }}>
+              <div style={{ fontWeight: 800 }}>{softDeleteTarget.title}</div>
+              <div className="admin-subtitle" style={{ marginTop: 6 }}>
+                {kindLabel(softDeleteTarget)} · {categoryLabel(softDeleteTarget)}
+              </div>
+            </div>
+
+            <div className="admin-field" style={{ marginTop: 12 }}>
+              <label>Reason {isAdmin ? '(optional)' : '(required)'}</label>
+              <textarea
+                value={softDeleteReason}
+                onChange={(e) => setSoftDeleteReason(e.target.value)}
+                placeholder="e.g. wrong file, outdated, replaced, etc."
+                rows={4}
+              />
+            </div>
+
+            <div className="admin-actions" style={{ justifyContent: 'flex-end', gap: 10, marginTop: 14 }}>
+              <button className="admin-button secondary" type="button" onClick={() => setSoftDeleteTarget(null)} disabled={softDeleteSubmitting}>
+                Cancel
+              </button>
+              <button
+                className="admin-button danger"
+                type="button"
+                onClick={async () => {
+                  const reason = String(softDeleteReason || '').trim();
+                  if (!isAdmin && reason.length < 3) {
+                    setMessage('Reason is required (min 3 characters).');
+                    return;
+                  }
+                  await softDelete(softDeleteTarget.id, reason);
+                  setSoftDeleteTarget(null);
+                }}
+                disabled={softDeleteSubmitting}
+              >
+                {softDeleteSubmitting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
