@@ -522,6 +522,7 @@ def upload_to_library(
 def soft_delete_item(
     request: Request,
     item_id: int,
+    reason: str | None = None,
     db: Session = Depends(get_db),
     current_staff: StaffUser = Depends(require_staff_permission("library.delete_own")),
 ):
@@ -530,6 +531,12 @@ def soft_delete_item(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     if item.is_deleted:
         return {"ok": True}
+
+    reason_norm = str(reason or "").strip()
+    if reason_norm:
+        reason_norm = reason_norm[:500]
+    else:
+        reason_norm = None
 
     admin_override = False
     if int(item.staff_user_id) != int(current_staff.id):
@@ -541,6 +548,10 @@ def soft_delete_item(
         if not StaffRBACService.has_permission(perms, "library.delete_any") and not StaffRBACService.has_permission(perms, "*"):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
         admin_override = True
+
+    # Staff must provide a reason for deletions (admin may omit).
+    if not _is_admin(db, current_staff) and not reason_norm:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Reason is required")
 
     item.is_deleted = True
     item.deleted_at = datetime.utcnow()
@@ -558,6 +569,7 @@ def soft_delete_item(
                 "folder": item.folder,
                 "title": item.title,
                 "url": item.url,
+                "reason": reason_norm,
                 "deleted_at": item.deleted_at.isoformat() if item.deleted_at else None,
             },
             ip=request.client.host if request.client else None,
