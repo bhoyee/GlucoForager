@@ -106,6 +106,9 @@ export default function LibraryPage() {
   const [previewItem, setPreviewItem] = useState(null);
   const [tableDownloadingId, setTableDownloadingId] = useState(null);
   const [previewDownloading, setPreviewDownloading] = useState(false);
+  const [detailsTarget, setDetailsTarget] = useState(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsData, setDetailsData] = useState(null);
   const debounceTimer = useRef(null);
 
   const loadSession = async () => {
@@ -158,6 +161,30 @@ export default function LibraryPage() {
       setMessage(e?.message || 'Failed to load library.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const openDetails = async (row) => {
+    if (!isAdmin || !token || !row?.id) return;
+    setDetailsTarget(row);
+    setDetailsLoading(true);
+    setDetailsData(null);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/library/items/${encodeURIComponent(String(row.id))}/details`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || 'Failed to load details.');
+      setDetailsData(data);
+    } catch (e) {
+      setDetailsData({ error: e?.message || 'Failed to load details.' });
+    } finally {
+      setDetailsLoading(false);
     }
   };
 
@@ -452,6 +479,11 @@ export default function LibraryPage() {
                   r.is_deleted ? (
                     canRestore ? (
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        {isAdmin ? (
+                          <button className="admin-button secondary" type="button" onClick={() => openDetails(r)}>
+                            Details
+                          </button>
+                        ) : null}
                         <button className="admin-button" type="button" onClick={() => restore(r.id)}>
                           Restore
                         </button>
@@ -463,9 +495,16 @@ export default function LibraryPage() {
                       <span className="admin-subtitle">Deleted</span>
                     )
                   ) : (
-                    <button className="admin-button danger" type="button" onClick={() => softDelete(r.id)}>
-                      Delete
-                    </button>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {isAdmin ? (
+                        <button className="admin-button secondary" type="button" onClick={() => openDetails(r)}>
+                          Details
+                        </button>
+                      ) : null}
+                      <button className="admin-button danger" type="button" onClick={() => softDelete(r.id)}>
+                        Delete
+                      </button>
+                    </div>
                   ),
               },
             ]}
@@ -528,6 +567,99 @@ export default function LibraryPage() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {detailsTarget ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => (detailsLoading ? null : setDetailsTarget(null))}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+            zIndex: 1000,
+          }}
+        >
+          <div className="admin-card" onClick={(e) => e.stopPropagation()} style={{ width: 'min(920px, 96vw)', padding: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+              <div>
+                <h3 style={{ marginTop: 0, marginBottom: 4 }}>Asset details</h3>
+                <p className="admin-subtitle" style={{ margin: 0 }}>
+                  {detailsTarget.title}
+                </p>
+              </div>
+              <button className="admin-button danger" type="button" onClick={() => setDetailsTarget(null)} disabled={detailsLoading}>
+                Close
+              </button>
+            </div>
+
+            {detailsLoading ? <div style={{ marginTop: 12 }}><LoadingState label="Loading..." /></div> : null}
+
+            {!detailsLoading && detailsData?.error ? <div className="admin-alert danger" style={{ marginTop: 12 }}>{String(detailsData.error)}</div> : null}
+
+            {!detailsLoading && detailsData?.item ? (
+              <div className="admin-card admin-card--subtle admin-card--compact" style={{ padding: 12, marginTop: 12 }}>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <span className="admin-badge secondary">{String(detailsData.item.kind || '').toUpperCase()}</span>
+                  <span className="admin-badge secondary">{categoryLabel({ folder: detailsData.item.folder })}</span>
+                </div>
+                <div className="admin-subtitle" style={{ marginTop: 8 }}>
+                  Uploaded: <strong>{formatDateTime(detailsData.item.created_at)}</strong>
+                </div>
+                <div className="admin-subtitle" style={{ marginTop: 6 }}>
+                  Deleted: <strong>{detailsData.item.is_deleted ? 'Yes' : 'No'}</strong>
+                  {detailsData.item.deleted_at ? (
+                    <>
+                      {' '}
+                      · at <strong>{formatDateTime(detailsData.item.deleted_at)}</strong>
+                    </>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            {!detailsLoading && Array.isArray(detailsData?.logs) ? (
+              <div className="admin-card admin-card--subtle admin-card--compact" style={{ padding: 12, marginTop: 12, maxHeight: 420, overflow: 'auto' }}>
+                <div style={{ fontWeight: 900, marginBottom: 8 }}>Activity log</div>
+                {detailsData.logs.length === 0 ? (
+                  <p className="admin-subtitle" style={{ margin: 0 }}>
+                    No activity yet.
+                  </p>
+                ) : (
+                  <div style={{ display: 'grid', gap: 10 }}>
+                    {detailsData.logs.map((l) => (
+                      <div key={String(l.id || l.created_at || Math.random())} style={{ border: '1px solid rgba(0,0,0,0.06)', borderRadius: 12, padding: 10, background: '#fff' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                          <div style={{ fontWeight: 800 }}>{String(l.action || '')}</div>
+                          <div className="admin-subtitle">{formatDateTime(l.created_at)}</div>
+                        </div>
+                        <div className="admin-subtitle" style={{ marginTop: 6 }}>
+                          By: <strong>{String(l.actor || `Staff #${l.actor_id || ''}`)}</strong>
+                          {l.ip ? (
+                            <>
+                              {' '}
+                              · IP: <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace' }}>{String(l.ip)}</span>
+                            </>
+                          ) : null}
+                        </div>
+                        {l.details ? (
+                          <pre style={{ margin: '10px 0 0', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 12, opacity: 0.9 }}>
+                            {JSON.stringify(l.details, null, 2)}
+                          </pre>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}
