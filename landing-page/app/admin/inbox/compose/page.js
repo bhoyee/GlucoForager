@@ -21,6 +21,7 @@ export default function ComposeMailPage() {
   const [to, setTo] = useState('');
   const [subject, setSubject] = useState('');
   const [bodyHtml, setBodyHtml] = useState('');
+  const [attachment, setAttachment] = useState(null);
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState('');
   const [tone, setTone] = useState('warning');
@@ -71,10 +72,16 @@ export default function ComposeMailPage() {
 
     setSending(true);
     try {
-      const res = await fetch(`${API_URL}/api/admin/inbox/messages`, {
+      const fd = new FormData();
+      fd.set('to', to);
+      fd.set('subject', subject);
+      fd.set('body_html', bodyHtml);
+      if (attachment) fd.set('attachment', attachment);
+
+      const res = await fetch(`${API_URL}/api/admin/inbox/messages/form`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to, subject, body_html: bodyHtml }),
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
       });
       const data = await res.json().catch(() => ({}));
       if (res.status === 401) {
@@ -131,6 +138,17 @@ export default function ComposeMailPage() {
               <div className="admin-field">
                 <label>Subject</label>
                 <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject" />
+              </div>
+              <div className="admin-field">
+                <label>Attachment (optional)</label>
+                <input
+                  type="file"
+                  onChange={(e) => setAttachment(e.target.files?.[0] || null)}
+                  accept=".pdf,.jpg,.jpeg,.png,.webp,.mp4"
+                />
+                <p className="admin-subtitle" style={{ marginTop: 6 }}>
+                  Allowed: images (jpg/png/webp), PDF, MP4 video.
+                </p>
               </div>
             </div>
 
