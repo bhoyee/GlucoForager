@@ -21,9 +21,81 @@ function formatRelativeMs(ms) {
 
 function parseIso(iso) {
   if (!iso) return null;
-  const d = new Date(iso);
+  // Backend stores timestamps as naive UTC (no timezone suffix). Treat "no tz" strings as UTC to avoid 1h offsets.
+  let normalized = String(iso);
+  if (normalized.includes(' ') && !normalized.includes('T')) normalized = normalized.replace(' ', 'T');
+  const hasTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(normalized);
+  if (!hasTz && /^\d{4}-\d{2}-\d{2}T/.test(normalized)) normalized = `${normalized}Z`;
+
+  const d = new Date(normalized);
   if (Number.isNaN(d.getTime())) return null;
   return d;
+}
+
+function formatDateTime(iso) {
+  const d = parseIso(iso);
+  if (!d) return String(iso || '');
+  try {
+    return d.toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return String(iso || '');
+  }
+}
+
+function roleKeyToLabel(key) {
+  const k = String(key || '').trim().toLowerCase();
+  if (!k) return '';
+  if (k === 'hr') return 'HR';
+  if (k === 'admin') return 'Admin';
+  return k.charAt(0).toUpperCase() + k.slice(1);
+}
+
+function firstNameFromFullName(fullName) {
+  const s = String(fullName || '').trim();
+  if (!s) return '';
+  const parts = s.split(/\s+/).filter(Boolean);
+  return parts[0] || '';
+}
+
+function nameFromEmail(email) {
+  const e = String(email || '').trim();
+  if (!e || !e.includes('@')) return e;
+  const local = e.split('@')[0];
+  if (!local) return e;
+  const cleaned = local.replace(/[._-]+/g, ' ').trim();
+  const first = cleaned.split(/\s+/)[0];
+  return first ? first.charAt(0).toUpperCase() + first.slice(1) : e;
+}
+
+function authorLabel(author, fallbackId) {
+  const roles = Array.isArray(author?.roles) ? author.roles.filter(Boolean) : [];
+  const roleLabel = roleKeyToLabel(roles[0] || 'staff') || 'Staff';
+  const name = firstNameFromFullName(author?.full_name) || nameFromEmail(author?.email) || `Staff #${fallbackId}`;
+  return `${name} (${roleLabel})`;
+}
+
+function bubblePalette() {
+  return [
+    { bg: 'rgba(59, 130, 246, 0.12)', border: 'rgba(59, 130, 246, 0.28)' }, // blue
+    { bg: 'rgba(34, 197, 94, 0.12)', border: 'rgba(34, 197, 94, 0.28)' }, // green
+    { bg: 'rgba(245, 158, 11, 0.12)', border: 'rgba(245, 158, 11, 0.28)' }, // amber
+    { bg: 'rgba(168, 85, 247, 0.12)', border: 'rgba(168, 85, 247, 0.28)' }, // purple
+    { bg: 'rgba(236, 72, 153, 0.12)', border: 'rgba(236, 72, 153, 0.28)' }, // pink
+    { bg: 'rgba(14, 165, 233, 0.12)', border: 'rgba(14, 165, 233, 0.28)' }, // sky
+  ];
+}
+
+function bubbleColorsForAuthorId(authorId) {
+  const palette = bubblePalette();
+  const id = Number(authorId || 0);
+  const idx = Number.isFinite(id) ? Math.abs(id) % palette.length : 0;
+  return palette[idx] || palette[0];
 }
 
 export default function HelpPage() {
@@ -54,6 +126,7 @@ export default function HelpPage() {
   const [newPriority, setNewPriority] = useState('normal');
   const [newMessage, setNewMessage] = useState('');
   const [reply, setReply] = useState('');
+  const [replyLoading, setReplyLoading] = useState(false);
 
   const [notifications, setNotifications] = useState([]);
 
@@ -96,12 +169,19 @@ export default function HelpPage() {
   const loadNotifications = async () => {
     if (!token) return;
     try {
-      const res = await fetch(`${API_URL}/api/admin/help/notifications?unread_only=1&limit=20`, {
+      const res = await fetch(`${API_URL}/api/admin/help/notifications?unread_only=1&limit=200`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.status === 401) return;
       const data = await res.json().catch(() => ({}));
-      if (res.ok) setNotifications(Array.isArray(data.items) ? data.items : []);
+      if (res.ok) {
+        setNotifications(Array.isArray(data.items) ? data.items : []);
+        try {
+          if (typeof window !== 'undefined') window.dispatchEvent(new Event('admin-help-notifications-updated'));
+        } catch {
+          // ignore
+        }
+      }
     } catch {
       // ignore
     }
@@ -180,7 +260,9 @@ export default function HelpPage() {
       setMessages([]);
       return;
     }
+    // When a ticket is opened, automatically mark any unread notifications for it as read.
     loadTicket(selectedId);
+    markTicketNotificationsRead(selectedId);
   }, [selectedId]);
 
   useEffect(() => {
@@ -218,9 +300,32 @@ export default function HelpPage() {
     }
   };
 
+  const selectedClosed = String(selected?.status || '').toLowerCase() === 'closed';
+
+  const statusBadge = (status) => {
+    const s = String(status || '').toLowerCase();
+    if (s === 'closed') return { label: 'Closed', tone: 'danger' };
+    if (s === 'in_progress') return { label: 'In progress', tone: 'warning' };
+    if (s === 'waiting') return { label: 'Waiting', tone: 'secondary' };
+    return { label: s ? s.replace(/_/g, ' ') : 'Open', tone: 'success' };
+  };
+
+  const priorityBadge = (priority) => {
+    const p = String(priority || '').toLowerCase();
+    if (p === 'urgent') return { label: 'Urgent', tone: 'danger' };
+    if (p === 'high') return { label: 'High', tone: 'danger' };
+    if (p === 'low') return { label: 'Low', tone: 'secondary' };
+    return { label: p ? p[0].toUpperCase() + p.slice(1) : 'Normal', tone: 'warning' };
+  };
+
   const sendReply = async () => {
     if (!token || !selectedId) return;
+    if (selectedClosed) {
+      setMessage('Ticket is closed.');
+      return;
+    }
     setMessage('');
+    setReplyLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/admin/help/tickets/${selectedId}/messages`, {
         method: 'POST',
@@ -240,6 +345,8 @@ export default function HelpPage() {
       loadNotifications();
     } catch (e) {
       setMessage(e?.message || 'Failed to send.');
+    } finally {
+      setReplyLoading(false);
     }
   };
 
@@ -305,28 +412,81 @@ export default function HelpPage() {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) loadNotifications();
+      if (res.ok) {
+        loadNotifications();
+        try {
+          if (typeof window !== 'undefined') window.dispatchEvent(new Event('admin-help-notifications-updated'));
+        } catch {
+          // ignore
+        }
+      }
     } catch {
       // ignore
     }
   };
 
+  const markTicketNotificationsRead = async (ticketId) => {
+    const tid = Number(ticketId);
+    if (!token || !tid) return;
+    let matching = (Array.isArray(notifications) ? notifications : []).filter((n) => Number(n?.data?.ticket_id) === tid);
+
+    if (!matching.length) {
+      try {
+        const res = await fetch(`${API_URL}/api/admin/help/notifications?unread_only=1&limit=200`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          const items = Array.isArray(data?.items) ? data.items : [];
+          matching = items.filter((n) => Number(n?.data?.ticket_id) === tid);
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    if (!matching.length) return;
+    await Promise.allSettled(matching.map((n) => markNotificationRead(n.id)));
+  };
+
+  const openFromNotification = async (n) => {
+    if (!n) return;
+    const tid = Number(n?.data?.ticket_id);
+    try {
+      await markNotificationRead(n.id);
+    } finally {
+      if (tid) setSelectedId(tid);
+    }
+  };
+
   const staffMap = useMemo(() => {
     const m = new Map();
-    staffUsers.forEach((u) => m.set(String(u.id), u.email));
+    staffUsers.forEach((u) => {
+      const roles = Array.isArray(u?.roles) ? u.roles.filter(Boolean) : [];
+      const roleLabel = roleKeyToLabel(roles[0] || 'staff') || 'Staff';
+      const label = `${firstNameFromFullName(u?.full_name) || nameFromEmail(u?.email) || u?.email} (${roleLabel})`;
+      m.set(String(u.id), label);
+    });
     return m;
   }, [staffUsers]);
+
+  const formatStaffOption = (u) => {
+    const roles = Array.isArray(u?.roles) ? u.roles.filter(Boolean) : [];
+    const roleLabel = roles.length ? roles.join(', ') : 'staff';
+    return `(${roleLabel}) ${u.email}`;
+  };
 
   return (
     <div className="admin-page">
       <div className="admin-card">
         <h2 className="admin-title">Help Tickets</h2>
-        <p className="admin-subtitle">Assign tickets, track priority/status, and monitor SLA (HR/support/developer).</p>
         {message && <p className="admin-subtitle">{message}</p>}
 
         {notifications.length > 0 ? (
           <details style={{ marginTop: 10 }}>
-            <summary>Notifications ({notifications.length})</summary>
+            <summary>
+              Notifications <span className="admin-badge danger">{notifications.length}</span>
+            </summary>
             <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
               {notifications.map((n) => (
                 <div key={n.id} className="admin-card" style={{ padding: 12 }}>
@@ -335,9 +495,16 @@ export default function HelpPage() {
                       <div style={{ fontWeight: 700 }}>{n.title}</div>
                       {n.body ? <div className="admin-subtitle">{n.body}</div> : null}
                     </div>
-                    <button className="admin-button secondary" type="button" onClick={() => markNotificationRead(n.id)}>
-                      Mark read
-                    </button>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                      {Number(n?.data?.ticket_id) ? (
+                        <button className="admin-button info" type="button" onClick={() => openFromNotification(n)}>
+                          Open
+                        </button>
+                      ) : null}
+                      <button className="admin-button secondary" type="button" onClick={() => markNotificationRead(n.id)}>
+                        Mark read
+                      </button>
+                    </div>
                   </div>
                   <div className="admin-subtitle" style={{ marginTop: 6 }}>
                     {n.created_at}
@@ -351,50 +518,51 @@ export default function HelpPage() {
 
       <div className="admin-card" style={{ marginTop: 16 }}>
         <h3 style={{ marginTop: 0 }}>Filters</h3>
-        <div className="admin-actions" style={{ gap: 10, flexWrap: 'wrap' }}>
-          <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            Status
-            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
-              <option value="">All</option>
+        <div className="admin-toolbar-grid" style={{ marginTop: 12 }}>
+          <div className="admin-toolbar-search">
+            <input
+              className="admin-search-input"
+              value={filterQ}
+              onChange={(e) => setFilterQ(e.target.value)}
+              placeholder="Search by subject..."
+            />
+          </div>
+
+          <div className="admin-toolbar-filters">
+            <select className="admin-filter-select" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+              <option value="">All status</option>
               <option value="open">Open</option>
               <option value="in_progress">In progress</option>
               <option value="waiting">Waiting</option>
               <option value="closed">Closed</option>
             </select>
-          </label>
-          <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            Priority
-            <select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)}>
-              <option value="">All</option>
+            <select className="admin-filter-select" value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)}>
+              <option value="">All priority</option>
               <option value="low">Low</option>
               <option value="normal">Normal</option>
               <option value="high">High</option>
               <option value="urgent">Urgent</option>
             </select>
-          </label>
-          {ticketsManage ? (
-            <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              Assigned to
-              <select value={filterAssignedTo} onChange={(e) => setFilterAssignedTo(e.target.value)}>
-                <option value="">Any</option>
+            {ticketsManage ? (
+              <select className="admin-filter-select" value={filterAssignedTo} onChange={(e) => setFilterAssignedTo(e.target.value)}>
+                <option value="">Any assignee</option>
                 {staffUsers.map((u) => (
                   <option key={u.id} value={u.id}>
-                    {u.email}
+                    {formatStaffOption(u)}
                   </option>
                 ))}
               </select>
+            ) : null}
+          </div>
+
+          <div className="admin-toolbar-actions" style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', flexWrap: 'wrap', alignItems: 'center' }}>
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input type="checkbox" checked={filterMine} onChange={(e) => setFilterMine(e.target.checked)} /> Mine
             </label>
-          ) : null}
-          <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <input type="checkbox" checked={filterMine} onChange={(e) => setFilterMine(e.target.checked)} /> Mine
-          </label>
-          <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            Search
-            <input value={filterQ} onChange={(e) => setFilterQ(e.target.value)} placeholder="Subject..." />
-          </label>
-          <button className="admin-button info" type="button" onClick={loadTickets}>
-            Refresh
-          </button>
+            <button className="admin-button info" type="button" onClick={loadTickets}>
+              Refresh
+            </button>
+          </div>
         </div>
       </div>
 
@@ -412,6 +580,8 @@ export default function HelpPage() {
                 const age = createdAt ? formatRelativeMs(Date.now() - createdAt.getTime()) : '';
                 const sla = t.sla || null;
                 const slaBad = Boolean(sla?.first_response_breached || sla?.resolve_breached);
+                const st = statusBadge(t.status);
+                const pr = priorityBadge(t.priority);
                 return (
                   <button
                     key={t.id}
@@ -423,8 +593,13 @@ export default function HelpPage() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
                       <div>
                         <strong>#{t.id}</strong> {t.subject}{' '}
-                        <span style={{ opacity: 0.7 }}>
-                          ({t.status}, {t.priority})
+                        <span style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap', marginLeft: 8, verticalAlign: 'middle' }}>
+                          <span className={`admin-badge ${st.tone}`} style={{ fontWeight: 900 }}>
+                            {st.label}
+                          </span>
+                          <span className={`admin-badge ${pr.tone}`} style={{ fontWeight: 900 }}>
+                            {pr.label}
+                          </span>
                         </span>
                       </div>
                       <div style={{ opacity: 0.7 }}>{age}</div>
@@ -436,7 +611,8 @@ export default function HelpPage() {
                     ) : null}
                     {sla && ticketsManage ? (
                       <div className="admin-subtitle" style={{ marginTop: 4 }}>
-                        SLA: first due {sla.first_response_due_at} {sla.first_response_breached ? ' (BREACHED)' : ''} • resolve due {sla.resolve_due_at}{' '}
+                        SLA: first due {formatDateTime(sla.first_response_due_at)} {sla.first_response_breached ? ' (BREACHED)' : ''} • resolve due{' '}
+                        {formatDateTime(sla.resolve_due_at)}{' '}
                         {sla.resolve_breached ? ' (BREACHED)' : ''}
                       </div>
                     ) : null}
@@ -483,8 +659,18 @@ export default function HelpPage() {
                 <strong>#{selected.id}</strong> {selected.subject}
               </p>
               <div className="admin-actions" style={{ gap: 10, flexWrap: 'wrap' }}>
-                <span className="admin-subtitle">Status: {selected.status}</span>
-                <span className="admin-subtitle">Priority: {selected.priority}</span>
+                <span className="admin-subtitle" style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+                  Status
+                  <span className={`admin-badge ${statusBadge(selected.status).tone}`} style={{ fontWeight: 900 }}>
+                    {statusBadge(selected.status).label}
+                  </span>
+                </span>
+                <span className="admin-subtitle" style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+                  Priority
+                  <span className={`admin-badge ${priorityBadge(selected.priority).tone}`} style={{ fontWeight: 900 }}>
+                    {priorityBadge(selected.priority).label}
+                  </span>
+                </span>
                 {selected.assigned_to_staff_user_id ? (
                   <span className="admin-subtitle">
                     Assigned: {staffMap.get(String(selected.assigned_to_staff_user_id)) || `Staff #${selected.assigned_to_staff_user_id}`}
@@ -499,20 +685,21 @@ export default function HelpPage() {
                   <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     Assign
                     <select
+                      className="admin-filter-select"
                       value={selected.assigned_to_staff_user_id ? String(selected.assigned_to_staff_user_id) : ''}
                       onChange={(e) => assignTicket(e.target.value)}
                     >
                       <option value="">Unassigned</option>
                       {staffUsers.map((u) => (
                         <option key={u.id} value={u.id}>
-                          {u.email}
+                          {formatStaffOption(u)}
                         </option>
                       ))}
                     </select>
                   </label>
                   <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     Priority
-                    <select value={selected.priority} onChange={(e) => setTicketPriority(e.target.value)}>
+                    <select className="admin-filter-select" value={selected.priority} onChange={(e) => setTicketPriority(e.target.value)}>
                       <option value="low">Low</option>
                       <option value="normal">Normal</option>
                       <option value="high">High</option>
@@ -521,7 +708,7 @@ export default function HelpPage() {
                   </label>
                   <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     Status
-                    <select value={selected.status} onChange={(e) => setTicketStatus(e.target.value)}>
+                    <select className="admin-filter-select" value={selected.status} onChange={(e) => setTicketStatus(e.target.value)}>
                       <option value="open">Open</option>
                       <option value="in_progress">In progress</option>
                       <option value="waiting">Waiting</option>
@@ -534,8 +721,8 @@ export default function HelpPage() {
               {selected.sla && ticketsManage ? (
                 <div className="admin-card" style={{ padding: 12, marginTop: 12, borderColor: selected.sla.first_response_breached || selected.sla.resolve_breached ? 'rgba(255,99,71,0.65)' : undefined }}>
                   <p className="admin-subtitle" style={{ margin: 0 }}>
-                    SLA: first due {selected.sla.first_response_due_at} {selected.sla.first_response_breached ? ' (BREACHED)' : ''} • resolve due{' '}
-                    {selected.sla.resolve_due_at} {selected.sla.resolve_breached ? ' (BREACHED)' : ''}
+                    SLA: first due {formatDateTime(selected.sla.first_response_due_at)} {selected.sla.first_response_breached ? ' (BREACHED)' : ''} • resolve due{' '}
+                    {formatDateTime(selected.sla.resolve_due_at)} {selected.sla.resolve_breached ? ' (BREACHED)' : ''}
                   </p>
                 </div>
               ) : null}
@@ -544,25 +731,57 @@ export default function HelpPage() {
                 {messages.length === 0 ? (
                   <p className="admin-subtitle">No messages yet.</p>
                 ) : (
-                  messages.map((m) => (
-                    <div key={m.id} style={{ padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                      <div style={{ fontSize: 12, opacity: 0.7 }}>
-                        Staff #{m.author_staff_user_id} · {m.created_at}
-                      </div>
-                      <div style={{ whiteSpace: 'pre-wrap' }}>{m.message}</div>
-                    </div>
-                  ))
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {messages.map((m) => {
+                      const authorId = m?.author_staff_user_id;
+                      const isMe = Number(authorId) === Number(session?.id);
+                      const colors = bubbleColorsForAuthorId(authorId);
+                      const label = authorLabel(m?.author, authorId);
+                      return (
+                        <div key={m.id} style={{ display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start' }}>
+                          <div style={{ fontSize: 12, opacity: 0.72, marginBottom: 4 }}>
+                            {label} · {formatDateTime(m.created_at)}
+                          </div>
+                          <div
+                            style={{
+                              maxWidth: '86%',
+                              borderRadius: 14,
+                              padding: '10px 12px',
+                              background: colors.bg,
+                              border: `1px solid ${colors.border}`,
+                              boxShadow: '0 10px 30px rgba(0,0,0,0.22)',
+                              whiteSpace: 'pre-wrap',
+                              lineHeight: 1.35,
+                            }}
+                          >
+                            {m.message}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
 
               <div style={{ marginTop: 12 }}>
                 <div className="admin-field">
                   <label>Reply</label>
-                  <textarea value={reply} onChange={(e) => setReply(e.target.value)} rows={3} placeholder="Type a message..." />
+                  <textarea
+                    value={reply}
+                    onChange={(e) => setReply(e.target.value)}
+                    rows={3}
+                    placeholder={selectedClosed ? 'This ticket is closed.' : 'Type a message...'}
+                    disabled={selectedClosed}
+                  />
                 </div>
                 <div className="admin-actions">
-                  <button className="admin-button" type="button" onClick={sendReply} disabled={!reply.trim()}>
-                    Send
+                  <button
+                    className={`admin-button ${selectedClosed ? 'danger' : ''}`.trim()}
+                    type="button"
+                    onClick={sendReply}
+                    disabled={selectedClosed || replyLoading || !reply.trim()}
+                  >
+                    {selectedClosed ? 'Closed' : replyLoading ? 'Sending…' : 'Send'}
                   </button>
                 </div>
               </div>
