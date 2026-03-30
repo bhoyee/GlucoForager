@@ -169,7 +169,10 @@ export default function LibraryPage() {
       if (kind) params.set('kind', kind);
       if (category) params.set('folder', category);
       if (debouncedQuery) params.set('q', debouncedQuery);
-      if (includeDeleted && isAdmin) params.set('include_deleted', '1');
+      if (includeDeleted && isAdmin) {
+        params.set('include_deleted', '1');
+        params.set('deleted_only', '1');
+      }
 
       const res = await fetch(`${API_URL}/api/admin/library?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -404,7 +407,7 @@ export default function LibraryPage() {
             </select>
             {isAdmin ? (
               <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input type="checkbox" checked={includeDeleted} onChange={(e) => setIncludeDeleted(e.target.checked)} /> Show deleted
+                <input type="checkbox" checked={includeDeleted} onChange={(e) => setIncludeDeleted(e.target.checked)} /> Show deleted only
               </label>
             ) : null}
           </div>
