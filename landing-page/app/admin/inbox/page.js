@@ -1,28 +1,69 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import RichTextEditor from '../ui/RichTextEditor';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
 export default function InboxPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const token = useMemo(() => (typeof window === 'undefined' ? null : localStorage.getItem('adminToken')), []);
 
-  const [unreadOnly, setUnreadOnly] = useState(true);
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const initialTab = (searchParams?.get('tab') || '').toLowerCase() === 'mail' ? 'mail' : 'notifications';
+  const initialMessageId = searchParams?.get('message') ? Number(searchParams.get('message')) : null;
+
+  const [tab, setTab] = useState(initialTab);
+
+  const [notifUnreadOnly, setNotifUnreadOnly] = useState(true);
+  const [notifItems, setNotifItems] = useState([]);
+  const [notifLoading, setNotifLoading] = useState(true);
+
+  const [mailItems, setMailItems] = useState([]);
+  const [mailLoading, setMailLoading] = useState(true);
+  const [mailUnreadOnly, setMailUnreadOnly] = useState(true);
+  const [mailViewAll, setMailViewAll] = useState(false);
+  const [mailIncludeDeleted, setMailIncludeDeleted] = useState(false);
+
+  const [mailThread, setMailThread] = useState(null);
+  const [mailThreadLoading, setMailThreadLoading] = useState(false);
+  const [replyHtml, setReplyHtml] = useState('');
+  const [replySending, setReplySending] = useState(false);
+
+  const [session, setSession] = useState(null);
   const [message, setMessage] = useState('');
 
-  const load = async () => {
+  const permissions = Array.isArray(session?.permissions) ? session.permissions : [];
+  const roles = Array.isArray(session?.roles) ? session.roles : [];
+  const isAdmin = permissions.includes('*') || permissions.includes('admin.manage') || roles.includes('admin');
+
+  const loadSession = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/api/admin/me`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.status === 401) return;
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) setSession(data);
+    } catch {
+      setSession(null);
+    }
+  };
+
+  useEffect(() => {
+    loadSession();
+  }, [token]);
+
+  const loadNotifications = async () => {
     if (!token) {
       router.push('/admin');
       return;
     }
-    setLoading(true);
+    setNotifLoading(true);
     setMessage('');
     try {
-      const res = await fetch(`${API_URL}/api/admin/staff-notifications?unread_only=${unreadOnly ? '1' : '0'}&limit=100`, {
+      const res = await fetch(`${API_URL}/api/admin/staff-notifications?unread_only=${notifUnreadOnly ? '1' : '0'}&limit=100`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.status === 401) {
@@ -32,17 +73,136 @@ export default function InboxPage() {
       }
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || 'Failed to load notifications.');
-      setItems(Array.isArray(data.items) ? data.items : []);
+      setNotifItems(Array.isArray(data.items) ? data.items : []);
     } catch (e) {
       setMessage(e?.message || 'Failed to load notifications.');
     } finally {
-      setLoading(false);
+      setNotifLoading(false);
     }
   };
 
   useEffect(() => {
-    load();
-  }, [token, unreadOnly]);
+    loadNotifications();
+  }, [token, notifUnreadOnly]);
+
+  const loadMail = async () => {
+    if (!token) {
+      router.push('/admin');
+      return;
+    }
+    setMailLoading(true);
+    setMessage('');
+    try {
+      const params = new URLSearchParams();
+      params.set('limit', '80');
+      if (mailUnreadOnly) params.set('unread_only', '1');
+      if (mailIncludeDeleted) params.set('include_deleted', '1');
+      if (mailViewAll && isAdmin) params.set('all', '1');
+      const res = await fetch(`${API_URL}/api/admin/inbox/messages?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || 'Failed to load mail.');
+      setMailItems(Array.isArray(data.items) ? data.items : []);
+    } catch (e) {
+      setMessage(e?.message || 'Failed to load mail.');
+    } finally {
+      setMailLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (tab !== 'mail') return;
+    loadMail();
+  }, [tab, token, mailUnreadOnly, mailIncludeDeleted, mailViewAll, isAdmin]);
+
+  const openMail = async (messageId) => {
+    if (!token || !messageId) return;
+    setMailThreadLoading(true);
+    setMessage('');
+    try {
+      fetch(`${API_URL}/api/admin/inbox/messages/${messageId}/read`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
+
+      const res = await fetch(`${API_URL}/api/admin/inbox/messages/${messageId}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || 'Failed to open mail.');
+      setMailThread(data);
+      setReplyHtml('');
+      loadMail();
+    } catch (e) {
+      setMessage(e?.message || 'Failed to open mail.');
+    } finally {
+      setMailThreadLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (tab !== 'mail') return;
+    if (!initialMessageId || Number.isNaN(initialMessageId)) return;
+    openMail(initialMessageId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
+  const sendReply = async () => {
+    if (!token || !mailThread?.messages?.length) return;
+    const rootId = Number(mailThread.messages[0].id);
+    const stripped = String(replyHtml || '').replace(/<[^>]*>/g, '').trim();
+    if (!stripped) {
+      setMessage('Reply cannot be empty.');
+      return;
+    }
+    setReplySending(true);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/inbox/messages/${rootId}/reply`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body_html: replyHtml }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || 'Failed to send reply.');
+      await openMail(rootId);
+    } catch (e) {
+      setMessage(e?.message || 'Failed to send reply.');
+    } finally {
+      setReplySending(false);
+    }
+  };
+
+  const softDeleteMail = async (id) => {
+    if (!token) return;
+    setMessage('');
+    try {
+      const res = await fetch(`${API_URL}/api/admin/inbox/messages/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || 'Failed to delete.');
+      loadMail();
+    } catch (e) {
+      setMessage(e?.message || 'Failed to delete.');
+    }
+  };
+
+  const purgeMail = async (id) => {
+    if (!token) return;
+    setMessage('');
+    try {
+      const res = await fetch(`${API_URL}/api/admin/inbox/messages/${id}/purge`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || 'Failed to delete.');
+      loadMail();
+    } catch (e) {
+      setMessage(e?.message || 'Failed to delete.');
+    }
+  };
 
   const markRead = async (id) => {
     if (!token) return;
@@ -54,7 +214,7 @@ export default function InboxPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || 'Failed to mark read.');
-      load();
+      loadNotifications();
     } catch (e) {
       setMessage(e?.message || 'Failed to mark read.');
     }
@@ -70,7 +230,7 @@ export default function InboxPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || 'Failed to mark all read.');
-      load();
+      loadNotifications();
     } catch (e) {
       setMessage(e?.message || 'Failed to mark all read.');
     }
@@ -78,6 +238,10 @@ export default function InboxPage() {
 
   const openFromNotification = (n) => {
     const data = n?.data || {};
+    if (data?.message_id) {
+      router.push(`/admin/inbox?tab=mail&message=${encodeURIComponent(String(data.message_id))}`);
+      return;
+    }
     if (data?.ticket_id) {
       router.push(`/admin/help?ticket=${encodeURIComponent(String(data.ticket_id))}`);
       return;
@@ -97,55 +261,196 @@ export default function InboxPage() {
     <div className="admin-page">
       <div className="admin-card">
         <h2 className="admin-title">Inbox</h2>
-        <p className="admin-subtitle">In-app notifications for tickets, work log feedback, and reminders.</p>
+        <p className="admin-subtitle">In-app notifications and internal staff mail.</p>
         {message && <p className="admin-subtitle">{message}</p>}
 
         <div className="admin-actions" style={{ gap: 10, flexWrap: 'wrap' }}>
-          <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <input type="checkbox" checked={unreadOnly} onChange={(e) => setUnreadOnly(e.target.checked)} /> Unread only
-          </label>
-          <button className="admin-button info" type="button" onClick={load}>
-            Refresh
+          <button className={`admin-button ${tab === 'notifications' ? 'info' : 'secondary'}`} type="button" onClick={() => setTab('notifications')}>
+            Notifications
           </button>
-          <button className="admin-button" type="button" onClick={markAllRead}>
-            Mark all read
+          <button className={`admin-button ${tab === 'mail' ? 'info' : 'secondary'}`} type="button" onClick={() => setTab('mail')}>
+            Mail
           </button>
+          <Link className="admin-button info" href="/admin/inbox/compose">
+            Compose mail
+          </Link>
+
+          {tab === 'notifications' ? (
+            <>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input type="checkbox" checked={notifUnreadOnly} onChange={(e) => setNotifUnreadOnly(e.target.checked)} /> Unread only
+              </label>
+              <button className="admin-button info" type="button" onClick={loadNotifications}>
+                Refresh
+              </button>
+              <button className="admin-button" type="button" onClick={markAllRead}>
+                Mark all read
+              </button>
+            </>
+          ) : (
+            <>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input type="checkbox" checked={mailUnreadOnly} onChange={(e) => setMailUnreadOnly(e.target.checked)} /> Unread only
+              </label>
+              {isAdmin ? (
+                <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input type="checkbox" checked={mailViewAll} onChange={(e) => setMailViewAll(e.target.checked)} /> View all
+                </label>
+              ) : null}
+              {isAdmin ? (
+                <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input type="checkbox" checked={mailIncludeDeleted} onChange={(e) => setMailIncludeDeleted(e.target.checked)} /> Include deleted
+                </label>
+              ) : null}
+              <button className="admin-button info" type="button" onClick={loadMail}>
+                Refresh mail
+              </button>
+            </>
+          )}
         </div>
       </div>
 
       <div className="admin-card" style={{ marginTop: 16 }}>
-        {loading ? (
-          <p className="admin-subtitle">Loading...</p>
-        ) : items.length === 0 ? (
-          <p className="admin-subtitle">No notifications.</p>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {items.map((n) => (
-              <div key={n.id} className="admin-card" style={{ padding: 14, borderColor: n.read_at ? 'rgba(255,255,255,0.08)' : 'rgba(15,183,165,0.35)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'start' }}>
-                  <div>
-                    <div style={{ fontWeight: 800 }}>{n.title}</div>
-                    {n.body ? <div style={{ marginTop: 6, whiteSpace: 'pre-wrap' }}>{n.body}</div> : null}
-                    <div className="admin-subtitle" style={{ marginTop: 8 }}>
-                      {n.type} • {n.created_at}
+        {tab === 'notifications' ? (
+          notifLoading ? (
+            <p className="admin-subtitle">Loading...</p>
+          ) : notifItems.length === 0 ? (
+            <p className="admin-subtitle">No notifications.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {notifItems.map((n) => (
+                <div key={n.id} className="admin-card" style={{ padding: 14, borderColor: n.read_at ? 'rgba(255,255,255,0.08)' : 'rgba(15,183,165,0.35)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'start' }}>
+                    <div>
+                      <div style={{ fontWeight: 800 }}>{n.title}</div>
+                      {n.body ? <div style={{ marginTop: 6, whiteSpace: 'pre-wrap' }}>{n.body}</div> : null}
+                      <div className="admin-subtitle" style={{ marginTop: 8 }}>
+                        {n.type} • {n.created_at}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                      <button className="admin-button secondary" type="button" onClick={() => openFromNotification(n)}>
+                        Open
+                      </button>
+                      {!n.read_at ? (
+                        <button className="admin-button" type="button" onClick={() => markRead(n.id)}>
+                          Mark read
+                        </button>
+                      ) : null}
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                    <button className="admin-button secondary" type="button" onClick={() => openFromNotification(n)}>
-                      Open
-                    </button>
-                    {!n.read_at ? (
-                      <button className="admin-button" type="button" onClick={() => markRead(n.id)}>
-                        Mark read
-                      </button>
-                    ) : null}
-                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          )
+        ) : mailLoading ? (
+          <p className="admin-subtitle">Loading...</p>
+        ) : mailItems.length === 0 ? (
+          <p className="admin-subtitle">No mail.</p>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="admin-table" style={{ minWidth: 760 }}>
+              <thead>
+                <tr>
+                  <th>Subject</th>
+                  <th>From</th>
+                  <th>Date</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mailItems.map((m) => (
+                  <tr key={m.id} style={{ opacity: m.is_deleted ? 0.6 : 1 }}>
+                    <td style={{ fontWeight: m.read_at ? 500 : 800 }}>{m.subject}</td>
+                    <td className="admin-subtitle">{m.from}</td>
+                    <td className="admin-subtitle">{m.created_at}</td>
+                    <td>{m.read_at ? <span className="admin-badge secondary">Read</span> : <span className="admin-badge warning">Unread</span>}</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <button className="admin-button secondary" type="button" onClick={() => openMail(m.id)}>
+                          View
+                        </button>
+                        {!m.is_deleted ? (
+                          <button className="admin-button danger" type="button" onClick={() => softDeleteMail(m.id)}>
+                            Soft delete
+                          </button>
+                        ) : null}
+                        {isAdmin ? (
+                          <button className="admin-button danger" type="button" onClick={() => purgeMail(m.id)}>
+                            Hard delete
+                          </button>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
+
+      {tab === 'mail' && (mailThreadLoading || mailThread) ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setMailThread(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+            zIndex: 1000,
+          }}
+        >
+          <div className="admin-card" onClick={(e) => e.stopPropagation()} style={{ width: 'min(980px, 98vw)', maxHeight: '92vh', overflow: 'auto', padding: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+              <div>
+                <h3 style={{ marginTop: 0, marginBottom: 6 }}>{mailThread?.messages?.[0]?.subject || 'Mail'}</h3>
+                <p className="admin-subtitle" style={{ margin: 0 }}>
+                  Thread #{mailThread?.thread_id || ''}
+                </p>
+              </div>
+              <button className="admin-button danger" type="button" onClick={() => setMailThread(null)}>
+                Close
+              </button>
+            </div>
+
+            {mailThreadLoading ? <p className="admin-subtitle" style={{ marginTop: 12 }}>Loading...</p> : null}
+
+            {Array.isArray(mailThread?.messages) ? (
+              <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
+                {mailThread.messages.map((msg) => (
+                  <div key={msg.id} className="admin-card admin-card--subtle admin-card--compact" style={{ padding: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                      <div className="admin-subtitle">
+                        From <strong>{msg.from}</strong> to <strong>{msg.to}</strong>
+                      </div>
+                      <div className="admin-subtitle">{msg.created_at}</div>
+                    </div>
+                    <div style={{ marginTop: 10 }} dangerouslySetInnerHTML={{ __html: String(msg.body_html || '') }} />
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="admin-card admin-card--subtle admin-card--compact" style={{ padding: 12, marginTop: 12 }}>
+              <div style={{ fontWeight: 900, marginBottom: 6 }}>Reply</div>
+              <RichTextEditor value={replyHtml} onChange={setReplyHtml} minHeight={140} />
+              <div className="admin-actions" style={{ justifyContent: 'flex-end', marginTop: 10 }}>
+                <button className="admin-button info" type="button" onClick={sendReply} disabled={replySending}>
+                  {replySending ? 'Sending...' : 'Send reply'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
+
