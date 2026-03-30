@@ -160,11 +160,11 @@ export default function LibraryPage() {
     }
   };
 
-  const downloadPreview = async () => {
-    if (!token || !previewItem?.id) return;
+  const downloadItem = async (item) => {
+    if (!token || !item?.id) return;
     setDownloadBusy(true);
     try {
-      const res = await fetch(`${API_URL}/api/admin/library/items/${encodeURIComponent(String(previewItem.id))}/download`, {
+      const res = await fetch(`${API_URL}/api/admin/library/items/${encodeURIComponent(String(item.id))}/download`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.status === 401) {
@@ -180,7 +180,7 @@ export default function LibraryPage() {
       const href = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = href;
-      a.download = downloadNameForItem(previewItem);
+      a.download = downloadNameForItem(item);
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -191,6 +191,8 @@ export default function LibraryPage() {
       setDownloadBusy(false);
     }
   };
+
+  const downloadPreview = async () => downloadItem(previewItem);
 
   useEffect(() => {
     loadSession();
@@ -397,10 +399,10 @@ export default function LibraryPage() {
                 sortable: false,
                 filterable: false,
                 render: (r) =>
-                  r.url ? (
-                    <a className="admin-button info" href={normalizeHref(r.url)} target="_blank" rel="noreferrer">
+                  r.id ? (
+                    <button className="admin-button warning" type="button" onClick={() => downloadItem(r)} disabled={downloadBusy || r.is_deleted}>
                       Download
-                    </a>
+                    </button>
                   ) : (
                     <span className="admin-subtitle">—</span>
                   ),
