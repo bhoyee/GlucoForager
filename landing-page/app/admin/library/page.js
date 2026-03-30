@@ -104,7 +104,8 @@ export default function LibraryPage() {
   const [purgeLoading, setPurgeLoading] = useState(false);
 
   const [previewItem, setPreviewItem] = useState(null);
-  const [downloadBusy, setDownloadBusy] = useState(false);
+  const [tableDownloadingId, setTableDownloadingId] = useState(null);
+  const [previewDownloading, setPreviewDownloading] = useState(false);
   const debounceTimer = useRef(null);
 
   const loadSession = async () => {
@@ -162,7 +163,7 @@ export default function LibraryPage() {
 
   const downloadItem = async (item) => {
     if (!token || !item?.id) return;
-    setDownloadBusy(true);
+    setTableDownloadingId(item.id);
     try {
       const res = await fetch(`${API_URL}/api/admin/library/items/${encodeURIComponent(String(item.id))}/download`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -188,11 +189,41 @@ export default function LibraryPage() {
     } catch (e) {
       setMessage(`Download failed: ${e?.message || 'unknown error'}`);
     } finally {
-      setDownloadBusy(false);
+      setTableDownloadingId(null);
     }
   };
 
-  const downloadPreview = async () => downloadItem(previewItem);
+  const downloadPreview = async () => {
+    if (!token || !previewItem?.id) return;
+    setPreviewDownloading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/library/items/${encodeURIComponent(String(previewItem.id))}/download`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || 'Download failed.');
+      }
+      const blob = await res.blob();
+      const href = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = href;
+      a.download = downloadNameForItem(previewItem);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(href);
+    } catch (e) {
+      setMessage(`Download failed: ${e?.message || 'unknown error'}`);
+    } finally {
+      setPreviewDownloading(false);
+    }
+  };
 
   useEffect(() => {
     loadSession();
@@ -400,8 +431,13 @@ export default function LibraryPage() {
                 filterable: false,
                 render: (r) =>
                   r.id ? (
-                    <button className="admin-button warning" type="button" onClick={() => downloadItem(r)} disabled={downloadBusy || r.is_deleted}>
-                      Download
+                    <button
+                      className="admin-button warning"
+                      type="button"
+                      onClick={() => downloadItem(r)}
+                      disabled={r.is_deleted || (tableDownloadingId !== null && tableDownloadingId !== r.id)}
+                    >
+                      {tableDownloadingId === r.id ? 'Downloading...' : 'Download'}
                     </button>
                   ) : (
                     <span className="admin-subtitle">—</span>
@@ -470,8 +506,8 @@ export default function LibraryPage() {
                 <a className="admin-button info" href={normalizeHref(previewItem.url)} target="_blank" rel="noreferrer">
                   Open
                 </a>
-                <button className="admin-button warning" type="button" onClick={downloadPreview} disabled={downloadBusy}>
-                  {downloadBusy ? 'Downloading...' : 'Download'}
+                <button className="admin-button warning" type="button" onClick={downloadPreview} disabled={previewDownloading}>
+                  {previewDownloading ? 'Downloading...' : 'Download'}
                 </button>
                 <button className="admin-button danger" type="button" onClick={() => setPreviewItem(null)}>
                   Close
