@@ -28,6 +28,11 @@ def _is_admin(db: Session, staff: StaffUser) -> bool:
     return StaffRBACService.has_permission(perms, "*") or StaffRBACService.has_permission(perms, "admin.manage")
 
 
+def _is_hr(db: Session, staff: StaffUser) -> bool:
+    roles = StaffRBACService.get_user_role_keys(db, staff.id)
+    return "hr" in [str(r).strip().lower() for r in roles]
+
+
 def _normalize_folder(folder: str | None) -> str | None:
     if folder is None:
         return None
@@ -290,6 +295,10 @@ def upload_to_library(
     if (not is_image) and (not is_video) and extension != ".pdf":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported document type")
 
+    folder_norm = _normalize_folder(folder) or "general"
+    if folder_norm in {"hr", "learning"} and not (_is_admin(db, current_staff) or _is_hr(db, current_staff)):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+
     try:
         stored = store_library_upload(file)
     except ValueError as e:
@@ -306,7 +315,7 @@ def upload_to_library(
     item = StaffLibraryItem(
         staff_user_id=current_staff.id,
         kind=stored.kind,
-        folder=_normalize_folder(folder) or "general",
+        folder=folder_norm,
         title=title.strip()[:160] or (file.filename or "Untitled")[:160],
         url=url,
         original_filename=(file.filename or None),
