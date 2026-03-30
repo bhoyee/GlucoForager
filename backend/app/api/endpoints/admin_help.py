@@ -306,6 +306,20 @@ def get_ticket(
         .order_by(StaffTicketMessage.created_at.asc())
         .all()
     )
+
+    author_ids = sorted({int(m.author_staff_user_id) for m in msgs if m.author_staff_user_id})
+    author_map: dict[int, dict] = {}
+    if author_ids:
+        authors = db.query(StaffUser).filter(StaffUser.id.in_(author_ids)).all()
+        for u in authors:
+            roles = StaffRBACService.get_user_role_keys(db, u.id)
+            author_map[int(u.id)] = {
+                "id": u.id,
+                "email": u.email,
+                "full_name": getattr(u, "full_name", None),
+                "roles": roles,
+            }
+
     return {
         "ticket": {
             "id": t.id,
@@ -325,6 +339,7 @@ def get_ticket(
             {
                 "id": m.id,
                 "author_staff_user_id": m.author_staff_user_id,
+                "author": author_map.get(int(m.author_staff_user_id)) if m.author_staff_user_id else None,
                 "message": m.message,
                 "created_at": m.created_at.isoformat() if m.created_at else None,
             }
