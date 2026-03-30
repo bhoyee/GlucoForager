@@ -212,6 +212,7 @@ def compose_message(
 
 @router.get("/messages")
 def list_messages(
+    box: str = "inbox",
     unread_only: int = 0,
     include_deleted: int = 0,
     all: int = 0,  # noqa: A002
@@ -223,18 +224,27 @@ def list_messages(
     limit = max(1, min(int(limit or 50), 200))
     offset = max(0, int(offset or 0))
 
+    box = str(box or "inbox").strip().lower()
+    if box not in {"inbox", "sent"}:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid box")
+
     q = db.query(StaffInboxMessage)
-    if all:
-        if not _is_admin(db, current_staff):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+    if all and not _is_admin(db, current_staff):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+
+    if box == "sent":
+        if not all:
+            q = q.filter(StaffInboxMessage.sender_staff_user_id == int(current_staff.id))
+        # Note: deleted_at represents the recipient soft-delete. Do not filter it out for sent mail.
     else:
-        q = q.filter(StaffInboxMessage.recipient_staff_user_id == int(current_staff.id))
+        if not all:
+            q = q.filter(StaffInboxMessage.recipient_staff_user_id == int(current_staff.id))
 
-    if unread_only:
-        q = q.filter(StaffInboxMessage.read_at.is_(None))
+        if unread_only:
+            q = q.filter(StaffInboxMessage.read_at.is_(None))
 
-    if not include_deleted:
-        q = q.filter(StaffInboxMessage.deleted_at.is_(None))
+        if not include_deleted:
+            q = q.filter(StaffInboxMessage.deleted_at.is_(None))
 
     rows = q.order_by(StaffInboxMessage.created_at.desc()).offset(offset).limit(limit).all()
 
@@ -242,6 +252,10 @@ def list_messages(
     sender_ids = {int(r.sender_staff_user_id) for r in rows if r.sender_staff_user_id is not None}
     senders = db.query(StaffUser).filter(StaffUser.id.in_(list(sender_ids))).all() if sender_ids else []
     sender_map = {int(s.id): {"email": s.email, "full_name": getattr(s, "full_name", None)} for s in senders}
+
+    recipient_ids = {int(r.recipient_staff_user_id) for r in rows if r.recipient_staff_user_id is not None}
+    recipients = db.query(StaffUser).filter(StaffUser.id.in_(list(recipient_ids))).all() if recipient_ids else []
+    recipient_map = {int(s.id): {"email": s.email, "full_name": getattr(s, "full_name", None)} for s in recipients}
 
     def _sender_label(sender_id: int) -> str:
         s = sender_map.get(int(sender_id))
@@ -253,6 +267,16 @@ def list_messages(
             return f"{name} ({email})"
         return email or f"Staff #{sender_id}"
 
+    def _recipient_label(recipient_id: int) -> str:
+        s = recipient_map.get(int(recipient_id))
+        if not s:
+            return f"Staff #{recipient_id}"
+        name = str(s.get("full_name") or "").strip()
+        email = str(s.get("email") or "").strip()
+        if name and email:
+            return f"{name} ({email})"
+        return email or f"Staff #{recipient_id}"
+
     return {
         "items": [
             {
@@ -260,9 +284,11 @@ def list_messages(
                 "thread_id": int(r.thread_id or r.id),
                 "subject": r.subject,
                 "from": _sender_label(int(r.sender_staff_user_id)),
+                "to": _recipient_label(int(r.recipient_staff_user_id)),
+                "box": box,
                 "created_at": r.created_at.isoformat() if r.created_at else None,
                 "read_at": r.read_at.isoformat() if r.read_at else None,
-                "is_deleted": bool(r.deleted_at),
+                "is_deleted": bool(r.deleted_at) if box == "inbox" else False,
             }
             for r in rows
         ]
