@@ -85,6 +85,7 @@ export default function ComposeMailPage() {
       if (!res.ok) throw new Error(data.detail || 'Failed to send.');
       setTone('info');
       setMessage('Sent.');
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('admin-inbox-updated'));
       router.push('/admin/inbox?tab=mail');
     } catch (e) {
       setTone('danger');
@@ -150,4 +151,3 @@ export default function ComposeMailPage() {
     </div>
   );
 }
-
