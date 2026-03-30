@@ -205,6 +205,7 @@ export default function AdminShell({ children }) {
     const permissions = Array.isArray(session?.permissions) ? session.permissions : [];
     const roles = Array.isArray(session?.roles) ? session.roles : [];
     const isAdmin = permissions.includes('*') || permissions.includes('admin.manage') || roles.includes('admin');
+    const isMarketer = roles.includes('marketer');
     const canSeeUpdatesMenu = isAdmin || roles.includes('hr');
 
     const hasPermission = (required) => {
@@ -265,13 +266,17 @@ export default function AdminShell({ children }) {
         id: 'marketing',
         label: 'Marketing',
         defaultOpen: isAdmin,
-        items: [
-          { href: '/admin/newsletter', label: 'Newsletter', icon: 'N', perm: 'newsletter.send' },
-          { href: '/admin/newsletter/send', label: 'Send Email', icon: 'S', perm: 'newsletter.send' },
-          { href: '/admin/user-email', label: 'User Email', icon: 'E', perm: 'email.send' },
-          { href: '/admin/notifications', label: 'Notifications', icon: '!', perm: 'push.send' },
-          { href: '/admin/push-campaigns', label: 'Push Campaigns', icon: 'PN', perm: 'push.send' },
-        ],
+        // Hide Marketing tools from marketer staff accounts (admin keeps access).
+        items:
+          isMarketer && !isAdmin
+            ? []
+            : [
+                { href: '/admin/newsletter', label: 'Newsletter', icon: 'N', perm: 'newsletter.send' },
+                { href: '/admin/newsletter/send', label: 'Send Email', icon: 'S', perm: 'newsletter.send' },
+                { href: '/admin/user-email', label: 'User Email', icon: 'E', perm: 'email.send' },
+                { href: '/admin/notifications', label: 'Notifications', icon: '!', perm: 'push.send' },
+                { href: '/admin/push-campaigns', label: 'Push Campaigns', icon: 'PN', perm: 'push.send' },
+              ],
       },
       {
         id: 'engineering',
