@@ -120,6 +120,15 @@ class Settings(BaseSettings):
     library_max_pdf_bytes: int = Field(921_600, env="LIBRARY_MAX_PDF_BYTES")  # 900 KB
     library_max_video_bytes: int = Field(25 * 1024 * 1024, env="LIBRARY_MAX_VIDEO_BYTES")  # 25 MB
 
+    # Staff inbox attachments (shared hosting via FTP recommended)
+    inbox_file_storage_backend: str = Field("local", env="INBOX_FILE_STORAGE_BACKEND")
+    inbox_file_remote_base_url: str | None = Field(None, env="INBOX_FILE_REMOTE_BASE_URL")
+    # Remote base directory that contains inbox attachments (POSIX style).
+    inbox_file_ftp_base_dir: str = Field("/public_html/glucoforager.com/inbox-file", env="INBOX_FILE_FTP_BASE_DIR")
+    inbox_file_max_image_bytes: int = Field(2_097_152, env="INBOX_FILE_MAX_IMAGE_BYTES")  # 2 MB
+    inbox_file_max_pdf_bytes: int = Field(2_097_152, env="INBOX_FILE_MAX_PDF_BYTES")  # 2 MB
+    inbox_file_max_video_bytes: int = Field(25 * 1024 * 1024, env="INBOX_FILE_MAX_VIDEO_BYTES")  # 25 MB
+
     # Recipe image upload storage (used by /api/admin/uploads)
     # - local: store on backend disk under UPLOADS_DIR (served from /uploads)
     # - ftp: upload to shared hosting under RECIPE_FTP_BASE_DIR and store public RECIPE_REMOTE_BASE_URL
