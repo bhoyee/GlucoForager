@@ -200,6 +200,33 @@ export default function LibraryPage() {
     }
   };
 
+  const purge = async (id) => {
+    if (!token) return;
+    const ok = typeof window === 'undefined' ? true : window.confirm('Permanent delete? This will remove the DB row and attempt to delete the file from hosting.');
+    if (!ok) return;
+
+    setMessage('');
+    try {
+      const res = await fetch(`${API_URL}/api/admin/library/items/${id}/purge`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      if (!res.ok) throw new Error(data.detail || 'Permanent delete failed.');
+      if (data?.file_deleted === false && data?.file_error) {
+        setMessage(`Deleted from database, but file delete failed: ${data.file_error}`);
+      }
+      load();
+    } catch (e) {
+      setMessage(e?.message || 'Permanent delete failed.');
+    }
+  };
+
   const rows = Array.isArray(items) ? items : [];
 
   return (
@@ -336,9 +363,14 @@ export default function LibraryPage() {
                 render: (r) =>
                   r.is_deleted ? (
                     canRestore ? (
-                      <button className="admin-button" type="button" onClick={() => restore(r.id)}>
-                        Restore
-                      </button>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <button className="admin-button" type="button" onClick={() => restore(r.id)}>
+                          Restore
+                        </button>
+                        <button className="admin-button danger" type="button" onClick={() => purge(r.id)}>
+                          Permanent delete
+                        </button>
+                      </div>
                     ) : (
                       <span className="admin-subtitle">Deleted</span>
                     )
