@@ -51,13 +51,10 @@ export default function MilestonesPage() {
   const [items, setItems] = useState([]);
   const [totalStaff, setTotalStaff] = useState(0);
 
-  const [newTitle, setNewTitle] = useState('');
-  const [newDescription, setNewDescription] = useState('');
-  const [createLoading, setCreateLoading] = useState(false);
-
   const [editId, setEditId] = useState(null);
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
+  const [toggleLoading, setToggleLoading] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
 
   const [carryLoading, setCarryLoading] = useState(false);
@@ -151,38 +148,6 @@ export default function MilestonesPage() {
     }
   }, [canManage, periodStart, token]);
 
-  const createMilestone = async () => {
-    if (!token || !canManage || !roleKey || !periodStart) return;
-    const title = String(newTitle || '').trim();
-    if (!title) return;
-    setCreateLoading(true);
-    setMessage('');
-    try {
-      const res = await fetch(`${API_URL}/api/admin/work-plans/milestones`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          role_key: roleKey,
-          cadence,
-          period_start: periodStart,
-          title,
-          description: String(newDescription || '').trim() || null,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || 'Failed to create milestone.');
-      setNewTitle('');
-      setNewDescription('');
-      setMessage('Milestone created.');
-      loadMilestones();
-      loadMonthSummary();
-    } catch (e) {
-      setMessage(e?.message || 'Failed to create milestone.');
-    } finally {
-      setCreateLoading(false);
-    }
-  };
-
   const startEdit = (m) => {
     setEditId(m.id);
     setEditTitle(m.title || '');
@@ -232,6 +197,32 @@ export default function MilestonesPage() {
       loadMonthSummary();
     } catch (e) {
       setMessage(e?.message || 'Failed to delete milestone.');
+    }
+  };
+
+  const setMilestoneDone = async (milestoneId, isCompleted) => {
+    if (!token || !canManage) return;
+    setToggleLoading(true);
+    setMessage('');
+    try {
+      const res = await fetch(`${API_URL}/api/admin/work-plans/milestones/${milestoneId}/complete`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_completed: Boolean(isCompleted) }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      if (!res.ok) throw new Error(data.detail || 'Failed to update milestone.');
+      await loadProgress();
+      await loadMonthSummary();
+    } catch (e) {
+      setMessage(e?.message || 'Failed to update milestone.');
+    } finally {
+      setToggleLoading(false);
     }
   };
 
@@ -298,7 +289,7 @@ export default function MilestonesPage() {
               Milestones
             </h2>
             <p className="admin-subtitle" style={{ margin: 0 }}>
-              Create and manage weekly/monthly role targets. Staff complete them with proof links.
+              Manage weekly/monthly role targets. Mark milestones done when the role has achieved them.
             </p>
             {message ? (
               <p className="admin-subtitle" style={{ marginTop: 8 }}>
@@ -370,67 +361,52 @@ export default function MilestonesPage() {
       </div>
 
       <div className="admin-card" style={{ marginTop: 16 }}>
-        <h3 style={{ marginTop: 0 }}>Create milestone</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10 }}>
-          <div className="admin-field" style={{ margin: 0 }}>
-            <label>Title</label>
-            <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Milestone title..." />
-          </div>
-          <div className="admin-field" style={{ margin: 0 }}>
-            <label>Description (optional)</label>
-            <textarea value={newDescription} onChange={(e) => setNewDescription(e.target.value)} rows={3} placeholder="Details..." />
-          </div>
-          <div className="admin-actions">
-            <button className="admin-button" type="button" onClick={createMilestone} disabled={createLoading || !String(newTitle || '').trim()}>
-              {createLoading ? 'Creating...' : 'Create'}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="admin-card" style={{ marginTop: 16 }}>
         <h3 style={{ marginTop: 0 }}>Milestones</h3>
         {loading ? (
           <LoadingState label="Loading milestones..." />
         ) : items.length === 0 ? (
-          <EmptyState title="No milestones" body="Create a milestone above to get started." />
+          <EmptyState title="No milestones" body="No milestones match the selected role and period." />
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table className="admin-table">
               <thead>
                 <tr>
                   <th>Title</th>
-                  <th>Progress</th>
+                  <th>Status</th>
+                  <th>Completed</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {items.map((m) => {
-                  const done = Number(m.done_count || 0);
-                  const tot = Number(m.total_staff || totalStaff || 0);
-                  const percent = tot > 0 ? Math.round((done / tot) * 100) : 0;
-                  return (
-                    <tr key={m.id}>
-                      <td style={{ maxWidth: 640, whiteSpace: 'pre-wrap' }}>
-                        <div style={{ fontWeight: 800 }}>{m.title}</div>
-                        {m.description ? <div className="admin-subtitle" style={{ marginTop: 6 }}>{m.description}</div> : null}
-                      </td>
-                      <td>
-                        {done}/{tot} ({percent}%)
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                          <button className="admin-button secondary" type="button" onClick={() => startEdit(m)}>
-                            Edit
+                {items.map((m) => (
+                  <tr key={m.id}>
+                    <td style={{ maxWidth: 640, whiteSpace: 'pre-wrap' }}>
+                      <div style={{ fontWeight: 800 }}>{m.title}</div>
+                      {m.description ? <div className="admin-subtitle" style={{ marginTop: 6 }}>{m.description}</div> : null}
+                    </td>
+                    <td>{m.is_completed ? <span className="admin-badge success">Done</span> : <span className="admin-badge secondary">Open</span>}</td>
+                    <td>{m.completed_at || '—'}</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <button className="admin-button secondary" type="button" onClick={() => startEdit(m)}>
+                          Edit
+                        </button>
+                        {m.is_completed ? (
+                          <button className="admin-button warning" type="button" disabled={toggleLoading} onClick={() => setMilestoneDone(m.id, false)}>
+                            Reopen
                           </button>
-                          <button className="admin-button danger" type="button" onClick={() => deleteMilestone(m.id)}>
-                            Delete
+                        ) : (
+                          <button className="admin-button success" type="button" disabled={toggleLoading} onClick={() => setMilestoneDone(m.id, true)}>
+                            Mark done
                           </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                        )}
+                        <button className="admin-button danger" type="button" onClick={() => deleteMilestone(m.id)}>
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
