@@ -69,7 +69,8 @@ class _Sanitizer(HTMLParser):
             if key in {"target", "rel"}:
                 # enforce safe link behavior
                 continue
-            safe_attrs.append(f'{key}="{val.replace("\"", "&quot;")}"')
+            safe_val = val.replace('"', "&quot;")
+            safe_attrs.append(f'{key}="{safe_val}"')
 
         if t == "a":
             safe_attrs.append('target="_blank"')
@@ -498,4 +499,3 @@ def purge_message(
     db.delete(msg)
     db.commit()
     return {"ok": True}
-
