@@ -480,7 +480,7 @@ export default function LibraryPage() {
                     canRestore ? (
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                         {isAdmin ? (
-                          <button className="admin-button secondary" type="button" onClick={() => openDetails(r)}>
+                          <button className="admin-button info" type="button" onClick={() => openDetails(r)}>
                             Details
                           </button>
                         ) : null}
@@ -497,7 +497,7 @@ export default function LibraryPage() {
                   ) : (
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       {isAdmin ? (
-                        <button className="admin-button secondary" type="button" onClick={() => openDetails(r)}>
+                        <button className="admin-button info" type="button" onClick={() => openDetails(r)}>
                           Details
                         </button>
                       ) : null}
