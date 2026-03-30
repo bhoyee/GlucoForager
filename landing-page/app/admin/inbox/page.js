@@ -146,6 +146,7 @@ export default function InboxPage() {
       setMailThread(data);
       setReplyHtml('');
       loadMail();
+      if (mailBox === 'inbox' && typeof window !== 'undefined') window.dispatchEvent(new Event('admin-inbox-updated'));
     } catch (e) {
       setMessage(e?.message || 'Failed to open mail.');
     } finally {
@@ -222,6 +223,7 @@ export default function InboxPage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || 'Failed to mark read.');
       loadNotifications();
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('admin-inbox-updated'));
     } catch (e) {
       setMessage(e?.message || 'Failed to mark read.');
     }
@@ -238,6 +240,7 @@ export default function InboxPage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || 'Failed to mark all read.');
       loadNotifications();
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('admin-inbox-updated'));
     } catch (e) {
       setMessage(e?.message || 'Failed to mark all read.');
     }
