@@ -26,6 +26,7 @@ from ...models.refresh_token import RefreshToken
 from ...models.subscription import Subscription
 from ...models.user import SearchLog, User
 from ...services.redis_ai_queue import RedisAIQueue
+from ...services.recipe_upload_storage_service import store_recipe_image_upload
 from ...services.staff_rbac_service import StaffRBACService
 from ...services.subscription_service import is_subscription_active, is_premium_blocked, refresh_user_tier
 
@@ -893,12 +894,15 @@ def upload_image(
     if extension not in {".jpg", ".jpeg", ".png", ".webp"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported image type")
 
-    os.makedirs(settings.uploads_dir, exist_ok=True)
-    filename = f"{uuid.uuid4().hex}{extension}"
-    destination = os.path.join(settings.uploads_dir, filename)
+    try:
+        url = store_recipe_image_upload(file, request_base_url=str(request.base_url))
+    except ValueError as e:
+        msg = str(e) or "Invalid upload"
+        code = status.HTTP_413_REQUEST_ENTITY_TOO_LARGE if "too large" in msg.lower() else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=code, detail=msg)
+    except RuntimeError as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Upload failed")
 
-    with open(destination, "wb") as target:
-        target.write(file.file.read())
-
-    base_url = str(request.base_url).rstrip("/")
-    return {"url": f"{base_url}/uploads/{filename}"}
+    return {"url": url}

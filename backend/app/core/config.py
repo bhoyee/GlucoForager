@@ -120,6 +120,14 @@ class Settings(BaseSettings):
     library_max_pdf_bytes: int = Field(921_600, env="LIBRARY_MAX_PDF_BYTES")  # 900 KB
     library_max_video_bytes: int = Field(25 * 1024 * 1024, env="LIBRARY_MAX_VIDEO_BYTES")  # 25 MB
 
+    # Recipe image upload storage (used by /api/admin/uploads)
+    # - local: store on backend disk under UPLOADS_DIR (served from /uploads)
+    # - ftp: upload to shared hosting under RECIPE_FTP_BASE_DIR and store public RECIPE_REMOTE_BASE_URL
+    recipe_upload_storage_backend: str = Field("local", env="RECIPE_UPLOAD_STORAGE_BACKEND")
+    recipe_remote_base_url: str | None = Field(None, env="RECIPE_REMOTE_BASE_URL")
+    recipe_ftp_base_dir: str = Field("/glucoforager.com/recipes", env="RECIPE_FTP_BASE_DIR")
+    recipe_max_image_bytes: int = Field(2_097_152, env="RECIPE_MAX_IMAGE_BYTES")  # 2 MB
+
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
 
     @field_validator("cors_origins", mode="before")
