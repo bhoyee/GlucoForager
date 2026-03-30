@@ -35,6 +35,7 @@ function categoryLabel(item) {
   const f = String(item?.folder || '').trim().toLowerCase();
   if (!f || f === 'general') return 'General';
   if (f === 'hr') return 'HR';
+  if (f === 'learning') return 'Learning';
   return f.charAt(0).toUpperCase() + f.slice(1);
 }
 
@@ -44,6 +45,7 @@ function categoryOptions() {
     { value: 'general', label: 'General' },
     { value: 'marketing', label: 'Marketing' },
     { value: 'hr', label: 'HR' },
+    { value: 'learning', label: 'Learning' },
   ];
 }
 

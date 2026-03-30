@@ -7,15 +7,6 @@ import LoadingState from '../../ui/LoadingState';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
-function folderForFile(file) {
-  const ct = String(file?.type || '').toLowerCase();
-  const name = String(file?.name || '').toLowerCase();
-  if (ct.startsWith('image/') || /\.(jpg|jpeg|png|webp)$/.test(name)) return 'images';
-  if (ct.includes('application/pdf') || name.endsWith('.pdf')) return 'pdfs';
-  if (ct === 'video/mp4' || name.endsWith('.mp4')) return 'videos';
-  return 'general';
-}
-
 function normalizeCategory(value) {
   const v = String(value || '').trim().toLowerCase();
   if (!v) return 'general';
@@ -27,6 +18,7 @@ function categoryOptions() {
     { value: 'general', label: 'General' },
     { value: 'marketing', label: 'Marketing' },
     { value: 'hr', label: 'HR' },
+    { value: 'learning', label: 'Learning' },
   ];
 }
 
