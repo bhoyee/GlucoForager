@@ -361,6 +361,18 @@ export default function AdminShell({ children }) {
     return cleaned;
   }, [session]);
 
+  const portalTitle = isAdmin ? 'GlucoForager Admin' : 'GlucoForager Staff Portal';
+  const signedInLabel = useMemo(() => {
+    if (sessionLoading) return 'Loading staff session...';
+    if (!session?.email) return 'Manage recipes, blog posts, and moderation.';
+    if (isAdmin) {
+      if (firstName) return `Signed in as ${firstName} (${session.email})`;
+      return `Signed in as ${session.email}`;
+    }
+    if (firstName) return `Welcome ${firstName} (${session.email})`;
+    return `Welcome ${session.email}`;
+  }, [firstName, isAdmin, session?.email, sessionLoading]);
+
   useEffect(() => {
     if (!navSections.length) return;
     setNavSectionOpen((prev) => {
@@ -403,7 +415,7 @@ export default function AdminShell({ children }) {
             <span className="admin-brand-mark">GF</span>
             <div>
               <p className="admin-brand-title">GlucoForager</p>
-              <p className="admin-brand-subtitle">Admin Console</p>
+              <p className="admin-brand-subtitle">{isAdmin ? 'Admin Console' : 'Staff Portal'}</p>
             </div>
             <button
               className="admin-collapse-toggle"
@@ -513,16 +525,8 @@ export default function AdminShell({ children }) {
                 <path d="M4 18h16" />
               </svg>
             </button>
-            <h1>GlucoForager Admin</h1>
-            <p className="admin-signed-in-pill">
-              {sessionLoading
-                ? 'Loading staff session...'
-                : session?.email
-                  ? firstName
-                    ? `Signed in as ${firstName} (${session.email})`
-                    : `Signed in as ${session.email}`
-                  : 'Manage recipes, blog posts, and moderation.'}
-            </p>
+            <h1>{portalTitle}</h1>
+            <p className="admin-signed-in-pill">{signedInLabel}</p>
             {!sessionLoading && session?.email && profileIncomplete ? (
               <div className="admin-alert warning" style={{ marginTop: 10 }}>
                 Your profile is incomplete — please update it now (urgent).{' '}
