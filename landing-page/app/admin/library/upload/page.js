@@ -37,6 +37,9 @@ export default function LibraryUploadPage() {
   const [session, setSession] = useState(null);
   const permissions = Array.isArray(session?.permissions) ? session.permissions : [];
   const canUpload = permissions.includes('*') || permissions.includes('library.upload');
+  const roles = Array.isArray(session?.roles) ? session.roles.filter(Boolean) : [];
+  // Only real "admin" role (or '*' in dev) can see low-level storage diagnostics.
+  const isAdmin = permissions.includes('*') || roles.includes('admin');
 
   const [title, setTitle] = useState('');
   const [tags, setTags] = useState('');
@@ -231,20 +234,22 @@ export default function LibraryUploadPage() {
                   </div>
                   <div className="admin-actions" style={{ justifyContent: 'flex-start' }}>
                     <button className="admin-button" type="submit" disabled={submitting || !file}>
-                      {submitting ? 'Uploading…' : 'Upload'}
+                      {submitting ? 'Uploading...' : 'Upload'}
                     </button>
                     <Link className="admin-button info" href="/admin/library">
                       View library
                     </Link>
-                    <button className="admin-button secondary" type="button" onClick={loadStorageStatus} disabled={statusLoading}>
-                      {statusLoading ? 'Checking…' : 'Storage status'}
-                    </button>
+                    {isAdmin ? (
+                      <button className="admin-button secondary" type="button" onClick={loadStorageStatus} disabled={statusLoading}>
+                        {statusLoading ? 'Checking...' : 'Storage status'}
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               </div>
             </form>
 
-            {storageStatus ? (
+            {isAdmin && storageStatus ? (
               <div className="admin-card admin-card--subtle admin-card--compact" style={{ padding: 12, marginTop: 12 }}>
                 <div style={{ fontWeight: 900, marginBottom: 6 }}>Storage status</div>
                 <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 12, opacity: 0.9 }}>
