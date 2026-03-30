@@ -392,12 +392,13 @@ export default function InboxPage() {
             type="button"
             onClick={() => {
               setTab('mail');
-              replaceInboxUrl({ tab: 'mail', box: mailBox });
+              setMailBox('inbox');
+              replaceInboxUrl({ tab: 'mail', box: 'inbox' });
             }}
           >
             Mail
           </button>
-          <Link className="admin-button info" href="/admin/inbox/compose">
+          <Link className="admin-button warning" href="/admin/inbox/compose">
             Compose mail
           </Link>
 
@@ -406,7 +407,7 @@ export default function InboxPage() {
               <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <input type="checkbox" checked={notifUnreadOnly} onChange={(e) => setNotifUnreadOnly(e.target.checked)} /> Unread only
               </label>
-              <button className="admin-button info" type="button" onClick={loadNotifications}>
+              <button className="admin-button neutral" type="button" onClick={loadNotifications}>
                 Refresh
               </button>
               <button className="admin-button" type="button" onClick={markAllRead}>
@@ -415,28 +416,17 @@ export default function InboxPage() {
             </>
           ) : (
             <>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button
-                  className={`admin-button ${mailBox === 'inbox' ? 'info' : 'secondary'}`}
-                  type="button"
-                  onClick={() => {
-                    setMailBox('inbox');
-                    replaceInboxUrl({ tab: 'mail', box: 'inbox' });
-                  }}
-                >
-                  Inbox
-                </button>
-                <button
-                  className={`admin-button ${mailBox === 'sent' ? 'info' : 'secondary'}`}
-                  type="button"
-                  onClick={() => {
-                    setMailBox('sent');
-                    replaceInboxUrl({ tab: 'mail', box: 'sent' });
-                  }}
-                >
-                  Sent
-                </button>
-              </div>
+              <button
+                className="admin-button"
+                type="button"
+                onClick={() => {
+                  const next = mailBox === 'sent' ? 'inbox' : 'sent';
+                  setMailBox(next);
+                  replaceInboxUrl({ tab: 'mail', box: next });
+                }}
+              >
+                {mailBox === 'sent' ? 'Back to Mail' : 'Sent'}
+              </button>
               <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <input type="checkbox" checked={mailUnreadOnly} disabled={mailBox !== 'inbox'} onChange={(e) => setMailUnreadOnly(e.target.checked)} /> Unread only
               </label>
@@ -450,7 +440,7 @@ export default function InboxPage() {
                   <input type="checkbox" checked={mailIncludeDeleted} disabled={mailBox !== 'inbox'} onChange={(e) => setMailIncludeDeleted(e.target.checked)} /> Include deleted
                 </label>
               ) : null}
-              <button className="admin-button info" type="button" onClick={loadMail}>
+              <button className="admin-button neutral" type="button" onClick={loadMail}>
                 Refresh mail
               </button>
             </>

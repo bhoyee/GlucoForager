@@ -584,6 +584,11 @@
   background: #e53935;
 }
 
+.admin-button.neutral {
+  background: #334155;
+  color: #ffffff;
+}
+
 .admin-icon-button {
   width: 40px;
   height: 40px;
