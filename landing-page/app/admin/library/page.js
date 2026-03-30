@@ -66,6 +66,16 @@ function formatDateTime(iso) {
   }
 }
 
+function normalizeHref(url) {
+  const u = String(url || '').trim();
+  if (!u) return '';
+  if (u.startsWith('http://') || u.startsWith('https://')) return u;
+  if (u.startsWith('//')) return `https:${u}`;
+  if (u.startsWith('/')) return u;
+  // Avoid Next.js treating it as an internal route.
+  return `https://${u}`;
+}
+
 export default function LibraryPage() {
   const router = useRouter();
   const token = useMemo(() => (typeof window === 'undefined' ? null : localStorage.getItem('adminToken')), []);
@@ -351,7 +361,7 @@ export default function LibraryPage() {
                 filterable: false,
                 render: (r) =>
                   r.url ? (
-                    <a className="admin-button info" href={r.url} target="_blank" rel="noreferrer">
+                    <a className="admin-button info" href={normalizeHref(r.url)} target="_blank" rel="noreferrer">
                       Download
                     </a>
                   ) : (
@@ -415,25 +425,25 @@ export default function LibraryPage() {
             onClick={(e) => e.stopPropagation()}
             style={{ width: 'min(980px, 98vw)', height: 'min(720px, 92vh)', padding: 12, display: 'flex', flexDirection: 'column' }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
-              <p style={{ margin: 0, fontWeight: 700 }}>{previewItem.title}</p>
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                <a className="admin-link" href={previewItem.url} target="_blank" rel="noreferrer">
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
+                <p style={{ margin: 0, fontWeight: 700 }}>{previewItem.title}</p>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <a className="admin-link" href={normalizeHref(previewItem.url)} target="_blank" rel="noreferrer">
                   Open
                 </a>
                 <button className="admin-button danger" type="button" onClick={() => setPreviewItem(null)}>
                   Close
                 </button>
+                </div>
               </div>
-            </div>
 
             <div style={{ flex: 1, marginTop: 10, borderRadius: 12, overflow: 'hidden', background: 'rgba(255,255,255,0.04)' }}>
               {isImage(previewItem) ? (
-                <img src={previewItem.url} alt={previewItem.title} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                <img src={normalizeHref(previewItem.url)} alt={previewItem.title} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
               ) : isPdf(previewItem) ? (
-                <iframe title="PDF preview" src={previewItem.url} style={{ width: '100%', height: '100%', border: 0 }} />
+                <iframe title="PDF preview" src={normalizeHref(previewItem.url)} style={{ width: '100%', height: '100%', border: 0 }} />
               ) : isVideo(previewItem) ? (
-                <video src={previewItem.url} controls style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                <video src={normalizeHref(previewItem.url)} controls style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
               ) : (
                 <div style={{ padding: 14 }}>
                   <p className="admin-subtitle">Preview not available for this file type.</p>
