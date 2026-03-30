@@ -33,6 +33,8 @@ export default function InboxPage() {
   const [mailThreadLoading, setMailThreadLoading] = useState(false);
   const [replyHtml, setReplyHtml] = useState('');
   const [replySending, setReplySending] = useState(false);
+  const [replyAttachment, setReplyAttachment] = useState(null);
+  const [attachmentDownloadingId, setAttachmentDownloadingId] = useState(null);
 
   const [session, setSession] = useState(null);
   const [message, setMessage] = useState('');
@@ -171,18 +173,59 @@ export default function InboxPage() {
     }
     setReplySending(true);
     try {
-      const res = await fetch(`${API_URL}/api/admin/inbox/messages/${rootId}/reply`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ body_html: replyHtml }),
-      });
+      const fd = new FormData();
+      fd.set('body_html', replyHtml);
+      if (replyAttachment) fd.set('attachment', replyAttachment);
+
+      const res = await fetch(`${API_URL}/api/admin/inbox/messages/${rootId}/reply/form`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd });
       const data = await res.json().catch(() => ({}));
+      if (res.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
       if (!res.ok) throw new Error(data.detail || 'Failed to send reply.');
+      setReplyHtml('');
+      setReplyAttachment(null);
       await openMail(rootId);
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('admin-inbox-updated'));
     } catch (e) {
       setMessage(e?.message || 'Failed to send reply.');
     } finally {
       setReplySending(false);
+    }
+  };
+
+  const downloadAttachment = async (msg) => {
+    const att = msg?.attachment;
+    if (!token || !msg?.id || !att?.url) return;
+    setAttachmentDownloadingId(msg.id);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/inbox/messages/${encodeURIComponent(String(msg.id))}/attachment/download`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || 'Download failed.');
+      }
+      const blob = await res.blob();
+      const href = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = href;
+      a.download = String(att.original_name || att.filename || 'attachment');
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(href);
+    } catch (e) {
+      setMessage(`Download failed: ${e?.message || 'unknown error'}`);
+    } finally {
+      setAttachmentDownloadingId(null);
     }
   };
 
@@ -443,7 +486,15 @@ export default function InboxPage() {
             {Array.isArray(mailThread?.messages) ? (
               <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
                 {mailThread.messages.map((msg) => (
-                  <div key={msg.id} className="admin-card admin-card--subtle admin-card--compact" style={{ padding: 12 }}>
+                  <div
+                    key={msg.id}
+                    className="admin-card admin-card--subtle admin-card--compact"
+                    style={{
+                      padding: 12,
+                      borderColor: msg.is_mine ? 'rgba(25,118,210,0.35)' : 'rgba(46,125,50,0.28)',
+                      background: msg.is_mine ? 'rgba(25,118,210,0.06)' : 'rgba(46,125,50,0.06)',
+                    }}
+                  >
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
                       <div className="admin-subtitle">
                         From <strong>{msg.from}</strong> to <strong>{msg.to}</strong>
@@ -451,6 +502,16 @@ export default function InboxPage() {
                       <div className="admin-subtitle">{msg.created_at}</div>
                     </div>
                     <div style={{ marginTop: 10 }} dangerouslySetInnerHTML={{ __html: String(msg.body_html || '') }} />
+                    {msg.attachment?.url ? (
+                      <div className="admin-actions" style={{ marginTop: 10, justifyContent: 'flex-end', alignItems: 'center', gap: 10 }}>
+                        <div className="admin-subtitle" style={{ marginRight: 'auto' }}>
+                          Attachment: {String(msg.attachment.original_name || msg.attachment.filename || '')}
+                        </div>
+                        <button className="admin-button info" type="button" onClick={() => downloadAttachment(msg)} disabled={attachmentDownloadingId === msg.id}>
+                          {attachmentDownloadingId === msg.id ? 'Downloading...' : 'Download'}
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 ))}
               </div>
@@ -459,6 +520,10 @@ export default function InboxPage() {
             <div className="admin-card admin-card--subtle admin-card--compact" style={{ padding: 12, marginTop: 12 }}>
               <div style={{ fontWeight: 900, marginBottom: 6 }}>Reply</div>
               <RichTextEditor value={replyHtml} onChange={setReplyHtml} minHeight={140} />
+              <div className="admin-field" style={{ marginTop: 10 }}>
+                <label>Attachment (optional)</label>
+                <input type="file" onChange={(e) => setReplyAttachment(e.target.files?.[0] || null)} accept=".pdf,.jpg,.jpeg,.png,.webp,.mp4" />
+              </div>
               <div className="admin-actions" style={{ justifyContent: 'flex-end', marginTop: 10 }}>
                 <button className="admin-button info" type="button" onClick={sendReply} disabled={replySending}>
                   {replySending ? 'Sending...' : 'Send reply'}
