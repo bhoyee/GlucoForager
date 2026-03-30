@@ -59,6 +59,51 @@ def _normalize_tags(raw: str | None) -> str | None:
     return "," + ",".join(tokens[:20]) + ","
 
 
+def _normalize_public_base_url(raw: str) -> str:
+    value = str(raw or "").strip().rstrip("/")
+    if not value:
+        return value
+    if value.startswith("http://") or value.startswith("https://"):
+        return value
+    return "https://" + value.lstrip("/")
+
+
+def _normalize_public_item_url(raw_url: str | None) -> str | None:
+    """
+    Fixes legacy/bad URLs (missing scheme or wrong domain) for FTP-backed storage
+    by re-basing to LIBRARY_REMOTE_BASE_URL when we can reliably infer the subdir/filename.
+    """
+
+    url = str(raw_url or "").strip()
+    if not url:
+        return None
+
+    base_url = _normalize_public_base_url(settings.library_remote_base_url or "")
+    backend = str(settings.library_storage_backend or "local").strip().lower()
+    if backend != "ftp" or not base_url:
+        return url
+
+    # If it's already under the configured base URL, keep it.
+    if url.startswith(base_url.rstrip("/") + "/") or url == base_url.rstrip("/"):
+        return url
+
+    try:
+        u = urlparse(url if (url.startswith("http://") or url.startswith("https://")) else "https://" + url.lstrip("/"))
+        path = str(u.path or "")
+
+        # Extract "<dir>/<filename>" from the path when possible.
+        for dirname in ("images", "pdfs", "videos"):
+            marker = f"/{dirname}/"
+            if marker in path:
+                filename = path.split(marker, 1)[1].split("/", 1)[0].split("?", 1)[0].split("#", 1)[0].strip()
+                if filename:
+                    return f"{base_url}/{dirname}/{filename}"
+    except Exception:
+        pass
+
+    return url
+
+
 def _safe_unlink_local(path: str) -> bool:
     try:
         if os.path.isfile(path):
@@ -186,7 +231,7 @@ def list_library(
                 "kind": i.kind,
                 "folder": i.folder,
                 "title": i.title,
-                "url": i.url,
+                "url": _normalize_public_item_url(i.url),
                 "original_filename": getattr(i, "original_filename", None),
                 "content_type": getattr(i, "content_type", None),
                 "tags": [t for t in str(getattr(i, "tags", "") or "").split(",") if t],
