@@ -13,9 +13,11 @@ export default function InboxPage() {
   const token = useMemo(() => (typeof window === 'undefined' ? null : localStorage.getItem('adminToken')), []);
 
   const initialTab = (searchParams?.get('tab') || '').toLowerCase() === 'mail' ? 'mail' : 'notifications';
+  const initialBox = (searchParams?.get('box') || '').toLowerCase() === 'sent' ? 'sent' : 'inbox';
   const initialMessageId = searchParams?.get('message') ? Number(searchParams.get('message')) : null;
 
   const [tab, setTab] = useState(initialTab);
+  const [mailBox, setMailBox] = useState(initialBox);
 
   const [notifUnreadOnly, setNotifUnreadOnly] = useState(true);
   const [notifItems, setNotifItems] = useState([]);
@@ -95,9 +97,12 @@ export default function InboxPage() {
     try {
       const params = new URLSearchParams();
       params.set('limit', '80');
-      if (mailUnreadOnly) params.set('unread_only', '1');
-      if (mailIncludeDeleted) params.set('include_deleted', '1');
-      if (mailViewAll && isAdmin) params.set('all', '1');
+      params.set('box', mailBox);
+      if (mailBox === 'inbox') {
+        if (mailUnreadOnly) params.set('unread_only', '1');
+        if (mailIncludeDeleted) params.set('include_deleted', '1');
+        if (mailViewAll && isAdmin) params.set('all', '1');
+      }
       const res = await fetch(`${API_URL}/api/admin/inbox/messages?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -119,14 +124,16 @@ export default function InboxPage() {
   useEffect(() => {
     if (tab !== 'mail') return;
     loadMail();
-  }, [tab, token, mailUnreadOnly, mailIncludeDeleted, mailViewAll, isAdmin]);
+  }, [tab, token, mailUnreadOnly, mailIncludeDeleted, mailViewAll, isAdmin, mailBox]);
 
   const openMail = async (messageId) => {
     if (!token || !messageId) return;
     setMailThreadLoading(true);
     setMessage('');
     try {
-      fetch(`${API_URL}/api/admin/inbox/messages/${messageId}/read`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
+      if (mailBox === 'inbox' && !mailViewAll) {
+        fetch(`${API_URL}/api/admin/inbox/messages/${messageId}/read`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
+      }
 
       const res = await fetch(`${API_URL}/api/admin/inbox/messages/${messageId}`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.status === 401) {
@@ -289,17 +296,25 @@ export default function InboxPage() {
             </>
           ) : (
             <>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button className={`admin-button ${mailBox === 'inbox' ? 'info' : 'secondary'}`} type="button" onClick={() => setMailBox('inbox')}>
+                  Inbox
+                </button>
+                <button className={`admin-button ${mailBox === 'sent' ? 'info' : 'secondary'}`} type="button" onClick={() => setMailBox('sent')}>
+                  Sent
+                </button>
+              </div>
               <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input type="checkbox" checked={mailUnreadOnly} onChange={(e) => setMailUnreadOnly(e.target.checked)} /> Unread only
+                <input type="checkbox" checked={mailUnreadOnly} disabled={mailBox !== 'inbox'} onChange={(e) => setMailUnreadOnly(e.target.checked)} /> Unread only
               </label>
               {isAdmin ? (
                 <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <input type="checkbox" checked={mailViewAll} onChange={(e) => setMailViewAll(e.target.checked)} /> View all
+                  <input type="checkbox" checked={mailViewAll} disabled={mailBox !== 'inbox'} onChange={(e) => setMailViewAll(e.target.checked)} /> View all
                 </label>
               ) : null}
               {isAdmin ? (
                 <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <input type="checkbox" checked={mailIncludeDeleted} onChange={(e) => setMailIncludeDeleted(e.target.checked)} /> Include deleted
+                  <input type="checkbox" checked={mailIncludeDeleted} disabled={mailBox !== 'inbox'} onChange={(e) => setMailIncludeDeleted(e.target.checked)} /> Include deleted
                 </label>
               ) : null}
               <button className="admin-button info" type="button" onClick={loadMail}>
@@ -353,7 +368,7 @@ export default function InboxPage() {
               <thead>
                 <tr>
                   <th>Subject</th>
-                  <th>From</th>
+                  <th>{mailBox === 'sent' ? 'To' : 'From'}</th>
                   <th>Date</th>
                   <th>Status</th>
                   <th>Action</th>
@@ -363,7 +378,7 @@ export default function InboxPage() {
                 {mailItems.map((m) => (
                   <tr key={m.id} style={{ opacity: m.is_deleted ? 0.6 : 1 }}>
                     <td style={{ fontWeight: m.read_at ? 500 : 800 }}>{m.subject}</td>
-                    <td className="admin-subtitle">{m.from}</td>
+                    <td className="admin-subtitle">{mailBox === 'sent' ? m.to : m.from}</td>
                     <td className="admin-subtitle">{m.created_at}</td>
                     <td>{m.read_at ? <span className="admin-badge secondary">Read</span> : <span className="admin-badge warning">Unread</span>}</td>
                     <td>
@@ -371,12 +386,12 @@ export default function InboxPage() {
                         <button className="admin-button secondary" type="button" onClick={() => openMail(m.id)}>
                           View
                         </button>
-                        {!m.is_deleted ? (
+                        {mailBox === 'inbox' && !m.is_deleted ? (
                           <button className="admin-button danger" type="button" onClick={() => softDeleteMail(m.id)}>
                             Soft delete
                           </button>
                         ) : null}
-                        {isAdmin ? (
+                        {mailBox === 'inbox' && isAdmin ? (
                           <button className="admin-button danger" type="button" onClick={() => purgeMail(m.id)}>
                             Hard delete
                           </button>
@@ -453,4 +468,3 @@ export default function InboxPage() {
     </div>
   );
 }
-
