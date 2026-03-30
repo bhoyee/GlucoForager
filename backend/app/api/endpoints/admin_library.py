@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from urllib.parse import urlparse
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
@@ -13,6 +14,7 @@ from ...database import get_db
 from ...models.staff_audit_log import StaffAuditLog
 from ...models.staff_library_item import StaffLibraryItem
 from ...models.staff_user import StaffUser
+from ...services.ftp_storage_service import open_shared_ftp
 from ...services.library_storage_service import store_library_upload
 from ...services.staff_rbac_service import StaffRBACService
 
@@ -54,6 +56,78 @@ def _normalize_tags(raw: str | None) -> str | None:
     if not tokens:
         return None
     return "," + ",".join(tokens[:20]) + ","
+
+
+def _safe_unlink_local(path: str) -> bool:
+    try:
+        if os.path.isfile(path):
+            os.remove(path)
+            return True
+    except Exception:
+        return False
+    return False
+
+
+def _delete_remote_file(item: StaffLibraryItem) -> tuple[bool, str | None]:
+    """
+    Best-effort deletion of the underlying file (local or FTP).
+    Returns (deleted, error_message).
+    """
+
+    url = str(getattr(item, "url", "") or "").strip()
+    if not url:
+        return False, "missing_url"
+
+    # FTP-backed files (shared hosting) - only delete when URL matches configured base URL.
+    base_url = str(settings.library_remote_base_url or "").strip().rstrip("/")
+    if base_url:
+        if not (base_url.startswith("http://") or base_url.startswith("https://")):
+            base_url = "https://" + base_url.lstrip("/")
+        try:
+            base = urlparse(base_url)
+            u = urlparse(url)
+            if base.netloc and u.netloc and base.netloc.lower() == u.netloc.lower() and u.path.startswith(base.path.rstrip("/") + "/"):
+                rel = u.path[len(base.path.rstrip("/")) + 1 :]  # "<dir>/<filename>"
+                parts = [p for p in rel.split("/") if p]
+                if len(parts) >= 2:
+                    remote_dirname = parts[0].strip().lower()
+                    filename = parts[-1].strip()
+                    if remote_dirname in {"images", "pdfs", "videos"} and filename:
+                        remote_dir = f"{settings.library_ftp_base_dir.strip().rstrip('/')}/{remote_dirname}"
+                        ftp = open_shared_ftp()
+                        try:
+                            try:
+                                ftp.cwd("/" + remote_dir.lstrip("/"))
+                            except Exception:
+                                return False, "remote_dir_missing"
+                            try:
+                                ftp.delete(filename)
+                                return True, None
+                            except Exception as exc:
+                                msg = str(exc)
+                                if "550" in msg:
+                                    return False, "remote_file_missing"
+                                return False, f"ftp_delete_failed:{msg[:120]}"
+                        finally:
+                            try:
+                                ftp.quit()
+                            except Exception:
+                                try:
+                                    ftp.close()
+                                except Exception:
+                                    pass
+        except Exception as exc:
+            return False, f"url_parse_failed:{str(exc)[:120]}"
+
+    # Local disk-backed files - only delete within uploads_dir/library.
+    if "/uploads/library/" in url:
+        filename = url.split("/uploads/library/", 1)[1].split("?", 1)[0].split("#", 1)[0].strip().split("/")[-1]
+        if filename and filename.replace(".", "").replace("-", "").replace("_", "").isalnum():
+            local_path = os.path.join(settings.uploads_dir, "library", filename)
+            deleted = _safe_unlink_local(local_path)
+            return (deleted, None if deleted else "local_file_missing_or_unlink_failed")
+
+    return False, "unknown_storage"
 
 
 @router.get("")
@@ -328,3 +402,47 @@ def restore_item(
     )
     db.commit()
     return {"ok": True}
+
+
+@router.delete("/items/{item_id}/purge")
+def purge_item(
+    request: Request,
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("admin.manage")),
+):
+    # Only admin can permanently delete.
+    if not _is_admin(db, current_staff):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+
+    item = db.query(StaffLibraryItem).filter(StaffLibraryItem.id == int(item_id)).first()
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    file_deleted, file_error = _delete_remote_file(item)
+
+    db.add(
+        StaffAuditLog(
+            actor_id=int(current_staff.id),
+            action="library.purge",
+            entity="staff_library_items",
+            entity_id=str(item.id),
+            details={
+                "kind": item.kind,
+                "folder": item.folder,
+                "title": item.title,
+                "url": item.url,
+                "file_deleted": bool(file_deleted),
+                "file_error": file_error,
+                "was_soft_deleted": bool(item.is_deleted),
+            },
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            created_at=datetime.utcnow(),
+        )
+    )
+
+    # Always remove DB row to fulfill admin intent; file deletion is best-effort and reported.
+    db.delete(item)
+    db.commit()
+    return {"ok": True, "file_deleted": bool(file_deleted), "file_error": file_error}
