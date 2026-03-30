@@ -81,6 +81,25 @@ function downloadNameForItem(item) {
   return raw.replace(/[\\\/:*?"<>|]+/g, '_');
 }
 
+function actionLabel(action) {
+  const a = String(action || '').toLowerCase();
+  if (a === 'library.upload') return 'Uploaded';
+  if (a === 'library.download') return 'Downloaded';
+  if (a === 'library.soft_delete') return 'Soft deleted';
+  if (a === 'library.restore') return 'Restored';
+  if (a === 'library.purge') return 'Permanently deleted';
+  return action ? String(action) : 'Activity';
+}
+
+function actorNameOnly(actor) {
+  const text = String(actor || '').trim();
+  if (!text) return 'Unknown';
+  const idx = text.indexOf(' (');
+  if (idx > 0) return text.slice(0, idx).trim() || 'Unknown';
+  if (text.includes('@')) return text.split('@')[0].trim() || 'Unknown';
+  return text;
+}
+
 export default function LibraryPage() {
   const router = useRouter();
   const token = useMemo(() => (typeof window === 'undefined' ? null : localStorage.getItem('adminToken')), []);
@@ -606,6 +625,12 @@ export default function LibraryPage() {
 
             {!detailsLoading && detailsData?.item ? (
               <div className="admin-card admin-card--subtle admin-card--compact" style={{ padding: 12, marginTop: 12 }}>
+                {Array.isArray(detailsData?.logs) ? (
+                  <div className="admin-subtitle" style={{ marginTop: 0 }}>
+                    Uploaded by:{' '}
+                    <strong>{String(detailsData.logs.find((l) => String(l.action || '') === 'library.upload')?.actor || 'Unknown')}</strong>
+                  </div>
+                ) : null}
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
                   <span className="admin-badge secondary">{String(detailsData.item.kind || '').toUpperCase()}</span>
                   <span className="admin-badge secondary">{categoryLabel({ folder: detailsData.item.folder })}</span>
@@ -637,23 +662,12 @@ export default function LibraryPage() {
                     {detailsData.logs.map((l) => (
                       <div key={String(l.id || l.created_at || Math.random())} style={{ border: '1px solid rgba(0,0,0,0.06)', borderRadius: 12, padding: 10, background: '#fff' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-                          <div style={{ fontWeight: 800 }}>{String(l.action || '')}</div>
+                          <div style={{ fontWeight: 800 }}>{actionLabel(l.action)}</div>
                           <div className="admin-subtitle">{formatDateTime(l.created_at)}</div>
                         </div>
                         <div className="admin-subtitle" style={{ marginTop: 6 }}>
-                          By: <strong>{String(l.actor || `Staff #${l.actor_id || ''}`)}</strong>
-                          {l.ip ? (
-                            <>
-                              {' '}
-                              · IP: <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace' }}>{String(l.ip)}</span>
-                            </>
-                          ) : null}
+                          By: <strong>{actorNameOnly(l.actor || `Staff #${l.actor_id || ''}`)}</strong>
                         </div>
-                        {l.details ? (
-                          <pre style={{ margin: '10px 0 0', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 12, opacity: 0.9 }}>
-                            {JSON.stringify(l.details, null, 2)}
-                          </pre>
-                        ) : null}
                       </div>
                     ))}
                   </div>
