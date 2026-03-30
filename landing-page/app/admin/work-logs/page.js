@@ -695,9 +695,8 @@ export default function WorkLogsPage() {
     if (!prev || prev === staffTodayISO) return;
 
     const hasQuery = Boolean(searchParams?.get('date') || searchParams?.get('work_date'));
-    // If the staff was working on "today" before midnight, automatically roll over to the new day
-    // so they don't keep seeing yesterday's tasks.
-    if (!hasQuery && String(workDateRef.current || '') === String(prev)) {
+    // New day: always reset to "today" unless the URL explicitly asked for a specific date.
+    if (!hasQuery) {
       workDateTouchedRef.current = false;
       workDateRef.current = staffTodayISO;
       setWorkDate(staffTodayISO);
