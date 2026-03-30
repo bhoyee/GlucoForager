@@ -305,6 +305,13 @@ export default function InboxPage() {
     }
   };
 
+  const markReadOptimistic = (id) => {
+    if (!id) return;
+    const nowIso = new Date().toISOString();
+    setNotifItems((prev) => (Array.isArray(prev) ? prev.map((n) => (n?.id === id ? { ...n, read_at: n.read_at || nowIso } : n)) : prev));
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('admin-inbox-updated'));
+  };
+
   const markAllRead = async () => {
     if (!token) return;
     setMessage('');
@@ -323,6 +330,17 @@ export default function InboxPage() {
   };
 
   const openFromNotification = (n) => {
+    if (n?.id && !n?.read_at) {
+      markReadOptimistic(n.id);
+      // Best-effort server sync (do not block navigation).
+      fetch(`${API_URL}/api/admin/staff-notifications/${encodeURIComponent(String(n.id))}/read`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then(() => loadNotifications())
+        .catch(() => {});
+    }
+
     let data = n?.data;
     if (typeof data === 'string') {
       try {
