@@ -42,6 +42,25 @@ export default function InboxPage() {
   const roles = Array.isArray(session?.roles) ? session.roles : [];
   const isAdmin = permissions.includes('*') || permissions.includes('admin.manage') || roles.includes('admin');
 
+  const replaceInboxUrl = (next) => {
+    const params = new URLSearchParams(searchParams?.toString() || '');
+
+    const nextTab = String(next?.tab || '').toLowerCase();
+    if (nextTab === 'mail') params.set('tab', 'mail');
+    else params.set('tab', 'notifications');
+
+    const nextBox = String(next?.box || '').toLowerCase();
+    if (nextTab === 'mail') params.set('box', nextBox === 'sent' ? 'sent' : 'inbox');
+    else params.delete('box');
+
+    const nextMessage = next?.message;
+    if (nextMessage) params.set('message', String(nextMessage));
+    else params.delete('message');
+
+    const qs = params.toString();
+    router.replace(qs ? `/admin/inbox?${qs}` : '/admin/inbox');
+  };
+
   const messageIdFromUrl = useMemo(() => {
     const raw = searchParams?.get('message');
     if (!raw) return null;
@@ -314,7 +333,7 @@ export default function InboxPage() {
     }
     if (!data || typeof data !== 'object') data = {};
     if (data?.message_id) {
-      router.push(`/admin/inbox?tab=mail&message=${encodeURIComponent(String(data.message_id))}`);
+      router.push(`/admin/inbox?tab=mail&box=inbox&message=${encodeURIComponent(String(data.message_id))}`);
       return;
     }
     if (data?.ticket_id) {
@@ -340,10 +359,24 @@ export default function InboxPage() {
         {message && <p className="admin-subtitle">{message}</p>}
 
         <div className="admin-actions" style={{ gap: 10, flexWrap: 'wrap' }}>
-          <button className={`admin-button ${tab === 'notifications' ? 'info' : 'secondary'}`} type="button" onClick={() => setTab('notifications')}>
+          <button
+            className={`admin-button ${tab === 'notifications' ? 'info' : 'secondary'}`}
+            type="button"
+            onClick={() => {
+              setTab('notifications');
+              replaceInboxUrl({ tab: 'notifications' });
+            }}
+          >
             Notifications
           </button>
-          <button className={`admin-button ${tab === 'mail' ? 'info' : 'secondary'}`} type="button" onClick={() => setTab('mail')}>
+          <button
+            className={`admin-button ${tab === 'mail' ? 'info' : 'secondary'}`}
+            type="button"
+            onClick={() => {
+              setTab('mail');
+              replaceInboxUrl({ tab: 'mail', box: mailBox });
+            }}
+          >
             Mail
           </button>
           <Link className="admin-button info" href="/admin/inbox/compose">
@@ -365,10 +398,24 @@ export default function InboxPage() {
           ) : (
             <>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button className={`admin-button ${mailBox === 'inbox' ? 'info' : 'secondary'}`} type="button" onClick={() => setMailBox('inbox')}>
+                <button
+                  className={`admin-button ${mailBox === 'inbox' ? 'info' : 'secondary'}`}
+                  type="button"
+                  onClick={() => {
+                    setMailBox('inbox');
+                    replaceInboxUrl({ tab: 'mail', box: 'inbox' });
+                  }}
+                >
                   Inbox
                 </button>
-                <button className={`admin-button ${mailBox === 'sent' ? 'info' : 'secondary'}`} type="button" onClick={() => setMailBox('sent')}>
+                <button
+                  className={`admin-button ${mailBox === 'sent' ? 'info' : 'secondary'}`}
+                  type="button"
+                  onClick={() => {
+                    setMailBox('sent');
+                    replaceInboxUrl({ tab: 'mail', box: 'sent' });
+                  }}
+                >
                   Sent
                 </button>
               </div>
@@ -478,7 +525,10 @@ export default function InboxPage() {
         <div
           role="dialog"
           aria-modal="true"
-          onClick={() => setMailThread(null)}
+          onClick={() => {
+            setMailThread(null);
+            replaceInboxUrl({ tab: 'mail', box: mailBox });
+          }}
           style={{
             position: 'fixed',
             inset: 0,
@@ -498,7 +548,14 @@ export default function InboxPage() {
                   Thread #{mailThread?.thread_id || ''}
                 </p>
               </div>
-              <button className="admin-button danger" type="button" onClick={() => setMailThread(null)}>
+              <button
+                className="admin-button danger"
+                type="button"
+                onClick={() => {
+                  setMailThread(null);
+                  replaceInboxUrl({ tab: 'mail', box: mailBox });
+                }}
+              >
                 Close
               </button>
             </div>
