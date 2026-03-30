@@ -429,6 +429,157 @@ def download_library_item(
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
 
+@router.get("/items/{item_id}/open")
+def open_library_item_inline(
+    request: Request,
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("library.read")),
+):
+    """
+    Streams the file inline (for preview/open) without exposing the underlying shared-hosting URL.
+    """
+
+    item = db.query(StaffLibraryItem).filter(StaffLibraryItem.id == int(item_id)).first()
+    if not item or bool(item.is_deleted):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    backend = str(settings.library_storage_backend or "local").strip().lower()
+    url = _normalize_public_item_url(item.url) or ""
+
+    download_name = _safe_filename(getattr(item, "original_filename", None) or getattr(item, "title", None) or "asset")
+    media_type = str(getattr(item, "content_type", None) or "").strip() or None
+
+    try:
+        p = urlparse(url if (url.startswith("http://") or url.startswith("https://")) else "https://" + url.lstrip("/"))
+        ext = os.path.splitext(p.path or "")[1].strip()
+        if ext and "." not in download_name:
+            download_name = download_name + ext
+        if not media_type and ext:
+            guessed = mimetypes.guess_type("x" + ext)[0]
+            if guessed:
+                media_type = guessed
+    except Exception:
+        pass
+
+    if backend == "ftp":
+        base_url = str(settings.library_remote_base_url or "").strip().rstrip("/")
+        if not base_url:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="LIBRARY_REMOTE_BASE_URL not configured")
+        if not (base_url.startswith("http://") or base_url.startswith("https://")):
+            base_url = "https://" + base_url.lstrip("/")
+
+        base = urlparse(base_url)
+        u = urlparse(url)
+        if not (base.netloc and u.netloc and base.netloc.lower() == u.netloc.lower()):
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Cannot locate remote file")
+        if not u.path.startswith(base.path.rstrip("/") + "/"):
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Cannot locate remote file")
+
+        rel = u.path[len(base.path.rstrip("/")) + 1 :]  # "<dir>/<filename>"
+        parts = [p for p in rel.split("/") if p]
+        if len(parts) < 2:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Cannot locate remote file")
+        remote_dirname = parts[0].strip().lower()
+        filename = parts[-1].strip()
+        if remote_dirname not in {"images", "pdfs", "videos"} or not filename:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Cannot locate remote file")
+
+        remote_dir = f"{settings.library_ftp_base_dir.strip().rstrip('/')}/{remote_dirname}"
+        ftp = open_shared_ftp()
+        try:
+            try:
+                ftp.cwd("/" + remote_dir.lstrip("/"))
+            except Exception:
+                raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Remote dir missing")
+
+            buf = io.BytesIO()
+            try:
+                ftp.retrbinary(f"RETR {filename}", buf.write)
+            except Exception as exc:
+                msg = str(exc)
+                if "550" in msg:
+                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+                raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Failed to open file")
+        finally:
+            try:
+                ftp.quit()
+            except Exception:
+                try:
+                    ftp.close()
+                except Exception:
+                    pass
+
+        try:
+            db.add(
+                StaffAuditLog(
+                    actor_id=int(current_staff.id),
+                    action="library.open",
+                    entity="staff_library_items",
+                    entity_id=str(item.id),
+                    details={
+                        "kind": item.kind,
+                        "folder": item.folder,
+                        "title": item.title,
+                        "original_filename": getattr(item, "original_filename", None),
+                    },
+                    ip=request.client.host if request.client else None,
+                    user_agent=request.headers.get("user-agent"),
+                    created_at=datetime.utcnow(),
+                )
+            )
+            db.commit()
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+
+        return Response(
+            content=buf.getvalue(),
+            media_type=media_type or "application/octet-stream",
+            headers={"Content-Disposition": f'inline; filename="{download_name}"'},
+        )
+
+    # Local disk-backed files - only serve from uploads_dir/library.
+    if "/uploads/library/" in url:
+        filename = url.split("/uploads/library/", 1)[1].split("?", 1)[0].split("#", 1)[0].strip().split("/")[-1]
+        if filename and filename.replace(".", "").replace("-", "").replace("_", "").isalnum():
+            local_path = os.path.join(settings.uploads_dir, "library", filename)
+            if os.path.isfile(local_path):
+                try:
+                    db.add(
+                        StaffAuditLog(
+                            actor_id=int(current_staff.id),
+                            action="library.open",
+                            entity="staff_library_items",
+                            entity_id=str(item.id),
+                            details={
+                                "kind": item.kind,
+                                "folder": item.folder,
+                                "title": item.title,
+                                "original_filename": getattr(item, "original_filename", None),
+                            },
+                            ip=request.client.host if request.client else None,
+                            user_agent=request.headers.get("user-agent"),
+                            created_at=datetime.utcnow(),
+                        )
+                    )
+                    db.commit()
+                except Exception:
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
+                return FileResponse(
+                    local_path,
+                    media_type=media_type or "application/octet-stream",
+                    headers={"Content-Disposition": f'inline; filename="{download_name}"'},
+                )
+
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+
+
 @router.post("/upload")
 def upload_to_library(
     request: Request,
