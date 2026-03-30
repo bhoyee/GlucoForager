@@ -1,12 +1,11 @@
 import os
-import posixpath
 import uuid
 from dataclasses import dataclass
-from ftplib import FTP, FTP_TLS, error_perm
 
 from fastapi import UploadFile
 
 from ..core.config import settings
+from .ftp_storage_service import ftp_upload, open_shared_ftp
 
 
 @dataclass(frozen=True)
@@ -57,51 +56,6 @@ def _read_upload_size(file: UploadFile) -> int | None:
         return None
 
 
-def _ensure_posix_dir(ftp: FTP, directory: str) -> None:
-    # directory must be absolute POSIX path.
-    path = posixpath.normpath("/" + directory.lstrip("/"))
-    parts = [p for p in path.split("/") if p]
-    current = "/"
-    ftp.cwd("/")
-    for p in parts:
-        current = posixpath.join(current, p)
-        try:
-            ftp.cwd(current)
-        except Exception:
-            try:
-                ftp.mkd(current)
-            except error_perm:
-                # Another process may have created it; try again.
-                pass
-            ftp.cwd(current)
-
-
-def _open_ftp() -> FTP:
-    host = settings.library_ftp_host
-    user = settings.library_ftp_username
-    pwd = settings.library_ftp_password
-    if not host or not user or not pwd:
-        raise RuntimeError("FTP storage not configured. Set LIBRARY_FTP_HOST/USERNAME/PASSWORD.")
-
-    timeout = float(settings.library_ftp_timeout_seconds or 30.0)
-    if bool(settings.library_ftp_tls):
-        ftp: FTP = FTP_TLS(timeout=timeout)
-    else:
-        ftp = FTP(timeout=timeout)
-
-    ftp.connect(host=str(host), port=int(settings.library_ftp_port))
-    ftp.login(user=str(user), passwd=str(pwd))
-
-    if isinstance(ftp, FTP_TLS):
-        # Secure both control + data channels.
-        ftp.prot_p()
-    try:
-        ftp.set_pasv(True)
-    except Exception:
-        pass
-    return ftp
-
-
 def store_library_upload(file: UploadFile) -> StoredLibraryObject:
     """
     Stores the upload according to LIBRARY_STORAGE_BACKEND.
@@ -134,15 +88,11 @@ def store_library_upload(file: UploadFile) -> StoredLibraryObject:
         if not base_url:
             raise RuntimeError("FTP storage requires LIBRARY_REMOTE_BASE_URL (public URL prefix).")
 
-        remote_dir = posixpath.join(settings.library_ftp_base_dir.strip().rstrip("/"), _remote_kind_dir(kind))
-        remote_dir = posixpath.normpath("/" + remote_dir.lstrip("/"))
-
-        ftp = _open_ftp()
+        remote_dir = f"{settings.library_ftp_base_dir.strip().rstrip('/')}/{_remote_kind_dir(kind)}"
+        ftp = open_shared_ftp()
         try:
-            _ensure_posix_dir(ftp, remote_dir)
-            ftp.cwd(remote_dir)
             file.file.seek(0)
-            ftp.storbinary(f"STOR {filename}", file.file, blocksize=1024 * 128)
+            ftp_upload(ftp, remote_dir=remote_dir, filename=filename, fileobj=file.file)
         finally:
             try:
                 ftp.quit()
