@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import posixpath
 from urllib.parse import urlparse
 from datetime import datetime
 
@@ -446,3 +447,71 @@ def purge_item(
     db.delete(item)
     db.commit()
     return {"ok": True, "file_deleted": bool(file_deleted), "file_error": file_error}
+
+
+@router.get("/storage/status")
+def library_storage_status(
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("admin.manage")),  # noqa: ARG001
+):
+    backend = str(settings.library_storage_backend or "local").strip().lower()
+    remote_base_url = str(settings.library_remote_base_url or "").strip()
+    ftp_host = str(settings.library_ftp_host or "").strip()
+    ftp_port = int(getattr(settings, "library_ftp_port", 21) or 21)
+    ftp_base_dir = str(settings.library_ftp_base_dir or "").strip() or "/"
+
+    result: dict = {
+        "backend": backend,
+        "remote_base_url": remote_base_url,
+        "ftp": {
+            "host": (ftp_host[:4] + "***") if ftp_host else "",
+            "port": ftp_port,
+            "tls": bool(getattr(settings, "library_ftp_tls", True)),
+            "base_dir": ftp_base_dir,
+            "connected": False,
+            "cwd_ok": False,
+            "list": {},
+            "error": None,
+        },
+    }
+
+    if backend != "ftp":
+        return result
+
+    try:
+        ftp = open_shared_ftp()
+        try:
+            result["ftp"]["connected"] = True
+            root = posixpath.normpath("/" + ftp_base_dir.lstrip("/"))
+            try:
+                ftp.cwd(root)
+                result["ftp"]["cwd_ok"] = True
+            except Exception as exc:
+                result["ftp"]["cwd_ok"] = False
+                result["ftp"]["error"] = f"cwd_failed:{str(exc)[:180]}"
+                return result
+
+            for sub in ("images", "pdfs", "videos"):
+                path = posixpath.join(root.rstrip("/"), sub)
+                try:
+                    ftp.cwd(path)
+                    names = []
+                    try:
+                        names = ftp.nlst()[:50]
+                    except Exception:
+                        names = []
+                    result["ftp"]["list"][sub] = {"ok": True, "count": len(names), "sample": names[:8]}
+                except Exception as exc:
+                    result["ftp"]["list"][sub] = {"ok": False, "error": str(exc)[:180]}
+        finally:
+            try:
+                ftp.quit()
+            except Exception:
+                try:
+                    ftp.close()
+                except Exception:
+                    pass
+    except Exception as exc:
+        result["ftp"]["error"] = str(exc)[:180]
+
+    return result
