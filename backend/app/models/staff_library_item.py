@@ -13,7 +13,7 @@ class StaffLibraryItem(Base):
     id = Column(Integer, primary_key=True, index=True)
     staff_user_id = Column(Integer, ForeignKey("staff_users.id"), nullable=False, index=True)
 
-    kind = Column(String, nullable=False)  # "document" | "image"
+    kind = Column(String, nullable=False)  # "document" | "image" | "video"
     folder = Column(String, nullable=False, default="general")  # "documents" | "images" | "training" | "general"
 
     title = Column(String, nullable=False)

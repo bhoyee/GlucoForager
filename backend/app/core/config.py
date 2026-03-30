@@ -100,6 +100,26 @@ class Settings(BaseSettings):
     expo_push_access_token: str | None = Field(None, env="EXPO_PUSH_ACCESS_TOKEN")
     expo_push_endpoint: str = Field("https://exp.host/--/api/v2/push/send", env="EXPO_PUSH_ENDPOINT")
 
+    # Staff library file storage
+    # - local: store on backend disk under UPLOADS_DIR (default, dev-friendly)
+    # - ftp: upload to shared hosting via (FTPS) and store public URL (recommended for your shared hosting setup)
+    library_storage_backend: str = Field("local", env="LIBRARY_STORAGE_BACKEND")
+    library_remote_base_url: str | None = Field(None, env="LIBRARY_REMOTE_BASE_URL")
+
+    library_ftp_host: str | None = Field(None, env="LIBRARY_FTP_HOST")
+    library_ftp_port: int = Field(21, env="LIBRARY_FTP_PORT")
+    library_ftp_username: str | None = Field(None, env="LIBRARY_FTP_USERNAME")
+    library_ftp_password: str | None = Field(None, env="LIBRARY_FTP_PASSWORD")
+    # Remote base directory that contains the "images/pdfs/videos" folders (POSIX style).
+    library_ftp_base_dir: str = Field("/glucoforager.com/library", env="LIBRARY_FTP_BASE_DIR")
+    library_ftp_tls: bool = Field(True, env="LIBRARY_FTP_TLS")
+    library_ftp_timeout_seconds: float = Field(30.0, env="LIBRARY_FTP_TIMEOUT_SECONDS")
+
+    # Default upload limits (bytes). Can be tuned per environment.
+    library_max_image_bytes: int = Field(1_048_576, env="LIBRARY_MAX_IMAGE_BYTES")  # 1 MB
+    library_max_pdf_bytes: int = Field(921_600, env="LIBRARY_MAX_PDF_BYTES")  # 900 KB
+    library_max_video_bytes: int = Field(25 * 1024 * 1024, env="LIBRARY_MAX_VIDEO_BYTES")  # 25 MB
+
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
 
     @field_validator("cors_origins", mode="before")
