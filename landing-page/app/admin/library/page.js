@@ -126,6 +126,8 @@ export default function LibraryPage() {
   const [purgeLoading, setPurgeLoading] = useState(false);
 
   const [previewItem, setPreviewItem] = useState(null);
+  const [previewBlobUrl, setPreviewBlobUrl] = useState('');
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [tableDownloadingId, setTableDownloadingId] = useState(null);
   const [previewDownloading, setPreviewDownloading] = useState(false);
   const [detailsTarget, setDetailsTarget] = useState(null);
@@ -287,6 +289,62 @@ export default function LibraryPage() {
       setPreviewDownloading(false);
     }
   };
+
+  const openPreviewInNewTab = () => {
+    if (!previewBlobUrl) return;
+    try {
+      window.open(previewBlobUrl, '_blank', 'noopener,noreferrer');
+    } catch {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    if (!previewItem?.id || !token) return undefined;
+
+    let canceled = false;
+    let objectUrl = '';
+
+    const run = async () => {
+      setPreviewLoading(true);
+      setMessage('');
+      try {
+        const res = await fetch(`${API_URL}/api/admin/library/items/${encodeURIComponent(String(previewItem.id))}/open`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.status === 401) {
+          localStorage.removeItem('adminToken');
+          router.push('/admin');
+          return;
+        }
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.detail || 'Failed to open file.');
+        }
+        const blob = await res.blob();
+        objectUrl = window.URL.createObjectURL(blob);
+        if (canceled) {
+          window.URL.revokeObjectURL(objectUrl);
+          return;
+        }
+        setPreviewBlobUrl(objectUrl);
+      } catch (e) {
+        setPreviewBlobUrl('');
+        setMessage(e?.message || 'Failed to open file.');
+      } finally {
+        if (!canceled) setPreviewLoading(false);
+      }
+    };
+
+    run();
+
+    return () => {
+      canceled = true;
+      setPreviewLoading(false);
+      setPreviewBlobUrl('');
+      if (objectUrl) window.URL.revokeObjectURL(objectUrl);
+    };
+  }, [previewItem?.id, router, token]);
 
   useEffect(() => {
     loadSession();
@@ -583,17 +641,17 @@ export default function LibraryPage() {
             zIndex: 1000,
           }}
         >
-          <div
-            className="admin-card"
-            onClick={(e) => e.stopPropagation()}
-            style={{ width: 'min(980px, 98vw)', height: 'min(720px, 92vh)', padding: 12, display: 'flex', flexDirection: 'column' }}
-          >
+            <div
+              className="admin-card"
+              onClick={(e) => e.stopPropagation()}
+              style={{ width: 'min(980px, 98vw)', height: 'min(720px, 92vh)', padding: 12, display: 'flex', flexDirection: 'column' }}
+            >
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
                 <p style={{ margin: 0, fontWeight: 700 }}>{previewItem.title}</p>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                <a className="admin-button info" href={normalizeHref(previewItem.url)} target="_blank" rel="noreferrer">
+                <button className="admin-button info" type="button" onClick={openPreviewInNewTab} disabled={!previewBlobUrl || previewLoading}>
                   Open
-                </a>
+                </button>
                 <button className="admin-button warning" type="button" onClick={downloadPreview} disabled={previewDownloading}>
                   {previewDownloading ? 'Downloading...' : 'Download'}
                 </button>
@@ -604,12 +662,20 @@ export default function LibraryPage() {
               </div>
 
             <div style={{ flex: 1, marginTop: 10, borderRadius: 12, overflow: 'hidden', background: 'rgba(255,255,255,0.04)' }}>
-              {isImage(previewItem) ? (
-                <img src={normalizeHref(previewItem.url)} alt={previewItem.title} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+              {previewLoading ? (
+                <div style={{ padding: 14 }}>
+                  <LoadingState label="Opening preview..." />
+                </div>
+              ) : !previewBlobUrl ? (
+                <div style={{ padding: 14 }}>
+                  <p className="admin-subtitle">Preview not available right now.</p>
+                </div>
+              ) : isImage(previewItem) ? (
+                <img src={previewBlobUrl} alt={previewItem.title} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
               ) : isPdf(previewItem) ? (
-                <iframe title="PDF preview" src={normalizeHref(previewItem.url)} style={{ width: '100%', height: '100%', border: 0 }} />
+                <iframe title="PDF preview" src={previewBlobUrl} style={{ width: '100%', height: '100%', border: 0 }} />
               ) : isVideo(previewItem) ? (
-                <video src={normalizeHref(previewItem.url)} controls style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                <video src={previewBlobUrl} controls style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
               ) : (
                 <div style={{ padding: 14 }}>
                   <p className="admin-subtitle">Preview not available for this file type.</p>
