@@ -279,6 +279,7 @@ def list_folders(
 
 @router.get("/items/{item_id}/download")
 def download_library_item(
+    request: Request,
     item_id: int,
     db: Session = Depends(get_db),
     current_staff: StaffUser = Depends(require_staff_permission("library.read")),
@@ -353,6 +354,33 @@ def download_library_item(
                 except Exception:
                     pass
 
+        # Audit (best-effort; don't block the download if logging fails).
+        try:
+            db.add(
+                StaffAuditLog(
+                    actor_id=int(current_staff.id),
+                    action="library.download",
+                    entity="staff_library_items",
+                    entity_id=str(item.id),
+                    details={
+                        "kind": item.kind,
+                        "folder": item.folder,
+                        "title": item.title,
+                        "url": item.url,
+                        "original_filename": getattr(item, "original_filename", None),
+                    },
+                    ip=request.client.host if request.client else None,
+                    user_agent=request.headers.get("user-agent"),
+                    created_at=datetime.utcnow(),
+                )
+            )
+            db.commit()
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+
         return Response(
             content=buf.getvalue(),
             media_type=media_type or "application/octet-stream",
@@ -365,6 +393,31 @@ def download_library_item(
         if filename and filename.replace(".", "").replace("-", "").replace("_", "").isalnum():
             local_path = os.path.join(settings.uploads_dir, "library", filename)
             if os.path.isfile(local_path):
+                try:
+                    db.add(
+                        StaffAuditLog(
+                            actor_id=int(current_staff.id),
+                            action="library.download",
+                            entity="staff_library_items",
+                            entity_id=str(item.id),
+                            details={
+                                "kind": item.kind,
+                                "folder": item.folder,
+                                "title": item.title,
+                                "url": item.url,
+                                "original_filename": getattr(item, "original_filename", None),
+                            },
+                            ip=request.client.host if request.client else None,
+                            user_agent=request.headers.get("user-agent"),
+                            created_at=datetime.utcnow(),
+                        )
+                    )
+                    db.commit()
+                except Exception:
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
                 return FileResponse(local_path, media_type=media_type or "application/octet-stream", filename=download_name)
 
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
@@ -561,6 +614,95 @@ def restore_item(
     )
     db.commit()
     return {"ok": True}
+
+
+@router.get("/items/{item_id}/details")
+def library_item_details(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("admin.manage")),
+):
+    if not _is_admin(db, current_staff):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+
+    item = db.query(StaffLibraryItem).filter(StaffLibraryItem.id == int(item_id)).first()
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    actor_ids = set()
+    actor_ids.add(int(item.staff_user_id) if item.staff_user_id is not None else 0)
+    if item.deleted_by_staff_user_id:
+        actor_ids.add(int(item.deleted_by_staff_user_id))
+
+    logs = (
+        db.query(StaffAuditLog)
+        .filter(StaffAuditLog.entity == "staff_library_items", StaffAuditLog.entity_id == str(item.id))
+        .order_by(StaffAuditLog.created_at.desc())
+        .limit(300)
+        .all()
+    )
+    for l in logs:
+        try:
+            actor_ids.add(int(l.actor_id))
+        except Exception:
+            pass
+
+    actor_ids.discard(0)
+    staff_map: dict[int, dict] = {}
+    if actor_ids:
+        rows = db.query(StaffUser).filter(StaffUser.id.in_(list(actor_ids))).all()
+        staff_map = {
+            int(u.id): {"id": int(u.id), "email": u.email, "full_name": getattr(u, "full_name", None), "roles": StaffRBACService.get_user_role_keys(db, u.id)}
+            for u in rows
+        }
+
+    def _actor_label(actor_id: int | None) -> str | None:
+        if actor_id is None:
+            return None
+        try:
+            aid = int(actor_id)
+        except Exception:
+            return None
+        u = staff_map.get(aid)
+        if not u:
+            return f"Staff #{aid}"
+        name = str(u.get("full_name") or "").strip()
+        email = str(u.get("email") or "").strip()
+        if name and email:
+            return f"{name} ({email})"
+        if email:
+            return email
+        return f"Staff #{aid}"
+
+    return {
+        "item": {
+            "id": item.id,
+            "kind": item.kind,
+            "folder": item.folder,
+            "title": item.title,
+            "url": _normalize_public_item_url(item.url),
+            "original_filename": getattr(item, "original_filename", None),
+            "content_type": getattr(item, "content_type", None),
+            "tags": [t for t in str(getattr(item, "tags", "") or "").split(",") if t],
+            "is_deleted": bool(item.is_deleted),
+            "deleted_at": item.deleted_at.isoformat() if item.deleted_at else None,
+            "deleted_by_staff_user_id": item.deleted_by_staff_user_id,
+            "created_at": item.created_at.isoformat() if item.created_at else None,
+            "created_by_staff_user_id": item.staff_user_id,
+        },
+        "logs": [
+            {
+                "id": int(l.id) if getattr(l, "id", None) is not None else None,
+                "action": l.action,
+                "actor_id": l.actor_id,
+                "actor": _actor_label(l.actor_id),
+                "ip": l.ip,
+                "created_at": l.created_at.isoformat() if l.created_at else None,
+                "details": l.details,
+            }
+            for l in logs
+        ],
+    }
 
 
 @router.delete("/items/{item_id}/purge")
