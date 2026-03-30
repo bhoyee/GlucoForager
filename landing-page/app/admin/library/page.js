@@ -85,6 +85,8 @@ export default function LibraryPage() {
   const [items, setItems] = useState([]);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
+  const [purgeTarget, setPurgeTarget] = useState(null);
+  const [purgeLoading, setPurgeLoading] = useState(false);
 
   const [previewItem, setPreviewItem] = useState(null);
   const debounceTimer = useRef(null);
@@ -202,10 +204,8 @@ export default function LibraryPage() {
 
   const purge = async (id) => {
     if (!token) return;
-    const ok = typeof window === 'undefined' ? true : window.confirm('Permanent delete? This will remove the DB row and attempt to delete the file from hosting.');
-    if (!ok) return;
-
     setMessage('');
+    setPurgeLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/admin/library/items/${id}/purge`, {
         method: 'DELETE',
@@ -224,6 +224,9 @@ export default function LibraryPage() {
       load();
     } catch (e) {
       setMessage(e?.message || 'Permanent delete failed.');
+    } finally {
+      setPurgeLoading(false);
+      setPurgeTarget(null);
     }
   };
 
@@ -367,7 +370,7 @@ export default function LibraryPage() {
                         <button className="admin-button" type="button" onClick={() => restore(r.id)}>
                           Restore
                         </button>
-                        <button className="admin-button danger" type="button" onClick={() => purge(r.id)}>
+                        <button className="admin-button danger" type="button" onClick={() => setPurgeTarget(r)}>
                           Permanent delete
                         </button>
                       </div>
@@ -436,6 +439,46 @@ export default function LibraryPage() {
                   <p className="admin-subtitle">Preview not available for this file type.</p>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {purgeTarget ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => (purgeLoading ? null : setPurgeTarget(null))}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+            zIndex: 1000,
+          }}
+        >
+          <div className="admin-card" onClick={(e) => e.stopPropagation()} style={{ width: 'min(560px, 96vw)', padding: 16 }}>
+            <h3 style={{ marginTop: 0, marginBottom: 8 }}>Permanent delete</h3>
+            <p className="admin-subtitle" style={{ marginTop: 0 }}>
+              This will remove the item from the database and attempt to delete the file from your hosting. This action cannot be undone.
+            </p>
+            <div className="admin-card admin-card--subtle admin-card--compact" style={{ padding: 12, marginTop: 10 }}>
+              <div style={{ fontWeight: 800 }}>{purgeTarget.title}</div>
+              <div className="admin-subtitle" style={{ marginTop: 6 }}>
+                {kindLabel(purgeTarget)} · {categoryLabel(purgeTarget)}
+              </div>
+            </div>
+
+            <div className="admin-actions" style={{ justifyContent: 'flex-end', gap: 10, marginTop: 14 }}>
+              <button className="admin-button secondary" type="button" onClick={() => setPurgeTarget(null)} disabled={purgeLoading}>
+                Cancel
+              </button>
+              <button className="admin-button danger" type="button" onClick={() => purge(purgeTarget.id)} disabled={purgeLoading}>
+                {purgeLoading ? 'Deleting…' : 'Permanent delete'}
+              </button>
             </div>
           </div>
         </div>
