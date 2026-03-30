@@ -27,9 +27,6 @@ function categoryOptions() {
     { value: 'general', label: 'General' },
     { value: 'marketing', label: 'Marketing' },
     { value: 'hr', label: 'HR' },
-    { value: 'support', label: 'Support' },
-    { value: 'designer', label: 'Designer' },
-    { value: 'developer', label: 'Developer' },
   ];
 }
 
@@ -152,7 +149,7 @@ export default function LibraryUploadPage() {
                     <label>Choose file</label>
                     <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
                     <p className="admin-subtitle" style={{ marginTop: 6 }}>
-                      Allowed: images (jpg/png/webp) â‰¤ 1MB, PDF â‰¤ 900KB, MP4 video â‰¤ 25MB.
+                      Allowed: images (jpg/png/webp) &lt;= 1MB, PDF &lt;= 900KB, MP4 video &lt;= 25MB.
                     </p>
                   </div>
                 </div>

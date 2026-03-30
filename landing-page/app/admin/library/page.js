@@ -44,9 +44,6 @@ function categoryOptions() {
     { value: 'general', label: 'General' },
     { value: 'marketing', label: 'Marketing' },
     { value: 'hr', label: 'HR' },
-    { value: 'support', label: 'Support' },
-    { value: 'designer', label: 'Designer' },
-    { value: 'developer', label: 'Developer' },
   ];
 }
 
