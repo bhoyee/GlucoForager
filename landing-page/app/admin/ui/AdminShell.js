@@ -261,13 +261,13 @@ export default function AdminShell({ children }) {
     return !full || !country || !address || !phone || !gender;
   }, [session?.address, session?.country, session?.full_name, session?.gender, session?.phone_number]);
 
-  const navSections = useMemo(() => {
-    const permissions = Array.isArray(session?.permissions) ? session.permissions : [];
-    const roles = Array.isArray(session?.roles) ? session.roles : [];
-    const isAdmin = permissions.includes('*') || permissions.includes('admin.manage') || roles.includes('admin');
-    const isMarketer = roles.includes('marketer');
-    const canSeeUpdatesMenu = isAdmin || roles.includes('hr');
+  const permissions = Array.isArray(session?.permissions) ? session.permissions : [];
+  const roles = Array.isArray(session?.roles) ? session.roles : [];
+  const isAdmin = permissions.includes('*') || permissions.includes('admin.manage') || roles.includes('admin');
+  const isMarketer = roles.includes('marketer');
+  const canSeeUpdatesMenu = isAdmin || roles.includes('hr');
 
+  const navSections = useMemo(() => {
     const hasPermission = (required) => {
       if (!required) return true;
       if (permissions.includes('*')) return true;
@@ -359,7 +359,7 @@ export default function AdminShell({ children }) {
       .filter((s) => (s.items || []).length > 0);
 
     return cleaned;
-  }, [session]);
+  }, [canSeeUpdatesMenu, isAdmin, isMarketer, permissions, session]);
 
   const portalTitle = isAdmin ? 'GlucoForager Admin' : 'GlucoForager Staff Portal';
   const signedInLabel = useMemo(() => {
