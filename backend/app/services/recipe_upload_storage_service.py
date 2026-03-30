@@ -7,6 +7,15 @@ from ..core.config import settings
 from .ftp_storage_service import ftp_upload, open_shared_ftp
 
 
+def _normalize_public_base_url(raw: str) -> str:
+    value = str(raw or "").strip().rstrip("/")
+    if not value:
+        return value
+    if value.startswith("http://") or value.startswith("https://"):
+        return value
+    return "https://" + value.lstrip("/")
+
+
 def _read_upload_size(file: UploadFile) -> int | None:
     try:
         pos = file.file.tell()
@@ -38,7 +47,7 @@ def store_recipe_image_upload(file: UploadFile, *, request_base_url: str) -> str
     backend = str(settings.recipe_upload_storage_backend or "local").strip().lower()
 
     if backend == "ftp":
-        base_url = (settings.recipe_remote_base_url or "").strip().rstrip("/")
+        base_url = _normalize_public_base_url(settings.recipe_remote_base_url or "")
         if not base_url:
             raise RuntimeError("Recipe FTP storage requires RECIPE_REMOTE_BASE_URL.")
         remote_dir = settings.recipe_ftp_base_dir.strip().rstrip("/")
@@ -67,4 +76,3 @@ def store_recipe_image_upload(file: UploadFile, *, request_base_url: str) -> str
                 break
             target.write(chunk)
     return f"{request_base_url.rstrip('/')}/uploads/{filename}"
-

@@ -15,6 +15,16 @@ class StoredLibraryObject:
     url: str
 
 
+def _normalize_public_base_url(raw: str) -> str:
+    value = str(raw or "").strip().rstrip("/")
+    if not value:
+        return value
+    if value.startswith("http://") or value.startswith("https://"):
+        return value
+    # If user accidentally sets "domain.com/path" without scheme, make it a valid absolute URL.
+    return "https://" + value.lstrip("/")
+
+
 def _remote_kind_dir(kind: str) -> str:
     k = str(kind or "").strip().lower()
     if k == "image":
@@ -84,7 +94,7 @@ def store_library_upload(file: UploadFile) -> StoredLibraryObject:
     backend = str(settings.library_storage_backend or "local").strip().lower()
 
     if backend == "ftp":
-        base_url = (settings.library_remote_base_url or "").strip().rstrip("/")
+        base_url = _normalize_public_base_url(settings.library_remote_base_url or "")
         if not base_url:
             raise RuntimeError("FTP storage requires LIBRARY_REMOTE_BASE_URL (public URL prefix).")
 
