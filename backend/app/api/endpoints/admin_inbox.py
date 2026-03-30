@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from ..admin_dependencies import get_current_staff_user, require_staff_permission
+from ...core.config import settings
 from ...database import get_db
 from ...models.staff_audit_log import StaffAuditLog
 from ...models.staff_inbox_message import StaffInboxMessage
