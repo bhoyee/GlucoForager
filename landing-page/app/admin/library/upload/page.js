@@ -168,14 +168,14 @@ export default function LibraryUploadPage() {
       </div>
 
       <div className="admin-card" style={{ marginTop: 16 }}>
-        {loading ? <LoadingState label="Loading…" /> : null}
+        {loading ? <LoadingState label="Loading..." /> : null}
 
         {!loading && !canUpload ? <div className="admin-alert danger">You do not have permission to upload library files.</div> : null}
 
         {!loading && canUpload ? (
           <>
             {message ? <div className={`admin-alert ${messageTone}`}>{message}</div> : null}
-            {lastUpload ? (
+            {isAdmin && lastUpload ? (
               <div className="admin-card admin-card--subtle admin-card--compact" style={{ padding: 12, marginTop: 12 }}>
                 <div style={{ fontWeight: 900, marginBottom: 6 }}>Last upload</div>
                 <div className="admin-subtitle">
@@ -188,9 +188,6 @@ export default function LibraryUploadPage() {
                     <a className="admin-button info" href={String(lastUpload.url)} target="_blank" rel="noreferrer">
                       Open file
                     </a>
-                    <Link className="admin-button secondary" href="/admin/library">
-                      Go to Library
-                    </Link>
                   </div>
                 ) : null}
               </div>
