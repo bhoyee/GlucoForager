@@ -175,6 +175,7 @@ export default function StaffDashboard() {
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [adminRedirecting, setAdminRedirecting] = useState(false);
   const [message, setMessage] = useState('');
   const [me, setMe] = useState(null);
   const [todayLabel, setTodayLabel] = useState('');
@@ -290,6 +291,8 @@ export default function StaffDashboard() {
         const roles = Array.isArray(meData?.roles) ? meData.roles : [];
         const isAdmin = perms.includes('*') || perms.includes('admin.manage') || roles.includes('admin');
         if (isAdmin) {
+          // Avoid flashing the staff dashboard for admin users (they have their own KPI dashboard).
+          setAdminRedirecting(true);
           router.replace('/admin/admin-dashboard');
           setLoading(false);
           setRefreshing(false);
@@ -423,6 +426,23 @@ export default function StaffDashboard() {
   }, [primaryQuickActions, quickActions]);
 
   const tickerUpdates = useMemo(() => (Array.isArray(intranetUpdates) ? intranetUpdates.slice(0, 8) : []), [intranetUpdates]);
+
+  if (adminRedirecting) {
+    return (
+      <div className="admin-card">
+        <LoadingState label="Redirecting to admin dashboardâ€¦" />
+      </div>
+    );
+  }
+
+  // On first page load, render a minimal loading state to avoid layout flashes (especially when roles redirect).
+  if (loading && !me && !message) {
+    return (
+      <div className="admin-card">
+        <LoadingState label="Loading dashboardâ€¦" />
+      </div>
+    );
+  }
 
   return (
     <div className="admin-dashboard">
