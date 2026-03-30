@@ -11,15 +11,6 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function mondayOfWeek(d) {
-  const x = new Date(d);
-  const day = x.getDay(); // 0..6 (Sun..Sat)
-  const diff = (day === 0 ? -6 : 1) - day;
-  x.setDate(x.getDate() + diff);
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`;
-}
-
 export default function WorkPlansPage() {
   const router = useRouter();
   const token = useMemo(() => (typeof window === 'undefined' ? null : localStorage.getItem('adminToken')), []);
@@ -34,18 +25,6 @@ export default function WorkPlansPage() {
   const [dailyLoading, setDailyLoading] = useState(false);
   const [dailyItems, setDailyItems] = useState([]);
   const [expandedStaff, setExpandedStaff] = useState({});
-
-  const [rolesLoading, setRolesLoading] = useState(false);
-  const [roles, setRoles] = useState([]);
-  const [roleKey, setRoleKey] = useState('');
-  const [cadence, setCadence] = useState('weekly');
-  const [periodStart, setPeriodStart] = useState(mondayOfWeek(new Date()));
-  const [progressLoading, setProgressLoading] = useState(false);
-  const [progressItems, setProgressItems] = useState([]);
-  const [totalStaff, setTotalStaff] = useState(0);
-  const [selectedMilestone, setSelectedMilestone] = useState(null);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [detailItems, setDetailItems] = useState([]);
 
   const loadSession = useCallback(async () => {
     if (!token) {
@@ -66,31 +45,6 @@ export default function WorkPlansPage() {
     }
   }, [router, token]);
 
-  const loadRoles = useCallback(async () => {
-    if (!token || !canManage) return;
-    setRolesLoading(true);
-    try {
-      const res = await fetch(`${API_URL}/api/admin/staff/roles`, { headers: { Authorization: `Bearer ${token}` } });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || 'Failed to load roles.');
-      const items = Array.isArray(data.items) ? data.items : [];
-      setRoles(items);
-      if (!roleKey && items[0]?.key) setRoleKey(String(items[0].key));
-    } catch {
-      const fallback = [
-        { key: 'designer', name: 'Designer' },
-        { key: 'developer', name: 'Developer' },
-        { key: 'hr', name: 'HR' },
-        { key: 'marketer', name: 'Marketer' },
-        { key: 'support', name: 'Support' },
-      ];
-      setRoles(fallback);
-      if (!roleKey) setRoleKey('designer');
-    } finally {
-      setRolesLoading(false);
-    }
-  }, [canManage, roleKey, token]);
-
   const loadDaily = useCallback(async () => {
     if (!token || !canManage) return;
     setDailyLoading(true);
@@ -110,69 +64,14 @@ export default function WorkPlansPage() {
     }
   }, [canManage, token, workDate]);
 
-  const loadProgress = useCallback(async () => {
-    if (!token || !canManage || !roleKey || !periodStart) return;
-    setProgressLoading(true);
-    setMessage('');
-    try {
-      const url = `${API_URL}/api/admin/work-plans/milestones/progress?role_key=${encodeURIComponent(roleKey)}&cadence=${encodeURIComponent(
-        cadence
-      )}&period_start=${encodeURIComponent(periodStart)}`;
-      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || 'Failed to load milestone progress.');
-      setProgressItems(Array.isArray(data.items) ? data.items : []);
-      setTotalStaff(Number(data.total_staff || 0));
-    } catch (e) {
-      setProgressItems([]);
-      setTotalStaff(0);
-      setMessage(e?.message || 'Failed to load milestone progress.');
-    } finally {
-      setProgressLoading(false);
-    }
-  }, [cadence, canManage, periodStart, roleKey, token]);
-
-  const loadMilestoneDetail = useCallback(
-    async (milestoneId) => {
-      if (!token || !canManage) return;
-      setDetailLoading(true);
-      setMessage('');
-      try {
-        const res = await fetch(`${API_URL}/api/admin/work-plans/milestones/${milestoneId}/progress-detail`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.detail || 'Failed to load milestone detail.');
-        setSelectedMilestone(data.milestone || null);
-        setDetailItems(Array.isArray(data.items) ? data.items : []);
-      } catch (e) {
-        setSelectedMilestone(null);
-        setDetailItems([]);
-        setMessage(e?.message || 'Failed to load milestone detail.');
-      } finally {
-        setDetailLoading(false);
-      }
-    },
-    [canManage, token]
-  );
-
   useEffect(() => {
     loadSession();
   }, [loadSession]);
 
   useEffect(() => {
-    loadRoles();
-  }, [loadRoles]);
-
-  useEffect(() => {
     if (!canManage) return;
     loadDaily();
   }, [canManage, loadDaily]);
-
-  useEffect(() => {
-    if (!canManage) return;
-    loadProgress();
-  }, [canManage, loadProgress]);
 
   if (!canManage) {
     return (
@@ -194,7 +93,7 @@ export default function WorkPlansPage() {
               Work Plans
             </h2>
             <p className="admin-subtitle" style={{ margin: 0 }}>
-              Daily task completion + milestone progress review.
+              Daily task completion review.
             </p>
             {message ? (
               <p className="admin-subtitle" style={{ marginTop: 8 }}>
@@ -202,8 +101,8 @@ export default function WorkPlansPage() {
               </p>
             ) : null}
           </div>
-          <button className="admin-button info" type="button" onClick={() => Promise.all([loadDaily(), loadProgress()])} disabled={dailyLoading || progressLoading}>
-            Refresh all
+          <button className="admin-button info" type="button" onClick={loadDaily} disabled={dailyLoading}>
+            {dailyLoading ? 'Loading…' : 'Refresh'}
           </button>
         </div>
       </div>
@@ -299,6 +198,7 @@ export default function WorkPlansPage() {
         )}
       </div>
 
+      {false && (
       <div className="admin-card" style={{ marginTop: 16 }}>
         <div className="admin-actions" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
           <h3 style={{ margin: 0 }}>Milestone progress</h3>
@@ -335,8 +235,8 @@ export default function WorkPlansPage() {
               <thead>
                 <tr>
                   <th>Milestone</th>
-                  <th>Done</th>
-                  <th>Total staff</th>
+                  <th>Status</th>
+                  <th>Completed</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -344,12 +244,18 @@ export default function WorkPlansPage() {
                 {progressItems.map((m) => (
                   <tr key={m.id}>
                     <td style={{ maxWidth: 620, whiteSpace: 'pre-wrap' }}>{m.title}</td>
-                    <td>{m.done_count || 0}</td>
-                    <td>{m.total_staff || totalStaff || 0}</td>
+                    <td>{m.is_completed ? <span className="admin-badge success">Done</span> : <span className="admin-badge secondary">Open</span>}</td>
+                    <td>{m.completed_at || '—'}</td>
                     <td>
-                      <button className="admin-button secondary" type="button" onClick={() => loadMilestoneDetail(m.id)}>
-                        Details
-                      </button>
+                      {m.is_completed ? (
+                        <button className="admin-button warning" type="button" disabled={toggleMilestoneLoading} onClick={() => setMilestoneDone(m.id, false)}>
+                          Reopen
+                        </button>
+                      ) : (
+                        <button className="admin-button success" type="button" disabled={toggleMilestoneLoading} onClick={() => setMilestoneDone(m.id, true)}>
+                          Mark done
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -358,7 +264,7 @@ export default function WorkPlansPage() {
           </div>
         )}
 
-        {detailLoading ? (
+        {false && detailLoading ? (
           <div style={{ marginTop: 16 }}>
             <LoadingState label="Loading milestone detail..." />
           </div>
@@ -401,7 +307,7 @@ export default function WorkPlansPage() {
           </div>
         ) : null}
       </div>
+      )}
     </div>
   );
 }
-
