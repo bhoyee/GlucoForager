@@ -76,6 +76,11 @@ function normalizeHref(url) {
   return `https://${u}`;
 }
 
+function downloadNameForItem(item) {
+  const raw = String(item?.original_filename || item?.filename || item?.title || 'asset').trim() || 'asset';
+  return raw.replace(/[\\\/:*?"<>|]+/g, '_');
+}
+
 export default function LibraryPage() {
   const router = useRouter();
   const token = useMemo(() => (typeof window === 'undefined' ? null : localStorage.getItem('adminToken')), []);
@@ -430,6 +435,11 @@ export default function LibraryPage() {
                 <a className="admin-link" href={normalizeHref(previewItem.url)} target="_blank" rel="noreferrer">
                   Open
                 </a>
+                {previewItem.url ? (
+                  <a className="admin-button warning" href={normalizeHref(previewItem.url)} download={downloadNameForItem(previewItem)} rel="noreferrer">
+                    Download
+                  </a>
+                ) : null}
                 <button className="admin-button danger" type="button" onClick={() => setPreviewItem(null)}>
                   Close
                 </button>
