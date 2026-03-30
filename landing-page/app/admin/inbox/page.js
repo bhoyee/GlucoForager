@@ -14,7 +14,6 @@ export default function InboxPage() {
 
   const initialTab = (searchParams?.get('tab') || '').toLowerCase() === 'mail' ? 'mail' : 'notifications';
   const initialBox = (searchParams?.get('box') || '').toLowerCase() === 'sent' ? 'sent' : 'inbox';
-  const initialMessageId = searchParams?.get('message') ? Number(searchParams.get('message')) : null;
 
   const [tab, setTab] = useState(initialTab);
   const [mailBox, setMailBox] = useState(initialBox);
@@ -42,6 +41,21 @@ export default function InboxPage() {
   const permissions = Array.isArray(session?.permissions) ? session.permissions : [];
   const roles = Array.isArray(session?.roles) ? session.roles : [];
   const isAdmin = permissions.includes('*') || permissions.includes('admin.manage') || roles.includes('admin');
+
+  const messageIdFromUrl = useMemo(() => {
+    const raw = searchParams?.get('message');
+    if (!raw) return null;
+    const num = Number(raw);
+    if (!num || Number.isNaN(num)) return null;
+    return num;
+  }, [searchParams]);
+
+  useEffect(() => {
+    const urlTab = (searchParams?.get('tab') || '').toLowerCase() === 'mail' ? 'mail' : 'notifications';
+    const urlBox = (searchParams?.get('box') || '').toLowerCase() === 'sent' ? 'sent' : 'inbox';
+    if (urlTab !== tab) setTab(urlTab);
+    if (urlBox !== mailBox) setMailBox(urlBox);
+  }, [searchParams, tab, mailBox]);
 
   const loadSession = async () => {
     if (!token) return;
@@ -158,10 +172,10 @@ export default function InboxPage() {
 
   useEffect(() => {
     if (tab !== 'mail') return;
-    if (!initialMessageId || Number.isNaN(initialMessageId)) return;
-    openMail(initialMessageId);
+    if (!messageIdFromUrl) return;
+    openMail(messageIdFromUrl);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab]);
+  }, [tab, messageIdFromUrl]);
 
   const sendReply = async () => {
     if (!token || !mailThread?.messages?.length) return;
@@ -290,7 +304,15 @@ export default function InboxPage() {
   };
 
   const openFromNotification = (n) => {
-    const data = n?.data || {};
+    let data = n?.data;
+    if (typeof data === 'string') {
+      try {
+        data = JSON.parse(data);
+      } catch {
+        data = {};
+      }
+    }
+    if (!data || typeof data !== 'object') data = {};
     if (data?.message_id) {
       router.push(`/admin/inbox?tab=mail&message=${encodeURIComponent(String(data.message_id))}`);
       return;
