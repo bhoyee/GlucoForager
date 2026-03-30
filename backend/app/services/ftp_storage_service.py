@@ -1,7 +1,11 @@
 import posixpath
+import logging
 from ftplib import FTP, FTP_TLS, error_perm
 
 from ..core.config import settings
+
+
+logger = logging.getLogger(__name__)
 
 
 def open_shared_ftp() -> FTP:
@@ -17,8 +21,10 @@ def open_shared_ftp() -> FTP:
     else:
         ftp = FTP(timeout=timeout)
 
+    logger.info("FTP connect start host=%s port=%s tls=%s", str(host), int(settings.library_ftp_port), bool(settings.library_ftp_tls))
     ftp.connect(host=str(host), port=int(settings.library_ftp_port))
     ftp.login(user=str(user), passwd=str(pwd))
+    logger.info("FTP login ok host=%s", str(host))
 
     if isinstance(ftp, FTP_TLS):
         ftp.prot_p()
@@ -47,7 +53,9 @@ def ensure_posix_dir(ftp: FTP, directory: str) -> None:
 
 
 def ftp_upload(ftp: FTP, *, remote_dir: str, filename: str, fileobj) -> None:
-    ensure_posix_dir(ftp, remote_dir)
-    ftp.cwd(posixpath.normpath("/" + remote_dir.lstrip("/")))
+    rd = posixpath.normpath("/" + str(remote_dir or "").lstrip("/"))
+    logger.info("FTP upload start dir=%s file=%s", rd, filename)
+    ensure_posix_dir(ftp, rd)
+    ftp.cwd(rd)
     ftp.storbinary(f"STOR {filename}", fileobj, blocksize=1024 * 128)
-
+    logger.info("FTP upload ok dir=%s file=%s", rd, filename)
