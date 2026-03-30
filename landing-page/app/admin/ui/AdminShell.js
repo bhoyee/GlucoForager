@@ -229,6 +229,7 @@ export default function AdminShell({ children }) {
           { href: '/admin/milestones', label: 'Milestones', icon: 'MS', perm: 'work_logs.manage' },
           { href: '/admin/help', label: 'Help', icon: '?' },
           { href: '/admin/library', label: 'Library', icon: 'LB' },
+          { href: '/admin/library/upload', label: 'Upload Asset', icon: '+', perm: 'library.upload' },
           { href: '/admin/inbox', label: 'Inbox', icon: 'IN', perm: 'notifications.read' },
           { href: '/admin/my-payroll', label: 'My Payroll', icon: '$', perm: 'payroll.read_own' },
         ],
