@@ -38,6 +38,9 @@ export default function LibraryUploadPage() {
   const [messageTone, setMessageTone] = useState('warning');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [lastUpload, setLastUpload] = useState(null);
+  const [storageStatus, setStorageStatus] = useState(null);
+  const [statusLoading, setStatusLoading] = useState(false);
 
   const loadSession = async () => {
     if (!token) {
@@ -94,6 +97,7 @@ export default function LibraryUploadPage() {
       if (!res.ok) throw new Error(data.detail || 'Upload failed.');
       setMessageTone('info');
       setMessage('Uploaded successfully.');
+      setLastUpload(data?.item || null);
       setTitle('');
       setTags('');
       setFile(null);
@@ -103,6 +107,26 @@ export default function LibraryUploadPage() {
       setMessage(e?.message || 'Upload failed.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const loadStorageStatus = async () => {
+    if (!token) return;
+    setStatusLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/library/storage/status`, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      if (!res.ok) throw new Error(data.detail || 'Failed to load storage status.');
+      setStorageStatus(data);
+    } catch (e) {
+      setStorageStatus({ error: e?.message || 'Failed to load storage status.' });
+    } finally {
+      setStatusLoading(false);
     }
   };
 
@@ -132,6 +156,26 @@ export default function LibraryUploadPage() {
         {!loading && canUpload ? (
           <>
             {message ? <div className={`admin-alert ${messageTone}`}>{message}</div> : null}
+            {lastUpload ? (
+              <div className="admin-card admin-card--subtle admin-card--compact" style={{ padding: 12, marginTop: 12 }}>
+                <div style={{ fontWeight: 900, marginBottom: 6 }}>Last upload</div>
+                <div className="admin-subtitle">
+                  Backend: <strong>{String(lastUpload.storage_backend || 'unknown')}</strong> · File: <strong>{String(lastUpload.filename || '')}</strong> · Size:{' '}
+                  <strong>{lastUpload.size_bytes ? `${lastUpload.size_bytes} bytes` : '—'}</strong>
+                </div>
+                {lastUpload.remote_dir ? <div className="admin-subtitle">Remote dir: {String(lastUpload.remote_dir)}</div> : null}
+                {lastUpload.url ? (
+                  <div style={{ marginTop: 8, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <a className="admin-button info" href={String(lastUpload.url)} target="_blank" rel="noreferrer">
+                      Open file
+                    </a>
+                    <Link className="admin-button secondary" href="/admin/library">
+                      Go to Library
+                    </Link>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             <form onSubmit={upload}>
               <div className="admin-grid" style={{ alignItems: 'start' }}>
@@ -176,10 +220,22 @@ export default function LibraryUploadPage() {
                     <Link className="admin-button info" href="/admin/library">
                       View library
                     </Link>
+                    <button className="admin-button secondary" type="button" onClick={loadStorageStatus} disabled={statusLoading}>
+                      {statusLoading ? 'Checking…' : 'Storage status'}
+                    </button>
                   </div>
                 </div>
               </div>
             </form>
+
+            {storageStatus ? (
+              <div className="admin-card admin-card--subtle admin-card--compact" style={{ padding: 12, marginTop: 12 }}>
+                <div style={{ fontWeight: 900, marginBottom: 6 }}>Storage status</div>
+                <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 12, opacity: 0.9 }}>
+                  {JSON.stringify(storageStatus, null, 2)}
+                </pre>
+              </div>
+            ) : null}
           </>
         ) : null}
       </div>
