@@ -199,6 +199,7 @@ def list_library(
     q: str | None = None,
     tag: str | None = None,
     include_deleted: int = 0,
+    deleted_only: int = 0,
     db: Session = Depends(get_db),
     current_staff: StaffUser = Depends(require_staff_permission("library.read")),
 ):
@@ -236,6 +237,8 @@ def list_library(
     else:
         if not _is_admin(db, current_staff):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+        if deleted_only:
+            query = query.filter(StaffLibraryItem.is_deleted.is_(True))
 
     query = query.order_by(StaffLibraryItem.created_at.desc())
     items = query.all()
@@ -264,6 +267,7 @@ def list_library(
 @router.get("/folders")
 def list_folders(
     include_deleted: int = 0,
+    deleted_only: int = 0,
     db: Session = Depends(get_db),
     current_staff: StaffUser = Depends(require_staff_permission("library.read")),
 ):
@@ -273,6 +277,8 @@ def list_folders(
     else:
         if not _is_admin(db, current_staff):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+        if deleted_only:
+            query = query.filter(StaffLibraryItem.is_deleted.is_(True))
     rows = query.order_by(func.count(StaffLibraryItem.id).desc()).all()
     return {"items": [{"folder": str(r[0] or "general"), "count": int(r[1] or 0)} for r in rows]}
 
