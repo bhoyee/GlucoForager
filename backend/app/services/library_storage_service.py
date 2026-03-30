@@ -13,6 +13,9 @@ class StoredLibraryObject:
     kind: str  # "image" | "document" | "video"
     filename: str
     url: str
+    storage_backend: str
+    remote_dir: str | None = None
+    size_bytes: int | None = None
 
 
 def _normalize_public_base_url(raw: str) -> str:
@@ -113,7 +116,7 @@ def store_library_upload(file: UploadFile) -> StoredLibraryObject:
                     pass
 
         public_url = f"{base_url}/{_remote_kind_dir(kind)}/{filename}"
-        return StoredLibraryObject(kind=kind, filename=filename, url=public_url)
+        return StoredLibraryObject(kind=kind, filename=filename, url=public_url, storage_backend="ftp", remote_dir=remote_dir, size_bytes=size)
 
     # local (default)
     subdir = os.path.join(settings.uploads_dir, "library")
@@ -127,4 +130,4 @@ def store_library_upload(file: UploadFile) -> StoredLibraryObject:
                 break
             target.write(chunk)
 
-    return StoredLibraryObject(kind=kind, filename=filename, url=f"/uploads/library/{filename}")
+    return StoredLibraryObject(kind=kind, filename=filename, url=f"/uploads/library/{filename}", storage_backend="local", remote_dir=None, size_bytes=size)

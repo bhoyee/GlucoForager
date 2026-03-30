@@ -219,7 +219,17 @@ def upload_to_library(
     )
     db.commit()
     db.refresh(item)
-    return {"ok": True, "item": {"id": item.id, "url": item.url}}
+    return {
+        "ok": True,
+        "item": {
+            "id": item.id,
+            "url": item.url,
+            "storage_backend": stored.storage_backend,
+            "remote_dir": stored.remote_dir,
+            "filename": stored.filename,
+            "size_bytes": stored.size_bytes,
+        },
+    }
 
 
 @router.delete("/items/{item_id}")
