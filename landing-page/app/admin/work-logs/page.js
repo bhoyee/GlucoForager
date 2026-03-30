@@ -1,5 +1,4 @@
 'use client';
-'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -144,6 +143,10 @@ export default function WorkLogsPage() {
   const [assignDate, setAssignDate] = useState(todayISO());
   const [assignText, setAssignText] = useState('');
   const [assignRoleKey, setAssignRoleKey] = useState('');
+  const [managerMessage, setManagerMessage] = useState('');
+  const [managerMessageTone, setManagerMessageTone] = useState('info'); // info | success | warning | danger
+  const [assignLoading, setAssignLoading] = useState(false);
+  const [assignRoleLoading, setAssignRoleLoading] = useState(false);
 
   const [milestoneRoleKey, setMilestoneRoleKey] = useState('');
   const [milestoneCadence, setMilestoneCadence] = useState('weekly');
@@ -156,6 +159,7 @@ export default function WorkLogsPage() {
   const [selectedLogId, setSelectedLogId] = useState(null);
   const [selectedLog, setSelectedLog] = useState(null);
   const [commentDraft, setCommentDraft] = useState('');
+  const [managerToolsOpen, setManagerToolsOpen] = useState(false);
 
   const loadSession = async () => {
     const t = getTokenNow();
@@ -549,7 +553,9 @@ export default function WorkLogsPage() {
     const staffId = Number(assignStaffUserId);
     const text = String(assignText || '').trim();
     if (!staffId || !text) return;
-    setMessage('');
+    setManagerMessage('');
+    setManagerMessageTone('info');
+    setAssignLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/admin/work-plans/tasks/assign`, {
         method: 'POST',
@@ -557,11 +563,20 @@ export default function WorkLogsPage() {
         body: JSON.stringify({ staff_user_id: staffId, work_date: assignDate, text }),
       });
       const data = await res.json().catch(() => ({}));
+      if (res.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
       if (!res.ok) throw new Error(data.detail || 'Failed to assign task.');
       setAssignText('');
-      setMessage('Task assigned.');
+      setManagerMessageTone('success');
+      setManagerMessage('Task assigned.');
     } catch (e) {
-      setMessage(e?.message || 'Failed to assign task.');
+      setManagerMessageTone('danger');
+      setManagerMessage(e?.message || 'Failed to assign task.');
+    } finally {
+      setAssignLoading(false);
     }
   };
 
@@ -570,7 +585,9 @@ export default function WorkLogsPage() {
     const role_key = String(assignRoleKey || '').trim();
     const text = String(assignText || '').trim();
     if (!role_key || !text) return;
-    setMessage('');
+    setManagerMessage('');
+    setManagerMessageTone('info');
+    setAssignRoleLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/admin/work-plans/tasks/assign-role`, {
         method: 'POST',
@@ -578,11 +595,20 @@ export default function WorkLogsPage() {
         body: JSON.stringify({ role_key, work_date: assignDate, text }),
       });
       const data = await res.json().catch(() => ({}));
+      if (res.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
       if (!res.ok) throw new Error(data.detail || 'Failed to assign task.');
       setAssignText('');
-      setMessage(`Assigned to ${data.count || 0} staff.`);
+      setManagerMessageTone('success');
+      setManagerMessage(`Assigned to ${data.count || 0} staff.`);
     } catch (e) {
-      setMessage(e?.message || 'Failed to assign task.');
+      setManagerMessageTone('danger');
+      setManagerMessage(e?.message || 'Failed to assign task.');
+    } finally {
+      setAssignRoleLoading(false);
     }
   };
 
@@ -1093,8 +1119,21 @@ export default function WorkLogsPage() {
                 >
                   <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6, listStyle: 'disc' }}>
                     {(Array.isArray(milestones?.weekly) ? milestones.weekly : []).map((m) => (
-                      <li key={m.id} style={{ fontWeight: 500, fontSize: 13, lineHeight: 1.45, color: '#1f2d3d' }}>
-                        {m.title}
+                      <li
+                        key={m.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 10,
+                          fontWeight: 500,
+                          fontSize: 13,
+                          lineHeight: 1.45,
+                          color: '#1f2d3d',
+                        }}
+                      >
+                        <span style={{ minWidth: 0 }}>{m.title}</span>
+                        {m.is_completed ? <span className="admin-badge success">Done</span> : <span className="admin-badge secondary">Open</span>}
                       </li>
                     ))}
                   </ul>
@@ -1118,8 +1157,21 @@ export default function WorkLogsPage() {
                 >
                   <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6, listStyle: 'disc' }}>
                     {(Array.isArray(milestones?.monthly) ? milestones.monthly : []).map((m) => (
-                      <li key={m.id} style={{ fontWeight: 500, fontSize: 13, lineHeight: 1.45, color: '#1f2d3d' }}>
-                        {m.title}
+                      <li
+                        key={m.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 10,
+                          fontWeight: 500,
+                          fontSize: 13,
+                          lineHeight: 1.45,
+                          color: '#1f2d3d',
+                        }}
+                      >
+                        <span style={{ minWidth: 0 }}>{m.title}</span>
+                        {m.is_completed ? <span className="admin-badge success">Done</span> : <span className="admin-badge secondary">Open</span>}
                       </li>
                     ))}
                   </ul>
@@ -1174,6 +1226,7 @@ export default function WorkLogsPage() {
           </div>
         </div>
       ) : null}
+
 
       <div className="admin-card" style={{ marginTop: 16 }}>
         <div className="admin-actions" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1352,12 +1405,27 @@ export default function WorkLogsPage() {
 
       {isManager ? (
         <div className="admin-card" style={{ marginTop: 16 }}>
-          <h3 style={{ marginTop: 0 }}>Admin: Tasks & Milestones</h3>
-          <p className="admin-subtitle">Assign daily tasks to staff and define weekly/monthly targets per role.</p>
+          <div className="admin-actions" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <h3 style={{ margin: 0 }}>Manager tools</h3>
+              <p className="admin-subtitle" style={{ margin: '6px 0 0 0' }}>
+                You’re seeing this because your account can manage work plans. Use it to schedule tasks and milestones for staff.
+              </p>
+            </div>
+            <button className="admin-button info" type="button" onClick={() => setManagerToolsOpen((v) => !v)}>
+              {managerToolsOpen ? 'Hide' : 'Show'}
+            </button>
+          </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12, marginTop: 12 }}>
+          {managerToolsOpen ? (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12, marginTop: 12 }}>
             <div className="admin-card" style={{ padding: 14 }}>
-              <h4 style={{ margin: 0 }}>Assign daily task</h4>
+              <h4 style={{ margin: 0 }}>Schedule task</h4>
+              {managerMessage ? (
+                <div className={`admin-alert ${managerMessageTone}`} style={{ marginTop: 12, marginBottom: 12 }}>
+                  {managerMessage}
+                </div>
+              ) : null}
               <div className="admin-field" style={{ marginTop: 10 }}>
                 <label>Staff</label>
                 <select value={assignStaffUserId} onChange={(e) => setAssignStaffUserId(e.target.value)}>
@@ -1370,8 +1438,19 @@ export default function WorkLogsPage() {
                 </select>
               </div>
               <div className="admin-field">
-                <label>Date</label>
+                <label>Schedule date</label>
                 <input type="date" value={assignDate} onChange={(e) => setAssignDate(e.target.value)} />
+              </div>
+              <div className="admin-actions" style={{ justifyContent: 'flex-start' }}>
+                <button className="admin-button secondary" type="button" onClick={() => setAssignDate(todayISO())}>
+                  Today
+                </button>
+                <button className="admin-button secondary" type="button" onClick={() => setAssignDate(isoDateAddDays(todayISO(), 1))}>
+                  Tomorrow
+                </button>
+                <button className="admin-button secondary" type="button" onClick={() => setAssignDate(mondayOfWeek(new Date()))}>
+                  Next Monday
+                </button>
               </div>
               <div className="admin-field">
                 <label>Role (bulk assign)</label>
@@ -1392,11 +1471,21 @@ export default function WorkLogsPage() {
                 <input value={assignText} onChange={(e) => setAssignText(e.target.value)} placeholder="Task for this staff..." />
               </div>
               <div className="admin-actions">
-                <button className="admin-button" type="button" onClick={assignTask} disabled={!String(assignText || '').trim() || !assignStaffUserId}>
-                  Assign
+                <button
+                  className="admin-button"
+                  type="button"
+                  onClick={assignTask}
+                  disabled={assignLoading || assignRoleLoading || !String(assignText || '').trim() || !assignStaffUserId}
+                >
+                  {assignLoading ? 'Assigning…' : 'Assign'}
                 </button>
-                <button className="admin-button warning" type="button" onClick={assignTaskToRole} disabled={!String(assignText || '').trim() || !String(assignRoleKey || '').trim()}>
-                  Assign to role
+                <button
+                  className="admin-button warning"
+                  type="button"
+                  onClick={assignTaskToRole}
+                  disabled={assignLoading || assignRoleLoading || !String(assignText || '').trim() || !String(assignRoleKey || '').trim()}
+                >
+                  {assignRoleLoading ? 'Assigning…' : 'Assign to role'}
                 </button>
               </div>
             </div>
@@ -1492,6 +1581,7 @@ export default function WorkLogsPage() {
               </div>
             </div>
           </div>
+          ) : null}
         </div>
       ) : null}
 
