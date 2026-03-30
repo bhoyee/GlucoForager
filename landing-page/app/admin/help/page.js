@@ -569,6 +569,17 @@ export default function HelpPage() {
       <div className="admin-grid" style={{ marginTop: 16 }}>
         <div className="admin-card admin-card--subtle admin-card--compact">
           <h3>Tickets</h3>
+          <div
+            style={{
+              marginTop: 10,
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: 12,
+              padding: 10,
+              maxHeight: 'clamp(260px, 46vh, 560px)',
+              overflowY: 'auto',
+              overscrollBehavior: 'contain',
+            }}
+          >
           {loading ? (
             <LoadingState label="Loading tickets…" />
           ) : tickets.length === 0 ? (
@@ -621,6 +632,7 @@ export default function HelpPage() {
               })}
             </div>
           )}
+          </div>
 
           <hr style={{ margin: '16px 0', opacity: 0.2 }} />
 
