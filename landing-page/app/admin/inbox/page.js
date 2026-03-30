@@ -629,7 +629,7 @@ export default function InboxPage() {
                 <input type="file" onChange={(e) => setReplyAttachment(e.target.files?.[0] || null)} accept=".pdf,.jpg,.jpeg,.png,.webp,.mp4" />
               </div>
               <div className="admin-actions" style={{ justifyContent: 'flex-end', marginTop: 10 }}>
-                <button className="admin-button info" type="button" onClick={sendReply} disabled={replySending}>
+                <button className="admin-button warning" type="button" onClick={sendReply} disabled={replySending}>
                   {replySending ? 'Sending...' : 'Send reply'}
                 </button>
               </div>
