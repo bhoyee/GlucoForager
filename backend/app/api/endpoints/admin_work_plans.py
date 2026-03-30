@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, text
+from sqlalchemy import and_, text as sa_text
 from sqlalchemy.orm import Session
 
 from ..admin_dependencies import require_staff_permission
@@ -234,12 +234,12 @@ def assign_task(
     if not staff or not staff.is_active or getattr(staff, "deleted_at", None) is not None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Staff user not found")
 
-    text = payload.text.strip()
+    task_text = payload.text.strip()
     row = StaffAssignedTask(
         staff_user_id=int(payload.staff_user_id),
         assigned_by_staff_user_id=int(current_staff.id),
         work_date=payload.work_date,
-        text=text,
+        text=task_text,
         is_completed=False,
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
@@ -253,7 +253,7 @@ def assign_task(
             staff_user_id=int(payload.staff_user_id),
             type="task.assigned",
             title=f"New task for {payload.work_date.isoformat()}",
-            body=text[:240],
+            body=task_text[:240],
             data={"task_id": int(row.id), "work_date": payload.work_date.isoformat()},
             read_at=None,
             created_at=datetime.utcnow(),
@@ -283,11 +283,11 @@ def assign_task_to_role(
     current_staff: StaffUser = Depends(require_staff_permission("work_logs.manage")),
 ):
     role_key = payload.role_key.strip().lower()
-    text = payload.text.strip()
+    task_text = payload.text.strip()
 
     # Get active staff ids for this role key.
     rows = db.execute(
-        text(
+        sa_text(
             """
         SELECT su.id, su.email
         FROM staff_users su
@@ -310,7 +310,7 @@ def assign_task_to_role(
             staff_user_id=int(staff_id),
             assigned_by_staff_user_id=int(current_staff.id),
             work_date=payload.work_date,
-            text=text,
+            text=task_text,
             is_completed=False,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
@@ -325,7 +325,7 @@ def assign_task_to_role(
                 staff_user_id=int(staff_id),
                 type="task.assigned",
                 title=f"New task for {payload.work_date.isoformat()}",
-                body=text[:240],
+                body=task_text[:240],
                 data={"task_id": int(row.id), "work_date": payload.work_date.isoformat()},
                 read_at=None,
                 created_at=datetime.utcnow(),
@@ -358,12 +358,12 @@ def add_self_task(
     if _is_work_log_submitted(db, int(current_staff.id), payload.work_date):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Work log already submitted for this date. Tasks are read-only.")
 
-    text = payload.text.strip()
+    task_text = payload.text.strip()
     row = StaffAssignedTask(
         staff_user_id=int(current_staff.id),
         assigned_by_staff_user_id=int(current_staff.id),
         work_date=payload.work_date,
-        text=text,
+        text=task_text,
         is_completed=False,
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
@@ -780,31 +780,25 @@ def milestone_progress(
 ):
     rk = role_key.strip().lower()
     cd = cadence.strip().lower()
+    ps = period_start
+    if cd == "weekly":
+        ps = _monday_of_week(period_start)
+    elif cd == "monthly":
+        ps = _month_start(period_start)
     milestones = (
         db.query(StaffRoleMilestone)
         .filter(
             StaffRoleMilestone.deleted_at.is_(None),
             StaffRoleMilestone.role_key == rk,
             StaffRoleMilestone.cadence == cd,
-            StaffRoleMilestone.period_start == period_start,
+            StaffRoleMilestone.period_start == ps,
         )
         .order_by(StaffRoleMilestone.id.asc())
         .all()
     )
-    mids = [int(m.id) for m in milestones]
-    done_counts: dict[int, int] = {}
-    if mids:
-        rows = (
-            db.query(StaffMilestoneProgress.milestone_id, StaffMilestoneProgress.id)
-            .filter(StaffMilestoneProgress.milestone_id.in_(mids), StaffMilestoneProgress.is_completed.is_(True))
-            .all()
-        )
-        for mid, _pid in rows:
-            done_counts[int(mid)] = int(done_counts.get(int(mid), 0)) + 1
-
     # total staff in role (active)
     staff_rows = db.execute(
-        text(
+        sa_text(
             """
             SELECT COUNT(*)
             FROM staff_users su
@@ -822,15 +816,16 @@ def milestone_progress(
     return {
         "role_key": rk,
         "cadence": cd,
-        "period_start": period_start.isoformat(),
+        "period_start": ps.isoformat(),
         "total_staff": total_staff,
         "items": [
             {
                 "id": m.id,
                 "title": m.title,
                 "description": m.description,
-                "done_count": int(done_counts.get(int(m.id), 0)),
-                "total_staff": total_staff,
+                "is_completed": bool(m.is_completed),
+                "completed_at": m.completed_at.isoformat() if m.completed_at else None,
+                "completed_by_staff_user_id": int(m.completed_by_staff_user_id) if m.completed_by_staff_user_id else None,
             }
             for m in milestones
         ],
@@ -938,7 +933,7 @@ def carry_over_incomplete_monthly_milestones(
 
     # total active staff in role (used for "incomplete" test)
     staff_rows = db.execute(
-        text(
+        sa_text(
             """
             SELECT COUNT(*)
             FROM staff_users su
@@ -1069,7 +1064,7 @@ def milestones_month_summary(
     out_items: list[dict] = []
     for rk, ms in sorted(by_role.items(), key=lambda x: x[0]):
         staff_rows = db.execute(
-            text(
+            sa_text(
                 """
                 SELECT COUNT(*)
                 FROM staff_users su
@@ -1083,18 +1078,8 @@ def milestones_month_summary(
             {"rk": rk},
         ).fetchone()
         total_staff = int(staff_rows[0]) if staff_rows and staff_rows[0] is not None else 0
-        mids = [int(m.id) for m in ms]
-        done_total = 0
-        if mids:
-            rows = (
-                db.query(StaffMilestoneProgress.milestone_id, StaffMilestoneProgress.id)
-                .filter(StaffMilestoneProgress.milestone_id.in_(mids), StaffMilestoneProgress.is_completed.is_(True))
-                .all()
-            )
-            for mid, _pid in rows:
-                done_total += 1
-
-        denom = max(1, total_staff * len(ms))
+        done_total = sum(1 for m in ms if bool(m.is_completed))
+        denom = max(1, len(ms))
         completion_rate = float(done_total) / float(denom) if denom else 0.0
         out_items.append(
             {
