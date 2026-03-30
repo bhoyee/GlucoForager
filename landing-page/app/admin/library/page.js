@@ -310,7 +310,6 @@ export default function LibraryPage() {
                 render: (r) => (
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                     <span style={{ fontWeight: 800 }}>{r.title}</span>
-                    {r.original_filename ? <span className="admin-subtitle">{r.original_filename}</span> : null}
                   </div>
                 ),
               },
