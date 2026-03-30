@@ -21,9 +21,16 @@ class StaffInboxMessage(Base):
     subject = Column(String, nullable=False)
     body_html = Column(Text, nullable=False)
 
+    attachment_original_name = Column(String, nullable=True)
+    attachment_filename = Column(String, nullable=True, index=True)
+    attachment_url = Column(String, nullable=True)
+    attachment_content_type = Column(String, nullable=True)
+    attachment_size_bytes = Column(Integer, nullable=True)
+    attachment_storage_backend = Column(String, nullable=True)
+    attachment_remote_dir = Column(String, nullable=True)
+
     read_at = Column(DateTime, nullable=True, index=True)
     deleted_at = Column(DateTime, nullable=True, index=True)
     deleted_by_staff_user_id = Column(Integer, ForeignKey("staff_users.id"), nullable=True, index=True)
 
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
-
