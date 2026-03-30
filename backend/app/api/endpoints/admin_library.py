@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import io
+import mimetypes
 import os
 import posixpath
 from urllib.parse import urlparse
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
+from fastapi.responses import FileResponse, Response
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
@@ -117,6 +120,14 @@ def _safe_unlink_local(path: str) -> bool:
     except Exception:
         return False
     return False
+
+
+def _safe_filename(raw: str) -> str:
+    name = str(raw or "").strip() or "asset"
+    # Avoid path traversal / invalid filename characters.
+    name = name.replace("\\", "_").replace("/", "_").replace(":", "_")
+    name = name.replace('"', "'")
+    return name[:180]
 
 
 def _delete_remote_file(item: StaffLibraryItem) -> tuple[bool, str | None]:
@@ -264,6 +275,99 @@ def list_folders(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
     rows = query.order_by(func.count(StaffLibraryItem.id).desc()).all()
     return {"items": [{"folder": str(r[0] or "general"), "count": int(r[1] or 0)} for r in rows]}
+
+
+@router.get("/items/{item_id}/download")
+def download_library_item(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("library.read")),
+):
+    item = db.query(StaffLibraryItem).filter(StaffLibraryItem.id == int(item_id)).first()
+    if not item or bool(item.is_deleted):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    backend = str(settings.library_storage_backend or "local").strip().lower()
+    url = _normalize_public_item_url(item.url) or ""
+
+    download_name = _safe_filename(getattr(item, "original_filename", None) or getattr(item, "title", None) or "asset")
+    media_type = str(getattr(item, "content_type", None) or "").strip() or None
+
+    try:
+        p = urlparse(url if (url.startswith("http://") or url.startswith("https://")) else "https://" + url.lstrip("/"))
+        ext = os.path.splitext(p.path or "")[1].strip()
+        if ext and "." not in download_name:
+            download_name = download_name + ext
+        if not media_type and ext:
+            guessed = mimetypes.guess_type("x" + ext)[0]
+            if guessed:
+                media_type = guessed
+    except Exception:
+        pass
+
+    if backend == "ftp":
+        base_url = str(settings.library_remote_base_url or "").strip().rstrip("/")
+        if not base_url:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="LIBRARY_REMOTE_BASE_URL not configured")
+        if not (base_url.startswith("http://") or base_url.startswith("https://")):
+            base_url = "https://" + base_url.lstrip("/")
+
+        base = urlparse(base_url)
+        u = urlparse(url)
+        if not (base.netloc and u.netloc and base.netloc.lower() == u.netloc.lower()):
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Cannot locate remote file")
+        if not u.path.startswith(base.path.rstrip("/") + "/"):
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Cannot locate remote file")
+
+        rel = u.path[len(base.path.rstrip("/")) + 1 :]  # "<dir>/<filename>"
+        parts = [p for p in rel.split("/") if p]
+        if len(parts) < 2:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Cannot locate remote file")
+        remote_dirname = parts[0].strip().lower()
+        filename = parts[-1].strip()
+        if remote_dirname not in {"images", "pdfs", "videos"} or not filename:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Cannot locate remote file")
+
+        remote_dir = f"{settings.library_ftp_base_dir.strip().rstrip('/')}/{remote_dirname}"
+        ftp = open_shared_ftp()
+        try:
+            try:
+                ftp.cwd("/" + remote_dir.lstrip("/"))
+            except Exception:
+                raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Remote dir missing")
+
+            buf = io.BytesIO()
+            try:
+                ftp.retrbinary(f"RETR {filename}", buf.write)
+            except Exception as exc:
+                msg = str(exc)
+                if "550" in msg:
+                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+                raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Failed to download file")
+        finally:
+            try:
+                ftp.quit()
+            except Exception:
+                try:
+                    ftp.close()
+                except Exception:
+                    pass
+
+        return Response(
+            content=buf.getvalue(),
+            media_type=media_type or "application/octet-stream",
+            headers={"Content-Disposition": f'attachment; filename="{download_name}"'},
+        )
+
+    # Local disk-backed files - only serve from uploads_dir/library.
+    if "/uploads/library/" in url:
+        filename = url.split("/uploads/library/", 1)[1].split("?", 1)[0].split("#", 1)[0].strip().split("/")[-1]
+        if filename and filename.replace(".", "").replace("-", "").replace("_", "").isalnum():
+            local_path = os.path.join(settings.uploads_dir, "library", filename)
+            if os.path.isfile(local_path):
+                return FileResponse(local_path, media_type=media_type or "application/octet-stream", filename=download_name)
+
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
 
 @router.post("/upload")
