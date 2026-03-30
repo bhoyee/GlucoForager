@@ -19,6 +19,7 @@ export default function AdminShell({ children }) {
   const [session, setSession] = useState(null);
   const [sessionLoading, setSessionLoading] = useState(false);
   const [navSectionOpen, setNavSectionOpen] = useState({});
+  const [helpUnreadCount, setHelpUnreadCount] = useState(0);
 
   const loadSession = useCallback(async () => {
     if (isPublicRoute) return;
@@ -45,6 +46,29 @@ export default function AdminShell({ children }) {
       setSessionLoading(false);
     }
   }, [API_URL, isPublicRoute, router]);
+
+  const loadHelpUnreadCount = useCallback(async () => {
+    if (isPublicRoute) return;
+    const token = getAdminAccessToken();
+    if (!token) return;
+
+    const permissions = Array.isArray(session?.permissions) ? session.permissions : [];
+    const canReadNotifications = permissions.includes('*') || permissions.includes('notifications.read');
+    if (!canReadNotifications) {
+      setHelpUnreadCount(0);
+      return;
+    }
+
+    try {
+      const response = await adminFetch(`${API_URL}/api/admin/help/notifications?unread_only=1&limit=200`);
+      if (response.status === 401) return;
+      const data = await response.json().catch(() => ({}));
+      const items = Array.isArray(data?.items) ? data.items : [];
+      setHelpUnreadCount(items.length);
+    } catch {
+      // ignore
+    }
+  }, [API_URL, isPublicRoute, session?.permissions]);
 
   useEffect(() => {
     // Persist the desktop collapsed state for a more "app-like" feel.
@@ -91,6 +115,23 @@ export default function AdminShell({ children }) {
   useEffect(() => {
     loadSession();
   }, [loadSession]);
+
+  useEffect(() => {
+    loadHelpUnreadCount();
+  }, [loadHelpUnreadCount, pathname]);
+
+  useEffect(() => {
+    if (isPublicRoute) return undefined;
+    const handler = () => loadHelpUnreadCount();
+    window.addEventListener('admin-help-notifications-updated', handler);
+    return () => window.removeEventListener('admin-help-notifications-updated', handler);
+  }, [isPublicRoute, loadHelpUnreadCount]);
+
+  useEffect(() => {
+    if (isPublicRoute) return undefined;
+    const timer = setInterval(() => loadHelpUnreadCount(), 20_000);
+    return () => clearInterval(timer);
+  }, [isPublicRoute, loadHelpUnreadCount]);
 
   useEffect(() => {
     if (isPublicRoute) return undefined;
@@ -358,6 +399,11 @@ export default function AdminShell({ children }) {
                             {item.icon}
                           </span>
                           <span className="admin-nav-label">{item.label}</span>
+                          {item.href === '/admin/help' && helpUnreadCount > 0 ? (
+                            <span className="admin-badge danger" style={{ marginLeft: 'auto' }}>
+                              {helpUnreadCount}
+                            </span>
+                          ) : null}
                         </Link>
                       ))}
                     </div>
