@@ -104,6 +104,7 @@ export default function LibraryPage() {
   const [purgeLoading, setPurgeLoading] = useState(false);
 
   const [previewItem, setPreviewItem] = useState(null);
+  const [downloadBusy, setDownloadBusy] = useState(false);
   const debounceTimer = useRef(null);
 
   const loadSession = async () => {
@@ -156,6 +157,38 @@ export default function LibraryPage() {
       setMessage(e?.message || 'Failed to load library.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const downloadPreview = async () => {
+    if (!token || !previewItem?.id) return;
+    setDownloadBusy(true);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/library/items/${encodeURIComponent(String(previewItem.id))}/download`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || 'Download failed.');
+      }
+      const blob = await res.blob();
+      const href = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = href;
+      a.download = downloadNameForItem(previewItem);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(href);
+    } catch (e) {
+      setMessage(`Download failed: ${e?.message || 'unknown error'}`);
+    } finally {
+      setDownloadBusy(false);
     }
   };
 
@@ -432,14 +465,12 @@ export default function LibraryPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
                 <p style={{ margin: 0, fontWeight: 700 }}>{previewItem.title}</p>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                <a className="admin-link" href={normalizeHref(previewItem.url)} target="_blank" rel="noreferrer">
+                <a className="admin-button info" href={normalizeHref(previewItem.url)} target="_blank" rel="noreferrer">
                   Open
                 </a>
-                {previewItem.url ? (
-                  <a className="admin-button warning" href={normalizeHref(previewItem.url)} download={downloadNameForItem(previewItem)} rel="noreferrer">
-                    Download
-                  </a>
-                ) : null}
+                <button className="admin-button warning" type="button" onClick={downloadPreview} disabled={downloadBusy}>
+                  {downloadBusy ? 'Downloading...' : 'Download'}
+                </button>
                 <button className="admin-button danger" type="button" onClick={() => setPreviewItem(null)}>
                   Close
                 </button>
