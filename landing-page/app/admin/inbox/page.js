@@ -12,6 +12,23 @@ export default function InboxPage() {
   const searchParams = useSearchParams();
   const token = useMemo(() => (typeof window === 'undefined' ? null : localStorage.getItem('adminToken')), []);
 
+  const formatDateTime = (value) => {
+    if (!value) return '';
+    try {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return String(value);
+      return new Intl.DateTimeFormat(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: '2-digit',
+        hour: 'numeric',
+        minute: '2-digit',
+      }).format(date);
+    } catch {
+      return String(value);
+    }
+  };
+
   const initialTab = (searchParams?.get('tab') || '').toLowerCase() === 'mail' ? 'mail' : 'notifications';
   const initialBox = (searchParams?.get('box') || '').toLowerCase() === 'sent' ? 'sent' : 'inbox';
 
@@ -463,7 +480,7 @@ export default function InboxPage() {
                       <div style={{ fontWeight: 800 }}>{n.title}</div>
                       {n.body ? <div style={{ marginTop: 6, whiteSpace: 'pre-wrap' }}>{n.body}</div> : null}
                       <div className="admin-subtitle" style={{ marginTop: 8 }}>
-                        {n.type} • {n.created_at}
+                        {n.type} • {formatDateTime(n.created_at)}
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -502,7 +519,7 @@ export default function InboxPage() {
                   <tr key={m.id} style={{ opacity: m.is_deleted ? 0.6 : 1 }}>
                     <td style={{ fontWeight: m.read_at ? 500 : 800 }}>{m.subject}</td>
                     <td className="admin-subtitle">{mailBox === 'sent' ? m.to : m.from}</td>
-                    <td className="admin-subtitle">{m.created_at}</td>
+                    <td className="admin-subtitle">{formatDateTime(m.created_at)}</td>
                     <td>{m.read_at ? <span className="admin-badge secondary">Read</span> : <span className="admin-badge warning">Unread</span>}</td>
                     <td>
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -586,7 +603,7 @@ export default function InboxPage() {
                       <div className="admin-subtitle">
                         From <strong>{msg.from}</strong> to <strong>{msg.to}</strong>
                       </div>
-                      <div className="admin-subtitle">{msg.created_at}</div>
+                      <div className="admin-subtitle">{formatDateTime(msg.created_at)}</div>
                     </div>
                     <div style={{ marginTop: 10 }} dangerouslySetInnerHTML={{ __html: String(msg.body_html || '') }} />
                     {msg.attachment?.url ? (
