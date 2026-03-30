@@ -13,13 +13,21 @@ function normalizeCategory(value) {
   return v;
 }
 
-function categoryOptions() {
-  return [
+function categoryOptionsForSession(session) {
+  const roles = Array.isArray(session?.roles) ? session.roles.filter(Boolean) : [];
+  const permissions = Array.isArray(session?.permissions) ? session.permissions : [];
+  const isAdmin = permissions.includes('*') || permissions.includes('admin.manage') || roles.includes('admin');
+  const isHr = roles.includes('hr');
+
+  // Only admin/HR can upload HR/Learning assets; other staff (e.g. designer) can upload General/Marketing only.
+  const opts = [
     { value: 'general', label: 'General' },
     { value: 'marketing', label: 'Marketing' },
-    { value: 'hr', label: 'HR' },
-    { value: 'learning', label: 'Learning' },
   ];
+  if (isAdmin || isHr) {
+    opts.push({ value: 'hr', label: 'HR' }, { value: 'learning', label: 'Learning' });
+  }
+  return opts;
 }
 
 export default function LibraryUploadPage() {
@@ -65,6 +73,14 @@ export default function LibraryUploadPage() {
   useEffect(() => {
     loadSession();
   }, [token]);
+
+  const categoryOptionsVisible = useMemo(() => categoryOptionsForSession(session), [session]);
+
+  useEffect(() => {
+    // If user role changes or a link preselects a now-disallowed category, reset it.
+    const allowed = new Set(categoryOptionsVisible.map((o) => o.value));
+    if (category && !allowed.has(String(category))) setCategory('general');
+  }, [category, categoryOptionsVisible]);
 
   const upload = async (event) => {
     event.preventDefault();
@@ -195,7 +211,7 @@ export default function LibraryUploadPage() {
                   <div className="admin-field">
                     <label>Category</label>
                     <select value={category} onChange={(e) => setCategory(e.target.value)}>
-                      {categoryOptions().map((o) => (
+                      {categoryOptionsVisible.map((o) => (
                         <option key={o.value} value={o.value}>
                           {o.label}
                         </option>
