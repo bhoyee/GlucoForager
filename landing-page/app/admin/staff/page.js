@@ -354,7 +354,7 @@ export default function AdminStaffPage() {
                           >
                             {u.is_active ? 'Disable' : 'Enable'}
                           </button>
-                          <button className="admin-button warning" type="button" onClick={() => softDelete(u)} disabled={isDeleted}>
+                          <button className="admin-button danger" type="button" onClick={() => softDelete(u)} disabled={isDeleted}>
                             Soft delete
                           </button>
                         </div>
