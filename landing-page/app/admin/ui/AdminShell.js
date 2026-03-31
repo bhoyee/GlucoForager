@@ -594,7 +594,9 @@ export default function AdminShell({ children }) {
             <footer className="admin-footer" role="contentinfo">
               <div className="admin-footer-left">
                 <span className="admin-footer-brand">GF-Staff Portal v1.0</span>
-                <span className="admin-footer-muted">Powered by Bhoyee Global dev team</span>
+              </div>
+              <div className="admin-footer-right">
+                <span className="admin-footer-muted">Powered by Bhoyee Global Dev Team</span>
               </div>
             </footer>
           ) : null}

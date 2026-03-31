@@ -430,14 +430,24 @@
   flex-wrap: wrap;
 }
 
+.admin-footer-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .admin-footer-brand {
-  font-weight: 800;
+  font-weight: 600;
   color: #0f172a;
+  font-size: 12.5px;
 }
 
 .admin-footer-muted {
   color: #475569;
-  font-weight: 600;
+  font-weight: 500;
+  font-size: 12.5px;
 }
 
 .admin-footer-links {
