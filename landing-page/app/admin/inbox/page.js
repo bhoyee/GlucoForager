@@ -1,13 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import RichTextEditor from '../ui/RichTextEditor';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
-export default function InboxPage() {
+function InboxPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = useMemo(() => (typeof window === 'undefined' ? null : localStorage.getItem('adminToken')), []);
@@ -638,5 +638,19 @@ export default function InboxPage() {
         </div>
       ) : null}
     </div>
+  );
+}
+
+export default function InboxPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="admin-card">
+          <p className="admin-subtitle">Loading inbox…</p>
+        </div>
+      }
+    >
+      <InboxPageInner />
+    </Suspense>
   );
 }
