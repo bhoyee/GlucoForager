@@ -13,6 +13,59 @@ export default function MyPayrollPage() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [items, setItems] = useState([]);
+  const [pdfLoadingId, setPdfLoadingId] = useState(null);
+
+  const downloadNameForItem = (it) => {
+    const y = String(it?.year || '');
+    const m = String(it?.month || '').padStart(2, '0');
+    return `payslip_${y}-${m}_${String(it?.id || '')}.pdf`.replace(/[\\\/:*?"<>|]+/g, '_');
+  };
+
+  const fetchPayslipPdf = async (it, { download }) => {
+    if (!token || !it?.id) return;
+    setMessage('');
+    setPdfLoadingId(it.id);
+    try {
+      const url = `${API_URL}/api/admin/payroll/my/items/${encodeURIComponent(String(it.id))}/payslip.pdf?download=${download ? '1' : '0'}`;
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || 'Failed to fetch payslip.');
+      }
+
+      const blob = await res.blob();
+      const href = window.URL.createObjectURL(blob);
+
+      if (download) {
+        const a = document.createElement('a');
+        a.href = href;
+        a.download = downloadNameForItem(it);
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(href);
+      } else {
+        window.open(href, '_blank', 'noopener,noreferrer');
+        // Revoke later to allow the new tab to load.
+        setTimeout(() => {
+          try {
+            window.URL.revokeObjectURL(href);
+          } catch {
+            // ignore
+          }
+        }, 60_000);
+      }
+    } catch (e) {
+      setMessage(e?.message || 'Failed to fetch payslip.');
+    } finally {
+      setPdfLoadingId(null);
+    }
+  };
 
   const load = async () => {
     if (!token) {
@@ -138,6 +191,7 @@ export default function MyPayrollPage() {
                         <th>Gross</th>
                         <th>Deductions</th>
                         <th>Net</th>
+                        <th style={{ width: 200 }}>Payslip</th>
                         <th>Notes</th>
                       </tr>
                     </thead>
@@ -148,6 +202,26 @@ export default function MyPayrollPage() {
                           <td>{it.gross}</td>
                           <td>{it.deductions}</td>
                           <td style={{ fontWeight: 700 }}>{it.net}</td>
+                          <td>
+                            <div className="admin-inline" style={{ gap: 10 }}>
+                              <button
+                                className="admin-button neutral"
+                                type="button"
+                                onClick={() => fetchPayslipPdf(it, { download: false })}
+                                disabled={pdfLoadingId === it.id}
+                              >
+                                {pdfLoadingId === it.id ? 'Loading…' : 'View PDF'}
+                              </button>
+                              <button
+                                className="admin-button info"
+                                type="button"
+                                onClick={() => fetchPayslipPdf(it, { download: true })}
+                                disabled={pdfLoadingId === it.id}
+                              >
+                                Download
+                              </button>
+                            </div>
+                          </td>
                           <td style={{ maxWidth: 520, whiteSpace: 'pre-wrap' }}>{it.notes || ''}</td>
                         </tr>
                       ))}
