@@ -174,6 +174,41 @@ def list_staff_users(
     return {"items": items}
 
 
+@router.get("/staff/team", response_model=dict)
+def list_staff_team(
+    q: str | None = None,
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("staff.team.read")),  # noqa: ARG001
+):
+    """
+    Lightweight team directory for staff (name + email + roles).
+    Does not expose sensitive profile fields.
+    """
+
+    query = db.query(StaffUser).filter(StaffUser.deleted_at.is_(None), StaffUser.is_active.is_(True))
+    if q:
+        needle = str(q).strip().lower()
+        if needle:
+            like = f"%{needle}%"
+            query = query.filter(
+                (StaffUser.email.ilike(like))
+                | (StaffUser.full_name.ilike(like))  # type: ignore[arg-type]
+            )
+
+    users = query.order_by(StaffUser.full_name.asc().nullslast(), StaffUser.email.asc()).limit(500).all()
+    items: list[dict] = []
+    for u in users:
+        items.append(
+            {
+                "id": int(u.id),
+                "full_name": getattr(u, "full_name", None),
+                "email": u.email,
+                "roles": StaffRBACService.get_user_role_keys(db, u.id),
+            }
+        )
+    return {"items": items}
+
+
 @router.post("/staff/users", response_model=StaffUserOut)
 def create_staff_user(
     payload: StaffUserCreate,
