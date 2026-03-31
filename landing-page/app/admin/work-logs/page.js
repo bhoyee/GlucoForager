@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import EmptyState from '../ui/EmptyState';
 import LoadingState from '../ui/LoadingState';
@@ -75,7 +75,7 @@ function monthStartISO(d) {
   return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-01`;
 }
 
-export default function WorkLogsPage() {
+function WorkLogsPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = useMemo(() => (typeof window === 'undefined' ? null : localStorage.getItem('adminToken')), []);
@@ -1818,5 +1818,19 @@ export default function WorkLogsPage() {
         </div>
       ) : null}
     </div>
+  );
+}
+
+export default function WorkLogsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="admin-card">
+          <LoadingState label="Loading work logs…" />
+        </div>
+      }
+    >
+      <WorkLogsPageInner />
+    </Suspense>
   );
 }

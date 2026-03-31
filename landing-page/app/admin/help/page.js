@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import EmptyState from '../ui/EmptyState';
 import LoadingState from '../ui/LoadingState';
@@ -98,7 +98,7 @@ function bubbleColorsForAuthorId(authorId) {
   return palette[idx] || palette[0];
 }
 
-export default function HelpPage() {
+function HelpPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = useMemo(() => (typeof window === 'undefined' ? null : localStorage.getItem('adminToken')), []);
@@ -802,5 +802,19 @@ export default function HelpPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function HelpPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="admin-card">
+          <LoadingState label="Loading…" />
+        </div>
+      }
+    >
+      <HelpPageInner />
+    </Suspense>
   );
 }
