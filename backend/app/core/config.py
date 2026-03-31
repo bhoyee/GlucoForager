@@ -149,6 +149,7 @@ class Settings(BaseSettings):
     payroll_company_name: str = Field("GlucoForager", env="PAYROLL_COMPANY_NAME")
     payroll_holding_name: str = Field("Bhoyee Global Enterprise", env="PAYROLL_HOLDING_NAME")
     payroll_brand_name: str = Field("GlucoForager", env="PAYROLL_BRAND_NAME")
+    payroll_brand_website: str = Field("https://glucoforager.com", env="PAYROLL_BRAND_WEBSITE")
     payroll_company_address: str | None = Field(None, env="PAYROLL_COMPANY_ADDRESS")
     payroll_company_email: str | None = Field(None, env="PAYROLL_COMPANY_EMAIL")
     payroll_company_phone: str | None = Field(None, env="PAYROLL_COMPANY_PHONE")
