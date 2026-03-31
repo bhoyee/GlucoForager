@@ -280,16 +280,16 @@ export default function MyDrivePage() {
         <p className="admin-subtitle">Private drive — only you can see your uploaded files.</p>
         {message ? <div className="admin-alert warning">{message}</div> : null}
 
-        <form onSubmit={doUpload} className="admin-grid" style={{ marginTop: 12 }}>
-          <div className="admin-col-6">
+        <form onSubmit={doUpload} style={{ marginTop: 12 }}>
+          <div className="admin-field">
             <label>Title</label>
-            <input className="admin-input" value={uploadTitle} onChange={(e) => setUploadTitle(e.target.value)} placeholder="e.g. Payslip March, Team notes, Design assets…" />
+            <input value={uploadTitle} onChange={(e) => setUploadTitle(e.target.value)} placeholder="e.g. Payslip March, Team notes, Design assets…" />
           </div>
-          <div className="admin-col-6">
+          <div className="admin-field">
             <label>File</label>
-            <input className="admin-input" type="file" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} />
+            <input type="file" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} />
           </div>
-          <div className="admin-col-12" style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+          <div className="admin-actions" style={{ justifyContent: 'flex-end', marginTop: 10 }}>
             <button className="admin-button info" type="submit" disabled={uploading}>
               {uploading ? 'Uploading…' : 'Upload'}
             </button>
@@ -430,4 +430,3 @@ export default function MyDrivePage() {
     </div>
   );
 }
-
