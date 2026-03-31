@@ -33,11 +33,22 @@ function kindLabel(item) {
   return 'File';
 }
 
+function formatBytes(bytes) {
+  const n = Number(bytes);
+  if (!Number.isFinite(n) || n <= 0) return '—';
+  if (n < 1024) return `${n} B`;
+  const kb = n / 1024;
+  if (kb < 1024) return `${kb.toFixed(kb < 10 ? 1 : 0)} KB`;
+  const mb = kb / 1024;
+  return `${mb.toFixed(mb < 10 ? 1 : 0)} MB`;
+}
+
 export default function MyDrivePage() {
   const router = useRouter();
   const token = useMemo(() => (typeof window === 'undefined' ? null : localStorage.getItem('adminToken')), []);
   const debounceTimer = useRef(null);
 
+  const [driveStatus, setDriveStatus] = useState(null);
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [includeDeleted, setIncludeDeleted] = useState(false);
@@ -56,6 +67,18 @@ export default function MyDrivePage() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [softDeleteTarget, setSoftDeleteTarget] = useState(null);
   const [softDeleteSubmitting, setSoftDeleteSubmitting] = useState(false);
+
+  const loadStatus = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/api/admin/drive/status`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.status === 401) return;
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) setDriveStatus(data);
+    } catch {
+      // ignore
+    }
+  };
 
   const load = async () => {
     if (!token) {
@@ -96,6 +119,7 @@ export default function MyDrivePage() {
   }, [query]);
 
   useEffect(() => {
+    loadStatus();
     load();
   }, [token, debouncedQuery, includeDeleted]);
 
@@ -268,6 +292,12 @@ export default function MyDrivePage() {
       <div className="admin-card">
         <h2 className="admin-title">MyDrive</h2>
         <p className="admin-subtitle">Private drive — only you can see your uploaded files.</p>
+        {driveStatus?.limits ? (
+          <div className="admin-alert info" style={{ marginTop: 12 }}>
+            Allowed: images (jpg/png/webp) ≤ {formatBytes(driveStatus.limits.image_max_bytes)}, PDF ≤ {formatBytes(driveStatus.limits.pdf_max_bytes)}, MP4 video ≤{' '}
+            {formatBytes(driveStatus.limits.video_max_bytes)}.
+          </div>
+        ) : null}
         {message ? <div className="admin-alert warning">{message}</div> : null}
 
         <form onSubmit={doUpload} style={{ marginTop: 12 }}>

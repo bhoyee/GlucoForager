@@ -67,6 +67,32 @@ def _get_file_or_404(db: Session, *, file_id: int) -> StaffDriveFile:
     return f
 
 
+@router.get("/status", response_model=dict)
+def drive_status(
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(get_current_staff_user),  # noqa: ARG001
+):
+    """
+    Returns client-safe drive limits so the UI can display them.
+    """
+
+    from ...core.config import settings  # local import to avoid circulars
+
+    return {
+        "backend": str(settings.drive_storage_backend or "").strip().lower() or "ftp",
+        "limits": {
+            "image_max_bytes": int(settings.drive_max_image_bytes),
+            "pdf_max_bytes": int(settings.drive_max_pdf_bytes),
+            "video_max_bytes": int(settings.drive_max_video_bytes),
+        },
+        "allowed": {
+            "images": ["jpg", "jpeg", "png", "webp"],
+            "pdfs": ["pdf"],
+            "videos": ["mp4"],
+        },
+    }
+
+
 @router.get("/my/files", response_model=dict)
 def list_my_files(
     q: str | None = None,
