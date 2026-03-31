@@ -269,7 +269,7 @@ export default function AdminPushCampaignsPage() {
         <button className="admin-button" type="button" onClick={openCreate} disabled={busy}>
           New campaign
         </button>
-        <button className="admin-button secondary" type="button" onClick={loadList} disabled={busy}>
+        <button className="admin-button info" type="button" onClick={loadList} disabled={busy}>
           Refresh
         </button>
       </div>

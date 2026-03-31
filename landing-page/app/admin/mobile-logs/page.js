@@ -102,7 +102,7 @@ export default function AdminMobileLogsPage() {
           <option value={200}>Last 200</option>
           <option value={500}>Last 500</option>
         </select>
-        <button type="button" className="admin-button secondary" onClick={() => loadLogs()}>
+        <button type="button" className="admin-button info" onClick={() => loadLogs()}>
           Refresh
         </button>
       </div>

@@ -1,0 +1,171 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import RichTextEditor from '../../ui/RichTextEditor';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
+
+function isValidStaffEmail(email) {
+  const e = String(email || '').trim().toLowerCase();
+  return Boolean(e) && e.includes('@') && e.includes('.');
+}
+
+export default function ComposeMailPage() {
+  const router = useRouter();
+  const token = useMemo(() => (typeof window === 'undefined' ? null : localStorage.getItem('adminToken')), []);
+
+  const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState(null);
+  const [to, setTo] = useState('');
+  const [subject, setSubject] = useState('');
+  const [bodyHtml, setBodyHtml] = useState('');
+  const [attachment, setAttachment] = useState(null);
+  const [sending, setSending] = useState(false);
+  const [message, setMessage] = useState('');
+  const [tone, setTone] = useState('warning');
+
+  useEffect(() => {
+    const loadSession = async () => {
+      if (!token) {
+        router.push('/admin');
+        return;
+      }
+      setLoading(true);
+      try {
+        const res = await fetch(`${API_URL}/api/admin/me`, { headers: { Authorization: `Bearer ${token}` } });
+        if (res.status === 401) {
+          localStorage.removeItem('adminToken');
+          router.push('/admin');
+          return;
+        }
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) setSession(data);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadSession();
+  }, [token]);
+
+  const send = async () => {
+    if (!token) return;
+    setMessage('');
+
+    if (!isValidStaffEmail(to)) {
+      setTone('danger');
+      setMessage('Enter a valid recipient email.');
+      return;
+    }
+    if (!String(subject || '').trim()) {
+      setTone('danger');
+      setMessage('Subject is required.');
+      return;
+    }
+    const stripped = String(bodyHtml || '').replace(/<[^>]*>/g, '').trim();
+    if (!stripped) {
+      setTone('danger');
+      setMessage('Message is required.');
+      return;
+    }
+
+    setSending(true);
+    try {
+      const fd = new FormData();
+      fd.set('to', to);
+      fd.set('subject', subject);
+      fd.set('body_html', bodyHtml);
+      if (attachment) fd.set('attachment', attachment);
+
+      const res = await fetch(`${API_URL}/api/admin/inbox/messages/form`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      if (!res.ok) throw new Error(data.detail || 'Failed to send.');
+      setTone('info');
+      setMessage('Sent.');
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('admin-inbox-updated'));
+      router.push('/admin/inbox?tab=mail');
+    } catch (e) {
+      setTone('danger');
+      setMessage(e?.message || 'Failed to send.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="admin-page">
+      <div className="admin-card">
+        <div className="admin-actions" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h2 className="admin-title" style={{ marginBottom: 6 }}>
+              Compose mail
+            </h2>
+            <p className="admin-subtitle" style={{ margin: 0 }}>
+              Staff-to-staff mail (recipient must be a registered staff email).
+            </p>
+          </div>
+          <Link className="admin-button secondary" href="/admin/inbox?tab=mail">
+            Back to Inbox
+          </Link>
+        </div>
+      </div>
+
+      <div className="admin-card" style={{ marginTop: 16 }}>
+        {loading ? <p className="admin-subtitle">Loading...</p> : null}
+        {!loading && !session ? <div className="admin-alert danger">Not signed in.</div> : null}
+        {message ? <div className={`admin-alert ${tone}`} style={{ marginTop: 12 }}>{message}</div> : null}
+
+        {!loading && session ? (
+          <div className="admin-grid" style={{ alignItems: 'start', marginTop: 12 }}>
+            <div className="admin-card admin-card--subtle admin-card--compact">
+              <div className="admin-field">
+                <label>To</label>
+                <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="someone@example.com" />
+                <p className="admin-subtitle" style={{ marginTop: 6 }}>
+                  Recipient must match an existing staff email in the system.
+                </p>
+              </div>
+              <div className="admin-field">
+                <label>Subject</label>
+                <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject" />
+              </div>
+              <div className="admin-field">
+                <label>Attachment (optional)</label>
+                <input
+                  type="file"
+                  onChange={(e) => setAttachment(e.target.files?.[0] || null)}
+                  accept=".pdf,.jpg,.jpeg,.png,.webp,.mp4"
+                />
+                <p className="admin-subtitle" style={{ marginTop: 6 }}>
+                  Allowed: images (jpg/png/webp), PDF, MP4 video.
+                </p>
+              </div>
+            </div>
+
+            <div className="admin-card admin-card--subtle admin-card--compact">
+              <div className="admin-field">
+                <label>Message</label>
+                <RichTextEditor value={bodyHtml} onChange={setBodyHtml} />
+              </div>
+              <div className="admin-actions" style={{ justifyContent: 'flex-end' }}>
+                <button className="admin-button info" type="button" onClick={send} disabled={sending}>
+                  {sending ? 'Sending...' : 'Send'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}

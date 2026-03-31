@@ -20,6 +20,21 @@ from sqlalchemy.exc import OperationalError
 from .api.endpoints import (
     auth,
     admin,
+    admin_staff_portal,
+    admin_staff_security,
+    admin_attendance,
+    admin_work_logs,
+    admin_work_plans,
+    admin_library,
+    admin_drive,
+    admin_inbox,
+    admin_help,
+    admin_intranet_updates,
+    admin_staff_notifications,
+    admin_audit,
+    admin_payroll,
+    admin_expenses,
+    admin_reports,
     admin_settings,
     admin_challenge,
     admin_revenuecat,
@@ -72,6 +87,14 @@ from .models import (  # ensure models are registered with SQLAlchemy
     push_token,
     admin_push_campaign,
     admin_push_send,
+    staff_intranet_update,
+    staff_compensation,
+    payroll_run,
+    payroll_item,
+    staff_assigned_task,
+    staff_role_milestone,
+    staff_milestone_progress,
+    staff_inbox_message,
 )
 from .services.cache_service import CacheService
 from .services.system_log_service import log_system_event
@@ -251,6 +274,22 @@ async def abuse_guard(request: Request, call_next):
     elif path.startswith("/api/mobile/push-tokens"):
         limit_per_min = int(getattr(settings, "api_rate_limit_push_tokens_per_min", 60))
         bucket_key = "push_tokens"
+    elif path.startswith("/api/admin/login") or path.startswith("/api/admin/bootstrap") or path.startswith("/api/admin/staff/login"):
+        # IP-based limiting for login/bootstrap endpoints.
+        limit_per_min = int(getattr(settings, "admin_login_rate_limit_per_min", 20))
+        identifier = f"ip:{_client_ip(request)}"
+        bucket_key = "admin_login"
+    elif path.startswith("/api/admin/staff/password-reset/"):
+        limit_per_min = int(getattr(settings, "admin_password_reset_rate_limit_per_min", 10))
+        identifier = f"ip:{_client_ip(request)}"
+        bucket_key = "admin_pw_reset"
+    elif path.startswith("/api/admin/staff/mfa/"):
+        limit_per_min = int(getattr(settings, "admin_mfa_rate_limit_per_min", 20))
+        identifier = f"ip:{_client_ip(request)}"
+        bucket_key = "admin_mfa"
+    elif path.startswith("/api/admin/"):
+        limit_per_min = int(getattr(settings, "admin_rate_limit_per_min", 180))
+        bucket_key = "admin_api"
     else:
         is_user = identifier.startswith("user:")
         if is_user:
@@ -412,6 +451,21 @@ except Exception as exc:  # noqa: BLE001
 
 app.include_router(auth.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
+app.include_router(admin_staff_portal.router, prefix="/api")
+app.include_router(admin_staff_security.router, prefix="/api")
+app.include_router(admin_attendance.router, prefix="/api")
+app.include_router(admin_work_logs.router, prefix="/api")
+app.include_router(admin_work_plans.router, prefix="/api")
+app.include_router(admin_library.router, prefix="/api")
+app.include_router(admin_drive.router, prefix="/api")
+app.include_router(admin_inbox.router, prefix="/api")
+app.include_router(admin_help.router, prefix="/api")
+app.include_router(admin_intranet_updates.router, prefix="/api")
+app.include_router(admin_staff_notifications.router, prefix="/api")
+app.include_router(admin_audit.router, prefix="/api")
+app.include_router(admin_payroll.router, prefix="/api")
+app.include_router(admin_expenses.router, prefix="/api")
+app.include_router(admin_reports.router, prefix="/api")
 app.include_router(admin_settings.router, prefix="/api")
 app.include_router(admin_challenge.router, prefix="/api")
 app.include_router(admin_revenuecat.router, prefix="/api")

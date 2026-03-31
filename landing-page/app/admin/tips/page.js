@@ -511,7 +511,7 @@ export default function AdminTipsPage() {
               <div className="admin-modal">
                 <div className="admin-modal-header">
                   <h3>{editingId ? 'Edit tip' : 'Add tip'}</h3>
-                  <button className="admin-icon-button" type="button" onClick={closeEditor} aria-label="Close">
+                  <button className="admin-icon-button danger" type="button" onClick={closeEditor} aria-label="Close">
                     ×
                   </button>
                 </div>
