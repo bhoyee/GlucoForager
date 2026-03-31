@@ -834,6 +834,7 @@ def my_payslip_pdf(
 
     holding = str(settings.payroll_holding_name or "Bhoyee Global Enterprise").strip() or "Bhoyee Global Enterprise"
     brand = str(settings.payroll_brand_name or "GlucoForager").strip() or "GlucoForager"
+    brand_website = str(getattr(settings, "payroll_brand_website", "") or "").strip() or "https://glucoforager.com"
     period = f"{int(run.year)}-{int(run.month):02d}"
     period_label = date(int(run.year), int(run.month), 1).strftime("%B %Y")
     staff_name = (getattr(current_staff, "full_name", None) or current_staff.email or "").strip()
@@ -854,6 +855,7 @@ def my_payslip_pdf(
 
     styles = getSampleStyleSheet()
     brand_blue = colors.HexColor("#2563eb")
+    brand_green = colors.HexColor("#16a34a")
     ink = colors.HexColor("#0f172a")
     muted = colors.HexColor("#475569")
     line = colors.HexColor("#cbd5e1")
@@ -865,6 +867,8 @@ def my_payslip_pdf(
     styles.add(ParagraphStyle(name="GFValue", parent=styles["BodyText"], fontName="Helvetica", fontSize=9.5, leading=11.5, textColor=ink))
     styles.add(ParagraphStyle(name="GFValueBold", parent=styles["BodyText"], fontName="Helvetica-Bold", fontSize=10.5, leading=12, textColor=ink))
     styles.add(ParagraphStyle(name="GFBrand", parent=styles["BodyText"], fontName="Helvetica-Bold", fontSize=12, leading=14, textColor=ink))
+    styles.add(ParagraphStyle(name="GFBrandGreen", parent=styles["BodyText"], fontName="Helvetica-Bold", fontSize=12, leading=14, textColor=brand_green))
+    styles.add(ParagraphStyle(name="GFWebsite", parent=styles["BodyText"], fontName="Helvetica", fontSize=9.5, leading=12, textColor=muted))
 
     def kv_table(rows: list[tuple[str, str]]) -> Table:
         data = [[Paragraph(_escape(k), styles["GFLabel"]), Paragraph(_escape(v), styles["GFValue"])] for k, v in rows]
@@ -900,9 +904,11 @@ def my_payslip_pdf(
     net = _money(item.currency, item.net)
 
     # Header (match reference image structure)
+    generated_label = datetime.utcnow().strftime("%d %b %Y %H:%M UTC")
     header_left = [
-        Paragraph(_escape(holding), styles["GFTitle"]),
-        Paragraph(_escape(f"Brand: {brand}"), styles["GFBrand"]),
+        Paragraph(_escape(holding.upper()), styles["GFTitle"]),
+        Paragraph(_escape(f"Brand: {brand}"), styles["GFBrandGreen"]),
+        Paragraph(_escape(brand_website), styles["GFWebsite"]),
         Paragraph(_escape(" ".join([x for x in company_lines if x]) or ""), styles["GFSub"]),
         Spacer(1, 6),
         Paragraph(_escape(f"Payslip for the month of {period_label}"), styles["GFValueBold"]),
@@ -1040,7 +1046,8 @@ def my_payslip_pdf(
     story.append(net_row)
 
     story.append(Spacer(1, 12))
-    story.append(Paragraph(_escape("— This is a system generated payslip —"), ParagraphStyle(name="GFFooter", parent=styles["GFSub"], fontSize=8, textColor=muted, alignment=1)))
+    footer_text = f"Generated {generated_label} · {brand_website} · This is a system generated payslip"
+    story.append(Paragraph(_escape(footer_text), ParagraphStyle(name="GFFooter", parent=styles["GFSub"], fontSize=8, textColor=muted, alignment=1)))
 
     doc.build(story)
     data = buf.getvalue()
