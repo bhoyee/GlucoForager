@@ -27,6 +27,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
+from reportlab.lib.utils import ImageReader
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 
 
@@ -813,6 +814,37 @@ def _escape(text: str | None) -> str:
     return html.escape(str(text or "").strip())
 
 
+def _draw_pdf_logo_watermark(*, canvas, doc, logo_path: str) -> None:  # noqa: ANN001
+    path = str(logo_path or "").strip()
+    if not path:
+        return
+    try:
+        reader = ImageReader(path)
+        iw, ih = reader.getSize()
+        if not iw or not ih:
+            return
+        page_w, page_h = doc.pagesize
+        # Keep a large-but-subtle watermark.
+        max_w = page_w * 0.72
+        max_h = page_h * 0.72
+        scale = min(max_w / float(iw), max_h / float(ih))
+        w = float(iw) * scale
+        h = float(ih) * scale
+        x = (page_w - w) / 2.0
+        y = (page_h - h) / 2.0
+
+        canvas.saveState()
+        try:
+            if hasattr(canvas, "setFillAlpha"):
+                canvas.setFillAlpha(0.06)
+        except Exception:
+            pass
+        canvas.drawImage(reader, x, y, width=w, height=h, mask="auto", preserveAspectRatio=True, anchor="c")
+        canvas.restoreState()
+    except Exception:
+        return
+
+
 @router.get("/my/items/{item_id}/payslip.pdf")
 def my_payslip_pdf(
     item_id: int,
@@ -835,6 +867,7 @@ def my_payslip_pdf(
     holding = str(settings.payroll_holding_name or "Bhoyee Global Enterprise").strip() or "Bhoyee Global Enterprise"
     brand = str(settings.payroll_brand_name or "GlucoForager").strip() or "GlucoForager"
     brand_website = str(getattr(settings, "payroll_brand_website", "") or "").strip() or "https://glucoforager.com"
+    logo_path = str(getattr(settings, "payroll_logo_path", "") or "").strip()
     period = f"{int(run.year)}-{int(run.month):02d}"
     period_label = date(int(run.year), int(run.month), 1).strftime("%B %Y")
     staff_name = (getattr(current_staff, "full_name", None) or current_staff.email or "").strip()
@@ -855,7 +888,6 @@ def my_payslip_pdf(
 
     styles = getSampleStyleSheet()
     brand_blue = colors.HexColor("#2563eb")
-    brand_green = colors.HexColor("#16a34a")
     ink = colors.HexColor("#0f172a")
     muted = colors.HexColor("#475569")
     line = colors.HexColor("#cbd5e1")
@@ -867,7 +899,6 @@ def my_payslip_pdf(
     styles.add(ParagraphStyle(name="GFValue", parent=styles["BodyText"], fontName="Helvetica", fontSize=9.5, leading=11.5, textColor=ink))
     styles.add(ParagraphStyle(name="GFValueBold", parent=styles["BodyText"], fontName="Helvetica-Bold", fontSize=10.5, leading=12, textColor=ink))
     styles.add(ParagraphStyle(name="GFBrand", parent=styles["BodyText"], fontName="Helvetica-Bold", fontSize=12, leading=14, textColor=ink))
-    styles.add(ParagraphStyle(name="GFBrandGreen", parent=styles["BodyText"], fontName="Helvetica-Bold", fontSize=12, leading=14, textColor=brand_green))
     styles.add(ParagraphStyle(name="GFWebsite", parent=styles["BodyText"], fontName="Helvetica", fontSize=9.5, leading=12, textColor=muted))
 
     def kv_table(rows: list[tuple[str, str]]) -> Table:
@@ -906,8 +937,8 @@ def my_payslip_pdf(
     # Header (match reference image structure)
     generated_label = datetime.utcnow().strftime("%d %b %Y %H:%M UTC")
     header_left = [
-        Paragraph(_escape(holding.upper()), styles["GFTitle"]),
-        Paragraph(_escape(f"Brand: {brand}"), styles["GFBrandGreen"]),
+        Paragraph(_escape(holding), styles["GFTitle"]),
+        Paragraph(_escape(f"Brand: {brand}"), styles["GFBrand"]),
         Paragraph(_escape(brand_website), styles["GFWebsite"]),
         Paragraph(_escape(" ".join([x for x in company_lines if x]) or ""), styles["GFSub"]),
         Spacer(1, 6),
@@ -1049,7 +1080,10 @@ def my_payslip_pdf(
     footer_text = f"Generated {generated_label} · {brand_website} · This is a system generated payslip"
     story.append(Paragraph(_escape(footer_text), ParagraphStyle(name="GFFooter", parent=styles["GFSub"], fontSize=8, textColor=muted, alignment=1)))
 
-    doc.build(story)
+    def _on_page(canvas, doc):  # noqa: ANN001
+        _draw_pdf_logo_watermark(canvas=canvas, doc=doc, logo_path=logo_path)
+
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
     data = buf.getvalue()
     buf.close()
 
