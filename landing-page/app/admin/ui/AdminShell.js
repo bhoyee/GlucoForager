@@ -16,9 +16,11 @@ export default function AdminShell({ children }) {
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsedInitialized, setSidebarCollapsedInitialized] = useState(false);
   const [session, setSession] = useState(null);
   const [sessionLoading, setSessionLoading] = useState(false);
   const [navSectionOpen, setNavSectionOpen] = useState({});
+  const [navSectionOpenInitialized, setNavSectionOpenInitialized] = useState(false);
   const [helpUnreadCount, setHelpUnreadCount] = useState(0);
   const [inboxUnreadCount, setInboxUnreadCount] = useState(0);
 
@@ -100,41 +102,34 @@ export default function AdminShell({ children }) {
   }, [API_URL, isPublicRoute, session?.permissions]);
 
   useEffect(() => {
-    // Persist the desktop collapsed state for a more "app-like" feel.
+    if (!session?.email) return;
+    if (!navSectionOpenInitialized) return;
     try {
-      const stored = localStorage.getItem('adminSidebarCollapsed');
-      if (stored === '1') setSidebarCollapsed(true);
-    } catch {
-      // Ignore storage failures (private mode / blocked storage).
-    }
-  }, []);
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem('adminNavSectionOpen');
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object') setNavSectionOpen(parsed);
+      const permissions = Array.isArray(session?.permissions) ? session.permissions : [];
+      const roles = Array.isArray(session?.roles) ? session.roles : [];
+      const isAdminForKey = permissions.includes('*') || permissions.includes('admin.manage') || roles.includes('admin');
+      const key = isAdminForKey ? 'adminNavSectionOpen' : 'staffNavSectionOpen';
+      localStorage.setItem(key, JSON.stringify(navSectionOpen || {}));
     } catch {
       // Ignore.
     }
-  }, []);
+  }, [navSectionOpen, navSectionOpenInitialized, session?.email, session?.permissions, session?.roles]);
 
   useEffect(() => {
+    // Persist collapsed state, but keep admin + staff separated so one user's preference
+    // doesn't make the sidebar look "missing" for another role.
+    if (!session?.email) return;
+    if (!sidebarCollapsedInitialized) return;
     try {
-      localStorage.setItem('adminNavSectionOpen', JSON.stringify(navSectionOpen || {}));
+      const permissions = Array.isArray(session?.permissions) ? session.permissions : [];
+      const roles = Array.isArray(session?.roles) ? session.roles : [];
+      const isAdminForKey = permissions.includes('*') || permissions.includes('admin.manage') || roles.includes('admin');
+      const key = isAdminForKey ? 'adminSidebarCollapsed' : 'staffSidebarCollapsed';
+      localStorage.setItem(key, sidebarCollapsed ? '1' : '0');
     } catch {
       // Ignore.
     }
-  }, [navSectionOpen]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('adminSidebarCollapsed', sidebarCollapsed ? '1' : '0');
-    } catch {
-      // Ignore.
-    }
-  }, [sidebarCollapsed]);
+  }, [session?.email, session?.permissions, session?.roles, sidebarCollapsed, sidebarCollapsedInitialized]);
 
   useEffect(() => {
     // Close the sidebar on navigation.
@@ -266,6 +261,42 @@ export default function AdminShell({ children }) {
   const isAdmin = permissions.includes('*') || permissions.includes('admin.manage') || roles.includes('admin');
   const isMarketer = roles.includes('marketer');
   const canSeeUpdatesMenu = isAdmin || roles.includes('hr');
+
+  useEffect(() => {
+    if (isPublicRoute) return;
+    if (sessionLoading) return;
+    if (!session?.email) return;
+    if (sidebarCollapsedInitialized) return;
+
+    try {
+      const key = isAdmin ? 'adminSidebarCollapsed' : 'staffSidebarCollapsed';
+      const stored = localStorage.getItem(key);
+      setSidebarCollapsed(stored === '1');
+    } catch {
+      setSidebarCollapsed(false);
+    } finally {
+      setSidebarCollapsedInitialized(true);
+    }
+  }, [isAdmin, isPublicRoute, session?.email, sessionLoading, sidebarCollapsedInitialized]);
+
+  useEffect(() => {
+    if (isPublicRoute) return;
+    if (sessionLoading) return;
+    if (!session?.email) return;
+    if (navSectionOpenInitialized) return;
+
+    try {
+      const key = isAdmin ? 'adminNavSectionOpen' : 'staffNavSectionOpen';
+      const raw = localStorage.getItem(key);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') setNavSectionOpen(parsed);
+    } catch {
+      // ignore
+    } finally {
+      setNavSectionOpenInitialized(true);
+    }
+  }, [isAdmin, isPublicRoute, navSectionOpenInitialized, session?.email, sessionLoading]);
 
   const navSections = useMemo(() => {
     const hasPermission = (required) => {
