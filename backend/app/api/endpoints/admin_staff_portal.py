@@ -178,12 +178,18 @@ def list_staff_users(
 def list_staff_team(
     q: str | None = None,
     db: Session = Depends(get_db),
-    current_staff: StaffUser = Depends(require_staff_permission("staff.team.read")),  # noqa: ARG001
+    current_staff: StaffUser = Depends(get_current_staff_user),  # noqa: ARG001
 ):
     """
     Lightweight team directory for staff (name + email + roles).
     Does not expose sensitive profile fields.
     """
+
+    # Admin users don't need the "My Team" directory page (staff-only UX).
+    # (Admins still have the full staff management page.)
+    roles = StaffRBACService.get_user_role_keys(db, current_staff.id)
+    if "admin" in roles:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
 
     query = db.query(StaffUser).filter(StaffUser.deleted_at.is_(None), StaffUser.is_active.is_(True))
     if q:
