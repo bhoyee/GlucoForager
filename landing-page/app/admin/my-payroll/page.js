@@ -24,6 +24,7 @@ export default function MyPayrollPage() {
 
   const fetchPayslipPdf = async (it, { download }) => {
     if (!token || !it?.id) return;
+    if (pdfLoading?.id === it.id) return; // prevent double-actions on same row
     setMessage('');
     setPdfLoading({ id: it.id, action: download ? 'download' : 'view' });
     try {
@@ -209,22 +210,31 @@ export default function MyPayrollPage() {
                           <td style={{ fontWeight: 700 }}>{it.net}</td>
                           <td>
                             <div className="admin-inline" style={{ gap: 10 }}>
+                              {(() => {
+                                const busy = pdfLoading?.id === it.id;
+                                const viewing = busy && pdfLoading?.action === 'view';
+                                const downloading = busy && pdfLoading?.action === 'download';
+                                return (
+                                  <>
                               <button
                                 className="admin-button neutral"
                                 type="button"
                                 onClick={() => fetchPayslipPdf(it, { download: false })}
-                                disabled={pdfLoading?.id === it.id}
+                                disabled={viewing}
                               >
-                                {pdfLoading?.id === it.id && pdfLoading?.action === 'view' ? 'Loading…' : 'View PDF'}
+                                {viewing ? 'Loading…' : 'View PDF'}
                               </button>
                               <button
                                 className="admin-button info"
                                 type="button"
                                 onClick={() => fetchPayslipPdf(it, { download: true })}
-                                disabled={pdfLoading?.id === it.id}
+                                disabled={downloading}
                               >
-                                {pdfLoading?.id === it.id && pdfLoading?.action === 'download' ? 'Downloading…' : 'Download'}
+                                {downloading ? 'Downloading…' : 'Download'}
                               </button>
+                                  </>
+                                );
+                              })()}
                             </div>
                           </td>
                           <td style={{ maxWidth: 520, whiteSpace: 'pre-wrap' }}>{it.notes || ''}</td>
