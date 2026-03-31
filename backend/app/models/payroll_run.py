@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import Column, DateTime, Integer, String
+from sqlalchemy import Column, Date, DateTime, Integer, String
 
 from ..database import Base
 
@@ -17,7 +17,7 @@ class PayrollRun(Base):
 
     created_by_staff_user_id = Column(Integer, nullable=True, index=True)
     finalized_at = Column(DateTime, nullable=True, index=True)
+    pay_date = Column(Date, nullable=True, index=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
