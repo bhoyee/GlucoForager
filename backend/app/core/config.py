@@ -129,6 +129,14 @@ class Settings(BaseSettings):
     inbox_file_max_pdf_bytes: int = Field(2_097_152, env="INBOX_FILE_MAX_PDF_BYTES")  # 2 MB
     inbox_file_max_video_bytes: int = Field(25 * 1024 * 1024, env="INBOX_FILE_MAX_VIDEO_BYTES")  # 25 MB
 
+    # Staff private drive (MyDrive / StaffDrive)
+    # Stored on shared hosting via FTP (recommended).
+    drive_storage_backend: str = Field("ftp", env="DRIVE_STORAGE_BACKEND")
+    drive_ftp_base_dir: str = Field("/public_html/glucoforager.com/private-drive", env="DRIVE_FTP_BASE_DIR")
+    drive_max_image_bytes: int = Field(1_048_576, env="DRIVE_MAX_IMAGE_BYTES")  # 1 MB
+    drive_max_pdf_bytes: int = Field(2_097_152, env="DRIVE_MAX_PDF_BYTES")  # 2 MB
+    drive_max_video_bytes: int = Field(25 * 1024 * 1024, env="DRIVE_MAX_VIDEO_BYTES")  # 25 MB
+
     # Recipe image upload storage (used by /api/admin/uploads)
     # - local: store on backend disk under UPLOADS_DIR (served from /uploads)
     # - ftp: upload to shared hosting under RECIPE_FTP_BASE_DIR and store public RECIPE_REMOTE_BASE_URL
