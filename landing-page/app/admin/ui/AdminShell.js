@@ -318,6 +318,8 @@ export default function AdminShell({ children }) {
           ...(canSeeUpdatesMenu ? [{ href: '/admin/updates', label: 'Updates', icon: 'UP', perm: 'intranet_updates.read' }] : []),
           { href: '/admin/attendance', label: 'Clock In/Out', icon: 'CI' },
           { href: '/admin/work-logs', label: 'Work Logs', icon: 'WL' },
+          { href: '/admin/my-drive', label: 'MyDrive', icon: 'DR' },
+          ...(isAdmin ? [{ href: '/admin/staff-drive', label: 'StaffDrive', icon: 'SD', perm: 'admin.manage' }] : []),
           { href: '/admin/work-plans', label: 'Work Plans', icon: 'WP', perm: 'work_logs.manage' },
           { href: '/admin/milestones', label: 'Milestones', icon: 'MS', perm: 'work_logs.manage' },
           { href: '/admin/help', label: 'Help', icon: '?' },
