@@ -18,7 +18,8 @@ export default function MyPayrollPage() {
   const downloadNameForItem = (it) => {
     const y = String(it?.year || '');
     const m = String(it?.month || '').padStart(2, '0');
-    return `payslip_${y}-${m}_${String(it?.id || '')}.pdf`.replace(/[\\\/:*?"<>|]+/g, '_');
+    const ref = String(it?.payslip_ref || it?.id || '');
+    return `payslip_${y}-${m}_${ref}.pdf`.replace(/[\\\/:*?"<>|]+/g, '_');
   };
 
   const fetchPayslipPdf = async (it, { download }) => {
@@ -158,15 +159,15 @@ export default function MyPayrollPage() {
         <div style={{ marginTop: 14, display: 'grid', gap: 14 }}>
           {groups.map((g) => {
             const totals = totalsByCurrency(g.items);
-            const status = String(g.items?.[0]?.run_status || '').toLowerCase();
-            const badge = status === 'finalized' ? 'success' : 'secondary';
+            const payDateISO = String(g.items?.[0]?.pay_date || '').slice(0, 10);
+            const payDateLabel = payDateISO ? new Date(`${payDateISO}T00:00:00Z`).toLocaleDateString() : '';
             return (
               <div key={g.period} className="admin-card admin-card--subtle admin-card--compact">
                 <div className="admin-actions" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
                     <h3 style={{ margin: 0 }}>{monthLabel(g.period)}</h3>
                     <p className="admin-help" style={{ marginTop: 6 }}>
-                      Status: <span className={`admin-badge ${badge}`}>{status || 'draft'}</span>
+                      Pay date: <span className="admin-badge secondary">{payDateLabel || '—'}</span>
                     </p>
                   </div>
                   <div style={{ textAlign: 'right' }}>
@@ -187,6 +188,7 @@ export default function MyPayrollPage() {
                   <table className="admin-table">
                     <thead>
                       <tr>
+                        <th>Payslip ID</th>
                         <th>Currency</th>
                         <th>Gross</th>
                         <th>Deductions</th>
@@ -198,6 +200,9 @@ export default function MyPayrollPage() {
                     <tbody>
                       {g.items.map((it) => (
                         <tr key={it.id}>
+                          <td style={{ whiteSpace: 'nowrap', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace' }}>
+                            {it.payslip_ref || it.id}
+                          </td>
                           <td>{it.currency}</td>
                           <td>{it.gross}</td>
                           <td>{it.deductions}</td>
