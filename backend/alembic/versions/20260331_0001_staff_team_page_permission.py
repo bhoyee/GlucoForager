@@ -31,8 +31,8 @@ def upgrade() -> None:
     op.execute(
         sa.text(
             """
-            INSERT INTO staff_role_permissions (role_id, permission_id, created_at)
-            SELECT r.id, p.id, now()
+            INSERT INTO staff_role_permissions (role_id, permission_id)
+            SELECT r.id, p.id
             FROM staff_roles r
             JOIN staff_permissions p ON p.key = :perm_key
             ON CONFLICT (role_id, permission_id) DO NOTHING
@@ -51,4 +51,3 @@ def downgrade() -> None:
         ).bindparams(perm_key="staff.team.read")
     )
     op.execute(sa.text("DELETE FROM staff_permissions WHERE key = :perm_key").bindparams(perm_key="staff.team.read"))
-
