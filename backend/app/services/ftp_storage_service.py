@@ -1,5 +1,6 @@
 import posixpath
 import logging
+import io
 from ftplib import FTP, FTP_TLS, error_perm
 
 from ..core.config import settings
@@ -59,3 +60,17 @@ def ftp_upload(ftp: FTP, *, remote_dir: str, filename: str, fileobj) -> None:
     ftp.cwd(rd)
     ftp.storbinary(f"STOR {filename}", fileobj, blocksize=1024 * 128)
     logger.info("FTP upload ok dir=%s file=%s", rd, filename)
+
+
+def ftp_download_bytes(ftp: FTP, *, remote_dir: str, filename: str) -> bytes:
+    rd = posixpath.normpath("/" + str(remote_dir or "").lstrip("/"))
+    ftp.cwd(rd)
+    buf = io.BytesIO()
+    ftp.retrbinary(f"RETR {filename}", buf.write, blocksize=1024 * 128)
+    return buf.getvalue()
+
+
+def ftp_delete_file(ftp: FTP, *, remote_dir: str, filename: str) -> None:
+    rd = posixpath.normpath("/" + str(remote_dir or "").lstrip("/"))
+    ftp.cwd(rd)
+    ftp.delete(filename)

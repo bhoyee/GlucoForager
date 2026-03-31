@@ -26,6 +26,7 @@ from .api.endpoints import (
     admin_work_logs,
     admin_work_plans,
     admin_library,
+    admin_drive,
     admin_inbox,
     admin_help,
     admin_intranet_updates,
@@ -456,6 +457,7 @@ app.include_router(admin_attendance.router, prefix="/api")
 app.include_router(admin_work_logs.router, prefix="/api")
 app.include_router(admin_work_plans.router, prefix="/api")
 app.include_router(admin_library.router, prefix="/api")
+app.include_router(admin_drive.router, prefix="/api")
 app.include_router(admin_inbox.router, prefix="/api")
 app.include_router(admin_help.router, prefix="/api")
 app.include_router(admin_intranet_updates.router, prefix="/api")

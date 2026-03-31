@@ -14,6 +14,8 @@ from .staff_assigned_task import StaffAssignedTask  # noqa: F401
 from .staff_role_milestone import StaffRoleMilestone  # noqa: F401
 from .staff_milestone_progress import StaffMilestoneProgress  # noqa: F401
 from .staff_library_item import StaffLibraryItem  # noqa: F401
+from .staff_drive_file import StaffDriveFile  # noqa: F401
+from .staff_drive_event import StaffDriveEvent  # noqa: F401
 from .staff_ticket import StaffTicket, StaffTicketMessage  # noqa: F401
 from .staff_expense import StaffExpense  # noqa: F401
 from .staff_compensation import StaffCompensation  # noqa: F401
