@@ -21,6 +21,8 @@ from ...models.staff_audit_log import StaffAuditLog
 from ...models.staff_compensation import StaffCompensation
 from ...models.staff_user import StaffUser
 from ...services.email_service import send_staff_payroll_available_email
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
 
 
 router = APIRouter(prefix="/admin/payroll", tags=["admin-payroll"])
@@ -713,3 +715,143 @@ def list_my_payroll_items(
             for item, r_year, r_month, r_status, r_finalized_at in rows
         ]
     }
+
+
+def _money(currency: str, value: Decimal | str | int | float | None) -> str:
+    cur = str(currency or "").upper() or "—"
+    try:
+        dec = Decimal(str(value or 0)).quantize(Decimal("0.01"))
+    except Exception:
+        dec = Decimal("0.00")
+    return f"{cur} {dec}"
+
+
+def _draw_kv(pdf: canvas.Canvas, *, x: float, y: float, key: str, value: str, key_w: float = 130) -> None:
+    pdf.setFont("Helvetica-Bold", 10)
+    pdf.drawString(x, y, str(key))
+    pdf.setFont("Helvetica", 10)
+    pdf.drawString(x + key_w, y, str(value or "—"))
+
+
+@router.get("/my/items/{item_id}/payslip.pdf")
+def my_payslip_pdf(
+    item_id: int,
+    download: int = 0,
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("payroll.read_own")),
+):
+    row = (
+        db.query(PayrollItem, PayrollRun)
+        .join(PayrollRun, PayrollRun.id == PayrollItem.run_id)
+        .filter(PayrollItem.id == int(item_id), PayrollItem.staff_user_id == int(current_staff.id))
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payslip not found")
+    item, run = row
+
+    buf = io.BytesIO()
+    pdf = canvas.Canvas(buf, pagesize=A4)
+    width, height = A4
+
+    company = str(settings.payroll_company_name or "GlucoForager").strip() or "GlucoForager"
+    period = f"{int(run.year)}-{int(run.month):02d}"
+    staff_name = (getattr(current_staff, "full_name", None) or current_staff.email or "").strip()
+
+    # Header
+    pdf.setFont("Helvetica-Bold", 18)
+    pdf.drawString(50, height - 60, company)
+    pdf.setFont("Helvetica", 11)
+    pdf.drawString(50, height - 80, "Payslip")
+    pdf.setFont("Helvetica-Bold", 11)
+    pdf.drawRightString(width - 50, height - 80, f"Period: {period}")
+
+    # Company meta (optional)
+    meta_y = height - 105
+    pdf.setFont("Helvetica", 9)
+    if settings.payroll_company_address:
+        pdf.drawString(50, meta_y, str(settings.payroll_company_address)[:140])
+        meta_y -= 12
+    line2 = " · ".join(
+        [
+            x
+            for x in [
+                (str(settings.payroll_company_email).strip() if settings.payroll_company_email else ""),
+                (str(settings.payroll_company_phone).strip() if settings.payroll_company_phone else ""),
+                (f"Reg: {str(settings.payroll_company_reg_no).strip()}" if settings.payroll_company_reg_no else ""),
+            ]
+            if x
+        ]
+    )
+    if line2:
+        pdf.drawString(50, meta_y, line2[:140])
+
+    # Divider
+    pdf.setLineWidth(1)
+    pdf.line(50, height - 125, width - 50, height - 125)
+
+    left_x = 50
+    right_x = width / 2 + 10
+    y = height - 155
+
+    pdf.setFont("Helvetica-Bold", 12)
+    pdf.drawString(left_x, y, "Employee")
+    pdf.drawString(right_x, y, "Payroll")
+    y -= 18
+
+    _draw_kv(pdf, x=left_x, y=y, key="Name", value=staff_name or "—")
+    _draw_kv(pdf, x=right_x, y=y, key="Run status", value=str(getattr(run, "status", "") or "draft"))
+    y -= 14
+    _draw_kv(pdf, x=left_x, y=y, key="Email", value=str(current_staff.email or "—"))
+    finalized = run.finalized_at.isoformat() if run.finalized_at else "—"
+    _draw_kv(pdf, x=right_x, y=y, key="Finalized at", value=finalized.replace("T", " ")[:16] if finalized != "—" else "—")
+    y -= 14
+    _draw_kv(pdf, x=left_x, y=y, key="Country", value=str(getattr(current_staff, "country", None) or "—"))
+    _draw_kv(pdf, x=right_x, y=y, key="Currency", value=str(item.currency or "—"))
+    y -= 20
+
+    pdf.setFont("Helvetica-Bold", 12)
+    pdf.drawString(50, y, "Earnings & Deductions")
+    y -= 18
+
+    gross = _money(item.currency, item.gross)
+    ded = _money(item.currency, item.deductions)
+    net = _money(item.currency, item.net)
+
+    _draw_kv(pdf, x=50, y=y, key="Gross pay", value=gross)
+    y -= 14
+    _draw_kv(pdf, x=50, y=y, key="Deductions", value=ded)
+    y -= 14
+    pdf.setFont("Helvetica-Bold", 11)
+    pdf.drawString(50, y, "Net pay")
+    pdf.drawString(180, y, net)
+    y -= 22
+
+    if item.notes:
+        pdf.setFont("Helvetica-Bold", 12)
+        pdf.drawString(50, y, "Notes")
+        y -= 16
+        pdf.setFont("Helvetica", 10)
+        # Simple wrap
+        text = str(item.notes or "").strip()
+        max_chars = 95
+        lines = [text[i : i + max_chars] for i in range(0, len(text), max_chars)]
+        for line in lines[:12]:
+            pdf.drawString(50, y, line)
+            y -= 12
+
+    pdf.setFont("Helvetica", 8)
+    pdf.drawRightString(width - 50, 40, f"Generated {datetime.utcnow().isoformat(timespec='minutes').replace('T',' ')} UTC")
+
+    pdf.showPage()
+    pdf.save()
+    data = buf.getvalue()
+    buf.close()
+
+    filename = f"payslip_{period}_{int(item.id)}.pdf"
+    disposition = "attachment" if int(download or 0) == 1 else "inline"
+    return StreamingResponse(
+        io.BytesIO(data),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'{disposition}; filename="{filename}"'},
+    )
