@@ -593,19 +593,8 @@ export default function AdminShell({ children }) {
           {!sessionLoading && session?.email && !isAdmin ? (
             <footer className="admin-footer" role="contentinfo">
               <div className="admin-footer-left">
-                <span className="admin-footer-brand">GlucoForager Staff Portal</span>
-                <span className="admin-footer-muted">© {new Date().getFullYear()} GlucoForager</span>
-              </div>
-              <div className="admin-footer-links">
-                <a className="admin-footer-link" href="https://glucoforager.com" target="_blank" rel="noreferrer">
-                  glucoforager.com
-                </a>
-                <a className="admin-footer-link" href="https://glucoforager.com/privacy-policy" target="_blank" rel="noreferrer">
-                  Privacy
-                </a>
-                <a className="admin-footer-link" href="https://glucoforager.com/terms" target="_blank" rel="noreferrer">
-                  Terms
-                </a>
+                <span className="admin-footer-brand">GF-Staff Portal v1.0</span>
+                <span className="admin-footer-muted">Powered by Bhoyee Global dev team</span>
               </div>
             </footer>
           ) : null}
