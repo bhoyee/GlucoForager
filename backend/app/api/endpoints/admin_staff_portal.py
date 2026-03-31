@@ -6,6 +6,7 @@ import os
 import uuid
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from pydantic import BaseModel, EmailStr, Field
+import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from ..admin_dependencies import get_current_staff_user, require_staff_permission
@@ -192,6 +193,25 @@ def list_staff_team(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
 
     query = db.query(StaffUser).filter(StaffUser.deleted_at.is_(None), StaffUser.is_active.is_(True))
+
+    # Hide admin accounts from the staff directory.
+    try:
+        admin_id_rows = db.execute(
+            sa.text(
+                """
+                SELECT ur.user_id
+                FROM staff_user_roles ur
+                JOIN staff_roles r ON r.id = ur.role_id
+                WHERE r.key = 'admin'
+                """
+            )
+        ).fetchall()
+        admin_ids = [int(r[0]) for r in admin_id_rows if r and r[0] is not None]
+        if admin_ids:
+            query = query.filter(~StaffUser.id.in_(admin_ids))
+    except Exception:
+        # If anything goes wrong, fail "open" (directory still works).
+        pass
     if q:
         needle = str(q).strip().lower()
         if needle:
