@@ -145,6 +145,13 @@ class Settings(BaseSettings):
     recipe_ftp_base_dir: str = Field("/glucoforager.com/recipes", env="RECIPE_FTP_BASE_DIR")
     recipe_max_image_bytes: int = Field(2_097_152, env="RECIPE_MAX_IMAGE_BYTES")  # 2 MB
 
+    # Payroll / payslip branding
+    payroll_company_name: str = Field("GlucoForager", env="PAYROLL_COMPANY_NAME")
+    payroll_company_address: str | None = Field(None, env="PAYROLL_COMPANY_ADDRESS")
+    payroll_company_email: str | None = Field(None, env="PAYROLL_COMPANY_EMAIL")
+    payroll_company_phone: str | None = Field(None, env="PAYROLL_COMPANY_PHONE")
+    payroll_company_reg_no: str | None = Field(None, env="PAYROLL_COMPANY_REG_NO")
+
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
 
     @field_validator("cors_origins", mode="before")
