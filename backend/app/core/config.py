@@ -77,6 +77,12 @@ class Settings(BaseSettings):
     api_rate_limit_mobile_logs_per_min: int = Field(600, env="API_RATE_LIMIT_MOBILE_LOGS_PER_MIN")
     api_rate_limit_push_tokens_per_min: int = Field(60, env="API_RATE_LIMIT_PUSH_TOKENS_PER_MIN")
 
+    # Admin/staff portal burst limits (requests per minute).
+    admin_rate_limit_per_min: int = Field(180, env="ADMIN_RATE_LIMIT_PER_MIN")
+    admin_login_rate_limit_per_min: int = Field(20, env="ADMIN_LOGIN_RATE_LIMIT_PER_MIN")
+    admin_password_reset_rate_limit_per_min: int = Field(10, env="ADMIN_PASSWORD_RESET_RATE_LIMIT_PER_MIN")
+    admin_mfa_rate_limit_per_min: int = Field(20, env="ADMIN_MFA_RATE_LIMIT_PER_MIN")
+
     # Per-user burst rate limits for AI endpoints (protects cost + latency under abuse).
     # Limits are "requests per minute" per user.
     ai_rate_limit_free_text_per_min: int = Field(4, env="AI_RATE_LIMIT_FREE_TEXT_PER_MIN")
@@ -93,6 +99,63 @@ class Settings(BaseSettings):
     # Push notifications (Expo push gateway)
     expo_push_access_token: str | None = Field(None, env="EXPO_PUSH_ACCESS_TOKEN")
     expo_push_endpoint: str = Field("https://exp.host/--/api/v2/push/send", env="EXPO_PUSH_ENDPOINT")
+
+    # Staff library file storage
+    # - local: store on backend disk under UPLOADS_DIR (default, dev-friendly)
+    # - ftp: upload to shared hosting via (FTPS) and store public URL (recommended for your shared hosting setup)
+    library_storage_backend: str = Field("local", env="LIBRARY_STORAGE_BACKEND")
+    library_remote_base_url: str | None = Field(None, env="LIBRARY_REMOTE_BASE_URL")
+
+    library_ftp_host: str | None = Field(None, env="LIBRARY_FTP_HOST")
+    library_ftp_port: int = Field(21, env="LIBRARY_FTP_PORT")
+    library_ftp_username: str | None = Field(None, env="LIBRARY_FTP_USERNAME")
+    library_ftp_password: str | None = Field(None, env="LIBRARY_FTP_PASSWORD")
+    # Remote base directory that contains the "images/pdfs/videos" folders (POSIX style).
+    library_ftp_base_dir: str = Field("/glucoforager.com/library", env="LIBRARY_FTP_BASE_DIR")
+    library_ftp_tls: bool = Field(True, env="LIBRARY_FTP_TLS")
+    library_ftp_timeout_seconds: float = Field(30.0, env="LIBRARY_FTP_TIMEOUT_SECONDS")
+
+    # Default upload limits (bytes). Can be tuned per environment.
+    library_max_image_bytes: int = Field(1_048_576, env="LIBRARY_MAX_IMAGE_BYTES")  # 1 MB
+    library_max_pdf_bytes: int = Field(921_600, env="LIBRARY_MAX_PDF_BYTES")  # 900 KB
+    library_max_video_bytes: int = Field(25 * 1024 * 1024, env="LIBRARY_MAX_VIDEO_BYTES")  # 25 MB
+
+    # Staff inbox attachments (shared hosting via FTP recommended)
+    inbox_file_storage_backend: str = Field("local", env="INBOX_FILE_STORAGE_BACKEND")
+    inbox_file_remote_base_url: str | None = Field(None, env="INBOX_FILE_REMOTE_BASE_URL")
+    # Remote base directory that contains inbox attachments (POSIX style).
+    inbox_file_ftp_base_dir: str = Field("/public_html/glucoforager.com/inbox-file", env="INBOX_FILE_FTP_BASE_DIR")
+    inbox_file_max_image_bytes: int = Field(2_097_152, env="INBOX_FILE_MAX_IMAGE_BYTES")  # 2 MB
+    inbox_file_max_pdf_bytes: int = Field(2_097_152, env="INBOX_FILE_MAX_PDF_BYTES")  # 2 MB
+    inbox_file_max_video_bytes: int = Field(25 * 1024 * 1024, env="INBOX_FILE_MAX_VIDEO_BYTES")  # 25 MB
+
+    # Staff private drive (MyDrive / StaffDrive)
+    # Stored on shared hosting via FTP (recommended).
+    drive_storage_backend: str = Field("ftp", env="DRIVE_STORAGE_BACKEND")
+    drive_ftp_base_dir: str = Field("/public_html/glucoforager.com/private-drive", env="DRIVE_FTP_BASE_DIR")
+    drive_max_image_bytes: int = Field(1_048_576, env="DRIVE_MAX_IMAGE_BYTES")  # 1 MB
+    drive_max_pdf_bytes: int = Field(2_097_152, env="DRIVE_MAX_PDF_BYTES")  # 2 MB
+    drive_max_video_bytes: int = Field(25 * 1024 * 1024, env="DRIVE_MAX_VIDEO_BYTES")  # 25 MB
+
+    # Recipe image upload storage (used by /api/admin/uploads)
+    # - local: store on backend disk under UPLOADS_DIR (served from /uploads)
+    # - ftp: upload to shared hosting under RECIPE_FTP_BASE_DIR and store public RECIPE_REMOTE_BASE_URL
+    recipe_upload_storage_backend: str = Field("local", env="RECIPE_UPLOAD_STORAGE_BACKEND")
+    recipe_remote_base_url: str | None = Field(None, env="RECIPE_REMOTE_BASE_URL")
+    recipe_ftp_base_dir: str = Field("/glucoforager.com/recipes", env="RECIPE_FTP_BASE_DIR")
+    recipe_max_image_bytes: int = Field(2_097_152, env="RECIPE_MAX_IMAGE_BYTES")  # 2 MB
+
+    # Payroll / payslip branding
+    payroll_company_name: str = Field("GlucoForager", env="PAYROLL_COMPANY_NAME")
+    payroll_holding_name: str = Field("Bhoyee Global Enterprise", env="PAYROLL_HOLDING_NAME")
+    payroll_brand_name: str = Field("GlucoForager", env="PAYROLL_BRAND_NAME")
+    payroll_brand_website: str = Field("https://glucoforager.com", env="PAYROLL_BRAND_WEBSITE")
+    payroll_header_logo_path: str | None = Field(None, env="PAYROLL_HEADER_LOGO_PATH")
+    payroll_logo_path: str | None = Field(None, env="PAYROLL_LOGO_PATH")
+    payroll_company_address: str | None = Field(None, env="PAYROLL_COMPANY_ADDRESS")
+    payroll_company_email: str | None = Field(None, env="PAYROLL_COMPANY_EMAIL")
+    payroll_company_phone: str | None = Field(None, env="PAYROLL_COMPANY_PHONE")
+    payroll_company_reg_no: str | None = Field(None, env="PAYROLL_COMPANY_REG_NO")
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
 

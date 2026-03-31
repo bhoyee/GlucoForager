@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import BlogPostForm from '../BlogPostForm';
 
@@ -52,8 +52,26 @@ export default function AdminNewBlogPostPage() {
     return localStorage.getItem('adminToken');
   }, []);
 
+  const [readOnly, setReadOnly] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    const loadSession = async () => {
+      if (!token) return;
+      try {
+        const res = await fetch(`${API_URL}/api/admin/me`, { headers: { Authorization: `Bearer ${token}` } });
+        if (res.status === 401) return;
+        const data = await res.json().catch(() => ({}));
+        const perms = Array.isArray(data?.permissions) ? data.permissions : [];
+        const canWrite = perms.includes('*') || perms.includes('blog.write') || perms.includes('blog.publish');
+        if (!canWrite) setReadOnly(true);
+      } catch {
+        // ignore
+      }
+    };
+    loadSession();
+  }, [token]);
 
   const handleSubmit = async (form) => {
     if (!token) {
@@ -100,6 +118,7 @@ export default function AdminNewBlogPostPage() {
         isSubmitting={isSubmitting}
         message={message}
         submitLabel="Create"
+        readOnly={readOnly}
       />
     </div>
   );

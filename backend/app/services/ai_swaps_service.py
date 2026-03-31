@@ -6,7 +6,6 @@ from typing import Any, Dict, List
 from openai import OpenAI, OpenAIError
 
 from ..core.config import settings
-from ..data.swaps_fallback import FALLBACK_ALIASES, FALLBACK_CATALOG
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +19,7 @@ Rules:
 - Only ask for clarification if the input is not recognizable as a food/drink after a best-effort interpretation.
 - If you can reasonably suggest a corrected spelling, include it as suggested_query.
 - Always provide swap candidates for recognizable foods/drinks (this endpoint is explicitly "Food swaps").
+- Swap candidates MUST be realistic substitutes for the original food in normal use (same role on the plate). Avoid unrelated foods.
 - For recognizable foods/drinks: set needs_clarification=false, set should_show_swaps=true, and return exactly 6 swap_candidates.
 - If the input is not a food or drink, set is_food_or_drink=false and do NOT fabricate swaps.
 - When you do not suggest swaps, set should_show_swaps=false and swaps=null.
@@ -68,12 +68,9 @@ Return ONLY valid JSON with this exact shape:
 }
 """
 
-def _fallback_key(food: str) -> str:
-    return _clean_food(food).lower()
-
-
 def _clean_food(value: str) -> str:
-    return " ".join((value or "").strip().split())[:25]
+    # Keep enough room for multi-word foods (e.g. "unripe plantain", "ice cream").
+    return " ".join((value or "").strip().split())[:60]
 
 
 def _parse_json_object(text: str) -> Dict[str, Any] | None:
@@ -567,7 +564,7 @@ class AISwapsService:
         *,
         food: str,
         force_swaps: bool = False,
-        timeout_seconds: float = 12.0,
+        timeout_seconds: float = 45.0,
         food_profile: dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         food_clean = _clean_food(food)
@@ -601,193 +598,52 @@ Write in very simple words (no jargon). Use short reasons (one sentence each).
 Return ONLY the required JSON.
 """
 
-        try:
-            params: dict[str, Any] = {
-                "model": self._model,
-                "messages": [
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_prompt},
-                ],
-                "temperature": 0.4,
-                # Rich swap candidates (GI + macros) need more output room; keep bounded to control costs.
-                "max_tokens": 900,
-                # Prefer strict JSON mode where supported.
-                "response_format": {"type": "json_object"},
-            }
-            resp = self._openai.chat.completions.create(**params, timeout=timeout_seconds)
-        except OpenAIError as e:
-            logger.warning("AI swaps OpenAI call failed: %s", str(e))
-            raise
-
-        content = (resp.choices[0].message.content or "").strip() if resp and resp.choices else ""
-        data = _parse_json_object(content)
-        if not data:
-            raise ValueError("Unparseable AI swaps output")
-        normalized = _normalize_payload(data, food_profile=food_profile)
-        if not normalized:
-            raise ValueError("Invalid AI swaps payload")
-        return {
-            "food": food_clean,
-            "provider": "openai",
-            "model": self._model,
-            **normalized,
-        }
-
-
-def fallback_swaps(*, food: str, food_profile: dict[str, Any] | None, force_swaps: bool) -> Dict[str, Any]:
-    key = _fallback_key(food)
-    canonical = FALLBACK_ALIASES.get(key) or key
-    data = FALLBACK_CATALOG.get(canonical)
-    # If we have no fallback, return a minimal assessment that doesn't break clients.
-    if not data:
-        return {
-            "food": _clean_food(food),
-            "assessment": {
-                "is_food_or_drink": True,
-                "confidence": 0.7,
-                "verdict": "depends",
-                "needs_clarification": False,
-                "suggested_query": None,
-                "clarification_question": None,
-                "summary": "AI is temporarily slow. Here are general lower-impact swap ideas you can use right now.",
-                "watch_outs": [],
-                "pair_with": [],
-                "portion_tip": "Portion size and pairing matter.",
-            },
-            # Prefer showing something useful rather than a blank result when AI is down.
-            "should_show_swaps": True,
-            "swaps": {
-                "better_options": [
-                    "Non-starchy vegetables",
-                    "Beans/lentils",
-                    "Cauliflower rice / veg swaps",
-                    "Greek yogurt / protein snack",
-                    "Smaller portion + protein",
-                ],
-                "options": [
-                    {
-                        "name": "Non-starchy vegetables",
-                        "reason": "Lower net carbs; adds fiber and volume.",
-                        "gi": {"min": 0, "max": 30, "note": "Estimated"},
-                        "serving": "1-2 cups",
-                        "macros": None,
-                        "impact_label": "low",
-                        "portion_suggestion": "Aim for half your plate as vegetables.",
-                        "fit_tags": ["balanced", "weight_loss", "budget_friendly"],
-                        "cuisine_fit": ["generic"],
-                    },
-                    {
-                        "name": "Beans/lentils",
-                        "reason": "More fiber/protein; often steadier blood sugar response.",
-                        "gi": {"min": 25, "max": 45, "note": "Estimated"},
-                        "serving": "1/2 cup",
-                        "macros": None,
-                        "impact_label": "low",
-                        "portion_suggestion": "Watch added sugar in canned/baked beans.",
-                        "fit_tags": ["high_protein", "balanced", "budget_friendly"],
-                        "cuisine_fit": ["generic"],
-                    },
-                    {
-                        "name": "Cauliflower rice / veggie swaps",
-                        "reason": "Cuts starch while keeping a similar 'base' texture.",
-                        "gi": {"min": 0, "max": 25, "note": "Estimated"},
-                        "serving": "1-2 cups",
-                        "macros": None,
-                        "impact_label": "low",
-                        "portion_suggestion": "Pair with protein + healthy fat for satiety.",
-                        "fit_tags": ["lower_carb", "quick_meals"],
-                        "cuisine_fit": ["generic"],
-                    },
-                    {
-                        "name": "Greek yogurt / protein snack",
-                        "reason": "Higher protein; may reduce cravings for refined carbs.",
-                        "gi": {"min": 10, "max": 35, "note": "Estimated"},
-                        "serving": "3/4-1 cup",
-                        "macros": None,
-                        "impact_label": "low",
-                        "portion_suggestion": "Choose plain/unsweetened; add berries if needed.",
-                        "fit_tags": ["high_protein", "simple_ingredients"],
-                        "cuisine_fit": ["generic"],
-                    },
-                    {
-                        "name": "Smaller portion + protein",
-                        "reason": "Portion control + pairing can reduce glucose spikes.",
-                        "gi": {"min": 56, "max": 69, "note": "Estimated"},
-                        "serving": "Reduce carbs by ~1/3",
-                        "macros": None,
-                        "impact_label": "medium",
-                        "portion_suggestion": "Add eggs, chicken, fish, tofu, or beans.",
-                        "fit_tags": ["balanced", "family_friendly"],
-                        "cuisine_fit": ["generic"],
-                    },
-                ],
-                "why_these_are_better": "They generally reduce net carbs and/or increase fiber and protein, which can blunt glucose spikes.",
-                "portion_tip": "If you still choose the original food, start with a smaller portion and pair with protein + vegetables.",
-            },
-        }
-
-    verdict = str(data.get("verdict") or "depends")
-    if verdict not in {"good_choice", "higher_impact", "depends"}:
-        verdict = "depends"
-    candidates = list(data.get("candidates") or [])
-    best = _best_options_from_candidates(candidates, food_profile=food_profile)
-    best = [c for c in best if isinstance(c, dict)][:5]
-    opts = [str(c.get("name") or "").strip() for c in best if str(c.get("name") or "").strip()]
-
-    should_show = bool(force_swaps) or (verdict != "good_choice")
-    swaps_payload = None
-    if should_show and len(opts) < 3:
-        # If preference filtering makes the list too short, fall back to the raw catalog
-        # so the UI always has swap options to show.
-        raw_names = [str(c.get("name") or "").strip() for c in candidates if isinstance(c, dict)]
-        raw_names = [n for n in raw_names if n]
-        if len(raw_names) >= 3:
-            opts = raw_names[:5]
-            best = [c for c in candidates if isinstance(c, dict)][:5]
-
-    if should_show and len(opts) >= 3:
-        swaps_payload = {
-            "better_options": opts[:5],
-            "options": [
-                {
-                    "name": str(c.get("name") or "").strip()[:80],
-                    "reason": str(c.get("reason") or "").strip()[:140],
-                    "gi": c.get("gi"),
-                    "serving": c.get("serving"),
-                    "macros": c.get("macros"),
-                    "impact_label": c.get("impact_label"),
-                    "portion_suggestion": c.get("portion_suggestion"),
-                    "fit_tags": c.get("fit_tags") or [],
-                    "cuisine_fit": c.get("cuisine_fit") or [],
+        last_err: Exception | None = None
+        for attempt in range(2):
+            try:
+                params: dict[str, Any] = {
+                    "model": self._model,
+                    "messages": [
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    "temperature": 0.4 if attempt == 0 else 0.2,
+                    # Rich swap candidates (GI + macros) need more output room; keep bounded to control costs.
+                    "max_tokens": 900,
+                    # Prefer strict JSON mode where supported.
+                    "response_format": {"type": "json_object"},
                 }
-                for c in best
-            ],
-            "why_these_are_better": str(data.get("why") or "").strip()[:320] or "These options may reduce net carbs or increase fiber/protein.",
-            "portion_tip": str(data.get("portion_tip") or "").strip()[:240] or "Portion size and pairing matter.",
-        }
+                if attempt == 1:
+                    params["messages"] = [
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {
+                            "role": "user",
+                            "content": user_prompt
+                            + "\n\nIMPORTANT: For recognizable foods/drinks you MUST return exactly 6 swap_candidates. Do not return swap_candidates=null.",
+                        },
+                    ]
+                resp = self._openai.chat.completions.create(**params, timeout=timeout_seconds)
+                content = (resp.choices[0].message.content or "").strip() if resp and resp.choices else ""
+                data = _parse_json_object(content)
+                if not data:
+                    raise ValueError("Unparseable AI swaps output")
+                normalized = _normalize_payload(data, food_profile=food_profile)
+                if not normalized:
+                    raise ValueError("Invalid AI swaps payload")
+                swaps = normalized.get("swaps") if isinstance(normalized, dict) else None
+                if not (isinstance(swaps, dict) and isinstance(swaps.get("options"), list) and len(swaps["options"]) >= 3):
+                    raise ValueError("AI swaps returned no usable swap options")
+                return {
+                    "food": food_clean,
+                    "provider": "openai",
+                    "model": self._model,
+                    **normalized,
+                }
+            except OpenAIError as e:
+                last_err = e
+                logger.warning("AI swaps OpenAI call failed attempt=%s: %s", attempt + 1, str(e)[:240])
+            except Exception as e:
+                last_err = e
+                logger.warning("AI swaps invalid output attempt=%s err=%s", attempt + 1, str(e)[:240])
 
-    summary = str(data.get("summary") or "").strip()[:240] or "Portion size and pairing matter."
-    portion_tip = str(data.get("portion_tip") or "").strip()[:240] or "Portion size and pairing matter."
-    return {
-        "food": _clean_food(food),
-        "assessment": {
-            "is_food_or_drink": True,
-            "confidence": 0.75,
-            "verdict": verdict,
-            "needs_clarification": False,
-            "suggested_query": None,
-            "clarification_question": None,
-            "summary": summary,
-            "watch_outs": [],
-            "pair_with": [],
-            "portion_tip": portion_tip,
-        },
-        "should_show_swaps": bool(swaps_payload),
-        "swaps": swaps_payload,
-    }
-
-
-def has_fallback_swaps(food: str) -> bool:
-    key = _fallback_key(food)
-    canonical = FALLBACK_ALIASES.get(key) or key
-    return bool(canonical) and canonical in FALLBACK_CATALOG
+        raise ValueError(str(last_err) if last_err else "AI swaps failed")

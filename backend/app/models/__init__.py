@@ -4,6 +4,27 @@ from .user import User, SearchLog  # noqa: F401
 from .subscription import Subscription  # noqa: F401
 from .ai_request import AIRequest  # noqa: F401
 from .ai_job import AIJob  # noqa: F401
+from .staff_user import StaffUser  # noqa: F401
+from .staff_role import StaffRole  # noqa: F401
+from .staff_permission import StaffPermission  # noqa: F401
+from .staff_audit_log import StaffAuditLog  # noqa: F401
+from .staff_time_entry import StaffTimeEntry  # noqa: F401
+from .staff_work_log import StaffWorkLog  # noqa: F401
+from .staff_assigned_task import StaffAssignedTask  # noqa: F401
+from .staff_role_milestone import StaffRoleMilestone  # noqa: F401
+from .staff_milestone_progress import StaffMilestoneProgress  # noqa: F401
+from .staff_library_item import StaffLibraryItem  # noqa: F401
+from .staff_drive_file import StaffDriveFile  # noqa: F401
+from .staff_drive_event import StaffDriveEvent  # noqa: F401
+from .staff_ticket import StaffTicket, StaffTicketMessage  # noqa: F401
+from .staff_expense import StaffExpense  # noqa: F401
+from .staff_compensation import StaffCompensation  # noqa: F401
+from .payroll_run import PayrollRun  # noqa: F401
+from .payroll_item import PayrollItem  # noqa: F401
+from .staff_refresh_token import StaffRefreshToken  # noqa: F401
+from .staff_password_reset import StaffPasswordResetToken  # noqa: F401
+from .staff_mfa_challenge import StaffMfaChallenge  # noqa: F401
+from .staff_intranet_update import StaffIntranetUpdate  # noqa: F401
 from .favorite import Favorite  # noqa: F401
 from .meal_plan import MealPlan  # noqa: F401
 from .shopping_item import ShoppingItem  # noqa: F401

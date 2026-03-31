@@ -53,6 +53,7 @@ export default function BlogPostForm({
   isSubmitting = false,
   message = '',
   submitLabel = 'Save',
+  readOnly = false,
 }) {
   const [form, setForm] = useState(() => ({
     title: initialValues?.title || '',
@@ -116,11 +117,13 @@ export default function BlogPostForm({
   const canSubmit = useMemo(() => {
     return (
       !isSubmitting &&
+      !readOnly &&
       form.title.trim().length >= 4 &&
       String(form.content || '').trim().length >= 10 &&
-      (form.status === 'draft' || form.status === 'published')
+      (form.status === 'draft' || form.status === 'published' || form.status === 'scheduled') &&
+      (form.status !== 'scheduled' || Boolean(String(form.published_at || '').trim()))
     );
-  }, [form, isSubmitting]);
+  }, [form, isSubmitting, readOnly]);
 
   const seo = useMemo(() => {
     const keyword = String(form.focus_keyword || '').trim().toLowerCase();
@@ -174,6 +177,11 @@ export default function BlogPostForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {readOnly ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          Read-only mode: you can view drafts and published posts, but you don&apos;t have permission to edit or publish.
+        </div>
+      ) : null}
       <div className="rounded-2xl border border-teal-200 bg-white p-4">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
@@ -253,7 +261,7 @@ export default function BlogPostForm({
 
       <div className="admin-field">
         <label>Title</label>
-        <input value={form.title} onChange={update('title')} placeholder="Post title" required />
+        <input value={form.title} onChange={update('title')} placeholder="Post title" required disabled={readOnly} />
       </div>
 
       <div className="admin-field">
@@ -262,6 +270,7 @@ export default function BlogPostForm({
           value={form.slug}
           onChange={update('slug')}
           placeholder="e.g. diabetes-friendly-breakfast-ideas"
+          disabled={readOnly}
         />
         <p className="admin-help">
           Leave blank to auto-generate from the title. Slug must be unique.
@@ -277,6 +286,7 @@ export default function BlogPostForm({
           onChange={(next) => setForm((prev) => ({ ...prev, excerpt: trimLeadingNbspHtml(next) }))}
           placeholder="Short summary shown on the blog list."
           adminToken={adminToken}
+          readOnly={readOnly}
         />
       </div>
 
@@ -286,6 +296,7 @@ export default function BlogPostForm({
           value={form.image_url}
           onChange={update('image_url')}
           placeholder="https://... or /uploads/..."
+          disabled={readOnly}
         />
         <p className="admin-help">
           This image shows on the blog list and at the top of the post. Recommended: 1200×630.
@@ -294,7 +305,7 @@ export default function BlogPostForm({
           <input
             type="file"
             accept="image/*"
-            disabled={uploadBusy || !adminToken}
+            disabled={readOnly || uploadBusy || !adminToken}
             onChange={(event) => handleFileUpload(event.target.files?.[0])}
           />
           {uploadBusy ? (
@@ -323,13 +334,14 @@ export default function BlogPostForm({
 
       <div className="admin-field">
         <label>Author name (optional)</label>
-        <input value={form.author_name} onChange={update('author_name')} placeholder="GlucoForager Team" />
+        <input value={form.author_name} onChange={update('author_name')} placeholder="GlucoForager Team" disabled={readOnly} />
       </div>
 
       <div className="admin-field">
         <label>Status</label>
-        <select value={form.status} onChange={update('status')}>
+        <select value={form.status} onChange={update('status')} disabled={readOnly}>
           <option value="draft">Draft</option>
+          <option value="scheduled">Scheduled</option>
           <option value="published">Published</option>
         </select>
       </div>
@@ -340,6 +352,7 @@ export default function BlogPostForm({
             type="checkbox"
             checked={!!form.notify_newsletter}
             onChange={(event) => setForm((prev) => ({ ...prev, notify_newsletter: event.target.checked }))}
+            disabled={readOnly}
           />
           <span>Send to newsletter subscribers</span>
         </label>
@@ -347,14 +360,15 @@ export default function BlogPostForm({
       </div>
 
       <div className="admin-field">
-        <label>Published at (optional)</label>
+        <label>Published at</label>
         <input
           type="datetime-local"
           value={form.published_at}
           onChange={update('published_at')}
+          disabled={readOnly}
         />
         <p className="admin-help">
-          If you publish without setting this, the backend will set it automatically.
+          Required for Scheduled posts. If you publish without setting this, the backend will set it automatically.
         </p>
       </div>
 
@@ -366,22 +380,25 @@ export default function BlogPostForm({
           onChange={(next) => setForm((prev) => ({ ...prev, content: next }))}
           placeholder="Write your post content..."
           adminToken={adminToken}
+          readOnly={readOnly}
         />
       </div>
 
       {message ? <p className="admin-subtitle">{message}</p> : null}
 
       <div className="admin-actions">
-        <button className="admin-button" type="submit" disabled={!canSubmit}>
-          {isSubmitting ? (
-            <span className="inline-flex items-center gap-2">
-              <span className="h-4 w-4 rounded-full border-2 border-white/60 border-t-white animate-spin" />
-              Saving...
-            </span>
-          ) : (
-            submitLabel
-          )}
-        </button>
+        {!readOnly ? (
+          <button className="admin-button" type="submit" disabled={!canSubmit}>
+            {isSubmitting ? (
+              <span className="inline-flex items-center gap-2">
+                <span className="h-4 w-4 rounded-full border-2 border-white/60 border-t-white animate-spin" />
+                Saving...
+              </span>
+            ) : (
+              submitLabel
+            )}
+          </button>
+        ) : null}
       </div>
     </form>
   );

@@ -1,4 +1,5 @@
 'use client';
+'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -23,6 +24,7 @@ export default function CommentsClient() {
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [canModerate, setCanModerate] = useState(false);
 
   const load = async (nextPage = page, nextStatus = statusFilter) => {
     if (!token) return;
@@ -56,6 +58,19 @@ export default function CommentsClient() {
       router.push('/admin');
       return;
     }
+    const loadSession = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/admin/me`, { headers: { Authorization: `Bearer ${token}` } });
+        if (res.status === 401) return;
+        const data = await res.json().catch(() => ({}));
+        const perms = Array.isArray(data?.permissions) ? data.permissions : [];
+        const can = perms.includes('*') || perms.includes('blog.write') || perms.includes('blog.publish');
+        setCanModerate(!!can);
+      } catch {
+        setCanModerate(false);
+      }
+    };
+    loadSession();
     load(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, postIdParam]);
@@ -79,9 +94,29 @@ export default function CommentsClient() {
     }
   };
 
+  const reject = async (commentId) => {
+    if (!token) return;
+    if (!confirm('Reject this comment?')) return;
+    try {
+      const response = await fetch(`${API_URL}/api/admin/blog/comments/${commentId}/reject`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      if (!response.ok) throw new Error();
+      await load(1);
+    } catch {
+      setMessage('Failed to reject comment.');
+    }
+  };
+
   const remove = async (commentId) => {
     if (!token) return;
-    if (!confirm('Delete this comment?')) return;
+    if (!confirm('Delete this comment? (It will be removed from the moderation queue)')) return;
     try {
       const response = await fetch(`${API_URL}/api/admin/blog/comments/${commentId}`, {
         method: 'DELETE',
@@ -107,10 +142,10 @@ export default function CommentsClient() {
   return (
     <div className="admin-card">
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h2 className="admin-title">Blog comments</h2>
-          <p className="admin-subtitle">Approve or delete comments submitted on the public blog.</p>
-        </div>
+          <div>
+            <h2 className="admin-title">Blog comments</h2>
+            <p className="admin-subtitle">Moderation queue for comments submitted on the public blog.</p>
+          </div>
         <Link className="admin-link" href="/admin/blog">
           Back to posts
         </Link>
@@ -131,11 +166,13 @@ export default function CommentsClient() {
             >
               <option value="pending">Pending</option>
               <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+              <option value="deleted">Deleted</option>
               <option value="all">All</option>
             </select>
             <button
               type="button"
-              className="admin-button admin-add-button"
+              className="admin-button info"
               onClick={() => load(1, statusFilter)}
               disabled={isLoading}
             >
@@ -178,14 +215,21 @@ export default function CommentsClient() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  {comment.status !== 'approved' ? (
+                  {canModerate && comment.status === 'pending' ? (
                     <button type="button" className="admin-button" onClick={() => approve(comment.id)}>
                       Approve
                     </button>
                   ) : null}
-                  <button type="button" className="admin-button secondary" onClick={() => remove(comment.id)}>
-                    Delete
-                  </button>
+                  {canModerate && comment.status === 'pending' ? (
+                    <button type="button" className="admin-button secondary" onClick={() => reject(comment.id)}>
+                      Reject
+                    </button>
+                  ) : null}
+                  {canModerate ? (
+                    <button type="button" className="admin-button secondary" onClick={() => remove(comment.id)}>
+                      Delete
+                    </button>
+                  ) : null}
                 </div>
               </div>
               <p className="mt-3 text-gray-800 whitespace-pre-wrap">{comment.content}</p>
@@ -218,4 +262,3 @@ export default function CommentsClient() {
     </div>
   );
 }
-

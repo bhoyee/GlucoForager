@@ -8,6 +8,7 @@ __pycache__/
 *.pyc
 *.pyo
 *.env
+.venv/
 
 # backend artifacts
 /backend/.env
