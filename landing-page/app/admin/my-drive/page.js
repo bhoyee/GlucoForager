@@ -55,7 +55,6 @@ export default function MyDrivePage() {
   const [previewBlobUrl, setPreviewBlobUrl] = useState('');
   const [previewLoading, setPreviewLoading] = useState(false);
   const [softDeleteTarget, setSoftDeleteTarget] = useState(null);
-  const [softDeleteReason, setSoftDeleteReason] = useState('');
   const [softDeleteSubmitting, setSoftDeleteSubmitting] = useState(false);
 
   const load = async () => {
@@ -217,19 +216,11 @@ export default function MyDrivePage() {
 
   const submitSoftDelete = async () => {
     if (!token || !softDeleteTarget?.id) return;
-    const r = String(softDeleteReason || '').trim();
-    if (!r) {
-      setMessage('Reason is required.');
-      return;
-    }
     setSoftDeleteSubmitting(true);
     try {
-      const form = new FormData();
-      form.append('reason', r);
       const res = await fetch(`${API_URL}/api/admin/drive/my/files/${encodeURIComponent(String(softDeleteTarget.id))}/soft-delete`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
-        body: form,
       });
       if (res.status === 401) {
         localStorage.removeItem('adminToken');
@@ -239,7 +230,6 @@ export default function MyDrivePage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || 'Delete failed.');
       setSoftDeleteTarget(null);
-      setSoftDeleteReason('');
       setMessage('File deleted (soft delete).');
       load();
     } catch (err) {
@@ -415,9 +405,8 @@ export default function MyDrivePage() {
             </div>
             <div className="admin-modal-body">
               <p className="admin-subtitle" style={{ marginTop: 0 }}>
-                Reason is required (admin can see it).
+                This will remove the file from your MyDrive view. You can restore it later from “Show deleted”.
               </p>
-              <textarea className="admin-textarea" rows={4} value={softDeleteReason} onChange={(e) => setSoftDeleteReason(e.target.value)} placeholder="Reason for deleting…" />
               <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 14 }}>
                 <button className="admin-button danger" type="button" onClick={submitSoftDelete} disabled={softDeleteSubmitting}>
                   {softDeleteSubmitting ? 'Deleting…' : 'Confirm delete'}

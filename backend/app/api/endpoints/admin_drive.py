@@ -142,7 +142,7 @@ def upload_my_file(
 @router.post("/my/files/{file_id}/soft-delete", response_model=dict)
 def soft_delete_my_file(
     file_id: int,
-    reason: str = Form(...),
+    reason: str | None = Form(None),
     db: Session = Depends(get_db),
     current_staff: StaffUser = Depends(get_current_staff_user),
 ):
@@ -150,17 +150,15 @@ def soft_delete_my_file(
     if f.is_deleted:
         return {"ok": True}
     r = str(reason or "").strip()
-    if not r:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Reason is required")
-    if len(r) > 280:
+    if r and len(r) > 280:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Reason is too long")
 
     f.is_deleted = True
     f.deleted_at = _now()
     f.deleted_by_staff_user_id = int(current_staff.id)
-    f.delete_reason = r
+    f.delete_reason = r or None
     db.add(f)
-    _log_event(db, file_id=int(f.id), actor_id=int(current_staff.id), action="soft_delete", details={"reason": r})
+    _log_event(db, file_id=int(f.id), actor_id=int(current_staff.id), action="soft_delete", details={"reason": r} if r else None)
     db.commit()
     return {"ok": True}
 
