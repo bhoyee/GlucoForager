@@ -373,6 +373,15 @@ export default function AdminShell({ children }) {
     return `Welcome ${session.email}`;
   }, [firstName, isAdmin, session?.email, sessionLoading]);
 
+  const primaryRoleLabel = useMemo(() => {
+    const r = Array.isArray(roles) ? roles[0] : null;
+    const key = String(r || '').trim().toLowerCase();
+    if (!key) return '';
+    if (key === 'hr') return 'HR';
+    if (key === 'admin') return 'Admin';
+    return key.charAt(0).toUpperCase() + key.slice(1);
+  }, [roles]);
+
   useEffect(() => {
     if (!navSections.length) return;
     setNavSectionOpen((prev) => {
@@ -526,7 +535,14 @@ export default function AdminShell({ children }) {
               </svg>
             </button>
             <h1>{portalTitle}</h1>
-            <p className="admin-signed-in-pill">{signedInLabel}</p>
+            <p className="admin-signed-in-pill" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <span>{signedInLabel}</span>
+              {!sessionLoading && session?.email && !isAdmin && primaryRoleLabel ? (
+                <span className="admin-badge info" style={{ marginLeft: 6 }}>
+                  {primaryRoleLabel}
+                </span>
+              ) : null}
+            </p>
             {!sessionLoading && session?.email && profileIncomplete ? (
               <div className="admin-alert warning" style={{ marginTop: 10 }}>
                 Your profile is incomplete — please update it now (urgent).{' '}
