@@ -13,7 +13,7 @@ export default function MyPayrollPage() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [items, setItems] = useState([]);
-  const [pdfLoadingId, setPdfLoadingId] = useState(null);
+  const [pdfLoading, setPdfLoading] = useState({ id: null, action: null }); // action: view|download
 
   const downloadNameForItem = (it) => {
     const y = String(it?.year || '');
@@ -25,7 +25,7 @@ export default function MyPayrollPage() {
   const fetchPayslipPdf = async (it, { download }) => {
     if (!token || !it?.id) return;
     setMessage('');
-    setPdfLoadingId(it.id);
+    setPdfLoading({ id: it.id, action: download ? 'download' : 'view' });
     try {
       const url = `${API_URL}/api/admin/payroll/my/items/${encodeURIComponent(String(it.id))}/payslip.pdf?download=${download ? '1' : '0'}`;
       const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
@@ -64,7 +64,7 @@ export default function MyPayrollPage() {
     } catch (e) {
       setMessage(e?.message || 'Failed to fetch payslip.');
     } finally {
-      setPdfLoadingId(null);
+      setPdfLoading({ id: null, action: null });
     }
   };
 
@@ -213,17 +213,17 @@ export default function MyPayrollPage() {
                                 className="admin-button neutral"
                                 type="button"
                                 onClick={() => fetchPayslipPdf(it, { download: false })}
-                                disabled={pdfLoadingId === it.id}
+                                disabled={pdfLoading?.id === it.id}
                               >
-                                {pdfLoadingId === it.id ? 'Loading…' : 'View PDF'}
+                                {pdfLoading?.id === it.id && pdfLoading?.action === 'view' ? 'Loading…' : 'View PDF'}
                               </button>
                               <button
                                 className="admin-button info"
                                 type="button"
                                 onClick={() => fetchPayslipPdf(it, { download: true })}
-                                disabled={pdfLoadingId === it.id}
+                                disabled={pdfLoading?.id === it.id}
                               >
-                                Download
+                                {pdfLoading?.id === it.id && pdfLoading?.action === 'download' ? 'Downloading…' : 'Download'}
                               </button>
                             </div>
                           </td>
