@@ -888,17 +888,29 @@ def my_payslip_pdf(
 
     styles = getSampleStyleSheet()
     brand_blue = colors.HexColor("#2563eb")
+    brand_green = colors.HexColor("#166534")  # dark green
     ink = colors.HexColor("#0f172a")
     muted = colors.HexColor("#475569")
     line = colors.HexColor("#cbd5e1")
 
-    styles.add(ParagraphStyle(name="GFTitle", parent=styles["Title"], fontName="Helvetica-Bold", fontSize=22, leading=26, textColor=ink))
+    # NOTE: ReportLab's default "Title" is centered; force left alignment so it lines up with other header lines.
+    styles.add(
+        ParagraphStyle(
+            name="GFTitle",
+            parent=styles["Title"],
+            fontName="Helvetica-Bold",
+            fontSize=22,
+            leading=26,
+            textColor=ink,
+            alignment=0,
+        )
+    )
     styles.add(ParagraphStyle(name="GFSub", parent=styles["BodyText"], fontName="Helvetica", fontSize=9.5, leading=12, textColor=muted))
     styles.add(ParagraphStyle(name="GFSection", parent=styles["BodyText"], fontName="Helvetica-Bold", fontSize=9.5, leading=12, textColor=brand_blue, spaceAfter=2))
     styles.add(ParagraphStyle(name="GFLabel", parent=styles["BodyText"], fontName="Helvetica", fontSize=9, leading=11, textColor=muted))
     styles.add(ParagraphStyle(name="GFValue", parent=styles["BodyText"], fontName="Helvetica", fontSize=9.5, leading=11.5, textColor=ink))
     styles.add(ParagraphStyle(name="GFValueBold", parent=styles["BodyText"], fontName="Helvetica-Bold", fontSize=10.5, leading=12, textColor=ink))
-    styles.add(ParagraphStyle(name="GFBrand", parent=styles["BodyText"], fontName="Helvetica-Bold", fontSize=12, leading=14, textColor=ink))
+    styles.add(ParagraphStyle(name="GFBrand", parent=styles["BodyText"], fontName="Helvetica-Bold", fontSize=12, leading=14, textColor=ink, alignment=0))
     styles.add(ParagraphStyle(name="GFWebsite", parent=styles["BodyText"], fontName="Helvetica", fontSize=9.5, leading=12, textColor=muted))
 
     def kv_table(rows: list[tuple[str, str]]) -> Table:
@@ -936,9 +948,13 @@ def my_payslip_pdf(
 
     # Header (match reference image structure)
     generated_label = datetime.utcnow().strftime("%d %b %Y %H:%M UTC")
+    brand_line = Paragraph(
+        f'Brand: <font color="{brand_green.hexval()}">{_escape(brand)}</font>',
+        styles["GFBrand"],
+    )
     header_left = [
         Paragraph(_escape(holding), styles["GFTitle"]),
-        Paragraph(_escape(f"Brand: {brand}"), styles["GFBrand"]),
+        brand_line,
         Paragraph(_escape(brand_website), styles["GFWebsite"]),
         Paragraph(_escape(" ".join([x for x in company_lines if x]) or ""), styles["GFSub"]),
         Spacer(1, 6),
