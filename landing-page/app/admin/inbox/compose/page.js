@@ -9,7 +9,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
 function isValidStaffEmail(email) {
   const e = String(email || '').trim().toLowerCase();
-  return Boolean(e) && e.includes('@') && e.endsWith('@glucoforager.com');
+  return Boolean(e) && e.includes('@') && e.includes('.');
 }
 
 export default function ComposeMailPage() {
@@ -55,7 +55,7 @@ export default function ComposeMailPage() {
 
     if (!isValidStaffEmail(to)) {
       setTone('danger');
-      setMessage("Recipient must be a @glucoforager.com email.");
+      setMessage('Enter a valid recipient email.');
       return;
     }
     if (!String(subject || '').trim()) {
@@ -111,7 +111,7 @@ export default function ComposeMailPage() {
               Compose mail
             </h2>
             <p className="admin-subtitle" style={{ margin: 0 }}>
-              Internal staff mail (only @glucoforager.com recipients).
+              Staff-to-staff mail (recipient must be a registered staff email).
             </p>
           </div>
           <Link className="admin-button secondary" href="/admin/inbox?tab=mail">
@@ -130,9 +130,9 @@ export default function ComposeMailPage() {
             <div className="admin-card admin-card--subtle admin-card--compact">
               <div className="admin-field">
                 <label>To</label>
-                <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="someone@glucoforager.com" />
+                <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="someone@example.com" />
                 <p className="admin-subtitle" style={{ marginTop: 6 }}>
-                  Only @glucoforager.com is allowed.
+                  Recipient must match an existing staff email in the system.
                 </p>
               </div>
               <div className="admin-field">
