@@ -459,7 +459,10 @@ export default function AdminShell({ children }) {
           </div>
           <nav className="admin-nav" aria-label="Admin navigation">
             {navSections.map((section) => {
-              const open = Boolean(navSectionOpen?.[section.id]);
+              // When the sidebar is collapsed into an icon rail, always show items.
+              // Otherwise, a persisted "closed" section state could result in an empty sidebar
+              // (since section headers are hidden in collapsed mode).
+              const open = sidebarCollapsed ? true : Boolean(navSectionOpen?.[section.id]);
               return (
                 <div key={section.id} className="admin-nav-section">
                   <button
