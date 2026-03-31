@@ -314,7 +314,7 @@ export default function AdminShell({ children }) {
         items: [
           { href: isAdmin ? '/admin/admin-dashboard' : '/admin/dashboard', label: 'Dashboard', icon: 'D' },
           { href: '/admin/profile', label: 'My Profile', icon: 'ME' },
-          ...(session?.email && !isAdmin ? [{ href: '/admin/my-team', label: 'My Team', icon: 'TM', perm: 'staff.team.read' }] : []),
+          ...(session?.email && !isAdmin ? [{ href: '/admin/my-team', label: 'My Team', icon: 'TM' }] : []),
           ...(canSeeUpdatesMenu ? [{ href: '/admin/updates', label: 'Updates', icon: 'UP', perm: 'intranet_updates.read' }] : []),
           { href: '/admin/attendance', label: 'Clock In/Out', icon: 'CI' },
           { href: '/admin/work-logs', label: 'Work Logs', icon: 'WL' },

@@ -91,7 +91,10 @@ export default function MyTeamPage() {
 
   const rows = Array.isArray(items) ? items : [];
 
-  const canView = Array.isArray(session?.permissions) ? session.permissions.includes('*') || session.permissions.includes('staff.team.read') : false;
+  const roles = Array.isArray(session?.roles) ? session.roles : [];
+  const perms = Array.isArray(session?.permissions) ? session.permissions : [];
+  const isAdmin = roles.includes('admin') || perms.includes('*') || perms.includes('admin.manage');
+  const canView = Boolean(session?.email) && !isAdmin;
 
   return (
     <div className="admin-page">
@@ -113,7 +116,7 @@ export default function MyTeamPage() {
       </div>
 
       <div className="admin-card" style={{ marginTop: 16 }}>
-        {!canView && !loading ? <div className="admin-alert danger">Permission denied.</div> : null}
+        {!canView && !loading ? <div className="admin-alert danger">This page is available to staff (non-admin) accounts only.</div> : null}
         {loading ? <LoadingState label="Loading team…" /> : null}
         {!loading && canView && rows.length === 0 ? (
           <EmptyState title="No team members found" description="Try clearing your search or ask an admin to add staff accounts." />
@@ -153,4 +156,3 @@ export default function MyTeamPage() {
     </div>
   );
 }
-
