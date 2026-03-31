@@ -172,7 +172,6 @@ export default function PayrollPage() {
 
   const activeComp = compsForSelected.find((c) => Boolean(c.is_active)) || null;
 
-  const selectedRun = runs.find((r) => String(r.id) === String(selectedRunId)) || null;
   const runIsDraft = !selectedRun || String(selectedRun.status || '').toLowerCase() === 'draft';
 
   useEffect(() => {
