@@ -1,4 +1,5 @@
 'use client';
+'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -27,8 +28,17 @@ export default function PayrollPage() {
   const now = useMemo(() => new Date(), []);
   const [runYear, setRunYear] = useState(now.getFullYear());
   const [runMonth, setRunMonth] = useState(now.getMonth() + 1);
+  const endOfMonthISO = (year, month) => {
+    const y = Number(year || 0);
+    const m = Number(month || 1);
+    const d = new Date(Date.UTC(y, m, 0));
+    return d.toISOString().slice(0, 10);
+  };
+  const [runPayDate, setRunPayDate] = useState(() => endOfMonthISO(now.getFullYear(), now.getMonth() + 1));
   const [overwriteGenerate, setOverwriteGenerate] = useState(false);
   const [runTotals, setRunTotals] = useState([]);
+  const selectedRun = useMemo(() => runs.find((r) => String(r?.id) === String(selectedRunId)), [runs, selectedRunId]);
+  const [selectedRunPayDate, setSelectedRunPayDateState] = useState('');
 
   const [selectedStaffId, setSelectedStaffId] = useState('');
   const [includeInactive, setIncludeInactive] = useState(true);
@@ -38,6 +48,16 @@ export default function PayrollPage() {
   const [deductionsDefault, setDeductionsDefault] = useState('0');
   const [effectiveFrom, setEffectiveFrom] = useState(() => new Date().toISOString().slice(0, 10));
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setRunPayDate(endOfMonthISO(runYear, runMonth));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runYear, runMonth]);
+
+  useEffect(() => {
+    const pd = String(selectedRun?.pay_date || '').slice(0, 10);
+    setSelectedRunPayDateState(pd);
+  }, [selectedRun?.pay_date]);
 
   const load = async () => {
     if (!token) {
@@ -231,7 +251,7 @@ export default function PayrollPage() {
       const res = await fetch(`${API_URL}/api/admin/payroll/runs`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ year: Number(runYear), month: Number(runMonth) }),
+        body: JSON.stringify({ year: Number(runYear), month: Number(runMonth), pay_date: runPayDate || undefined }),
       });
       if (res.status === 401) {
         localStorage.removeItem('adminToken');
@@ -246,6 +266,29 @@ export default function PayrollPage() {
       setMessage(e?.message || 'Failed to create run.');
     } finally {
       setCreatingRun(false);
+    }
+  };
+
+  const setSelectedRunPayDate = async (nextPayDate) => {
+    if (!token || !selectedRunId) return;
+    setMessage('');
+    try {
+      const res = await fetch(`${API_URL}/api/admin/payroll/runs/${selectedRunId}/pay-date`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pay_date: String(nextPayDate || '').slice(0, 10) }),
+      });
+      if (res.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || 'Failed to update pay date.');
+      await loadRuns();
+      setMessage('Pay date updated.');
+    } catch (e) {
+      setMessage(e?.message || 'Failed to update pay date.');
     }
   };
 
@@ -534,6 +577,10 @@ export default function PayrollPage() {
                     onChange={(e) => setRunMonth(Number(e.target.value || runMonth))}
                   />
                 </div>
+                <div className="admin-field" style={{ margin: 0, minWidth: 160 }}>
+                  <label>Pay date</label>
+                  <input type="date" value={runPayDate} onChange={(e) => setRunPayDate(e.target.value)} />
+                </div>
                 <button className="admin-button" type="button" onClick={createRun} disabled={creatingRun}>
                   {creatingRun ? 'Creating…' : 'Create run'}
                 </button>
@@ -551,6 +598,7 @@ export default function PayrollPage() {
                   <thead>
                     <tr>
                       <th>Period</th>
+                      <th>Pay date</th>
                       <th>Status</th>
                       <th>Finalized</th>
                       <th />
@@ -561,6 +609,9 @@ export default function PayrollPage() {
                       <tr key={r.id} style={String(r.id) === String(selectedRunId) ? { background: 'rgba(46,125,50,0.06)' } : undefined}>
                         <td>
                           {r.year}-{String(r.month).padStart(2, '0')}
+                        </td>
+                        <td style={{ whiteSpace: 'nowrap' }}>
+                          {r.pay_date ? new Date(`${r.pay_date}T00:00:00Z`).toLocaleDateString() : ''}
                         </td>
                         <td>
                           <span className={`admin-badge ${r.status === 'finalized' ? 'success' : 'secondary'}`}>{r.status}</span>
@@ -588,6 +639,24 @@ export default function PayrollPage() {
                 </p>
               </div>
               <div className="admin-actions" style={{ margin: 0 }}>
+                <div className="admin-field" style={{ margin: 0, minWidth: 160 }}>
+                  <label>Pay date</label>
+                  <input
+                    type="date"
+                    value={selectedRunPayDate || ''}
+                    onChange={(e) => setSelectedRunPayDateState(e.target.value)}
+                    disabled={!selectedRunId}
+                  />
+                </div>
+                <button
+                  className="admin-button info"
+                  type="button"
+                  onClick={() => setSelectedRunPayDate(selectedRunPayDate)}
+                  disabled={!selectedRunId || !selectedRunPayDate}
+                  title="Updates pay date for all payslips in this run"
+                >
+                  Update pay date
+                </button>
                 <button className="admin-button secondary" type="button" onClick={downloadRunCsv} disabled={!selectedRunId}>
                   Download CSV
                 </button>
