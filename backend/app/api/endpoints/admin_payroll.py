@@ -218,9 +218,16 @@ def _end_of_month(year: int, month: int) -> date:
     return date(int(year), int(month), int(days))
 
 
+def _payslip_ref(*, brand: str, year: int, month: int, item_id: int) -> str:
+    b = str(brand or "").strip().lower()
+    prefix = "GF" if "glucoforager" in b else "".join([w[:1].upper() for w in str(brand or "").split() if w][:3]) or "PAY"
+    return f"{prefix}-PSL-{int(year)}{int(month):02d}-{int(item_id):06d}"
+
+
 class PayrollRunCreatePayload(BaseModel):
     year: int = Field(..., ge=2000, le=2100)
     month: int = Field(..., ge=1, le=12)
+    pay_date: str | None = Field(None, description="Optional pay date (YYYY-MM-DD). Defaults to last day of month.")
 
 
 @router.get("/runs")
@@ -245,6 +252,7 @@ def list_runs(
                 "status": r.status,
                 "created_by_staff_user_id": r.created_by_staff_user_id,
                 "finalized_at": r.finalized_at.isoformat() if r.finalized_at else None,
+                "pay_date": r.pay_date.isoformat() if getattr(r, "pay_date", None) else None,
                 "created_at": r.created_at.isoformat() if r.created_at else None,
             }
             for r in rows
@@ -263,12 +271,22 @@ def create_run(
     if existing:
         return {"ok": True, "id": existing.id}
 
+    pay_date = None
+    if payload.pay_date:
+        try:
+            pay_date = date.fromisoformat(str(payload.pay_date))
+        except Exception:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid pay_date")
+    if not pay_date:
+        pay_date = _end_of_month(int(payload.year), int(payload.month))
+
     run = PayrollRun(
         year=int(payload.year),
         month=int(payload.month),
         status="draft",
         created_by_staff_user_id=int(current_staff.id),
         finalized_at=None,
+        pay_date=pay_date,
         created_at=_now(),
         updated_at=_now(),
     )
@@ -287,6 +305,41 @@ def create_run(
     return {"ok": True, "id": run.id}
 
 
+class PayrollRunPayDatePayload(BaseModel):
+    pay_date: str = Field(..., description="YYYY-MM-DD")
+
+
+@router.post("/runs/{run_id}/pay-date")
+def set_run_pay_date(
+    request: Request,
+    run_id: int,
+    payload: PayrollRunPayDatePayload,
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("payroll.manage")),
+):
+    run = db.query(PayrollRun).filter(PayrollRun.id == int(run_id)).first()
+    if not run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
+    try:
+        pay_date = date.fromisoformat(str(payload.pay_date))
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid pay_date")
+
+    run.pay_date = pay_date
+    run.updated_at = _now()
+    _audit(
+        request,
+        db,
+        actor_id=int(current_staff.id),
+        action="payroll.run.pay_date.set",
+        entity="payroll_runs",
+        entity_id=str(run.id),
+        details={"pay_date": pay_date.isoformat()},
+    )
+    db.commit()
+    return {"ok": True, "pay_date": pay_date.isoformat()}
+
+
 @router.get("/runs/{run_id}")
 def get_run(
     run_id: int,
@@ -303,6 +356,7 @@ def get_run(
             "month": run.month,
             "status": run.status,
             "finalized_at": run.finalized_at.isoformat() if run.finalized_at else None,
+            "pay_date": run.pay_date.isoformat() if getattr(run, "pay_date", None) else None,
             "created_at": run.created_at.isoformat() if run.created_at else None,
         }
     }
@@ -332,6 +386,12 @@ def list_run_items(
                 "run_id": item.run_id,
                 "staff_user_id": item.staff_user_id,
                 "staff_email": email,
+                "payslip_ref": _payslip_ref(
+                    brand=str(settings.payroll_brand_name or "GlucoForager"),
+                    year=int(run.year),
+                    month=int(run.month),
+                    item_id=int(item.id),
+                ),
                 "currency": item.currency,
                 "gross": str(item.gross or 0),
                 "deductions": str(item.deductions or 0),
@@ -411,8 +471,10 @@ def export_run_csv(
             "month",
             "run_id",
             "run_status",
+            "pay_date",
             "staff_user_id",
             "staff_email",
+            "payslip_ref",
             "currency",
             "gross",
             "deductions",
@@ -422,6 +484,8 @@ def export_run_csv(
         ]
     )
 
+    pay_date = getattr(run, "pay_date", None) or _end_of_month(int(run.year), int(run.month))
+
     for item, email in rows:
         writer.writerow(
             [
@@ -429,8 +493,15 @@ def export_run_csv(
                 int(run.month),
                 int(run.id),
                 str(run.status or ""),
+                pay_date.isoformat(),
                 int(item.staff_user_id),
                 str(email or ""),
+                _payslip_ref(
+                    brand=str(settings.payroll_brand_name or "GlucoForager"),
+                    year=int(run.year),
+                    month=int(run.month),
+                    item_id=int(item.id),
+                ),
                 str(item.currency or ""),
                 str(item.gross or 0),
                 str(item.deductions or 0),
@@ -691,7 +762,7 @@ def list_my_payroll_items(
     current_staff: StaffUser = Depends(require_staff_permission("payroll.read_own")),
 ):
     q = (
-        db.query(PayrollItem, PayrollRun.year, PayrollRun.month, PayrollRun.status, PayrollRun.finalized_at)
+        db.query(PayrollItem, PayrollRun.year, PayrollRun.month, PayrollRun.status, PayrollRun.finalized_at, PayrollRun.pay_date)
         .join(PayrollRun, PayrollRun.id == PayrollItem.run_id)
         .filter(PayrollItem.staff_user_id == int(current_staff.id))
     )
@@ -710,6 +781,13 @@ def list_my_payroll_items(
                 "month": int(r_month),
                 "run_status": str(r_status or ""),
                 "finalized_at": r_finalized_at.isoformat() if r_finalized_at else None,
+                "pay_date": (r_pay_date.isoformat() if r_pay_date else _end_of_month(int(r_year), int(r_month)).isoformat()),
+                "payslip_ref": _payslip_ref(
+                    brand=str(settings.payroll_brand_name or "GlucoForager"),
+                    year=int(r_year),
+                    month=int(r_month),
+                    item_id=int(item.id),
+                ),
                 "currency": item.currency,
                 "gross": str(item.gross or 0),
                 "deductions": str(item.deductions or 0),
@@ -717,7 +795,7 @@ def list_my_payroll_items(
                 "notes": item.notes,
                 "updated_at": item.updated_at.isoformat() if item.updated_at else None,
             }
-            for item, r_year, r_month, r_status, r_finalized_at in rows
+            for item, r_year, r_month, r_status, r_finalized_at, r_pay_date in rows
         ]
     }
 
@@ -754,10 +832,14 @@ def my_payslip_pdf(
 
     buf = io.BytesIO()
 
-    company = str(settings.payroll_company_name or "GlucoForager").strip() or "GlucoForager"
+    holding = str(settings.payroll_holding_name or "Bhoyee Global Enterprise").strip() or "Bhoyee Global Enterprise"
+    brand = str(settings.payroll_brand_name or "GlucoForager").strip() or "GlucoForager"
     period = f"{int(run.year)}-{int(run.month):02d}"
     period_label = date(int(run.year), int(run.month), 1).strftime("%B %Y")
     staff_name = (getattr(current_staff, "full_name", None) or current_staff.email or "").strip()
+    pay_date = getattr(run, "pay_date", None) or _end_of_month(int(run.year), int(run.month))
+    pay_date_label = pay_date.strftime("%d %b %Y")
+    payslip_id = _payslip_ref(brand=brand, year=int(run.year), month=int(run.month), item_id=int(item.id))
 
     doc = SimpleDocTemplate(
         buf,
@@ -767,7 +849,7 @@ def my_payslip_pdf(
         topMargin=16 * mm,
         bottomMargin=16 * mm,
         title=f"Payslip {period}",
-        author=company,
+        author=holding,
     )
 
     styles = getSampleStyleSheet()
@@ -776,12 +858,13 @@ def my_payslip_pdf(
     muted = colors.HexColor("#475569")
     line = colors.HexColor("#cbd5e1")
 
-    styles.add(ParagraphStyle(name="GFTitle", parent=styles["Title"], fontName="Helvetica-Bold", fontSize=18, leading=22, textColor=ink))
+    styles.add(ParagraphStyle(name="GFTitle", parent=styles["Title"], fontName="Helvetica-Bold", fontSize=22, leading=26, textColor=ink))
     styles.add(ParagraphStyle(name="GFSub", parent=styles["BodyText"], fontName="Helvetica", fontSize=9.5, leading=12, textColor=muted))
     styles.add(ParagraphStyle(name="GFSection", parent=styles["BodyText"], fontName="Helvetica-Bold", fontSize=9.5, leading=12, textColor=brand_blue, spaceAfter=2))
     styles.add(ParagraphStyle(name="GFLabel", parent=styles["BodyText"], fontName="Helvetica", fontSize=9, leading=11, textColor=muted))
     styles.add(ParagraphStyle(name="GFValue", parent=styles["BodyText"], fontName="Helvetica", fontSize=9.5, leading=11.5, textColor=ink))
     styles.add(ParagraphStyle(name="GFValueBold", parent=styles["BodyText"], fontName="Helvetica-Bold", fontSize=10.5, leading=12, textColor=ink))
+    styles.add(ParagraphStyle(name="GFBrand", parent=styles["BodyText"], fontName="Helvetica-Bold", fontSize=12, leading=14, textColor=ink))
 
     def kv_table(rows: list[tuple[str, str]]) -> Table:
         data = [[Paragraph(_escape(k), styles["GFLabel"]), Paragraph(_escape(v), styles["GFValue"])] for k, v in rows]
@@ -818,7 +901,8 @@ def my_payslip_pdf(
 
     # Header (match reference image structure)
     header_left = [
-        Paragraph(_escape(company), styles["GFTitle"]),
+        Paragraph(_escape(holding), styles["GFTitle"]),
+        Paragraph(_escape(f"Brand: {brand}"), styles["GFBrand"]),
         Paragraph(_escape(" ".join([x for x in company_lines if x]) or ""), styles["GFSub"]),
         Spacer(1, 6),
         Paragraph(_escape(f"Payslip for the month of {period_label}"), styles["GFValueBold"]),
@@ -871,15 +955,14 @@ def my_payslip_pdf(
             ("Employee Name", staff_name or "—"),
             ("Employee Email", str(current_staff.email or "—")),
             ("Pay Period", period_label),
-            ("Payslip ID", str(int(item.id))),
+            ("Payslip ID", payslip_id),
         ]
     )
     summary_right = kv_table(
         [
-            ("Run Status", str(getattr(run, "status", "") or "draft")),
+            ("Pay Date", pay_date_label),
             ("Finalized At", (run.finalized_at.isoformat(sep=" ", timespec="minutes") if run.finalized_at else "—")),
             ("Currency", str(item.currency or "—")),
-            ("Country", str(getattr(current_staff, "country", None) or "—")),
         ]
     )
     summary = Table(
@@ -963,7 +1046,7 @@ def my_payslip_pdf(
     data = buf.getvalue()
     buf.close()
 
-    filename = f"payslip_{period}_{int(item.id)}.pdf"
+    filename = f"payslip_{period}_{payslip_id}.pdf"
     disposition = "attachment" if int(download or 0) == 1 else "inline"
     return StreamingResponse(
         io.BytesIO(data),
