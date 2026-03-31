@@ -21,8 +21,13 @@ from ...models.staff_audit_log import StaffAuditLog
 from ...models.staff_compensation import StaffCompensation
 from ...models.staff_user import StaffUser
 from ...services.email_service import send_staff_payroll_available_email
+
+import html
+from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 
 
 router = APIRouter(prefix="/admin/payroll", tags=["admin-payroll"])
@@ -726,11 +731,8 @@ def _money(currency: str, value: Decimal | str | int | float | None) -> str:
     return f"{cur} {dec}"
 
 
-def _draw_kv(pdf: canvas.Canvas, *, x: float, y: float, key: str, value: str, key_w: float = 130) -> None:
-    pdf.setFont("Helvetica-Bold", 10)
-    pdf.drawString(x, y, str(key))
-    pdf.setFont("Helvetica", 10)
-    pdf.drawString(x + key_w, y, str(value or "—"))
+def _escape(text: str | None) -> str:
+    return html.escape(str(text or "").strip())
 
 
 @router.get("/my/items/{item_id}/payslip.pdf")
@@ -751,100 +753,222 @@ def my_payslip_pdf(
     item, run = row
 
     buf = io.BytesIO()
-    pdf = canvas.Canvas(buf, pagesize=A4)
-    width, height = A4
 
     company = str(settings.payroll_company_name or "GlucoForager").strip() or "GlucoForager"
     period = f"{int(run.year)}-{int(run.month):02d}"
+    period_label = date(int(run.year), int(run.month), 1).strftime("%B %Y")
     staff_name = (getattr(current_staff, "full_name", None) or current_staff.email or "").strip()
 
-    # Header
-    pdf.setFont("Helvetica-Bold", 18)
-    pdf.drawString(50, height - 60, company)
-    pdf.setFont("Helvetica", 11)
-    pdf.drawString(50, height - 80, "Payslip")
-    pdf.setFont("Helvetica-Bold", 11)
-    pdf.drawRightString(width - 50, height - 80, f"Period: {period}")
-
-    # Company meta (optional)
-    meta_y = height - 105
-    pdf.setFont("Helvetica", 9)
-    if settings.payroll_company_address:
-        pdf.drawString(50, meta_y, str(settings.payroll_company_address)[:140])
-        meta_y -= 12
-    line2 = " · ".join(
-        [
-            x
-            for x in [
-                (str(settings.payroll_company_email).strip() if settings.payroll_company_email else ""),
-                (str(settings.payroll_company_phone).strip() if settings.payroll_company_phone else ""),
-                (f"Reg: {str(settings.payroll_company_reg_no).strip()}" if settings.payroll_company_reg_no else ""),
-            ]
-            if x
-        ]
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=A4,
+        leftMargin=18 * mm,
+        rightMargin=18 * mm,
+        topMargin=16 * mm,
+        bottomMargin=16 * mm,
+        title=f"Payslip {period}",
+        author=company,
     )
-    if line2:
-        pdf.drawString(50, meta_y, line2[:140])
 
-    # Divider
-    pdf.setLineWidth(1)
-    pdf.line(50, height - 125, width - 50, height - 125)
+    styles = getSampleStyleSheet()
+    styles.add(
+        ParagraphStyle(
+            name="GFTitle",
+            parent=styles["Title"],
+            fontName="Helvetica-Bold",
+            fontSize=20,
+            leading=24,
+            textColor=colors.HexColor("#0f172a"),
+            spaceAfter=2,
+        )
+    )
+    styles.add(
+        ParagraphStyle(
+            name="GFSub",
+            parent=styles["BodyText"],
+            fontName="Helvetica",
+            fontSize=10,
+            leading=13,
+            textColor=colors.HexColor("#475569"),
+        )
+    )
+    styles.add(
+        ParagraphStyle(
+            name="GFLabel",
+            parent=styles["BodyText"],
+            fontName="Helvetica-Bold",
+            fontSize=9,
+            leading=12,
+            textColor=colors.HexColor("#334155"),
+        )
+    )
+    styles.add(
+        ParagraphStyle(
+            name="GFValue",
+            parent=styles["BodyText"],
+            fontName="Helvetica",
+            fontSize=10,
+            leading=12,
+            textColor=colors.HexColor("#0f172a"),
+        )
+    )
 
-    left_x = 50
-    right_x = width / 2 + 10
-    y = height - 155
+    def kv_table(rows: list[tuple[str, str]]) -> Table:
+        data = [[Paragraph(_escape(k), styles["GFLabel"]), Paragraph(_escape(v), styles["GFValue"])] for k, v in rows]
+        t = Table(data, colWidths=[42 * mm, 120 * mm])
+        t.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                    ("TOPPADDING", (0, 0), (-1, -1), 2),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                ]
+            )
+        )
+        return t
 
-    pdf.setFont("Helvetica-Bold", 12)
-    pdf.drawString(left_x, y, "Employee")
-    pdf.drawString(right_x, y, "Payroll")
-    y -= 18
+    # Header lines (optional)
+    company_lines: list[str] = []
+    if settings.payroll_company_address:
+        company_lines.append(str(settings.payroll_company_address).strip())
+    meta_parts = [
+        (str(settings.payroll_company_email).strip() if settings.payroll_company_email else ""),
+        (str(settings.payroll_company_phone).strip() if settings.payroll_company_phone else ""),
+        (f"Reg: {str(settings.payroll_company_reg_no).strip()}" if settings.payroll_company_reg_no else ""),
+    ]
+    meta_line = " · ".join([p for p in meta_parts if p])
+    if meta_line:
+        company_lines.append(meta_line)
 
-    _draw_kv(pdf, x=left_x, y=y, key="Name", value=staff_name or "—")
-    _draw_kv(pdf, x=right_x, y=y, key="Run status", value=str(getattr(run, "status", "") or "draft"))
-    y -= 14
-    _draw_kv(pdf, x=left_x, y=y, key="Email", value=str(current_staff.email or "—"))
-    finalized = run.finalized_at.isoformat() if run.finalized_at else "—"
-    _draw_kv(pdf, x=right_x, y=y, key="Finalized at", value=finalized.replace("T", " ")[:16] if finalized != "—" else "—")
-    y -= 14
-    _draw_kv(pdf, x=left_x, y=y, key="Country", value=str(getattr(current_staff, "country", None) or "—"))
-    _draw_kv(pdf, x=right_x, y=y, key="Currency", value=str(item.currency or "—"))
-    y -= 20
+    header_table = Table(
+        [[Paragraph(_escape(company), styles["GFTitle"]), Paragraph(_escape(f"Payslip · {period_label}"), styles["GFSub"])]
+        ],
+        colWidths=[110 * mm, 70 * mm],
+    )
+    header_table.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ]
+        )
+    )
 
-    pdf.setFont("Helvetica-Bold", 12)
-    pdf.drawString(50, y, "Earnings & Deductions")
-    y -= 18
+    story: list = [header_table]
+    if company_lines:
+        story.append(Paragraph(_escape(" • ".join([x for x in company_lines if x])), styles["GFSub"]))
+    story.append(Spacer(1, 10))
+
+    divider = Table([[""]], colWidths=[180 * mm], rowHeights=[1])
+    divider.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#e2e8f0"))]))
+    story.append(divider)
+    story.append(Spacer(1, 12))
+
+    employee_rows = [
+        ("Name", staff_name or "—"),
+        ("Email", str(current_staff.email or "—")),
+        ("Country", str(getattr(current_staff, "country", None) or "—")),
+    ]
+    payroll_rows = [
+        ("Run status", str(getattr(run, "status", "") or "draft")),
+        ("Finalized at", (run.finalized_at.isoformat(sep=" ", timespec="minutes") if run.finalized_at else "—")),
+        ("Currency", str(item.currency or "—")),
+        ("Payslip ID", str(int(item.id))),
+    ]
+    cards = Table(
+        [
+            [
+                Table([[Paragraph("Employee", styles["GFLabel"])], [kv_table(employee_rows)]], colWidths=[88 * mm]),
+                Table([[Paragraph("Payroll", styles["GFLabel"])], [kv_table(payroll_rows)]], colWidths=[88 * mm]),
+            ]
+        ],
+        colWidths=[90 * mm, 90 * mm],
+    )
+    cards.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+            ]
+        )
+    )
+    story.append(cards)
+    story.append(Spacer(1, 6))
 
     gross = _money(item.currency, item.gross)
     ded = _money(item.currency, item.deductions)
     net = _money(item.currency, item.net)
 
-    _draw_kv(pdf, x=50, y=y, key="Gross pay", value=gross)
-    y -= 14
-    _draw_kv(pdf, x=50, y=y, key="Deductions", value=ded)
-    y -= 14
-    pdf.setFont("Helvetica-Bold", 11)
-    pdf.drawString(50, y, "Net pay")
-    pdf.drawString(180, y, net)
-    y -= 22
+    earnings = Table(
+        [
+            [Paragraph("Earnings & Deductions", styles["GFLabel"]), "", ""],
+            ["Description", "Amount", ""],
+            ["Gross pay", gross, ""],
+            ["Deductions", ded, ""],
+            ["Net pay", net, ""],
+        ],
+        colWidths=[110 * mm, 60 * mm, 10 * mm],
+    )
+    earnings.setStyle(
+        TableStyle(
+            [
+                ("SPAN", (0, 0), (-1, 0)),
+                ("BACKGROUND", (0, 1), (-1, 1), colors.HexColor("#f1f5f9")),
+                ("TEXTCOLOR", (0, 1), (-1, 1), colors.HexColor("#334155")),
+                ("FONTNAME", (0, 1), (-1, 1), "Helvetica-Bold"),
+                ("FONTNAME", (0, 2), (0, 4), "Helvetica"),
+                ("FONTNAME", (1, 2), (1, 3), "Helvetica"),
+                ("FONTNAME", (0, 4), (1, 4), "Helvetica-Bold"),
+                ("TEXTCOLOR", (0, 4), (1, 4), colors.HexColor("#0f172a")),
+                ("BACKGROUND", (0, 4), (1, 4), colors.HexColor("#ecfdf5")),
+                ("ALIGN", (1, 1), (1, -1), "RIGHT"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("GRID", (0, 1), (1, 4), 0.25, colors.HexColor("#e2e8f0")),
+                ("BOX", (0, 1), (1, 4), 0.6, colors.HexColor("#e2e8f0")),
+                ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                ("TOPPADDING", (0, 0), (-1, -1), 7),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+            ]
+        )
+    )
+    story.append(earnings)
 
     if item.notes:
-        pdf.setFont("Helvetica-Bold", 12)
-        pdf.drawString(50, y, "Notes")
-        y -= 16
-        pdf.setFont("Helvetica", 10)
-        # Simple wrap
-        text = str(item.notes or "").strip()
-        max_chars = 95
-        lines = [text[i : i + max_chars] for i in range(0, len(text), max_chars)]
-        for line in lines[:12]:
-            pdf.drawString(50, y, line)
-            y -= 12
+        story.append(Spacer(1, 12))
+        story.append(Paragraph("Notes", styles["GFLabel"]))
+        story.append(Spacer(1, 4))
+        notes_box = Table([[Paragraph(_escape(str(item.notes)), styles["GFSub"])]], colWidths=[180 * mm])
+        notes_box.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f8fafc")),
+                    ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#e2e8f0")),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 10),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+                    ("TOPPADDING", (0, 0), (-1, -1), 10),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+                ]
+            )
+        )
+        story.append(notes_box)
 
-    pdf.setFont("Helvetica", 8)
-    pdf.drawRightString(width - 50, 40, f"Generated {datetime.utcnow().isoformat(timespec='minutes').replace('T',' ')} UTC")
+    story.append(Spacer(1, 14))
+    story.append(
+        Paragraph(
+            _escape(f"Generated {datetime.utcnow().isoformat(sep=' ', timespec='minutes')} UTC · {company}"),
+            ParagraphStyle(name="GFFooter", parent=styles["GFSub"], fontSize=8, textColor=colors.HexColor("#64748b")),
+        )
+    )
 
-    pdf.showPage()
-    pdf.save()
+    doc.build(story)
     data = buf.getvalue()
     buf.close()
 
