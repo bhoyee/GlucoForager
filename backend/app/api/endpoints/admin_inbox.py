@@ -38,8 +38,6 @@ def _ensure_staff_email(email: str) -> str:
     e = str(email or "").strip().lower()
     if not e or "@" not in e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid recipient email")
-    if not e.endswith("@glucoforager.com"):
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Recipient must be a @glucoforager.com address")
     return e[:254]
 
 
@@ -147,8 +145,10 @@ def compose_message(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Subject is required")
 
     recipient = db.query(StaffUser).filter(StaffUser.email == to_email, StaffUser.deleted_at.is_(None)).first()
-    if not recipient or not StaffRBACService.is_active_staff(recipient):
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Recipient not found or inactive")
+    if not recipient:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Recipient email does not belong to any staff member")
+    if not StaffRBACService.is_active_staff(recipient):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Recipient is not an active staff member")
 
     html_body = sanitize_html(payload.body_html)
     if not html_body.strip():
@@ -235,8 +235,10 @@ def compose_message_form(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Subject is required")
 
     recipient = db.query(StaffUser).filter(StaffUser.email == to_email, StaffUser.deleted_at.is_(None)).first()
-    if not recipient or not StaffRBACService.is_active_staff(recipient):
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Recipient not found or inactive")
+    if not recipient:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Recipient email does not belong to any staff member")
+    if not StaffRBACService.is_active_staff(recipient):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Recipient is not an active staff member")
 
     html_body = sanitize_html(payload.body_html)
     if not html_body.strip():
