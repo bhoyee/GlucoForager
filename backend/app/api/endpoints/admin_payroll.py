@@ -771,51 +771,21 @@ def my_payslip_pdf(
     )
 
     styles = getSampleStyleSheet()
-    styles.add(
-        ParagraphStyle(
-            name="GFTitle",
-            parent=styles["Title"],
-            fontName="Helvetica-Bold",
-            fontSize=20,
-            leading=24,
-            textColor=colors.HexColor("#0f172a"),
-            spaceAfter=2,
-        )
-    )
-    styles.add(
-        ParagraphStyle(
-            name="GFSub",
-            parent=styles["BodyText"],
-            fontName="Helvetica",
-            fontSize=10,
-            leading=13,
-            textColor=colors.HexColor("#475569"),
-        )
-    )
-    styles.add(
-        ParagraphStyle(
-            name="GFLabel",
-            parent=styles["BodyText"],
-            fontName="Helvetica-Bold",
-            fontSize=9,
-            leading=12,
-            textColor=colors.HexColor("#334155"),
-        )
-    )
-    styles.add(
-        ParagraphStyle(
-            name="GFValue",
-            parent=styles["BodyText"],
-            fontName="Helvetica",
-            fontSize=10,
-            leading=12,
-            textColor=colors.HexColor("#0f172a"),
-        )
-    )
+    brand_blue = colors.HexColor("#2563eb")
+    ink = colors.HexColor("#0f172a")
+    muted = colors.HexColor("#475569")
+    line = colors.HexColor("#cbd5e1")
+
+    styles.add(ParagraphStyle(name="GFTitle", parent=styles["Title"], fontName="Helvetica-Bold", fontSize=18, leading=22, textColor=ink))
+    styles.add(ParagraphStyle(name="GFSub", parent=styles["BodyText"], fontName="Helvetica", fontSize=9.5, leading=12, textColor=muted))
+    styles.add(ParagraphStyle(name="GFSection", parent=styles["BodyText"], fontName="Helvetica-Bold", fontSize=9.5, leading=12, textColor=brand_blue, spaceAfter=2))
+    styles.add(ParagraphStyle(name="GFLabel", parent=styles["BodyText"], fontName="Helvetica", fontSize=9, leading=11, textColor=muted))
+    styles.add(ParagraphStyle(name="GFValue", parent=styles["BodyText"], fontName="Helvetica", fontSize=9.5, leading=11.5, textColor=ink))
+    styles.add(ParagraphStyle(name="GFValueBold", parent=styles["BodyText"], fontName="Helvetica-Bold", fontSize=10.5, leading=12, textColor=ink))
 
     def kv_table(rows: list[tuple[str, str]]) -> Table:
         data = [[Paragraph(_escape(k), styles["GFLabel"]), Paragraph(_escape(v), styles["GFValue"])] for k, v in rows]
-        t = Table(data, colWidths=[42 * mm, 120 * mm])
+        t = Table(data, colWidths=[40 * mm, 75 * mm])
         t.setStyle(
             TableStyle(
                 [
@@ -842,131 +812,152 @@ def my_payslip_pdf(
     if meta_line:
         company_lines.append(meta_line)
 
-    header_table = Table(
-        [[Paragraph(_escape(company), styles["GFTitle"]), Paragraph(_escape(f"Payslip · {period_label}"), styles["GFSub"])]
-        ],
-        colWidths=[110 * mm, 70 * mm],
-    )
-    header_table.setStyle(
-        TableStyle(
-            [
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("ALIGN", (1, 0), (1, 0), "RIGHT"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-            ]
-        )
-    )
-
-    story: list = [header_table]
-    if company_lines:
-        story.append(Paragraph(_escape(" • ".join([x for x in company_lines if x])), styles["GFSub"]))
-    story.append(Spacer(1, 10))
-
-    divider = Table([[""]], colWidths=[180 * mm], rowHeights=[1])
-    divider.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#e2e8f0"))]))
-    story.append(divider)
-    story.append(Spacer(1, 12))
-
-    employee_rows = [
-        ("Name", staff_name or "—"),
-        ("Email", str(current_staff.email or "—")),
-        ("Country", str(getattr(current_staff, "country", None) or "—")),
-    ]
-    payroll_rows = [
-        ("Run status", str(getattr(run, "status", "") or "draft")),
-        ("Finalized at", (run.finalized_at.isoformat(sep=" ", timespec="minutes") if run.finalized_at else "—")),
-        ("Currency", str(item.currency or "—")),
-        ("Payslip ID", str(int(item.id))),
-    ]
-    cards = Table(
-        [
-            [
-                Table([[Paragraph("Employee", styles["GFLabel"])], [kv_table(employee_rows)]], colWidths=[88 * mm]),
-                Table([[Paragraph("Payroll", styles["GFLabel"])], [kv_table(payroll_rows)]], colWidths=[88 * mm]),
-            ]
-        ],
-        colWidths=[90 * mm, 90 * mm],
-    )
-    cards.setStyle(
-        TableStyle(
-            [
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-            ]
-        )
-    )
-    story.append(cards)
-    story.append(Spacer(1, 6))
-
     gross = _money(item.currency, item.gross)
     ded = _money(item.currency, item.deductions)
     net = _money(item.currency, item.net)
 
-    earnings = Table(
+    # Header (match reference image structure)
+    header_left = [
+        Paragraph(_escape(company), styles["GFTitle"]),
+        Paragraph(_escape(" ".join([x for x in company_lines if x]) or ""), styles["GFSub"]),
+        Spacer(1, 6),
+        Paragraph(_escape(f"Payslip for the month of {period_label}"), styles["GFValueBold"]),
+    ]
+    header_left_box = Table([[c] for c in header_left], colWidths=[120 * mm])
+    header_left_box.setStyle(TableStyle([("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0)]))
+
+    net_box = Table(
         [
-            [Paragraph("Earnings & Deductions", styles["GFLabel"]), "", ""],
-            ["Description", "Amount", ""],
-            ["Gross pay", gross, ""],
-            ["Deductions", ded, ""],
-            ["Net pay", net, ""],
+            [Paragraph("Employee Net Pay", styles["GFLabel"])],
+            [Paragraph(_escape(net), ParagraphStyle(name="GFNet", parent=styles["GFValueBold"], fontSize=14, textColor=ink))],
         ],
-        colWidths=[110 * mm, 60 * mm, 10 * mm],
+        colWidths=[55 * mm],
     )
-    earnings.setStyle(
+    net_box.setStyle(
         TableStyle(
             [
-                ("SPAN", (0, 0), (-1, 0)),
-                ("BACKGROUND", (0, 1), (-1, 1), colors.HexColor("#f1f5f9")),
-                ("TEXTCOLOR", (0, 1), (-1, 1), colors.HexColor("#334155")),
-                ("FONTNAME", (0, 1), (-1, 1), "Helvetica-Bold"),
-                ("FONTNAME", (0, 2), (0, 4), "Helvetica"),
-                ("FONTNAME", (1, 2), (1, 3), "Helvetica"),
-                ("FONTNAME", (0, 4), (1, 4), "Helvetica-Bold"),
-                ("TEXTCOLOR", (0, 4), (1, 4), colors.HexColor("#0f172a")),
-                ("BACKGROUND", (0, 4), (1, 4), colors.HexColor("#ecfdf5")),
-                ("ALIGN", (1, 1), (1, -1), "RIGHT"),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("GRID", (0, 1), (1, 4), 0.25, colors.HexColor("#e2e8f0")),
-                ("BOX", (0, 1), (1, 4), 0.6, colors.HexColor("#e2e8f0")),
-                ("LEFTPADDING", (0, 0), (-1, -1), 8),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-                ("TOPPADDING", (0, 0), (-1, -1), 7),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f8fafc")),
+                ("BOX", (0, 0), (-1, -1), 0.8, line),
+                ("LEFTPADDING", (0, 0), (-1, -1), 10),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+                ("TOPPADDING", (0, 0), (-1, -1), 10),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+                ("ALIGN", (0, 1), (0, 1), "RIGHT"),
             ]
         )
     )
-    story.append(earnings)
 
-    if item.notes:
-        story.append(Spacer(1, 12))
-        story.append(Paragraph("Notes", styles["GFLabel"]))
-        story.append(Spacer(1, 4))
-        notes_box = Table([[Paragraph(_escape(str(item.notes)), styles["GFSub"])]], colWidths=[180 * mm])
-        notes_box.setStyle(
+    header = Table([[header_left_box, net_box]], colWidths=[125 * mm, 55 * mm])
+    header.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+
+    story: list = [header]
+    top_line = Table([[""]], colWidths=[180 * mm], rowHeights=[1])
+    top_line.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), line)]))
+    story.append(top_line)
+    story.append(Spacer(1, 10))
+
+    # Employee pay summary (like reference)
+    summary_left = kv_table(
+        [
+            ("Employee Name", staff_name or "—"),
+            ("Employee Email", str(current_staff.email or "—")),
+            ("Pay Period", period_label),
+            ("Payslip ID", str(int(item.id))),
+        ]
+    )
+    summary_right = kv_table(
+        [
+            ("Run Status", str(getattr(run, "status", "") or "draft")),
+            ("Finalized At", (run.finalized_at.isoformat(sep=" ", timespec="minutes") if run.finalized_at else "—")),
+            ("Currency", str(item.currency or "—")),
+            ("Country", str(getattr(current_staff, "country", None) or "—")),
+        ]
+    )
+    summary = Table(
+        [
+            [Paragraph("EMPLOYEE PAY SUMMARY", styles["GFSection"]), ""],
+            [summary_left, summary_right],
+        ],
+        colWidths=[90 * mm, 90 * mm],
+    )
+    summary.setStyle(
+        TableStyle(
+            [
+                ("SPAN", (0, 0), (-1, 0)),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
+                ("VALIGN", (0, 1), (-1, -1), "TOP"),
+            ]
+        )
+    )
+    story.append(summary)
+    story.append(Spacer(1, 10))
+
+    def section_table(*, title: str, rows: list[tuple[str, str]]) -> Table:
+        data = [[Paragraph(_escape(title), styles["GFSection"]), "", ""]]
+        data.append([Paragraph("Description", styles["GFLabel"]), Paragraph("Amount", styles["GFLabel"]), Paragraph("YTD", styles["GFLabel"])])
+        for label, amount in rows:
+            data.append([Paragraph(_escape(label), styles["GFValue"]), Paragraph(_escape(amount), styles["GFValue"]), Paragraph("—", styles["GFLabel"])])
+        t = Table(data, colWidths=[110 * mm, 45 * mm, 25 * mm])
+        t.setStyle(
             TableStyle(
                 [
-                    ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f8fafc")),
-                    ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#e2e8f0")),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 10),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 10),
-                    ("TOPPADDING", (0, 0), (-1, -1), 10),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+                    ("SPAN", (0, 0), (-1, 0)),
+                    ("BACKGROUND", (0, 1), (-1, 1), colors.HexColor("#eff6ff")),
+                    ("TEXTCOLOR", (0, 1), (-1, 1), muted),
+                    ("LINEABOVE", (0, 2), (-1, 2), 0.6, line),
+                    ("GRID", (0, 1), (-1, -1), 0.25, colors.HexColor("#e2e8f0")),
+                    ("BOX", (0, 1), (-1, -1), 0.6, colors.HexColor("#e2e8f0")),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                    ("TOPPADDING", (0, 0), (-1, -1), 6),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                    ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ]
             )
         )
-        story.append(notes_box)
+        return t
 
-    story.append(Spacer(1, 14))
-    story.append(
-        Paragraph(
-            _escape(f"Generated {datetime.utcnow().isoformat(sep=' ', timespec='minutes')} UTC · {company}"),
-            ParagraphStyle(name="GFFooter", parent=styles["GFSub"], fontSize=8, textColor=colors.HexColor("#64748b")),
+    story.append(section_table(title="EARNINGS", rows=[("Gross Earnings", gross)]))
+    story.append(Spacer(1, 10))
+    story.append(section_table(title="DEDUCTIONS", rows=[("Total Deductions", ded)]))
+    story.append(Spacer(1, 10))
+    story.append(section_table(title="REIMBURSEMENTS", rows=[("Total Reimbursements", _money(item.currency, 0))]))
+    story.append(Spacer(1, 10))
+
+    net_row = Table(
+        [[Paragraph("NET PAY (Gross Earnings − Total Deductions + Reimbursements)", styles["GFLabel"]), Paragraph(_escape(net), styles["GFValueBold"]) ]],
+        colWidths=[140 * mm, 40 * mm],
+    )
+    net_row.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f1f5f9")),
+                ("BOX", (0, 0), (-1, -1), 0.8, line),
+                ("LEFTPADDING", (0, 0), (-1, -1), 10),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+                ("TOPPADDING", (0, 0), (-1, -1), 10),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+                ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ]
         )
     )
+    story.append(net_row)
+
+    story.append(Spacer(1, 12))
+    story.append(Paragraph(_escape("— This is a system generated payslip —"), ParagraphStyle(name="GFFooter", parent=styles["GFSub"], fontSize=8, textColor=muted, alignment=1)))
 
     doc.build(story)
     data = buf.getvalue()
