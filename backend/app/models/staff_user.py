@@ -30,6 +30,11 @@ class StaffUser(Base):
 
     avatar_url = Column(String, nullable=True)
 
+    # Bank details (for payroll)
+    bank_name = Column(String, nullable=True)
+    bank_account_number = Column(String, nullable=True)
+    bank_account_name = Column(String, nullable=True)
+
     # Public-facing stable identifier (do not expose numeric id in UI)
     employee_code = Column(String, unique=True, index=True, nullable=True)
 
