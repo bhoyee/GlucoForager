@@ -265,6 +265,46 @@ def send_staff_notification_email(*, to_email: str, title: str, body: str | None
     logger.info("Sent staff notification email to %s", to_email)
 
 
+def send_staff_portal_credentials_email(
+    *,
+    to_email: str,
+    temp_password: str,
+    full_name: str | None = None,
+    login_url: str,
+) -> None:
+    subject = "Your GF-Staff Portal login details"
+    greeting_name = full_name.strip().split(" ")[0] if full_name else "there"
+    safe_login = (login_url or "").strip().rstrip("/")
+    safe_email = (to_email or "").strip().lower()
+    safe_pwd = (temp_password or "").strip()
+    profile_url = f"{safe_login}/profile" if safe_login else ""
+    html_body = f"""
+    <html>
+      <body style="font-family: Arial, sans-serif; color: #0C1824;">
+        <div style="max-width:620px; margin:0 auto; border:1px solid #e5e7eb; border-radius:14px; padding:22px;">
+          <h2 style="color:#0FB7A5; margin-top:0;">GF-Staff Portal access</h2>
+          <p>Hi {greeting_name},</p>
+          <p>Your staff portal account has been created. Use the login details below:</p>
+          <table style="width:100%; border-collapse:collapse; font-size:14px; margin-top:12px;">
+            <tr><td style="padding:8px 0; color:#6b7280; width:160px;">Login URL</td><td style="padding:8px 0;"><a href="{safe_login}" style="color:#0b3d91; text-decoration:none;">{safe_login}</a></td></tr>
+            <tr><td style="padding:8px 0; color:#6b7280;">Email</td><td style="padding:8px 0;"><strong>{safe_email}</strong></td></tr>
+            <tr><td style="padding:8px 0; color:#6b7280;">Temporary password</td><td style="padding:8px 0;"><strong>{safe_pwd}</strong></td></tr>
+          </table>
+          <div style="margin-top:16px; padding:12px; border-radius:12px; border:1px solid rgba(229,57,53,0.22); background:rgba(229,57,53,0.06); color:#8e1513;">
+            <strong>Important:</strong> After you log in, please change your password and update your profile immediately.
+            {f"<br/><a href='{profile_url}' style='color:#8e1513; text-decoration:underline;'>{profile_url}</a>" if profile_url else ""}
+          </div>
+          <p style="margin-top:20px; color:#6b7280; font-size:12px;">
+            If you did not expect this email, please contact your admin.
+          </p>
+        </div>
+      </body>
+    </html>
+    """
+    _send_email(to_email, subject, html_body)
+    logger.info("Sent staff portal credentials email to %s", to_email)
+
+
 def send_staff_mfa_code(*, to_email: str, code: str) -> None:
     subject = "Your GlucoForager admin verification code"
     html_body = f"""

@@ -26,12 +26,12 @@ export const metadata = {
     "low carb meal ideas",
     "glucose-friendly meals",
   ],
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://www.glucoforager.com"),
+  metadataBase: new URL("https://www.glucoforager.com"),
   openGraph: {
     title: "GlucoForager — Your Daily Diabetes Food Assistant | Meal Ideas & Blood Sugar Support",
     description:
       "Stop guessing what to eat with diabetes. GlucoForager scans ingredients, suggests blood-sugar-friendly meals, and gives you a daily plan to stay in control. Free on iOS & Android.",
-    url: process.env.NEXT_PUBLIC_SITE_URL || "https://www.glucoforager.com",
+    url: "https://www.glucoforager.com",
     siteName: "GlucoForager",
     locale: "en_GB",
     type: "website",
@@ -76,7 +76,7 @@ export const viewport = {
 };
 
 export default function RootLayout({ children }) {
-  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.glucoforager.com").replace(/\/+$/, "");
+  const siteUrl = "https://www.glucoforager.com";
   const appStoreUrl = "https://apps.apple.com/us/app/glucoforager/id6758808427";
   const playStoreUrl = "https://play.google.com/store/apps/details?id=com.glucoforager.app";
   const jsonLd = {
