@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
@@ -22,6 +22,16 @@ def _is_admin(db: Session, staff: StaffUser) -> bool:
     return StaffRBACService.has_permission(perms, "*") or StaffRBACService.has_permission(perms, "admin.manage")
 
 
+def _iso_utc(dt: datetime | None) -> str | None:
+    if dt is None:
+        return None
+    try:
+        aware = dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+        return aware.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    except Exception:
+        return dt.isoformat()
+
+
 class UpdateCreatePayload(BaseModel):
     title: str = Field(..., min_length=2, max_length=160)
     body: str = Field(..., min_length=2, max_length=8000)
@@ -40,10 +50,10 @@ def _view(row: StaffIntranetUpdate) -> dict:
         "created_by_staff_user_id": row.created_by_staff_user_id,
         "updated_by_staff_user_id": row.updated_by_staff_user_id,
         "is_deleted": bool(row.is_deleted),
-        "deleted_at": row.deleted_at.isoformat() if row.deleted_at else None,
+        "deleted_at": _iso_utc(row.deleted_at),
         "deleted_by_staff_user_id": row.deleted_by_staff_user_id,
-        "created_at": row.created_at.isoformat() if row.created_at else None,
-        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+        "created_at": _iso_utc(row.created_at),
+        "updated_at": _iso_utc(row.updated_at),
     }
 
 
@@ -213,4 +223,3 @@ def purge_update(
     )
     db.commit()
     return {"ok": True}
-
