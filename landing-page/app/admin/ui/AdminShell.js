@@ -403,7 +403,7 @@ export default function AdminShell({ children }) {
       if (firstName) return `Signed in as ${firstName} (${session.email})`;
       return `Signed in as ${session.email}`;
     }
-    if (firstName) return `Welcome ${firstName} (${session.email})`;
+    if (firstName) return `Welcome ${firstName}`;
     return `Welcome ${session.email}`;
   }, [firstName, isAdmin, session?.email, sessionLoading]);
 
@@ -415,6 +415,12 @@ export default function AdminShell({ children }) {
     if (key === 'admin') return 'Admin';
     return key.charAt(0).toUpperCase() + key.slice(1);
   }, [roles]);
+
+  const employeeId = useMemo(() => {
+    const id = session?.id ?? session?.staff_user_id ?? session?.user_id ?? null;
+    const n = Number(id);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [session?.id, session?.staff_user_id, session?.user_id]);
 
   useEffect(() => {
     if (!navSections.length) return;
@@ -576,7 +582,12 @@ export default function AdminShell({ children }) {
               <span>{signedInLabel}</span>
               {!sessionLoading && session?.email && !isAdmin && primaryRoleLabel ? (
                 <span className="admin-badge info" style={{ marginLeft: 6 }}>
-                  {primaryRoleLabel}
+                  Role: {primaryRoleLabel}
+                </span>
+              ) : null}
+              {!sessionLoading && session?.email && !isAdmin && employeeId ? (
+                <span className="admin-badge secondary" style={{ marginLeft: 6 }}>
+                  Employee ID: {employeeId}
                 </span>
               ) : null}
             </p>
