@@ -29,6 +29,7 @@ from .api.endpoints import (
     admin_drive,
     admin_inbox,
     admin_help,
+    admin_requests,
     admin_intranet_updates,
     admin_staff_notifications,
     admin_audit,
@@ -95,6 +96,7 @@ from .models import (  # ensure models are registered with SQLAlchemy
     staff_role_milestone,
     staff_milestone_progress,
     staff_inbox_message,
+    staff_request,
 )
 from .services.cache_service import CacheService
 from .services.system_log_service import log_system_event
@@ -460,6 +462,7 @@ app.include_router(admin_library.router, prefix="/api")
 app.include_router(admin_drive.router, prefix="/api")
 app.include_router(admin_inbox.router, prefix="/api")
 app.include_router(admin_help.router, prefix="/api")
+app.include_router(admin_requests.router, prefix="/api")
 app.include_router(admin_intranet_updates.router, prefix="/api")
 app.include_router(admin_staff_notifications.router, prefix="/api")
 app.include_router(admin_audit.router, prefix="/api")
