@@ -95,6 +95,7 @@ class Settings(BaseSettings):
     revenuecat_currency: str = Field("USD", env="REVENUECAT_CURRENCY")
     admin_bootstrap_token: str | None = Field(None, env="ADMIN_BOOTSTRAP_TOKEN")
     site_url: str = Field("https://www.glucoforager.com", env="SITE_URL")
+    staff_portal_url: str | None = Field(None, env="STAFF_PORTAL_URL")
 
     # Push notifications (Expo push gateway)
     expo_push_access_token: str | None = Field(None, env="EXPO_PUSH_ACCESS_TOKEN")

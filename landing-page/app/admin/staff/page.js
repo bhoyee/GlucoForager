@@ -18,12 +18,14 @@ export default function AdminStaffPage() {
   const [loading, setLoading] = useState(true);
   const [includeDeleted, setIncludeDeleted] = useState(false);
   const [detailsUser, setDetailsUser] = useState(null);
+  const [detailsDraft, setDetailsDraft] = useState(null);
+  const [detailsSaving, setDetailsSaving] = useState(false);
+  const [detailsMessage, setDetailsMessage] = useState('');
 
   const [roleDrafts, setRoleDrafts] = useState({});
   const [roleDirty, setRoleDirty] = useState({});
 
   const [newEmail, setNewEmail] = useState('');
-  const [newPassword, setNewPassword] = useState('');
   const [newFullName, setNewFullName] = useState('');
   const [newCountry, setNewCountry] = useState('');
   const [newTimezone, setNewTimezone] = useState('UTC');
@@ -80,6 +82,65 @@ export default function AdminStaffPage() {
     loadAll();
   }, [token, includeDeleted]);
 
+  const openDetails = (user) => {
+    setDetailsMessage('');
+    setDetailsUser(user);
+    setDetailsDraft({
+      id: user.id,
+      employee_code: user.employee_code || '',
+      email: user.email || '',
+      full_name: user.full_name || '',
+      country: user.country || '',
+      timezone: user.timezone || 'UTC',
+      bank_name: user.bank_name || '',
+      bank_account_name: user.bank_account_name || '',
+      bank_account_number: user.bank_account_number || '',
+    });
+  };
+
+  const closeDetails = () => {
+    setDetailsUser(null);
+    setDetailsDraft(null);
+    setDetailsMessage('');
+    setDetailsSaving(false);
+  };
+
+  const saveDetails = async (event) => {
+    event?.preventDefault?.();
+    if (!token || !detailsDraft?.id) return;
+    setDetailsSaving(true);
+    setDetailsMessage('');
+    try {
+      const res = await fetch(`${API_URL}/api/admin/staff/users/${detailsDraft.id}`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: detailsDraft.email || null,
+          full_name: detailsDraft.full_name || null,
+          country: detailsDraft.country || null,
+          timezone: detailsDraft.timezone || null,
+          bank_name: detailsDraft.bank_name || null,
+          bank_account_name: detailsDraft.bank_account_name || null,
+          bank_account_number: detailsDraft.bank_account_number || null,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      if (!res.ok) throw new Error(data.detail || 'Failed to update staff user.');
+      setDetailsMessage('Saved.');
+      await loadAll();
+      openDetails(data);
+    } catch (e) {
+      setDetailsMessage(e?.message || 'Failed to update staff user.');
+    } finally {
+      setDetailsSaving(false);
+    }
+  };
+
   const createUser = async (event) => {
     event.preventDefault();
     if (!token) return;
@@ -90,7 +151,6 @@ export default function AdminStaffPage() {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: newEmail,
-          password: newPassword,
           full_name: newFullName,
           country: newCountry,
           timezone: newTimezone,
@@ -106,11 +166,11 @@ export default function AdminStaffPage() {
       }
       if (!res.ok) throw new Error(data.detail || 'Failed to create staff user.');
       setNewEmail('');
-      setNewPassword('');
       setNewFullName('');
       setNewCountry('');
       setNewTimezone('UTC');
       setNewRoleKeys([]);
+      setMessage(`Staff created. Login details were emailed to ${data.email || newEmail}.`);
       loadAll();
     } catch (e) {
       setMessage(e?.message || 'Failed to create staff user.');
@@ -220,6 +280,9 @@ export default function AdminStaffPage() {
         <div className="admin-grid" style={{ marginTop: 16, gridTemplateColumns: '1fr' }}>
           <div className="admin-card" style={{ padding: 16 }}>
             <h3>Create Staff</h3>
+            <p className="admin-subtitle" style={{ marginTop: 6 }}>
+              A temporary password is auto-generated and sent to the staff email. They should change it after first login and update their profile.
+            </p>
             <form onSubmit={createUser}>
               <div className="admin-field">
                 <label>Email</label>
@@ -239,10 +302,6 @@ export default function AdminStaffPage() {
                     </option>
                   ))}
                 </select>
-              </div>
-              <div className="admin-field">
-                <label>Password</label>
-                <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required />
               </div>
               <div className="admin-field">
                 <label>Timezone</label>
@@ -343,7 +402,7 @@ export default function AdminStaffPage() {
                       </td>
                       <td>
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                          <button className="admin-button info" type="button" onClick={() => setDetailsUser(u)}>
+                          <button className="admin-button info" type="button" onClick={() => openDetails(u)}>
                             Details
                           </button>
                           <button
@@ -374,37 +433,92 @@ export default function AdminStaffPage() {
           role="dialog"
           aria-modal="true"
           aria-label="Staff user details"
-          onClick={() => setDetailsUser(null)}
+          onClick={closeDetails}
         >
           <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
             <div className="admin-modal-header">
               <h3>Staff details</h3>
-              <button className="admin-icon-button danger" type="button" aria-label="Close" onClick={() => setDetailsUser(null)}>
+              <button className="admin-icon-button danger" type="button" aria-label="Close" onClick={closeDetails}>
                 ×
               </button>
             </div>
             <div className="admin-modal-body">
-              <p className="admin-help" style={{ margin: 0 }}>
-                <strong>Name:</strong> {detailsUser.full_name || '—'}
-              </p>
-              <p className="admin-help" style={{ margin: '8px 0 0' }}>
-                <strong>Email:</strong> {detailsUser.email || '—'}
-              </p>
-              <p className="admin-help" style={{ margin: '8px 0 0' }}>
-                <strong>Country:</strong> {countryName(detailsUser.country)}
-              </p>
-              <p className="admin-help" style={{ margin: '8px 0 0' }}>
-                <strong>Timezone:</strong> {detailsUser.timezone || '—'}
-              </p>
-              <p className="admin-help" style={{ margin: '8px 0 0' }}>
-                <strong>Status:</strong> {detailsUser.deleted_at ? 'Deleted' : detailsUser.is_active ? 'Active' : 'Disabled'}
-              </p>
-              <p className="admin-help" style={{ margin: '8px 0 0' }}>
-                <strong>Roles:</strong> {(Array.isArray(detailsUser.roles) ? detailsUser.roles.join(', ') : '') || '—'}
-              </p>
+              {detailsMessage ? <div className="admin-alert warning">{detailsMessage}</div> : null}
+
+              <div className="admin-grid" style={{ gridTemplateColumns: '1fr', gap: 12 }}>
+                <div className="admin-card" style={{ padding: 14 }}>
+                  <p className="admin-help" style={{ margin: 0 }}>
+                    <strong>Employee ID:</strong> {detailsUser.employee_code || '—'}
+                  </p>
+                  <p className="admin-help" style={{ margin: '8px 0 0' }}>
+                    <strong>Status:</strong> {detailsUser.deleted_at ? 'Deleted' : detailsUser.is_active ? 'Active' : 'Disabled'}
+                  </p>
+                  <p className="admin-help" style={{ margin: '8px 0 0' }}>
+                    <strong>Roles:</strong> {(Array.isArray(detailsUser.roles) ? detailsUser.roles.join(', ') : '') || '—'}
+                  </p>
+                </div>
+
+                <div className="admin-card" style={{ padding: 14 }}>
+                  <h4 style={{ marginTop: 0 }}>Edit staff info</h4>
+                  {detailsDraft ? (
+                    <form onSubmit={saveDetails}>
+                      <div className="admin-field">
+                        <label>Full name</label>
+                        <input value={detailsDraft.full_name} onChange={(e) => setDetailsDraft((p) => ({ ...p, full_name: e.target.value }))} required />
+                      </div>
+                      <div className="admin-field">
+                        <label>Email</label>
+                        <input value={detailsDraft.email} onChange={(e) => setDetailsDraft((p) => ({ ...p, email: e.target.value }))} required />
+                      </div>
+                      <div className="admin-field">
+                        <label>Country</label>
+                        <select value={detailsDraft.country} onChange={(e) => setDetailsDraft((p) => ({ ...p, country: e.target.value }))} required>
+                          <option value="">Select country</option>
+                          {COUNTRIES.map((c) => (
+                            <option key={c.code} value={c.code}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="admin-field">
+                        <label>Timezone</label>
+                        <input value={detailsDraft.timezone} onChange={(e) => setDetailsDraft((p) => ({ ...p, timezone: e.target.value }))} placeholder="UTC" />
+                      </div>
+
+                      <div className="admin-card" style={{ padding: 12, marginTop: 12 }}>
+                        <h4 style={{ marginTop: 0 }}>Bank details</h4>
+                        <div className="admin-field">
+                          <label>Bank name</label>
+                          <input value={detailsDraft.bank_name} onChange={(e) => setDetailsDraft((p) => ({ ...p, bank_name: e.target.value }))} />
+                        </div>
+                        <div className="admin-field">
+                          <label>Account name</label>
+                          <input
+                            value={detailsDraft.bank_account_name}
+                            onChange={(e) => setDetailsDraft((p) => ({ ...p, bank_account_name: e.target.value }))}
+                          />
+                        </div>
+                        <div className="admin-field">
+                          <label>Account number</label>
+                          <input
+                            value={detailsDraft.bank_account_number}
+                            onChange={(e) => setDetailsDraft((p) => ({ ...p, bank_account_number: e.target.value }))}
+                            inputMode="numeric"
+                          />
+                        </div>
+                      </div>
+
+                      <button className="admin-button" type="submit" disabled={detailsSaving}>
+                        {detailsSaving ? 'Saving...' : 'Save changes'}
+                      </button>
+                    </form>
+                  ) : null}
+                </div>
+              </div>
             </div>
             <div className="admin-modal-footer">
-              <button className="admin-button danger" type="button" onClick={() => setDetailsUser(null)}>
+              <button className="admin-button danger" type="button" onClick={closeDetails}>
                 Close
               </button>
             </div>
