@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import EmptyState from '../ui/EmptyState';
 import LoadingState from '../ui/LoadingState';
 import { COUNTRIES } from '../lib/countries';
+import { defaultTimezoneForCountry } from '../lib/timezones';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -294,7 +295,15 @@ export default function AdminStaffPage() {
               </div>
               <div className="admin-field">
                 <label>Country</label>
-                <select value={newCountry} onChange={(e) => setNewCountry(e.target.value)} required>
+                <select
+                  value={newCountry}
+                  onChange={(e) => {
+                    const c = e.target.value;
+                    setNewCountry(c);
+                    setNewTimezone(defaultTimezoneForCountry(c));
+                  }}
+                  required
+                >
                   <option value="">Select country</option>
                   {COUNTRIES.map((c) => (
                     <option key={c.code} value={c.code}>
@@ -305,7 +314,10 @@ export default function AdminStaffPage() {
               </div>
               <div className="admin-field">
                 <label>Timezone</label>
-                <input value={newTimezone} onChange={(e) => setNewTimezone(e.target.value)} placeholder="UTC" />
+                <input value={newTimezone} readOnly />
+                <p className="admin-help" style={{ marginTop: 6 }}>
+                  Auto-set from country to avoid typos.
+                </p>
               </div>
               <div className="admin-field">
                 <label>Roles</label>
@@ -472,7 +484,14 @@ export default function AdminStaffPage() {
                       </div>
                       <div className="admin-field">
                         <label>Country</label>
-                        <select value={detailsDraft.country} onChange={(e) => setDetailsDraft((p) => ({ ...p, country: e.target.value }))} required>
+                        <select
+                          value={detailsDraft.country}
+                          onChange={(e) => {
+                            const c = e.target.value;
+                            setDetailsDraft((p) => ({ ...p, country: c, timezone: defaultTimezoneForCountry(c) }));
+                          }}
+                          required
+                        >
                           <option value="">Select country</option>
                           {COUNTRIES.map((c) => (
                             <option key={c.code} value={c.code}>
@@ -483,7 +502,7 @@ export default function AdminStaffPage() {
                       </div>
                       <div className="admin-field">
                         <label>Timezone</label>
-                        <input value={detailsDraft.timezone} onChange={(e) => setDetailsDraft((p) => ({ ...p, timezone: e.target.value }))} placeholder="UTC" />
+                        <input value={detailsDraft.timezone} readOnly />
                       </div>
 
                       <div className="admin-card" style={{ padding: 12, marginTop: 12 }}>
