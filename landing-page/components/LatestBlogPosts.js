@@ -6,16 +6,17 @@ import { useEffect, useState } from 'react';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 const stripHtml = (value) => String(value || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
 
-export default function LatestBlogPosts() {
-  const [items, setItems] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+export default function LatestBlogPosts({ initialItems = [] }) {
+  const [items, setItems] = useState(() => (Array.isArray(initialItems) ? initialItems : []));
+  const [isLoading, setIsLoading] = useState(() => !(Array.isArray(initialItems) && initialItems.length > 0));
   const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     let alive = true;
     const load = async () => {
       try {
-        setIsLoading(true);
+        // Silent refresh in background if we already have SSR items.
+        if (!(Array.isArray(initialItems) && initialItems.length > 0)) setIsLoading(true);
         setLoadFailed(false);
         const response = await fetch(`${API_URL}/api/blog/posts?page=1&page_size=4`);
         if (!response.ok) throw new Error('Request failed');

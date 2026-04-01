@@ -32,7 +32,9 @@ export default function StaffProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const [messageTone, setMessageTone] = useState('info');
   const [profile, setProfile] = useState(null);
+  const [saveNotice, setSaveNotice] = useState(null);
 
   const [avatarUploading, setAvatarUploading] = useState(false);
 
@@ -49,6 +51,7 @@ export default function StaffProfilePage() {
     }
     setLoading(true);
     setMessage('');
+    setMessageTone('info');
     try {
       const res = await adminFetch(`${API_URL}/api/admin/staff/profile/me`);
       if (res.status === 401) {
@@ -60,6 +63,7 @@ export default function StaffProfilePage() {
       if (!res.ok) throw new Error(data.detail || 'Failed to load profile.');
       setProfile(data);
     } catch (e) {
+      setMessageTone('danger');
       setMessage(e?.message || 'Failed to load profile.');
     } finally {
       setLoading(false);
@@ -79,6 +83,7 @@ export default function StaffProfilePage() {
     if (!token || !profile) return;
     setSaving(true);
     setMessage('');
+    setMessageTone('info');
     try {
       const res = await adminFetch(`${API_URL}/api/admin/staff/profile/me`, {
         method: 'PATCH',
@@ -93,6 +98,9 @@ export default function StaffProfilePage() {
           next_of_kin_contact: profile.next_of_kin_contact || null,
           next_of_kin_relationship: profile.next_of_kin_relationship || null,
           next_of_kin_address: profile.next_of_kin_address || null,
+          bank_name: profile.bank_name || null,
+          bank_account_name: profile.bank_account_name || null,
+          bank_account_number: profile.bank_account_number || null,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -103,13 +111,14 @@ export default function StaffProfilePage() {
       }
       if (!res.ok) throw new Error(data.detail || 'Failed to save profile.');
       setProfile(data);
-      setMessage('Saved.');
+      setSaveNotice({ text: 'Saved successfully.', tone: 'success' });
       try {
         window.dispatchEvent(new Event('admin-profile-updated'));
       } catch {
         // Ignore.
       }
     } catch (e) {
+      setMessageTone('danger');
       setMessage(e?.message || 'Failed to save profile.');
     } finally {
       setSaving(false);
@@ -120,6 +129,7 @@ export default function StaffProfilePage() {
     if (!file) return;
     setAvatarUploading(true);
     setMessage('');
+    setMessageTone('info');
     try {
       const form = new FormData();
       form.append('file', file);
@@ -135,13 +145,14 @@ export default function StaffProfilePage() {
       }
       if (!res.ok) throw new Error(data.detail || 'Failed to upload avatar.');
       setProfile((prev) => ({ ...(prev || {}), avatar_url: data.avatar_url }));
-      setMessage('Profile picture updated.');
+      setSaveNotice({ text: 'Profile picture updated.', tone: 'success' });
       try {
         window.dispatchEvent(new Event('admin-profile-updated'));
       } catch {
         // Ignore.
       }
     } catch (e) {
+      setMessageTone('danger');
       setMessage(e?.message || 'Failed to upload avatar.');
     } finally {
       setAvatarUploading(false);
@@ -182,7 +193,7 @@ export default function StaffProfilePage() {
       setPwdCurrent('');
       setPwdNew('');
       setPwdConfirm('');
-      setPwdMessage('Password updated.');
+      setSaveNotice({ text: 'Password updated.', tone: 'success' });
     } catch (e) {
       setPwdMessage(e?.message || 'Failed to change password.');
     } finally {
@@ -210,6 +221,35 @@ export default function StaffProfilePage() {
 
   return (
     <div className="admin-page">
+      {saveNotice ? (
+        <div
+          className="admin-modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Success"
+          onClick={() => setSaveNotice(null)}
+        >
+          <div className="admin-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
+            <div className="admin-modal-header">
+              <h3 style={{ margin: 0 }}>Success</h3>
+              <button className="admin-icon-button danger" type="button" aria-label="Close" onClick={() => setSaveNotice(null)}>
+                ×
+              </button>
+            </div>
+            <div className="admin-modal-body">
+              <div className={`admin-alert ${saveNotice.tone || 'success'}`} style={{ margin: 0 }}>
+                {saveNotice.text}
+              </div>
+            </div>
+            <div className="admin-modal-footer">
+              <button className="admin-button danger" type="button" onClick={() => setSaveNotice(null)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="admin-card">
         <div className="admin-profile-header">
           <div className="admin-profile-avatar">
@@ -247,7 +287,22 @@ export default function StaffProfilePage() {
           </div>
         </div>
 
-        {message ? <div className="admin-alert warning">{message}</div> : null}
+        {message ? (
+          <div className={`admin-alert admin-alert--dismissible ${messageTone || 'info'}`} style={{ marginTop: 12, marginBottom: 12 }}>
+            <div style={{ minWidth: 0 }}>{message}</div>
+            <button
+              type="button"
+              className="admin-alert-close"
+              aria-label="Dismiss message"
+              onClick={() => {
+                setMessage('');
+                setMessageTone('info');
+              }}
+            >
+              <span aria-hidden="true">×</span>
+            </button>
+          </div>
+        ) : null}
 
         <div className="admin-grid" style={{ marginTop: 16 }}>
           <div className="admin-card" style={{ padding: 16 }}>
@@ -333,6 +388,33 @@ export default function StaffProfilePage() {
               </div>
               <button className="admin-button info" type="submit" disabled={saving}>
                 {saving ? 'Saving…' : 'Save next of kin'}
+              </button>
+            </form>
+          </div>
+
+          <div className="admin-card" style={{ padding: 16 }}>
+            <h3>Bank details</h3>
+            <p className="admin-subtitle">Used for payroll payouts.</p>
+            <form onSubmit={saveProfile}>
+              <div className="admin-field">
+                <label>Bank name</label>
+                <input value={profile.bank_name || ''} onChange={(e) => updateField('bank_name', e.target.value)} placeholder="e.g. GTBank" />
+              </div>
+              <div className="admin-field">
+                <label>Account name</label>
+                <input value={profile.bank_account_name || ''} onChange={(e) => updateField('bank_account_name', e.target.value)} placeholder="e.g. John Doe" />
+              </div>
+              <div className="admin-field">
+                <label>Account number</label>
+                <input
+                  value={profile.bank_account_number || ''}
+                  onChange={(e) => updateField('bank_account_number', e.target.value)}
+                  inputMode="numeric"
+                  placeholder="e.g. 0123456789"
+                />
+              </div>
+              <button className="admin-button warning" type="submit" disabled={saving}>
+                {saving ? 'Saving...' : 'Save bank details'}
               </button>
             </form>
           </div>
