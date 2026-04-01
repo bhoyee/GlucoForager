@@ -86,23 +86,30 @@ def _clean_links(raw: list[str] | None, *, max_items: int) -> list[str]:
 class TaskAssignPayload(BaseModel):
     staff_user_id: int
     work_date: date
-    text: str = Field(..., min_length=1, max_length=240)
+    # Allow multi-line tasks and longer instructions from managers/admins.
+    text: str = Field(..., min_length=1, max_length=4000)
 
 class TaskAssignRolePayload(BaseModel):
     role_key: str = Field(..., min_length=2, max_length=40)
     work_date: date
-    text: str = Field(..., min_length=1, max_length=240)
+    # Allow multi-line tasks and longer instructions from managers/admins.
+    text: str = Field(..., min_length=1, max_length=4000)
 
 
 class TaskSelfAddPayload(BaseModel):
     work_date: date
-    text: str = Field(..., min_length=1, max_length=240)
+    text: str = Field(..., min_length=1, max_length=4000)
 
 
 class TaskCompletePayload(BaseModel):
     is_completed: bool = True
-    completion_note: str | None = Field(None, max_length=240)
+    completion_note: str | None = Field(None, max_length=1000)
     proof_links: list[str] = Field(default_factory=list)
+
+
+class TaskUpdatePayload(BaseModel):
+    work_date: date | None = None
+    text: str = Field(..., min_length=1, max_length=4000)
 
 
 class MilestoneCreatePayload(BaseModel):
@@ -1169,6 +1176,44 @@ def delete_task(
             entity="staff_assigned_tasks",
             entity_id=str(row.id),
             details={"staff_user_id": int(row.staff_user_id), "work_date": row.work_date.isoformat()},
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            created_at=datetime.utcnow(),
+        )
+    )
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/tasks/{task_id}/update")
+def update_task(
+    request: Request,
+    task_id: int,
+    payload: TaskUpdatePayload,
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("work_logs.manage")),
+):
+    row = (
+        db.query(StaffAssignedTask)
+        .filter(StaffAssignedTask.id == int(task_id), StaffAssignedTask.deleted_at.is_(None))
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+
+    before = {"work_date": row.work_date.isoformat(), "text": row.text}
+    row.text = payload.text.strip()[:4000]
+    if payload.work_date is not None:
+        row.work_date = payload.work_date
+    row.updated_at = datetime.utcnow()
+
+    db.add(
+        StaffAuditLog(
+            actor_id=int(current_staff.id),
+            action="work_plans.task.update",
+            entity="staff_assigned_tasks",
+            entity_id=str(row.id),
+            details={"before": before, "after": {"work_date": row.work_date.isoformat(), "text": row.text}},
             ip=request.client.host if request.client else None,
             user_agent=request.headers.get("user-agent"),
             created_at=datetime.utcnow(),
