@@ -18,6 +18,7 @@ from ...models.staff_permission import StaffPermission
 from ...models.staff_role import StaffRole
 from ...models.staff_user import StaffUser
 from ...services.staff_rbac_service import StaffRBACService
+from ...services.email_service import send_staff_portal_credentials_email
 from ...core.country_codes import ISO_COUNTRY_CODES
 
 
@@ -68,7 +69,7 @@ class StaffMeResponse(BaseModel):
 
 class StaffUserCreate(BaseModel):
     email: EmailStr
-    password: str = Field(..., min_length=8, max_length=256)
+    password: str | None = Field(None, min_length=8, max_length=256)
     full_name: str | None = Field(None, max_length=160)
     country: str | None = Field(None, min_length=2, max_length=2)  # ISO alpha-2 (e.g. "US", "GB")
     timezone: str = Field("UTC", max_length=64)
@@ -77,10 +78,14 @@ class StaffUserCreate(BaseModel):
 
 
 class StaffUserUpdate(BaseModel):
+    email: EmailStr | None = None
     timezone: str | None = Field(None, max_length=64)
     is_active: bool | None = None
     full_name: str | None = Field(None, max_length=160)
     country: str | None = Field(None, min_length=2, max_length=2)  # ISO alpha-2
+    bank_name: str | None = Field(None, max_length=120)
+    bank_account_number: str | None = Field(None, max_length=64)
+    bank_account_name: str | None = Field(None, max_length=160)
 
 
 class StaffUserOut(BaseModel):
@@ -92,6 +97,9 @@ class StaffUserOut(BaseModel):
     full_name: str | None = None
     country: str | None = None
     avatar_url: str | None = None
+    bank_name: str | None = None
+    bank_account_number: str | None = None
+    bank_account_name: str | None = None
     roles: list[str]
     created_at: datetime | None = None
     deleted_at: datetime | None = None
@@ -171,6 +179,9 @@ def list_staff_users(
                 full_name=getattr(u, "full_name", None),
                 country=getattr(u, "country", None),
                 avatar_url=getattr(u, "avatar_url", None),
+                bank_name=getattr(u, "bank_name", None),
+                bank_account_number=getattr(u, "bank_account_number", None),
+                bank_account_name=getattr(u, "bank_account_name", None),
                 roles=StaffRBACService.get_user_role_keys(db, u.id),
                 created_at=u.created_at,
                 deleted_at=getattr(u, "deleted_at", None),
@@ -241,6 +252,7 @@ def list_staff_team(
 
 @router.post("/staff/users", response_model=StaffUserOut)
 def create_staff_user(
+    request: Request,
     payload: StaffUserCreate,
     db: Session = Depends(get_db),
     current_staff: StaffUser = Depends(require_staff_permission("staff.manage")),  # noqa: ARG001
@@ -251,6 +263,12 @@ def create_staff_user(
     if existing_staff or existing_admin:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Staff user already exists")
 
+    def _make_temp_password() -> str:
+        import secrets
+
+        # URL-safe + strong; keep length within policy.
+        return secrets.token_urlsafe(12)[:18]
+
     def _generate_employee_code() -> str:
         import secrets
 
@@ -260,7 +278,8 @@ def create_staff_user(
     while db.query(StaffUser).filter(StaffUser.employee_code == employee_code).first() is not None:
         employee_code = _generate_employee_code()
 
-    hashed = get_password_hash(payload.password)
+    raw_password = (payload.password or "").strip() or _make_temp_password()
+    hashed = get_password_hash(raw_password)
     user = StaffUser(
         email=email,
         hashed_password=hashed,
@@ -282,6 +301,27 @@ def create_staff_user(
         StaffRBACService.set_user_roles_by_keys(db, user.id, payload.role_keys)
         db.commit()
 
+    # Email staff their login details (best effort; do not block creation if email is not configured).
+    try:
+        from ...core.config import settings  # local import to avoid circular imports
+
+        login_url = (settings.staff_portal_url or "").strip().rstrip("/")
+        if not login_url:
+            origin = (request.headers.get("origin") or "").strip().rstrip("/")
+            if origin:
+                login_url = f"{origin}/admin"
+            else:
+                login_url = f"{str(settings.site_url).strip().rstrip('/')}/admin"
+        send_staff_portal_credentials_email(
+            to_email=email,
+            temp_password=raw_password,
+            full_name=getattr(user, "full_name", None),
+            login_url=login_url,
+        )
+    except Exception:
+        # Keep endpoint stable; email failures are logged by email service.
+        pass
+
     return StaffUserOut(
         id=user.id,
         employee_code=getattr(user, "employee_code", None),
@@ -291,6 +331,9 @@ def create_staff_user(
         full_name=getattr(user, "full_name", None),
         country=getattr(user, "country", None),
         avatar_url=getattr(user, "avatar_url", None),
+        bank_name=getattr(user, "bank_name", None),
+        bank_account_number=getattr(user, "bank_account_number", None),
+        bank_account_name=getattr(user, "bank_account_name", None),
         roles=StaffRBACService.get_user_role_keys(db, user.id),
         created_at=user.created_at,
     )
@@ -310,6 +353,20 @@ def update_staff_user(
     if getattr(user, "deleted_at", None) is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Staff user is deleted")
 
+    if payload.email is not None:
+        new_email = str(payload.email).strip().lower()
+        if new_email and new_email != str(user.email).strip().lower():
+            existing_staff = db.query(StaffUser).filter(StaffUser.email == new_email).first()
+            existing_admin = db.query(AdminUser).filter(AdminUser.email == new_email).first()
+            if existing_staff or existing_admin:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already in use")
+            old_email = str(user.email).strip().lower()
+            user.email = new_email
+            # Keep legacy admin user record in sync if present.
+            admin = db.query(AdminUser).filter(AdminUser.email == old_email).first()
+            if admin:
+                admin.email = new_email
+
     if payload.timezone is not None:
         user.timezone = payload.timezone.strip()[:64] or user.timezone
     if payload.is_active is not None:
@@ -321,6 +378,12 @@ def update_staff_user(
         user.full_name = _clean_text(payload.full_name, max_len=160)
     if payload.country is not None:
         user.country = _normalize_country(payload.country)
+    if payload.bank_name is not None:
+        user.bank_name = _clean_text(payload.bank_name, max_len=120)
+    if payload.bank_account_number is not None:
+        user.bank_account_number = _clean_text(payload.bank_account_number, max_len=64)
+    if payload.bank_account_name is not None:
+        user.bank_account_name = _clean_text(payload.bank_account_name, max_len=160)
 
     db.add(
         StaffAuditLog(
@@ -349,6 +412,9 @@ def update_staff_user(
         full_name=getattr(user, "full_name", None),
         country=getattr(user, "country", None),
         avatar_url=getattr(user, "avatar_url", None),
+        bank_name=getattr(user, "bank_name", None),
+        bank_account_number=getattr(user, "bank_account_number", None),
+        bank_account_name=getattr(user, "bank_account_name", None),
         roles=StaffRBACService.get_user_role_keys(db, user.id),
         created_at=user.created_at,
         deleted_at=getattr(user, "deleted_at", None),
@@ -369,6 +435,9 @@ class StaffProfileOut(BaseModel):
     next_of_kin_relationship: str | None = None
     next_of_kin_address: str | None = None
     avatar_url: str | None = None
+    bank_name: str | None = None
+    bank_account_number: str | None = None
+    bank_account_name: str | None = None
 
 
 class StaffProfileUpdatePayload(BaseModel):
@@ -381,6 +450,9 @@ class StaffProfileUpdatePayload(BaseModel):
     next_of_kin_contact: str | None = Field(None, max_length=64)
     next_of_kin_relationship: str | None = Field(None, max_length=64)
     next_of_kin_address: str | None = Field(None, max_length=240)
+    bank_name: str | None = Field(None, max_length=120)
+    bank_account_number: str | None = Field(None, max_length=64)
+    bank_account_name: str | None = Field(None, max_length=160)
 
 
 @router.get("/staff/profile/me", response_model=StaffProfileOut)
@@ -402,6 +474,9 @@ def get_my_profile(
         next_of_kin_relationship=getattr(current_staff, "next_of_kin_relationship", None),
         next_of_kin_address=getattr(current_staff, "next_of_kin_address", None),
         avatar_url=getattr(current_staff, "avatar_url", None),
+        bank_name=getattr(current_staff, "bank_name", None),
+        bank_account_number=getattr(current_staff, "bank_account_number", None),
+        bank_account_name=getattr(current_staff, "bank_account_name", None),
     )
 
 
@@ -434,6 +509,12 @@ def update_my_profile(
         current_staff.next_of_kin_relationship = (rel if rel in allowed_rel else None) if rel is not None else None
     if payload.next_of_kin_address is not None:
         current_staff.next_of_kin_address = _clean_text(payload.next_of_kin_address, max_len=240, allow_newlines=True)
+    if payload.bank_name is not None:
+        current_staff.bank_name = _clean_text(payload.bank_name, max_len=120)
+    if payload.bank_account_number is not None:
+        current_staff.bank_account_number = _clean_text(payload.bank_account_number, max_len=64)
+    if payload.bank_account_name is not None:
+        current_staff.bank_account_name = _clean_text(payload.bank_account_name, max_len=160)
 
     # Enforce required profile fields (keep next-of-kin optional).
     required_missing: list[str] = []
