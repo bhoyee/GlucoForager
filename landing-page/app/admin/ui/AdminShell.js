@@ -416,11 +416,11 @@ export default function AdminShell({ children }) {
     return key.charAt(0).toUpperCase() + key.slice(1);
   }, [roles]);
 
-  const employeeId = useMemo(() => {
-    const id = session?.id ?? session?.staff_user_id ?? session?.user_id ?? null;
-    const n = Number(id);
-    return Number.isFinite(n) && n > 0 ? n : null;
-  }, [session?.id, session?.staff_user_id, session?.user_id]);
+  const employeeCode = useMemo(() => {
+    const c = String(session?.employee_code || '').trim();
+    if (c) return c.slice(0, 32);
+    return '';
+  }, [session?.employee_code]);
 
   useEffect(() => {
     if (!navSections.length) return;
@@ -585,9 +585,9 @@ export default function AdminShell({ children }) {
                   Role: {primaryRoleLabel}
                 </span>
               ) : null}
-              {!sessionLoading && session?.email && !isAdmin && employeeId ? (
+              {!sessionLoading && session?.email && !isAdmin && employeeCode ? (
                 <span className="admin-badge secondary" style={{ marginLeft: 6 }}>
-                  Employee ID: {employeeId}
+                  Employee ID: {employeeCode}
                 </span>
               ) : null}
             </p>

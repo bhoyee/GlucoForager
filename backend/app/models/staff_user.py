@@ -30,6 +30,9 @@ class StaffUser(Base):
 
     avatar_url = Column(String, nullable=True)
 
+    # Public-facing stable identifier (do not expose numeric id in UI)
+    employee_code = Column(String, unique=True, index=True, nullable=True)
+
     mfa_enabled = Column(Boolean, nullable=False, default=False)
     mfa_method = Column(String, nullable=True)  # e.g. "email"
 

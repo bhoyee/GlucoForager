@@ -52,6 +52,7 @@ def _normalize_country(code: str | None) -> str | None:
 
 class StaffMeResponse(BaseModel):
     id: int
+    employee_code: str | None = None
     email: EmailStr
     timezone: str
     is_active: bool
@@ -84,6 +85,7 @@ class StaffUserUpdate(BaseModel):
 
 class StaffUserOut(BaseModel):
     id: int
+    employee_code: str | None = None
     email: EmailStr
     timezone: str
     is_active: bool
@@ -132,6 +134,7 @@ def admin_me(
     perms = StaffRBACService.get_user_permission_keys(db, current_staff.id)
     return StaffMeResponse(
         id=current_staff.id,
+        employee_code=getattr(current_staff, "employee_code", None),
         email=current_staff.email,
         timezone=current_staff.timezone,
         is_active=bool(current_staff.is_active),
@@ -161,6 +164,7 @@ def list_staff_users(
         items.append(
             StaffUserOut(
                 id=u.id,
+                employee_code=getattr(u, "employee_code", None),
                 email=u.email,
                 timezone=u.timezone,
                 is_active=bool(u.is_active),
@@ -247,10 +251,20 @@ def create_staff_user(
     if existing_staff or existing_admin:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Staff user already exists")
 
+    def _generate_employee_code() -> str:
+        import secrets
+
+        return f"GF-EMP-{secrets.token_hex(4).upper()}"
+
+    employee_code = _generate_employee_code()
+    while db.query(StaffUser).filter(StaffUser.employee_code == employee_code).first() is not None:
+        employee_code = _generate_employee_code()
+
     hashed = get_password_hash(payload.password)
     user = StaffUser(
         email=email,
         hashed_password=hashed,
+        employee_code=employee_code,
         full_name=_clean_text(payload.full_name, max_len=160),
         country=_normalize_country(payload.country),
         timezone=(payload.timezone or "UTC").strip()[:64] or "UTC",
@@ -270,6 +284,7 @@ def create_staff_user(
 
     return StaffUserOut(
         id=user.id,
+        employee_code=getattr(user, "employee_code", None),
         email=user.email,
         timezone=user.timezone,
         is_active=bool(user.is_active),
@@ -327,6 +342,7 @@ def update_staff_user(
     db.refresh(user)
     return StaffUserOut(
         id=user.id,
+        employee_code=getattr(user, "employee_code", None),
         email=user.email,
         timezone=user.timezone,
         is_active=bool(user.is_active),
