@@ -3782,7 +3782,7 @@
 .admin-ticker-track {
   display: flex;
   width: max-content;
-  animation: adminTickerScroll 28s linear infinite;
+  animation: adminTickerScroll 40s linear infinite;
   will-change: transform;
 }
 
