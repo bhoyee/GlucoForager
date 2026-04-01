@@ -31,6 +31,17 @@ def _within_window(local_dt: datetime, *, target_hour: int, target_minute: int, 
     return (-minutes_before) <= delta_minutes <= minutes_after
 
 
+def _iso_utc(dt: datetime | None) -> str | None:
+    if dt is None:
+        return None
+    try:
+        aware = dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+        return aware.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    except Exception:
+        # Fallback to basic isoformat (still better than crashing).
+        return dt.isoformat()
+
+
 def _entry_view(entry: StaffTimeEntry, staff_tz: str) -> dict:
     tz = _safe_tz(staff_tz)
     clock_in_local = entry.clock_in_at.replace(tzinfo=timezone.utc).astimezone(tz) if entry.clock_in_at else None
@@ -49,8 +60,8 @@ def _entry_view(entry: StaffTimeEntry, staff_tz: str) -> dict:
         "id": entry.id,
         "staff_user_id": entry.staff_user_id,
         "work_date": entry.work_date.isoformat(),
-        "clock_in_at": entry.clock_in_at.isoformat() if entry.clock_in_at else None,
-        "clock_out_at": entry.clock_out_at.isoformat() if entry.clock_out_at else None,
+        "clock_in_at": _iso_utc(entry.clock_in_at),
+        "clock_out_at": _iso_utc(entry.clock_out_at),
         "clock_in_reason": getattr(entry, "clock_in_reason", None),
         "clock_out_reason": getattr(entry, "clock_out_reason", None),
         "clock_in_ok": clock_in_ok,
@@ -60,7 +71,7 @@ def _entry_view(entry: StaffTimeEntry, staff_tz: str) -> dict:
         "edited_at": entry.edited_at.isoformat() if entry.edited_at else None,
         "edited_by_staff_user_id": entry.edited_by_staff_user_id,
         "edit_reason": entry.edit_reason,
-        "approved_at": entry.approved_at.isoformat() if getattr(entry, "approved_at", None) else None,
+        "approved_at": _iso_utc(getattr(entry, "approved_at", None)),
         "approved_by_staff_user_id": getattr(entry, "approved_by_staff_user_id", None),
         "approval_reason": getattr(entry, "approval_reason", None),
     }
@@ -211,7 +222,7 @@ def clock_in(
             entity_id=str(entry.id),
             details={
                 "work_date": today.isoformat(),
-                "clock_in_at": entry.clock_in_at.isoformat() if entry.clock_in_at else None,
+                "clock_in_at": _iso_utc(entry.clock_in_at),
                 "clock_in_reason": reason,
                 "created_entry": bool(created_entry),
             },
@@ -266,7 +277,7 @@ def clock_out(
             entity_id=str(entry.id),
             details={
                 "work_date": today.isoformat(),
-                "clock_out_at": entry.clock_out_at.isoformat() if entry.clock_out_at else None,
+                "clock_out_at": _iso_utc(entry.clock_out_at),
                 "clock_out_reason": reason,
             },
             ip=request.client.host if request.client else None,
@@ -313,10 +324,7 @@ def edit_entry(
     if new_in and new_out and new_out < new_in:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="clock_out_at must be after clock_in_at")
 
-    before = {
-        "clock_in_at": entry.clock_in_at.isoformat() if entry.clock_in_at else None,
-        "clock_out_at": entry.clock_out_at.isoformat() if entry.clock_out_at else None,
-    }
+    before = {"clock_in_at": _iso_utc(entry.clock_in_at), "clock_out_at": _iso_utc(entry.clock_out_at)}
     entry.clock_in_at = new_in
     entry.clock_out_at = new_out
     entry.edited_at = datetime.utcnow()
@@ -330,7 +338,7 @@ def edit_entry(
             action="attendance.edit",
             entity="staff_time_entries",
             entity_id=str(entry.id),
-            details={"before": before, "after": {"clock_in_at": new_in.isoformat() if new_in else None, "clock_out_at": new_out.isoformat() if new_out else None}},
+            details={"before": before, "after": {"clock_in_at": _iso_utc(new_in), "clock_out_at": _iso_utc(new_out)}},
             ip=request.client.host if request.client else None,
             user_agent=request.headers.get("user-agent"),
             created_at=datetime.utcnow(),
@@ -453,10 +461,7 @@ def approve_missed_clock_out(
 
     reason = (payload.reason.strip()[:240] if isinstance(payload.reason, str) and payload.reason.strip() else "HR approval: missed clock-out")
 
-    before = {
-        "clock_out_at": entry.clock_out_at.isoformat() if entry.clock_out_at else None,
-        "approved_at": entry.approved_at.isoformat() if getattr(entry, "approved_at", None) else None,
-    }
+    before = {"clock_out_at": _iso_utc(entry.clock_out_at), "approved_at": _iso_utc(getattr(entry, "approved_at", None))}
 
     entry.clock_out_at = clock_out
     entry.clock_out_ip = request.client.host if request.client else None
@@ -477,8 +482,8 @@ def approve_missed_clock_out(
             details={
                 "before": before,
                 "after": {
-                    "clock_out_at": clock_out.isoformat() if clock_out else None,
-                    "approved_at": entry.approved_at.isoformat() if entry.approved_at else None,
+                    "clock_out_at": _iso_utc(clock_out),
+                    "approved_at": _iso_utc(entry.approved_at),
                 },
                 "reason": reason,
             },
