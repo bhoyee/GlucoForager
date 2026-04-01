@@ -403,6 +403,7 @@ export default function StaffDashboard() {
 
   const workLogToday = todayInWeek?.work_log?.id ? todayInWeek.work_log : null;
   const missingLogToday = Boolean(todayInWeek?.missing_log);
+  const isMarketer = useMemo(() => (Array.isArray(me?.roles) ? me.roles.includes('marketer') : false), [me?.roles]);
 
   const quickActions = useMemo(() => {
     const actions = [
@@ -415,10 +416,10 @@ export default function StaffDashboard() {
   }, [permissions]);
 
   const primaryQuickActions = useMemo(() => {
-    const preferred = ['/admin/attendance', '/admin/work-logs'];
+    const preferred = isMarketer ? ['/admin/attendance', '/admin/work-logs', '/admin/blog/new'] : ['/admin/attendance', '/admin/work-logs'];
     const byHref = new Map((quickActions || []).map((a) => [a.href, a]));
     return preferred.map((h) => byHref.get(h)).filter(Boolean);
-  }, [quickActions]);
+  }, [quickActions, isMarketer]);
 
   const secondaryQuickActions = useMemo(() => {
     const primaryHrefs = new Set((primaryQuickActions || []).map((a) => a.href));
@@ -505,7 +506,7 @@ export default function StaffDashboard() {
               <Link
                 key={a.href}
                 href={a.href}
-                className={`admin-button ${a.href === '/admin/work-logs' ? 'info' : ''}`.trim()}
+                className={`admin-button ${a.href === '/admin/work-logs' ? 'info' : a.href === '/admin/blog/new' ? 'warning' : ''}`.trim()}
                 style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
               >
                 {a.label}
