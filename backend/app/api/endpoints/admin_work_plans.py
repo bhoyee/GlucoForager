@@ -16,10 +16,33 @@ from ...models.staff_role_milestone import StaffRoleMilestone
 from ...models.staff_user import StaffUser
 from ...models.staff_milestone_progress import StaffMilestoneProgress
 from ...models.staff_work_log import StaffWorkLog
+from ...services.email_service import send_staff_notification_email
 from ...services.staff_rbac_service import StaffRBACService
 
 
 router = APIRouter(prefix="/admin/work-plans", tags=["admin-work-plans"])
+
+
+def _staff_portal_url(request: Request) -> str:
+    # Prefer explicit env config, then request origin (dev), then SITE_URL.
+    try:
+        from ...core.config import settings  # local import to avoid circular imports
+
+        base = (settings.staff_portal_url or "").strip().rstrip("/")
+        if base:
+            return base
+        origin = (request.headers.get("origin") or "").strip().rstrip("/")
+        if origin:
+            return f"{origin}/admin"
+        return f"{str(settings.site_url).strip().rstrip('/')}/admin"
+    except Exception:
+        origin = (request.headers.get("origin") or "").strip().rstrip("/")
+        return f"{origin}/admin" if origin else "/admin"
+
+
+def _work_log_link(request: Request, work_date: date) -> str:
+    base = _staff_portal_url(request).rstrip("/")
+    return f"{base}/work-logs?date={work_date.isoformat()}"
 
 
 def _utc_today() -> date:
@@ -272,6 +295,16 @@ def assign_task(
         )
     )
     db.commit()
+
+    # Best-effort email notification.
+    try:
+        send_staff_notification_email(
+            to_email=str(staff.email),
+            title=f"New task for {payload.work_date.isoformat()}",
+            body=f"{task_text}\n\nOpen: {_work_log_link(request, payload.work_date)}",
+        )
+    except Exception:
+        pass
     return {"ok": True, "id": row.id}
 
 
@@ -300,7 +333,8 @@ def assign_task_to_role(
         ),
         {"rk": role_key},
     ).fetchall()
-    staff_ids = [int(r[0]) for r in rows if r and r[0] is not None]
+    staff_id_to_email = {int(r[0]): str(r[1]) for r in rows if r and r[0] is not None and r[1]}
+    staff_ids = list(staff_id_to_email.keys())
     if not staff_ids:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active staff found for that role")
 
@@ -345,6 +379,21 @@ def assign_task_to_role(
         )
     )
     db.commit()
+
+    # Best-effort email notifications (bulk).
+    link = _work_log_link(request, payload.work_date)
+    for sid in staff_ids:
+        to_email = staff_id_to_email.get(int(sid))
+        if not to_email:
+            continue
+        try:
+            send_staff_notification_email(
+                to_email=str(to_email),
+                title=f"New task for {payload.work_date.isoformat()}",
+                body=f"{task_text}\n\nOpen: {link}",
+            )
+        except Exception:
+            pass
     return {"ok": True, "count": len(created_ids), "ids": created_ids}
 
 
