@@ -130,6 +130,15 @@ class Settings(BaseSettings):
     inbox_file_max_pdf_bytes: int = Field(2_097_152, env="INBOX_FILE_MAX_PDF_BYTES")  # 2 MB
     inbox_file_max_video_bytes: int = Field(25 * 1024 * 1024, env="INBOX_FILE_MAX_VIDEO_BYTES")  # 25 MB
 
+    # Staff requests attachments (leave/training requests)
+    # Uses shared hosting via FTP (recommended) or local uploads.
+    requests_file_storage_backend: str = Field("local", env="REQUESTS_FILE_STORAGE_BACKEND")
+    requests_file_remote_base_url: str | None = Field(None, env="REQUESTS_FILE_REMOTE_BASE_URL")
+    requests_file_ftp_base_dir: str = Field("/public_html/glucoforager.com/requests-file", env="REQUESTS_FILE_FTP_BASE_DIR")
+    requests_file_max_image_bytes: int = Field(2_097_152, env="REQUESTS_FILE_MAX_IMAGE_BYTES")  # 2 MB
+    requests_file_max_pdf_bytes: int = Field(2_097_152, env="REQUESTS_FILE_MAX_PDF_BYTES")  # 2 MB
+    requests_file_max_video_bytes: int = Field(25 * 1024 * 1024, env="REQUESTS_FILE_MAX_VIDEO_BYTES")  # 25 MB
+
     # Staff private drive (MyDrive / StaffDrive)
     # Stored on shared hosting via FTP (recommended).
     drive_storage_backend: str = Field("ftp", env="DRIVE_STORAGE_BACKEND")
