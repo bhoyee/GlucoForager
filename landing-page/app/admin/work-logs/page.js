@@ -1004,7 +1004,7 @@ function WorkLogsPageInner() {
                       {!t.is_completed ? (
                         <div style={{ marginTop: 10 }}>
                           <div className="admin-field">
-                            <label style={{ color: '#e53935', fontWeight: 800 }}>Proof links (required to mark done)</label>
+                            <label style={{ color: '#f57c00', fontWeight: 800 }}>Proof links (optional)</label>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                               {proofLinks.map((l, idx) => (
                                 <div key={idx} style={{ display: 'flex', gap: 8 }}>
@@ -1095,8 +1095,8 @@ function WorkLogsPageInner() {
                     Add
                   </button>
                 </div>
-                <p className="admin-subtitle" style={{ margin: '6px 0 0 0', color: '#f57c00', fontWeight: 700 }}>
-                  Mark it done with a proof link when complete.
+                <p className="admin-subtitle" style={{ margin: '6px 0 0 0', color: '#64748b', fontWeight: 600 }}>
+                  You can optionally add proof links for completed tasks.
                 </p>
               </div>
             </div>

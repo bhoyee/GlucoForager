@@ -543,8 +543,8 @@ def complete_task(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Work log already submitted for this date. Tasks are read-only.")
 
     want_completed = bool(payload.is_completed)
-    if want_completed and not _clean_links(payload.proof_links, max_items=8):
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Add at least one proof link before marking done.")
+    # Proof links are optional (some tasks don't have a URL-based proof).
+    # Keep the field for when staff have links, but don't block completion.
 
     row.is_completed = want_completed
     if want_completed:
