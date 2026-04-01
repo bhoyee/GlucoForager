@@ -161,6 +161,197 @@ function WorkLogsPageInner() {
   const [commentDraft, setCommentDraft] = useState('');
   const [managerToolsOpen, setManagerToolsOpen] = useState(false);
 
+  const taskTextLabel = (task) => {
+    const direct = task?.text;
+    if (typeof direct === 'string') return direct;
+    if (direct && typeof direct === 'object') {
+      if (typeof direct.text === 'string') return direct.text;
+      if (typeof direct.value === 'string') return direct.value;
+      if (typeof direct.label === 'string') return direct.label;
+      return '[Invalid task text]';
+    }
+    if (typeof task?.title === 'string') return task.title;
+    const fallback = direct == null ? '' : String(direct);
+    return fallback === '[object Object]' ? '[Invalid task text]' : fallback;
+  };
+
+  const confirmActionRef = useRef(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState('Confirm');
+  const [confirmBody, setConfirmBody] = useState('');
+  const openConfirm = ({ title, body, onConfirm }) => {
+    confirmActionRef.current = typeof onConfirm === 'function' ? onConfirm : null;
+    setConfirmTitle(title || 'Confirm');
+    setConfirmBody(body || '');
+    setConfirmOpen(true);
+  };
+  const closeConfirm = () => {
+    setConfirmOpen(false);
+    setConfirmTitle('Confirm');
+    setConfirmBody('');
+    confirmActionRef.current = null;
+  };
+  const runConfirm = async () => {
+    const fn = confirmActionRef.current;
+    closeConfirm();
+    if (fn) await fn();
+  };
+
+  const [manageTaskItems, setManageTaskItems] = useState([]);
+  const [manageTaskLoading, setManageTaskLoading] = useState(false);
+  const [taskEditOpen, setTaskEditOpen] = useState(false);
+  const [taskEditId, setTaskEditId] = useState(null);
+  const [taskEditDate, setTaskEditDate] = useState(todayISO());
+  const [taskEditText, setTaskEditText] = useState('');
+  const [taskEditSaving, setTaskEditSaving] = useState(false);
+
+  const loadManageTasks = async () => {
+    if (!token || !isManager) return;
+    if (!assignDate) return;
+    const sid = String(assignStaffUserId || '').trim();
+    setManageTaskLoading(true);
+    try {
+      const url = `${API_URL}/api/admin/work-plans/tasks?start=${encodeURIComponent(assignDate)}&end=${encodeURIComponent(assignDate)}${
+        sid ? `&staff_user_id=${encodeURIComponent(sid)}` : ''
+      }`;
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || 'Failed to load tasks.');
+      setManageTaskItems(Array.isArray(data.items) ? data.items : []);
+    } catch (e) {
+      setManageTaskItems([]);
+      setManagerMessageTone('danger');
+      setManagerMessage(e?.message || 'Failed to load tasks.');
+    } finally {
+      setManageTaskLoading(false);
+    }
+  };
+
+  const openTaskEdit = (t) => {
+    if (!t?.id) return;
+    setTaskEditId(t.id);
+    setTaskEditDate(String(t.work_date || assignDate || todayISO()).slice(0, 10));
+    setTaskEditText(typeof t.text === 'string' ? t.text : String(t.text || '').trim());
+    setTaskEditOpen(true);
+  };
+
+  const closeTaskEdit = () => {
+    setTaskEditOpen(false);
+    setTaskEditId(null);
+    setTaskEditDate(todayISO());
+    setTaskEditText('');
+    setTaskEditSaving(false);
+  };
+
+  const saveTaskEdit = async () => {
+    if (!token || !isManager) return;
+    if (!taskEditId) return;
+    const text = typeof taskEditText === 'string' ? taskEditText.trim() : '';
+    if (!text) return;
+    setTaskEditSaving(true);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/work-plans/tasks/${taskEditId}/update`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ work_date: taskEditDate, text }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || 'Failed to update task.');
+      setManagerMessageTone('success');
+      setManagerMessage('Task updated.');
+      closeTaskEdit();
+      loadManageTasks();
+    } catch (e) {
+      setManagerMessageTone('danger');
+      setManagerMessage(e?.message || 'Failed to update task.');
+    } finally {
+      setTaskEditSaving(false);
+    }
+  };
+
+  const deleteManageTask = async (taskId) => {
+    if (!token || !isManager || !taskId) return;
+    try {
+      const res = await fetch(`${API_URL}/api/admin/work-plans/tasks/${taskId}/delete`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || 'Failed to delete task.');
+      setManagerMessageTone('success');
+      setManagerMessage('Task deleted.');
+      loadManageTasks();
+    } catch (e) {
+      setManagerMessageTone('danger');
+      setManagerMessage(e?.message || 'Failed to delete task.');
+    }
+  };
+
+  const [milestoneEditOpen, setMilestoneEditOpen] = useState(false);
+  const [milestoneEditId, setMilestoneEditId] = useState(null);
+  const [milestoneEditTitle, setMilestoneEditTitle] = useState('');
+  const [milestoneEditDescription, setMilestoneEditDescription] = useState('');
+  const [milestoneEditSaving, setMilestoneEditSaving] = useState(false);
+
+  const openMilestoneEdit = (m) => {
+    if (!m?.id) return;
+    setMilestoneEditId(m.id);
+    setMilestoneEditTitle(typeof m.title === 'string' ? m.title : String(m.title || '').trim());
+    setMilestoneEditDescription(typeof m.description === 'string' ? m.description : '');
+    setMilestoneEditOpen(true);
+  };
+
+  const closeMilestoneEdit = () => {
+    setMilestoneEditOpen(false);
+    setMilestoneEditId(null);
+    setMilestoneEditTitle('');
+    setMilestoneEditDescription('');
+    setMilestoneEditSaving(false);
+  };
+
+  const saveMilestoneEdit = async () => {
+    if (!token || !isManager || !milestoneEditId) return;
+    const title = String(milestoneEditTitle || '').trim();
+    if (!title) return;
+    setMilestoneEditSaving(true);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/work-plans/milestones/${milestoneEditId}/update`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, description: String(milestoneEditDescription || '').trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || 'Failed to update milestone.');
+      setManagerMessageTone('success');
+      setManagerMessage('Milestone updated.');
+      closeMilestoneEdit();
+      loadMilestones();
+    } catch (e) {
+      setManagerMessageTone('danger');
+      setManagerMessage(e?.message || 'Failed to update milestone.');
+    } finally {
+      setMilestoneEditSaving(false);
+    }
+  };
+
+  const deleteMilestoneRow = async (milestoneId) => {
+    if (!token || !isManager || !milestoneId) return;
+    try {
+      const res = await fetch(`${API_URL}/api/admin/work-plans/milestones/${milestoneId}/delete`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || 'Failed to delete milestone.');
+      setManagerMessageTone('success');
+      setManagerMessage('Milestone deleted.');
+      loadMilestones();
+    } catch (e) {
+      setManagerMessageTone('danger');
+      setManagerMessage(e?.message || 'Failed to delete milestone.');
+    }
+  };
+
   const loadSession = async () => {
     const t = getTokenNow();
     if (!t) {
@@ -488,7 +679,7 @@ function WorkLogsPageInner() {
   const addMyTask = async () => {
     const t = getTokenNow();
     if (!t) return;
-    const text = String(myTaskText || '').trim();
+    const text = typeof myTaskText === 'string' ? myTaskText.trim() : '';
     if (!text) return;
     setMessage('');
     try {
@@ -551,7 +742,7 @@ function WorkLogsPageInner() {
   const assignTask = async () => {
     if (!token || !isManager) return;
     const staffId = Number(assignStaffUserId);
-    const text = String(assignText || '').trim();
+    const text = typeof assignText === 'string' ? assignText.trim() : '';
     if (!staffId || !text) return;
     setManagerMessage('');
     setManagerMessageTone('info');
@@ -583,7 +774,7 @@ function WorkLogsPageInner() {
   const assignTaskToRole = async () => {
     if (!token || !isManager) return;
     const role_key = String(assignRoleKey || '').trim();
-    const text = String(assignText || '').trim();
+    const text = typeof assignText === 'string' ? assignText.trim() : '';
     if (!role_key || !text) return;
     setManagerMessage('');
     setManagerMessageTone('info');
@@ -983,8 +1174,8 @@ function WorkLogsPageInner() {
                     <div key={t.id} className="admin-card" style={{ padding: 12 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
                         <div style={{ flex: 1 }}>
-                          <p style={{ margin: 0, fontWeight: 700, color: '#1976d2' }}>
-                            {taskIndex + 1}. {t.text}
+                          <p style={{ margin: 0, fontWeight: 500, color: '#1976d2', whiteSpace: 'pre-wrap' }}>
+                            {taskIndex + 1}. {taskTextLabel(t)}
                           </p>
                           {t.is_completed ? (
                             <p className="admin-subtitle" style={{ margin: '6px 0 0 0' }}>
@@ -1007,8 +1198,9 @@ function WorkLogsPageInner() {
                             <label style={{ color: '#f57c00', fontWeight: 800 }}>Proof links (optional)</label>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                               {proofLinks.map((l, idx) => (
-                                <div key={idx} style={{ display: 'flex', gap: 8 }}>
+                                <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                                   <input
+                                    style={{ flex: 1, minWidth: 0 }}
                                     value={l}
                                     disabled={isWorkDateLocked}
                                     onChange={(e) =>
@@ -1045,10 +1237,11 @@ function WorkLogsPageInner() {
 
                           <div className="admin-field">
                             <label>Note (optional)</label>
-                            <input
+                            <textarea
                               value={draft.completion_note || ''}
                               disabled={isWorkDateLocked}
                               onChange={(e) => setTaskDraft(t.id, { ...draft, completion_note: e.target.value })}
+                              rows={2}
                               placeholder="Short note..."
                             />
                           </div>
@@ -1091,13 +1284,16 @@ function WorkLogsPageInner() {
                     disabled={isWorkDateLocked}
                     placeholder="Add a task for this date..."
                   />
-                  <button className="admin-button info" type="button" onClick={addMyTask} disabled={isWorkDateLocked || !String(myTaskText || '').trim()}>
+                  <button
+                    className="admin-button info"
+                    type="button"
+                    onClick={addMyTask}
+                    disabled={isWorkDateLocked || !(typeof myTaskText === 'string' && myTaskText.trim())}
+                  >
                     Add
                   </button>
                 </div>
-                <p className="admin-subtitle" style={{ margin: '6px 0 0 0', color: '#64748b', fontWeight: 600 }}>
-                  You can optionally add proof links for completed tasks.
-                </p>
+
               </div>
             </div>
 
@@ -1325,8 +1521,8 @@ function WorkLogsPageInner() {
                         {(Array.isArray(monthViewPlan?.tasks) ? monthViewPlan.tasks : []).map((t, idx) => (
                           <div key={t.id || `${t.title}-${idx}`} className="admin-card" style={{ padding: 12 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
-                              <p style={{ margin: 0, fontWeight: 650 }}>
-                                {idx + 1}. {t.title || t.text || 'Task'}
+                              <p style={{ margin: 0, fontWeight: 650, whiteSpace: 'pre-wrap' }}>
+                                {idx + 1}. {taskTextLabel(t) || 'Task'}
                               </p>
                               <span className={`admin-badge ${t.is_completed ? 'success' : 'warning'}`}>
                                 {t.is_completed ? 'Done' : 'Open'}
@@ -1403,6 +1599,102 @@ function WorkLogsPageInner() {
         </div>
       ) : null}
 
+      {confirmOpen ? (
+        <div className="admin-modal-backdrop" role="presentation" onClick={closeConfirm}>
+          <div className="admin-modal" role="dialog" aria-modal="true" aria-label="Confirm action" onClick={(e) => e.stopPropagation()}>
+            <div className="admin-modal-header">
+              <h3>{confirmTitle || 'Confirm'}</h3>
+              <button className="admin-icon-button danger" type="button" aria-label="Close" onClick={closeConfirm}>
+                ×
+              </button>
+            </div>
+            <div className="admin-modal-body">
+              <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{confirmBody || 'Are you sure?'}</p>
+            </div>
+            <div className="admin-modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button className="admin-button secondary" type="button" onClick={closeConfirm}>
+                Cancel
+              </button>
+              <button className="admin-button danger" type="button" onClick={runConfirm}>
+                Yes, continue
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {taskEditOpen ? (
+        <div className="admin-modal-backdrop" role="presentation" onClick={closeTaskEdit}>
+          <div className="admin-modal" role="dialog" aria-modal="true" aria-label="Edit task" onClick={(e) => e.stopPropagation()}>
+            <div className="admin-modal-header">
+              <h3>Edit task</h3>
+              <button className="admin-icon-button danger" type="button" aria-label="Close" onClick={closeTaskEdit}>
+                ×
+              </button>
+            </div>
+            <div className="admin-modal-body">
+              <div className="admin-field">
+                <label>Date</label>
+                <input type="date" value={taskEditDate} onChange={(e) => setTaskEditDate(e.target.value)} />
+              </div>
+              <div className="admin-field">
+                <label>Task</label>
+                <textarea value={taskEditText} onChange={(e) => setTaskEditText(e.target.value)} rows={6} placeholder="Task text..." />
+              </div>
+            </div>
+            <div className="admin-modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button className="admin-button danger" type="button" onClick={closeTaskEdit} disabled={taskEditSaving}>
+                Close
+              </button>
+              <button
+                className="admin-button"
+                type="button"
+                onClick={saveTaskEdit}
+                disabled={taskEditSaving || !(typeof taskEditText === 'string' && taskEditText.trim()) || !taskEditDate}
+              >
+                {taskEditSaving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {milestoneEditOpen ? (
+        <div className="admin-modal-backdrop" role="presentation" onClick={closeMilestoneEdit}>
+          <div className="admin-modal" role="dialog" aria-modal="true" aria-label="Edit milestone" onClick={(e) => e.stopPropagation()}>
+            <div className="admin-modal-header">
+              <h3>Edit milestone</h3>
+              <button className="admin-icon-button danger" type="button" aria-label="Close" onClick={closeMilestoneEdit}>
+                ×
+              </button>
+            </div>
+            <div className="admin-modal-body">
+              <div className="admin-field">
+                <label>Title</label>
+                <input value={milestoneEditTitle} onChange={(e) => setMilestoneEditTitle(e.target.value)} placeholder="Milestone title..." />
+              </div>
+              <div className="admin-field">
+                <label>Description (optional)</label>
+                <textarea
+                  value={milestoneEditDescription}
+                  onChange={(e) => setMilestoneEditDescription(e.target.value)}
+                  rows={4}
+                  placeholder="Details..."
+                />
+              </div>
+            </div>
+            <div className="admin-modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button className="admin-button danger" type="button" onClick={closeMilestoneEdit} disabled={milestoneEditSaving}>
+                Close
+              </button>
+              <button className="admin-button" type="button" onClick={saveMilestoneEdit} disabled={milestoneEditSaving || !String(milestoneEditTitle || '').trim()}>
+                {milestoneEditSaving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {isManager ? (
         <div className="admin-card" style={{ marginTop: 16 }}>
           <div className="admin-actions" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1468,14 +1760,19 @@ function WorkLogsPageInner() {
               </div>
               <div className="admin-field">
                 <label>Task</label>
-                <input value={assignText} onChange={(e) => setAssignText(e.target.value)} placeholder="Task for this staff..." />
+                <textarea
+                  value={assignText}
+                  onChange={(e) => setAssignText(e.target.value)}
+                  rows={4}
+                  placeholder="Task for this staff... (multi-line supported)"
+                />
               </div>
               <div className="admin-actions">
                 <button
                   className="admin-button"
                   type="button"
                   onClick={assignTask}
-                  disabled={assignLoading || assignRoleLoading || !String(assignText || '').trim() || !assignStaffUserId}
+                  disabled={assignLoading || assignRoleLoading || !(typeof assignText === 'string' && assignText.trim()) || !assignStaffUserId}
                 >
                   {assignLoading ? 'Assigning…' : 'Assign'}
                 </button>
@@ -1483,10 +1780,54 @@ function WorkLogsPageInner() {
                   className="admin-button warning"
                   type="button"
                   onClick={assignTaskToRole}
-                  disabled={assignLoading || assignRoleLoading || !String(assignText || '').trim() || !String(assignRoleKey || '').trim()}
+                  disabled={assignLoading || assignRoleLoading || !(typeof assignText === 'string' && assignText.trim()) || !String(assignRoleKey || '').trim()}
                 >
                   {assignRoleLoading ? 'Assigning…' : 'Assign to role'}
                 </button>
+                <button className="admin-button info" type="button" onClick={loadManageTasks} disabled={manageTaskLoading || !assignDate}>
+                  {manageTaskLoading ? 'Loading…' : 'Load tasks'}
+                </button>
+              </div>
+
+              <div style={{ marginTop: 12 }}>
+                {(Array.isArray(manageTaskItems) ? manageTaskItems : []).length === 0 ? (
+                  <p className="admin-subtitle" style={{ margin: 0 }}>
+                    No scheduled tasks loaded.
+                  </p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {manageTaskItems.map((t) => (
+                      <div key={t.id} className="admin-card" style={{ padding: 12 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
+                          <div style={{ flex: 1 }}>
+                            <p style={{ margin: 0, fontWeight: 800, whiteSpace: 'pre-wrap' }}>{taskTextLabel(t) || 'Task'}</p>
+                            <p className="admin-subtitle" style={{ margin: '6px 0 0 0' }}>
+                              Staff: {t.staff_user_id || '—'} • Date: {String(t.work_date || '').slice(0, 10)} • Status: {t.is_completed ? 'Done' : 'Open'}
+                            </p>
+                          </div>
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            <button className="admin-button info" type="button" onClick={() => openTaskEdit(t)}>
+                              Edit
+                            </button>
+                            <button
+                              className="admin-button danger"
+                              type="button"
+                              onClick={() =>
+                                openConfirm({
+                                  title: 'Delete task?',
+                                  body: 'This will remove the task from staff view (soft delete).',
+                                  onConfirm: () => deleteManageTask(t.id),
+                                })
+                              }
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1563,6 +1904,9 @@ function WorkLogsPageInner() {
                             </p>
                           </div>
                           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            <button className="admin-button info" type="button" onClick={() => openMilestoneEdit(m)}>
+                              Edit
+                            </button>
                             {m.is_completed ? (
                               <button className="admin-button secondary" type="button" onClick={() => setMilestoneDone(m.id, false)}>
                                 Reopen
@@ -1572,6 +1916,19 @@ function WorkLogsPageInner() {
                                 Mark done
                               </button>
                             )}
+                            <button
+                              className="admin-button danger"
+                              type="button"
+                              onClick={() =>
+                                openConfirm({
+                                  title: 'Delete milestone?',
+                                  body: 'This will remove the milestone from staff view (soft delete).',
+                                  onConfirm: () => deleteMilestoneRow(m.id),
+                                })
+                              }
+                            >
+                              Delete
+                            </button>
                           </div>
                         </div>
                       </div>
