@@ -6,9 +6,17 @@ import DataTable from '../../ui/DataTable';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
+function normalizeAssumedUtcIso(iso) {
+  const s = String(iso || '').trim();
+  if (!s) return null;
+  if (/[zZ]$/.test(s) || /[+-]\d\d:\d\d$/.test(s) || /[+-]\d\d\d\d$/.test(s)) return s;
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(s)) return `${s}Z`;
+  return s;
+}
+
 function toDatetimeLocalValue(iso) {
   if (!iso) return '';
-  const d = new Date(iso);
+  const d = new Date(normalizeAssumedUtcIso(iso));
   if (Number.isNaN(d.getTime())) return '';
   const pad = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -59,11 +67,11 @@ function nowLocalMinutes(timeZone) {
 function formatTimeInZone(iso, timeZone) {
   if (!iso) return '—';
   try {
-    const d = new Date(iso);
+    const d = new Date(normalizeAssumedUtcIso(iso));
     if (Number.isNaN(d.getTime())) return '—';
     return new Intl.DateTimeFormat(undefined, { timeZone, hour: '2-digit', minute: '2-digit' }).format(d);
   } catch {
-    const d = new Date(iso);
+    const d = new Date(normalizeAssumedUtcIso(iso));
     if (Number.isNaN(d.getTime())) return '—';
     return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
   }
