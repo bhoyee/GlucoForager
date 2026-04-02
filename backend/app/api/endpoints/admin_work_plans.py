@@ -133,6 +133,34 @@ class MilestoneSelfCompletePayload(BaseModel):
     proof_links: list[str] = Field(default_factory=list)
 
 
+@router.get("/picklists")
+def picklists(
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("work_logs.manage")),  # noqa: ARG001
+):
+    roles = db.execute(sa_text("SELECT key, name FROM staff_roles ORDER BY name ASC, key ASC")).fetchall()
+    staff = (
+        db.query(StaffUser)
+        .filter(StaffUser.is_active.is_(True), StaffUser.deleted_at.is_(None))
+        .order_by(StaffUser.email.asc())
+        .limit(800)
+        .all()
+    )
+
+    return {
+        "roles": [{"key": str(r[0]), "name": str(r[1])} for r in roles if r and r[0] and r[1]],
+        "staff": [
+            {
+                "id": int(u.id),
+                "email": u.email,
+                "full_name": getattr(u, "full_name", None),
+                "employee_code": getattr(u, "employee_code", None),
+            }
+            for u in staff
+        ],
+    }
+
+
 @router.get("/my")
 def my_plan(
     work_date: date | None = None,
