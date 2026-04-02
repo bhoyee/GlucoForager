@@ -23,6 +23,28 @@ from ...services.staff_rbac_service import StaffRBACService
 router = APIRouter(prefix="/admin/work-plans", tags=["admin-work-plans"])
 
 
+def _plain_text(v: str, *, max_len: int) -> str:
+    """
+    Best-effort plain-text version of a (potentially HTML) task body for notifications.
+    Not a full sanitizer (UI sanitizes on render).
+    """
+    s = str(v or "")
+    if "<" in s and ">" in s:
+        import re
+
+        s = re.sub(r"<[^>]*>", " ", s)
+        s = s.replace("&nbsp;", " ")
+    s = " ".join(s.split())
+    return s[: int(max_len)] if s else ""
+
+
+def _reject_unsafe_html(v: str) -> None:
+    s = str(v or "")
+    low = s.lower()
+    if "<script" in low or "javascript:" in low or "onerror=" in low or "onload=" in low:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Task text contains unsafe HTML")
+
+
 def _staff_portal_url(request: Request) -> str:
     # Prefer explicit env config, then request origin (dev), then SITE_URL.
     try:
@@ -87,18 +109,18 @@ class TaskAssignPayload(BaseModel):
     staff_user_id: int
     work_date: date
     # Allow multi-line tasks and longer instructions from managers/admins.
-    text: str = Field(..., min_length=1, max_length=4000)
+    text: str = Field(..., min_length=1, max_length=20000)
 
 class TaskAssignRolePayload(BaseModel):
     role_key: str = Field(..., min_length=2, max_length=40)
     work_date: date
     # Allow multi-line tasks and longer instructions from managers/admins.
-    text: str = Field(..., min_length=1, max_length=4000)
+    text: str = Field(..., min_length=1, max_length=20000)
 
 
 class TaskSelfAddPayload(BaseModel):
     work_date: date
-    text: str = Field(..., min_length=1, max_length=4000)
+    text: str = Field(..., min_length=1, max_length=20000)
 
 
 class TaskCompletePayload(BaseModel):
@@ -109,7 +131,7 @@ class TaskCompletePayload(BaseModel):
 
 class TaskUpdatePayload(BaseModel):
     work_date: date | None = None
-    text: str = Field(..., min_length=1, max_length=4000)
+    text: str = Field(..., min_length=1, max_length=20000)
 
 
 class MilestoneCreatePayload(BaseModel):
@@ -293,6 +315,7 @@ def assign_task(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Staff user not found")
 
     task_text = payload.text.strip()
+    _reject_unsafe_html(task_text)
     row = StaffAssignedTask(
         staff_user_id=int(payload.staff_user_id),
         assigned_by_staff_user_id=int(current_staff.id),
@@ -311,7 +334,7 @@ def assign_task(
             staff_user_id=int(payload.staff_user_id),
             type="task.assigned",
             title=f"New task for {payload.work_date.isoformat()}",
-            body=task_text[:240],
+            body=_plain_text(task_text, max_len=240),
             data={"task_id": int(row.id), "work_date": payload.work_date.isoformat()},
             read_at=None,
             created_at=datetime.utcnow(),
@@ -336,7 +359,7 @@ def assign_task(
         send_staff_notification_email(
             to_email=str(staff.email),
             title=f"New task for {payload.work_date.isoformat()}",
-            body=f"{task_text}\n\nOpen: {_work_log_link(request, payload.work_date)}",
+            body=f"{_plain_text(task_text, max_len=1200)}\n\nOpen: {_work_log_link(request, payload.work_date)}",
         )
     except Exception:
         pass
@@ -352,6 +375,7 @@ def assign_task_to_role(
 ):
     role_key = payload.role_key.strip().lower()
     task_text = payload.text.strip()
+    _reject_unsafe_html(task_text)
 
     # Get active staff ids for this role key.
     rows = db.execute(
@@ -394,7 +418,7 @@ def assign_task_to_role(
                 staff_user_id=int(staff_id),
                 type="task.assigned",
                 title=f"New task for {payload.work_date.isoformat()}",
-                body=task_text[:240],
+                body=_plain_text(task_text, max_len=240),
                 data={"task_id": int(row.id), "work_date": payload.work_date.isoformat()},
                 read_at=None,
                 created_at=datetime.utcnow(),
@@ -425,7 +449,7 @@ def assign_task_to_role(
             send_staff_notification_email(
                 to_email=str(to_email),
                 title=f"New task for {payload.work_date.isoformat()}",
-                body=f"{task_text}\n\nOpen: {link}",
+                body=f"{_plain_text(task_text, max_len=1200)}\n\nOpen: {link}",
             )
         except Exception:
             pass
@@ -443,6 +467,7 @@ def add_self_task(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Work log already submitted for this date. Tasks are read-only.")
 
     task_text = payload.text.strip()
+    _reject_unsafe_html(task_text)
     row = StaffAssignedTask(
         staff_user_id=int(current_staff.id),
         assigned_by_staff_user_id=int(current_staff.id),
@@ -1230,7 +1255,9 @@ def update_task(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
 
     before = {"work_date": row.work_date.isoformat(), "text": row.text}
-    row.text = payload.text.strip()[:4000]
+    task_text = payload.text.strip()
+    _reject_unsafe_html(task_text)
+    row.text = task_text[:20000]
     if payload.work_date is not None:
         row.work_date = payload.work_date
     row.updated_at = datetime.utcnow()
