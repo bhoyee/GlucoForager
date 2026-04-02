@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import EmptyState from '../ui/EmptyState';
 import LoadingState from '../ui/LoadingState';
 import DataTable from '../ui/DataTable';
-import StructuredText from '../ui/StructuredText';
+import TaskContent from '../ui/TaskContent';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -1177,7 +1177,7 @@ function WorkLogsPageInner() {
                         <div style={{ flex: 1 }}>
                           <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                             <div style={{ fontWeight: 900, color: '#1976d2', marginTop: 1 }}>{taskIndex + 1}.</div>
-                            <StructuredText text={taskTextLabel(t)} style={{ margin: 0, fontWeight: 500, color: '#1976d2' }} />
+                            <TaskContent text={taskTextLabel(t)} style={{ margin: 0, fontWeight: 500, color: '#1976d2' }} />
                           </div>
                           {t.is_completed ? (
                             <p className="admin-subtitle" style={{ margin: '6px 0 0 0' }}>
@@ -1525,7 +1525,7 @@ function WorkLogsPageInner() {
                             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
                               <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                                 <div style={{ fontWeight: 900, marginTop: 1 }}>{idx + 1}.</div>
-                                <StructuredText text={taskTextLabel(t) || 'Task'} style={{ margin: 0, fontWeight: 650 }} />
+                                <TaskContent text={taskTextLabel(t) || 'Task'} style={{ margin: 0, fontWeight: 650 }} />
                               </div>
                               <span className={`admin-badge ${t.is_completed ? 'success' : 'warning'}`}>
                                 {t.is_completed ? 'Done' : 'Open'}
@@ -1803,7 +1803,7 @@ function WorkLogsPageInner() {
                       <div key={t.id} className="admin-card" style={{ padding: 12 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
                           <div style={{ flex: 1 }}>
-                            <StructuredText text={taskTextLabel(t) || 'Task'} style={{ margin: 0, fontWeight: 800 }} />
+                            <TaskContent text={taskTextLabel(t) || 'Task'} style={{ margin: 0, fontWeight: 800 }} />
                             <p className="admin-subtitle" style={{ margin: '6px 0 0 0' }}>
                               Staff: {t.staff_user_id || '—'} • Date: {String(t.work_date || '').slice(0, 10)} • Status: {t.is_completed ? 'Done' : 'Open'}
                             </p>
