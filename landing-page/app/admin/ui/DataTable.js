@@ -20,19 +20,24 @@ function compareValues(a, b) {
 export default function DataTable({
   columns,
   rows,
+  items, // legacy alias for rows
+  rowKey, // legacy alias for getRowId
   getRowId,
+  pageSize, // legacy alias for initialPageSize
   initialPageSize = 10,
   pageSizeOptions = [5, 10, 20, 50],
   initialSortKey = null,
   initialSortDir = 'asc',
   searchPlaceholder = 'Search…',
-  showFilters = true,
+  showSearch = true,
+  showFilters = false,
 }) {
-  const safeRows = Array.isArray(rows) ? rows : [];
+  const effectiveRows = rows ?? items;
+  const safeRows = Array.isArray(effectiveRows) ? effectiveRows : [];
   const safeCols = Array.isArray(columns) ? columns : [];
 
   const [query, setQuery] = useState('');
-  const [pageSize, setPageSize] = useState(initialPageSize);
+  const [pageSizeState, setPageSizeState] = useState(Number(pageSize || initialPageSize) || 10);
   const [pageIndex, setPageIndex] = useState(0);
   const [sortKey, setSortKey] = useState(initialSortKey);
   const [sortDir, setSortDir] = useState(initialSortDir);
@@ -92,12 +97,12 @@ export default function DataTable({
   }, [filteredRows, sortKey, sortDir, colByKey]);
 
   const total = sortedRows.length;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const totalPages = Math.max(1, Math.ceil(total / pageSizeState));
   const safePageIndex = Math.min(pageIndex, totalPages - 1);
   const pageRows = useMemo(() => {
-    const start = safePageIndex * pageSize;
-    return sortedRows.slice(start, start + pageSize);
-  }, [sortedRows, safePageIndex, pageSize]);
+    const start = safePageIndex * pageSizeState;
+    return sortedRows.slice(start, start + pageSizeState);
+  }, [sortedRows, safePageIndex, pageSizeState]);
 
   const toggleSort = (k) => {
     const col = colByKey.get(k);
@@ -120,37 +125,38 @@ export default function DataTable({
 
   return (
     <div>
-      <div className="admin-actions" style={{ justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <input
-            value={query}
-            onChange={(e) => {
-              setPageIndex(0);
-              setQuery(e.target.value);
-            }}
-            placeholder={searchPlaceholder}
-            style={{ width: 260 }}
-          />
+      <div className="admin-toolbar-grid" style={{ marginTop: 12 }}>
+        <div className="admin-toolbar-search" style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+          {showSearch ? (
+            <input
+              className="admin-search-input"
+              value={query}
+              onChange={(e) => {
+                setPageIndex(0);
+                setQuery(e.target.value);
+              }}
+              placeholder={searchPlaceholder}
+              style={{ maxWidth: 420 }}
+            />
+          ) : null}
           <span className="admin-subtitle" style={{ margin: 0 }}>
             {total} result{total === 1 ? '' : 's'}
           </span>
         </div>
 
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span className="admin-subtitle" style={{ margin: 0 }}>
-            Rows
-          </span>
+        <div className="admin-toolbar-actions" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <select
-            value={String(pageSize)}
+            value={String(pageSizeState)}
             onChange={(e) => {
               setPageIndex(0);
-              setPageSize(Number(e.target.value));
+              setPageSizeState(Number(e.target.value));
             }}
-            className="admin-select"
+            className="admin-sort-select"
+            aria-label="Rows per page"
           >
             {pageSizeOptions.map((n) => (
               <option key={n} value={String(n)}>
-                {n}
+                {n} rows
               </option>
             ))}
           </select>
@@ -217,9 +223,12 @@ export default function DataTable({
           </thead>
           <tbody>
             {pageRows.map((row, idx) => (
-              <tr key={getRowId ? getRowId(row) : row?.id ?? idx}>
+              <tr key={(getRowId || rowKey) ? (getRowId || rowKey)(row) : row?.id ?? idx}>
                 {safeCols.map((c) => (
-                  <td key={`${(getRowId ? getRowId(row) : row?.id ?? idx)}-${c.key}`} style={c.cellStyle ? c.cellStyle(row) : undefined}>
+                  <td
+                    key={`${((getRowId || rowKey) ? (getRowId || rowKey)(row) : row?.id ?? idx)}-${c.key}`}
+                    style={c.cellStyle ? c.cellStyle(row) : undefined}
+                  >
                     {c.render ? c.render(row) : normalizeText(c.accessor ? c.accessor(row) : row?.[c.key])}
                   </td>
                 ))}

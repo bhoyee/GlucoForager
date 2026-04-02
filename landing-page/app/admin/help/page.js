@@ -128,8 +128,6 @@ function HelpPageInner() {
   const [reply, setReply] = useState('');
   const [replyLoading, setReplyLoading] = useState(false);
 
-  const [notifications, setNotifications] = useState([]);
-
   const loadSession = async () => {
     if (!token) {
       router.push('/admin');
@@ -161,27 +159,6 @@ function HelpPageInner() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error();
       setStaffUsers(Array.isArray(data.items) ? data.items : []);
-    } catch {
-      // ignore
-    }
-  };
-
-  const loadNotifications = async () => {
-    if (!token) return;
-    try {
-      const res = await fetch(`${API_URL}/api/admin/help/notifications?unread_only=1&limit=200`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.status === 401) return;
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        setNotifications(Array.isArray(data.items) ? data.items : []);
-        try {
-          if (typeof window !== 'undefined') window.dispatchEvent(new Event('admin-help-notifications-updated'));
-        } catch {
-          // ignore
-        }
-      }
     } catch {
       // ignore
     }
@@ -251,7 +228,6 @@ function HelpPageInner() {
 
   useEffect(() => {
     loadTickets();
-    loadNotifications();
   }, [token, filterStatus, filterPriority, filterAssignedTo, filterMine]);
 
   useEffect(() => {
@@ -260,9 +236,7 @@ function HelpPageInner() {
       setMessages([]);
       return;
     }
-    // When a ticket is opened, automatically mark any unread notifications for it as read.
     loadTicket(selectedId);
-    markTicketNotificationsRead(selectedId);
   }, [selectedId]);
 
   useEffect(() => {
@@ -294,7 +268,6 @@ function HelpPageInner() {
       setNewMessage('');
       setNewPriority('normal');
       await loadTickets();
-      await loadNotifications();
     } catch (e) {
       setMessage(e?.message || 'Failed to create ticket.');
     }
@@ -342,7 +315,6 @@ function HelpPageInner() {
       setReply('');
       loadTicket(selectedId);
       loadTickets();
-      loadNotifications();
     } catch (e) {
       setMessage(e?.message || 'Failed to send.');
     } finally {
@@ -399,63 +371,8 @@ function HelpPageInner() {
       if (!res.ok) throw new Error(data.detail || 'Failed to assign ticket.');
       loadTicket(selectedId);
       loadTickets();
-      loadNotifications();
     } catch (e) {
       setMessage(e?.message || 'Failed to assign ticket.');
-    }
-  };
-
-  const markNotificationRead = async (id) => {
-    if (!token) return;
-    try {
-      const res = await fetch(`${API_URL}/api/admin/help/notifications/${id}/read`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        loadNotifications();
-        try {
-          if (typeof window !== 'undefined') window.dispatchEvent(new Event('admin-help-notifications-updated'));
-        } catch {
-          // ignore
-        }
-      }
-    } catch {
-      // ignore
-    }
-  };
-
-  const markTicketNotificationsRead = async (ticketId) => {
-    const tid = Number(ticketId);
-    if (!token || !tid) return;
-    let matching = (Array.isArray(notifications) ? notifications : []).filter((n) => Number(n?.data?.ticket_id) === tid);
-
-    if (!matching.length) {
-      try {
-        const res = await fetch(`${API_URL}/api/admin/help/notifications?unread_only=1&limit=200`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.ok) {
-          const data = await res.json().catch(() => ({}));
-          const items = Array.isArray(data?.items) ? data.items : [];
-          matching = items.filter((n) => Number(n?.data?.ticket_id) === tid);
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    if (!matching.length) return;
-    await Promise.allSettled(matching.map((n) => markNotificationRead(n.id)));
-  };
-
-  const openFromNotification = async (n) => {
-    if (!n) return;
-    const tid = Number(n?.data?.ticket_id);
-    try {
-      await markNotificationRead(n.id);
-    } finally {
-      if (tid) setSelectedId(tid);
     }
   };
 
@@ -481,39 +398,6 @@ function HelpPageInner() {
       <div className="admin-card">
         <h2 className="admin-title">Help Tickets</h2>
         {message && <p className="admin-subtitle">{message}</p>}
-
-        {notifications.length > 0 ? (
-          <details style={{ marginTop: 10 }}>
-            <summary>
-              Notifications <span className="admin-badge danger">{notifications.length}</span>
-            </summary>
-            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {notifications.map((n) => (
-                <div key={n.id} className="admin-card" style={{ padding: 12 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                    <div>
-                      <div style={{ fontWeight: 700 }}>{n.title}</div>
-                      {n.body ? <div className="admin-subtitle">{n.body}</div> : null}
-                    </div>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                      {Number(n?.data?.ticket_id) ? (
-                        <button className="admin-button info" type="button" onClick={() => openFromNotification(n)}>
-                          Open
-                        </button>
-                      ) : null}
-                      <button className="admin-button secondary" type="button" onClick={() => markNotificationRead(n.id)}>
-                        Mark read
-                      </button>
-                    </div>
-                  </div>
-                  <div className="admin-subtitle" style={{ marginTop: 6 }}>
-                    {n.created_at}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </details>
-        ) : null}
       </div>
 
       <div className="admin-card" style={{ marginTop: 16 }}>

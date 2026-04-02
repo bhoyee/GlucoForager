@@ -23,6 +23,7 @@ export default function AdminShell({ children }) {
   const [navSectionOpenInitialized, setNavSectionOpenInitialized] = useState(false);
   const [helpUnreadCount, setHelpUnreadCount] = useState(0);
   const [inboxUnreadCount, setInboxUnreadCount] = useState(0);
+  const [requestsPendingCount, setRequestsPendingCount] = useState(0);
 
   const loadSession = useCallback(async () => {
     if (isPublicRoute) return;
@@ -67,7 +68,8 @@ export default function AdminShell({ children }) {
       if (response.status === 401) return;
       const data = await response.json().catch(() => ({}));
       const items = Array.isArray(data?.items) ? data.items : [];
-      setHelpUnreadCount(items.length);
+      // Backstop: only count ticket.* types even if backend changes.
+      setHelpUnreadCount(items.filter((n) => String(n?.type || '').startsWith('ticket.')).length);
     } catch {
       // ignore
     }
@@ -86,16 +88,34 @@ export default function AdminShell({ children }) {
     }
 
     try {
-      const [notifRes, mailRes] = await Promise.all([
-        adminFetch(`${API_URL}/api/admin/staff-notifications?unread_only=1&limit=200`),
-        adminFetch(`${API_URL}/api/admin/inbox/messages?box=inbox&unread_only=1&limit=200`),
-      ]);
-      if (notifRes.status === 401 || mailRes.status === 401) return;
-      const notifData = await notifRes.json().catch(() => ({}));
+      const mailRes = await adminFetch(`${API_URL}/api/admin/inbox/messages?box=inbox&unread_only=1&limit=200`);
+      if (mailRes.status === 401) return;
       const mailData = await mailRes.json().catch(() => ({}));
-      const notifItems = Array.isArray(notifData?.items) ? notifData.items : [];
       const mailItems = Array.isArray(mailData?.items) ? mailData.items : [];
-      setInboxUnreadCount(notifItems.length + mailItems.length);
+      // Inbox badge should reflect unread mail only (not general notifications).
+      setInboxUnreadCount(mailItems.length);
+    } catch {
+      // ignore
+    }
+  }, [API_URL, isPublicRoute, session?.permissions]);
+
+  const loadRequestsPendingCount = useCallback(async () => {
+    if (isPublicRoute) return;
+    const token = getAdminAccessToken();
+    if (!token) return;
+
+    const permissions = Array.isArray(session?.permissions) ? session.permissions : [];
+    const canManageRequests = permissions.includes('*') || permissions.includes('requests.manage');
+    if (!canManageRequests) {
+      setRequestsPendingCount(0);
+      return;
+    }
+
+    try {
+      const response = await adminFetch(`${API_URL}/api/admin/requests/pending-count`);
+      if (response.status === 401) return;
+      const data = await response.json().catch(() => ({}));
+      setRequestsPendingCount(Number(data?.count || 0) || 0);
     } catch {
       // ignore
     }
@@ -149,6 +169,10 @@ export default function AdminShell({ children }) {
   }, [loadInboxUnreadCount, pathname]);
 
   useEffect(() => {
+    loadRequestsPendingCount();
+  }, [loadRequestsPendingCount, pathname]);
+
+  useEffect(() => {
     if (isPublicRoute) return undefined;
     const handler = () => loadHelpUnreadCount();
     window.addEventListener('admin-help-notifications-updated', handler);
@@ -164,6 +188,13 @@ export default function AdminShell({ children }) {
 
   useEffect(() => {
     if (isPublicRoute) return undefined;
+    const handler = () => loadRequestsPendingCount();
+    window.addEventListener('admin-requests-updated', handler);
+    return () => window.removeEventListener('admin-requests-updated', handler);
+  }, [isPublicRoute, loadRequestsPendingCount]);
+
+  useEffect(() => {
+    if (isPublicRoute) return undefined;
     const timer = setInterval(() => loadHelpUnreadCount(), 20_000);
     return () => clearInterval(timer);
   }, [isPublicRoute, loadHelpUnreadCount]);
@@ -173,6 +204,12 @@ export default function AdminShell({ children }) {
     const timer = setInterval(() => loadInboxUnreadCount(), 12_000);
     return () => clearInterval(timer);
   }, [isPublicRoute, loadInboxUnreadCount]);
+
+  useEffect(() => {
+    if (isPublicRoute) return undefined;
+    const timer = setInterval(() => loadRequestsPendingCount(), 20_000);
+    return () => clearInterval(timer);
+  }, [isPublicRoute, loadRequestsPendingCount]);
 
   useEffect(() => {
     if (isPublicRoute) return undefined;
@@ -318,6 +355,7 @@ export default function AdminShell({ children }) {
           ...(canSeeUpdatesMenu ? [{ href: '/admin/updates', label: 'Updates', icon: 'UP', perm: 'intranet_updates.read' }] : []),
           { href: '/admin/attendance', label: 'Clock In/Out', icon: 'CI' },
           { href: '/admin/work-logs', label: 'Work Logs', icon: 'WL' },
+          { href: '/admin/requests', label: 'My Requests', icon: 'RQ', perm: ['requests.read_own', 'requests.write_own'] },
           { href: '/admin/my-drive', label: 'MyDrive', icon: 'DR' },
           ...(isAdmin ? [{ href: '/admin/staff-drive', label: 'StaffDrive', icon: 'SD', perm: 'admin.manage' }] : []),
           { href: '/admin/work-plans', label: 'Work Plans', icon: 'WP', perm: 'work_logs.manage' },
@@ -338,6 +376,7 @@ export default function AdminShell({ children }) {
           { href: '/admin/payroll', label: 'Payroll', icon: 'PR', perm: 'payroll.manage' },
           { href: '/admin/staff', label: 'Staff', icon: 'ST', perm: 'staff.manage' },
           { href: '/admin/expenses', label: 'Expenses', icon: 'EX', perm: 'expenses.read' },
+          { href: '/admin/requests/manage', label: 'Requests', icon: 'RQ', perm: 'requests.manage' },
           { href: '/admin/audit', label: 'Audit Log', icon: 'AL', perm: 'admin.manage' },
         ],
       },
@@ -537,6 +576,11 @@ export default function AdminShell({ children }) {
                           {item.href === '/admin/inbox' && inboxUnreadCount > 0 ? (
                             <span className="admin-badge danger" style={{ marginLeft: 'auto' }}>
                               {inboxUnreadCount}
+                            </span>
+                          ) : null}
+                          {item.href === '/admin/requests/manage' && requestsPendingCount > 0 ? (
+                            <span className="admin-badge warning" style={{ marginLeft: 'auto' }}>
+                              {requestsPendingCount}
                             </span>
                           ) : null}
                         </Link>
