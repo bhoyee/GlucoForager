@@ -170,6 +170,31 @@ function IntranetTicker({ items }) {
   );
 }
 
+function StandupNoteBanner({ notes }) {
+  const rows = Array.isArray(notes) ? notes.filter(Boolean) : [];
+  if (!rows.length) return null;
+
+  const primary = rows[0];
+  const title = String(primary?.title || 'Standup').trim() || 'Standup';
+  const body = String(primary?.body || '').replace(/\s+/g, ' ').trim();
+  const url = String(primary?.meeting_url || '').trim();
+
+  return (
+    <div className="admin-standup-note" role="status" aria-label="Standup note">
+      <div className="admin-standup-note-badge">Standup</div>
+      <div className="admin-standup-note-content">
+        <div className="admin-standup-note-title">{title}</div>
+        {body ? <div className="admin-standup-note-body">{body}</div> : null}
+      </div>
+      {url ? (
+        <a className="admin-standup-note-link" href={url} target="_blank" rel="noreferrer">
+          Join
+        </a>
+      ) : null}
+    </div>
+  );
+}
+
 export default function StaffDashboard() {
   const router = useRouter();
 
@@ -185,6 +210,7 @@ export default function StaffDashboard() {
   const [attendanceMonth, setAttendanceMonth] = useState([]);
   const [week, setWeek] = useState(null);
   const [intranetUpdates, setIntranetUpdates] = useState([]);
+  const [standupNotes, setStandupNotes] = useState([]);
 
   const permissions = Array.isArray(me?.permissions) ? me.permissions : [];
   const loadInFlightRef = useRef(false);
@@ -333,6 +359,14 @@ export default function StaffDashboard() {
         } else {
           setIntranetUpdates([]);
         }
+
+        // Standup / sticky notes are always safe to fetch for logged-in staff.
+        requests.push(
+          safeJson(`${API_URL}/api/admin/dashboard-notes/active`, {
+            timeoutMs: 12000,
+            allowUnauthorized: true,
+          }).then((r) => setStandupNotes(Array.isArray(r?.data?.items) ? r.data.items : []))
+        );
 
         await Promise.allSettled(requests);
         setLastUpdatedAt(new Date().toISOString());
@@ -515,6 +549,8 @@ export default function StaffDashboard() {
           </div>
         ) : null}
       </div>
+
+      <StandupNoteBanner notes={standupNotes} />
 
       {hasPermission(permissions, 'intranet_updates.read') ? <IntranetTicker items={tickerUpdates} /> : null}
 

@@ -298,6 +298,7 @@ export default function AdminShell({ children }) {
   const isAdmin = permissions.includes('*') || permissions.includes('admin.manage') || roles.includes('admin');
   const isMarketer = roles.includes('marketer');
   const canSeeUpdatesMenu = isAdmin || roles.includes('hr');
+  const canSeeStandupNotesMenu = permissions.includes('*') || permissions.includes('dashboard_notes.manage');
 
   useEffect(() => {
     if (isPublicRoute) return;
@@ -353,6 +354,7 @@ export default function AdminShell({ children }) {
           { href: '/admin/profile', label: 'My Profile', icon: 'ME' },
           ...(session?.email && !isAdmin ? [{ href: '/admin/my-team', label: 'My Team', icon: 'TM' }] : []),
           ...(canSeeUpdatesMenu ? [{ href: '/admin/updates', label: 'Updates', icon: 'UP', perm: 'intranet_updates.read' }] : []),
+          ...(canSeeStandupNotesMenu ? [{ href: '/admin/standup-notes', label: 'Standup Notes', icon: 'SN', perm: 'dashboard_notes.manage' }] : []),
           { href: '/admin/attendance', label: 'Clock In/Out', icon: 'CI' },
           { href: '/admin/work-logs', label: 'Work Logs', icon: 'WL' },
           { href: '/admin/requests', label: 'My Requests', icon: 'RQ', perm: ['requests.read_own', 'requests.write_own'] },
@@ -432,7 +434,7 @@ export default function AdminShell({ children }) {
       .filter((s) => (s.items || []).length > 0);
 
     return cleaned;
-  }, [canSeeUpdatesMenu, isAdmin, isMarketer, permissions, session]);
+  }, [canSeeStandupNotesMenu, canSeeUpdatesMenu, isAdmin, isMarketer, permissions, session]);
 
   const portalTitle = isAdmin ? 'GlucoForager Admin' : 'GlucoForager Staff Portal';
   const signedInLabel = useMemo(() => {
