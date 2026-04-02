@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import EmptyState from '../ui/EmptyState';
 import LoadingState from '../ui/LoadingState';
+import StructuredText from '../ui/StructuredText';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -384,7 +385,7 @@ export default function WorkPlansPage() {
                                 {(Array.isArray(s.tasks) ? s.tasks : []).map((t) => (
                                   <div key={t.id} className="admin-card admin-card--subtle" style={{ padding: 12 }}>
                                     <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                                      <p style={{ margin: 0, fontWeight: 700, whiteSpace: 'pre-wrap' }}>{t.text}</p>
+                                      <StructuredText text={t.text} style={{ margin: 0, fontWeight: 700 }} />
                                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                                         <button className="admin-button secondary" type="button" onClick={() => openEdit(t)}>
                                           Edit
