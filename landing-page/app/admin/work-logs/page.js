@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import EmptyState from '../ui/EmptyState';
 import LoadingState from '../ui/LoadingState';
 import DataTable from '../ui/DataTable';
+import TaskContent from '../ui/TaskContent';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -1174,9 +1175,10 @@ function WorkLogsPageInner() {
                     <div key={t.id} className="admin-card" style={{ padding: 12 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
                         <div style={{ flex: 1 }}>
-                          <p style={{ margin: 0, fontWeight: 500, color: '#1976d2', whiteSpace: 'pre-wrap' }}>
-                            {taskIndex + 1}. {taskTextLabel(t)}
-                          </p>
+                          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                            <div style={{ fontWeight: 900, color: '#1976d2', marginTop: 1 }}>{taskIndex + 1}.</div>
+                            <TaskContent text={taskTextLabel(t)} style={{ margin: 0, fontWeight: 500, color: '#1976d2' }} />
+                          </div>
                           {t.is_completed ? (
                             <p className="admin-subtitle" style={{ margin: '6px 0 0 0' }}>
                               Done {t.completed_at ? `• ${String(t.completed_at).slice(0, 19).replace('T', ' ')}` : ''}
@@ -1521,9 +1523,10 @@ function WorkLogsPageInner() {
                         {(Array.isArray(monthViewPlan?.tasks) ? monthViewPlan.tasks : []).map((t, idx) => (
                           <div key={t.id || `${t.title}-${idx}`} className="admin-card" style={{ padding: 12 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
-                              <p style={{ margin: 0, fontWeight: 650, whiteSpace: 'pre-wrap' }}>
-                                {idx + 1}. {taskTextLabel(t) || 'Task'}
-                              </p>
+                              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                                <div style={{ fontWeight: 900, marginTop: 1 }}>{idx + 1}.</div>
+                                <TaskContent text={taskTextLabel(t) || 'Task'} style={{ margin: 0, fontWeight: 650 }} />
+                              </div>
                               <span className={`admin-badge ${t.is_completed ? 'success' : 'warning'}`}>
                                 {t.is_completed ? 'Done' : 'Open'}
                               </span>
@@ -1800,7 +1803,7 @@ function WorkLogsPageInner() {
                       <div key={t.id} className="admin-card" style={{ padding: 12 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
                           <div style={{ flex: 1 }}>
-                            <p style={{ margin: 0, fontWeight: 800, whiteSpace: 'pre-wrap' }}>{taskTextLabel(t) || 'Task'}</p>
+                            <TaskContent text={taskTextLabel(t) || 'Task'} style={{ margin: 0, fontWeight: 800 }} />
                             <p className="admin-subtitle" style={{ margin: '6px 0 0 0' }}>
                               Staff: {t.staff_user_id || '—'} • Date: {String(t.work_date || '').slice(0, 10)} • Status: {t.is_completed ? 'Done' : 'Open'}
                             </p>

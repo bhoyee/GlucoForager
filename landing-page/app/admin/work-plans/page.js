@@ -4,8 +4,34 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import EmptyState from '../ui/EmptyState';
 import LoadingState from '../ui/LoadingState';
+import dynamic from 'next/dynamic';
+import TaskContent from '../ui/TaskContent';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
+
+const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
+
+function isQuillEmpty(html) {
+  const raw = String(html || '').trim();
+  if (!raw) return true;
+  const text = raw
+    .replace(/<(.|\n)*?>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return !text;
+}
+
+function toQuillHtml(v) {
+  const raw = String(v || '').trim();
+  if (!raw) return '';
+  if (raw.startsWith('<')) return raw;
+  const escaped = raw
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  return `<p>${escaped.replace(/\n/g, '<br/>')}</p>`;
+}
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -114,7 +140,7 @@ export default function WorkPlansPage() {
       setMessage('');
       try {
         const text = String(assignText || '').trim();
-        if (!text) throw new Error('Task text is required.');
+        if (isQuillEmpty(text)) throw new Error('Task text is required.');
 
         const url =
           assignMode === 'role'
@@ -151,7 +177,7 @@ export default function WorkPlansPage() {
 
   const openEdit = (task) => {
     setEditTask(task);
-    setEditText(String(task?.text || ''));
+    setEditText(toQuillHtml(task?.text || ''));
     setEditOpen(true);
   };
 
@@ -169,6 +195,7 @@ export default function WorkPlansPage() {
       setEditSaving(true);
       setMessage('');
       try {
+        if (isQuillEmpty(editText)) throw new Error('Task text is required.');
         const res = await fetch(`${API_URL}/api/admin/work-plans/tasks/${editTask.id}/update`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -315,16 +342,34 @@ export default function WorkPlansPage() {
 
             <div className="admin-field" style={{ marginTop: 10 }}>
               <label>Task</label>
-              <textarea
-                value={assignText}
-                onChange={(e) => setAssignText(e.target.value)}
-                placeholder="Write the task instructions..."
-                maxLength={4000}
-                required
-              />
+              <div className="admin-quill" style={{ border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden', background: '#fff' }}>
+                <ReactQuill
+                  theme="snow"
+                  value={assignText}
+                  onChange={setAssignText}
+                  placeholder="Write the task instructions..."
+                  modules={{
+                    toolbar: [
+                      [{ header: [1, 2, 3, false] }],
+                      [{ size: ['small', false, 'large', 'huge'] }],
+                      ['bold', 'italic', 'underline', 'strike'],
+                      [{ color: [] }, { background: [] }],
+                      [{ list: 'ordered' }, { list: 'bullet' }],
+                      [{ indent: '-1' }, { indent: '+1' }],
+                      ['link'],
+                      ['clean'],
+                    ],
+                  }}
+                  formats={['header', 'size', 'bold', 'italic', 'underline', 'strike', 'color', 'background', 'list', 'indent', 'link']}
+                  style={{ '--editor-height': '180px' }}
+                />
+              </div>
+              <p className="admin-help" style={{ marginTop: 6 }}>
+                Tip: use headings, bullets and font size to make the task easier to read.
+              </p>
             </div>
             <div className="admin-actions" style={{ justifyContent: 'flex-end' }}>
-              <button className="admin-button" type="submit" disabled={assigning || picklistsLoading || !assignText.trim()}>
+              <button className="admin-button" type="submit" disabled={assigning || picklistsLoading || isQuillEmpty(assignText)}>
                 {assigning ? 'Assigning…' : 'Assign task'}
               </button>
             </div>
@@ -384,7 +429,7 @@ export default function WorkPlansPage() {
                                 {(Array.isArray(s.tasks) ? s.tasks : []).map((t) => (
                                   <div key={t.id} className="admin-card admin-card--subtle" style={{ padding: 12 }}>
                                     <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                                      <p style={{ margin: 0, fontWeight: 700, whiteSpace: 'pre-wrap' }}>{t.text}</p>
+                                      <TaskContent text={t.text} style={{ margin: 0, fontWeight: 700 }} />
                                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                                         <button className="admin-button secondary" type="button" onClick={() => openEdit(t)}>
                                           Edit
@@ -434,13 +479,33 @@ export default function WorkPlansPage() {
               <form onSubmit={saveEdit}>
                 <div className="admin-field">
                   <label>Task</label>
-                  <textarea value={editText} onChange={(e) => setEditText(e.target.value)} maxLength={4000} required />
+                  <div className="admin-quill" style={{ border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden', background: '#fff' }}>
+                    <ReactQuill
+                      theme="snow"
+                      value={editText}
+                      onChange={setEditText}
+                      modules={{
+                        toolbar: [
+                          [{ header: [1, 2, 3, false] }],
+                          [{ size: ['small', false, 'large', 'huge'] }],
+                          ['bold', 'italic', 'underline', 'strike'],
+                          [{ color: [] }, { background: [] }],
+                          [{ list: 'ordered' }, { list: 'bullet' }],
+                          [{ indent: '-1' }, { indent: '+1' }],
+                          ['link'],
+                          ['clean'],
+                        ],
+                      }}
+                      formats={['header', 'size', 'bold', 'italic', 'underline', 'strike', 'color', 'background', 'list', 'indent', 'link']}
+                      style={{ '--editor-height': '180px' }}
+                    />
+                  </div>
                 </div>
                 <div className="admin-actions" style={{ justifyContent: 'flex-end' }}>
                   <button className="admin-button secondary" type="button" onClick={closeEdit}>
                     Cancel
                   </button>
-                  <button className="admin-button" type="submit" disabled={editSaving || !editText.trim()}>
+                  <button className="admin-button" type="submit" disabled={editSaving || isQuillEmpty(editText)}>
                     {editSaving ? 'Saving…' : 'Save'}
                   </button>
                 </div>

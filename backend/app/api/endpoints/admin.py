@@ -163,6 +163,7 @@ def list_recipes(
 ):
     items = db.query(Recipe).order_by(Recipe.created_at.desc()).all()
     return {
+        "total": len(items),
         "items": [
             {
                 "id": r.id,
