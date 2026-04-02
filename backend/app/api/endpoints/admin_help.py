@@ -176,7 +176,12 @@ def list_notifications(
     db: Session = Depends(get_db),
     current_staff: StaffUser = Depends(require_staff_permission("notifications.read")),
 ):
-    q = db.query(StaffNotification).filter(StaffNotification.staff_user_id == int(current_staff.id))
+    # Help page notifications are only for help tickets, not general notifications
+    # (inbox mail, work logs, etc). Keep this filtered to ticket.* to avoid confusing counts.
+    q = db.query(StaffNotification).filter(
+        StaffNotification.staff_user_id == int(current_staff.id),
+        StaffNotification.type.like("ticket.%"),
+    )
     if unread_only:
         q = q.filter(StaffNotification.read_at.is_(None))
     q = q.order_by(StaffNotification.created_at.desc())
