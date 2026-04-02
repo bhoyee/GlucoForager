@@ -3832,6 +3832,64 @@
   }
 }
 
+.admin-standup-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid #ffe082;
+  background: #fff8e1;
+  margin-top: 14px;
+}
+
+.admin-standup-note-badge {
+  font-size: 12px;
+  font-weight: 900;
+  color: #1b3b2f;
+  background: #ffca28;
+  border: 1px solid #ffb300;
+  border-radius: 999px;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+
+.admin-standup-note-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-standup-note-title {
+  font-weight: 900;
+  color: #1b3b2f;
+  line-height: 1.2;
+}
+
+.admin-standup-note-body {
+  margin-top: 4px;
+  color: #4f6b5c;
+  font-weight: 700;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.admin-standup-note-link {
+  font-size: 12px;
+  font-weight: 900;
+  color: #ffffff;
+  text-decoration: none;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #1b5e20;
+  background: #2e7d32;
+  white-space: nowrap;
+}
+
+.admin-standup-note-link:hover {
+  background: #1b5e20;
+  border-color: #1b5e20;
+}
+
 .admin-ticker-time {
   font-size: 12px;
   font-weight: 700;

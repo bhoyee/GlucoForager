@@ -25,6 +25,9 @@ from .staff_refresh_token import StaffRefreshToken  # noqa: F401
 from .staff_password_reset import StaffPasswordResetToken  # noqa: F401
 from .staff_mfa_challenge import StaffMfaChallenge  # noqa: F401
 from .staff_intranet_update import StaffIntranetUpdate  # noqa: F401
+from .staff_dashboard_note import StaffDashboardNote  # noqa: F401
+from .staff_dashboard_note_target_role import StaffDashboardNoteTargetRole  # noqa: F401
+from .staff_dashboard_note_target_user import StaffDashboardNoteTargetUser  # noqa: F401
 from .staff_request import StaffRequest  # noqa: F401
 from .favorite import Favorite  # noqa: F401
 from .meal_plan import MealPlan  # noqa: F401
