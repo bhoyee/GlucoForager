@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import RichTextEditor from '../ui/RichTextEditor';
+import DataTable from '../ui/DataTable';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -148,7 +149,7 @@ function InboxPageInner() {
     setMessage('');
     try {
       const params = new URLSearchParams();
-      params.set('limit', '80');
+      params.set('limit', '200');
       params.set('box', mailBox);
       if (mailBox === 'inbox') {
         if (mailUnreadOnly) params.set('unread_only', '1');
@@ -503,46 +504,83 @@ function InboxPageInner() {
         ) : mailItems.length === 0 ? (
           <p className="admin-subtitle">No mail.</p>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table className="admin-table" style={{ minWidth: 760 }}>
-              <thead>
-                <tr>
-                  <th>Subject</th>
-                  <th>{mailBox === 'sent' ? 'To' : 'From'}</th>
-                  <th>Date</th>
-                  <th>Status</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {mailItems.map((m) => (
-                  <tr key={m.id} style={{ opacity: m.is_deleted ? 0.6 : 1 }}>
-                    <td style={{ fontWeight: m.read_at ? 500 : 800 }}>{m.subject}</td>
-                    <td className="admin-subtitle">{mailBox === 'sent' ? m.to : m.from}</td>
-                    <td className="admin-subtitle">{formatDateTime(m.created_at)}</td>
-                    <td>{m.read_at ? <span className="admin-badge secondary">Read</span> : <span className="admin-badge warning">Unread</span>}</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                        <button className="admin-button secondary" type="button" onClick={() => openMail(m.id)}>
-                          View
-                        </button>
-                        {mailBox === 'inbox' && !m.is_deleted ? (
-                          <button className="admin-button danger" type="button" onClick={() => softDeleteMail(m.id)}>
-                            Soft delete
-                          </button>
-                        ) : null}
-                        {mailBox === 'inbox' && isAdmin ? (
-                          <button className="admin-button danger" type="button" onClick={() => purgeMail(m.id)}>
-                            Hard delete
-                          </button>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            items={mailItems}
+            rowKey={(m) => String(m.id)}
+            pageSize={10}
+            searchPlaceholder="Search subject / from / to..."
+            columns={[
+              {
+                key: 'subject',
+                header: 'Subject',
+                sortable: true,
+                searchable: true,
+                accessor: (m) => String(m.subject || ''),
+                render: (m) => <span style={{ fontWeight: m.read_at ? 600 : 900, opacity: m.is_deleted ? 0.6 : 1 }}>{m.subject}</span>,
+                sortValue: (m) => String(m.subject || ''),
+              },
+              {
+                key: 'party',
+                header: mailBox === 'sent' ? 'To' : 'From',
+                sortable: true,
+                searchable: true,
+                accessor: (m) => String(mailBox === 'sent' ? m.to : m.from),
+                render: (m) => (
+                  <span className="admin-subtitle" style={{ opacity: m.is_deleted ? 0.6 : 1 }}>
+                    {mailBox === 'sent' ? m.to : m.from}
+                  </span>
+                ),
+                sortValue: (m) => String(mailBox === 'sent' ? m.to : m.from),
+              },
+              {
+                key: 'created_at',
+                header: 'Date',
+                sortable: true,
+                searchable: false,
+                accessor: (m) => formatDateTime(m.created_at),
+                render: (m) => (
+                  <span className="admin-subtitle" style={{ opacity: m.is_deleted ? 0.6 : 1 }}>
+                    {formatDateTime(m.created_at)}
+                  </span>
+                ),
+                sortValue: (m) => (m.created_at ? new Date(String(m.created_at)).getTime() : 0),
+              },
+              {
+                key: 'read',
+                header: 'Status',
+                sortable: true,
+                searchable: false,
+                accessor: (m) => (m.read_at ? 'Read' : 'Unread'),
+                render: (m) =>
+                  m.read_at ? <span className="admin-badge secondary">Read</span> : <span className="admin-badge warning">Unread</span>,
+                sortValue: (m) => (m.read_at ? 1 : 0),
+              },
+              {
+                key: 'action',
+                header: 'Action',
+                sortable: false,
+                searchable: false,
+                width: 260,
+                render: (m) => (
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button className="admin-button secondary" type="button" onClick={() => openMail(m.id)}>
+                      View
+                    </button>
+                    {mailBox === 'inbox' && !m.is_deleted ? (
+                      <button className="admin-button danger" type="button" onClick={() => softDeleteMail(m.id)}>
+                        Soft delete
+                      </button>
+                    ) : null}
+                    {mailBox === 'inbox' && isAdmin ? (
+                      <button className="admin-button danger" type="button" onClick={() => purgeMail(m.id)}>
+                        Hard delete
+                      </button>
+                    ) : null}
+                  </div>
+                ),
+              },
+            ]}
+          />
         )}
       </div>
 

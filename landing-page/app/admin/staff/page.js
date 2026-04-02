@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import DataTable from '../ui/DataTable';
 import EmptyState from '../ui/EmptyState';
 import LoadingState from '../ui/LoadingState';
 import { COUNTRIES } from '../lib/countries';
@@ -257,10 +258,90 @@ export default function AdminStaffPage() {
 
   const roleOptions = roles.map((r) => ({ key: r.key, name: r.name }));
 
-  const countryName = useMemo(() => {
-    const map = new Map(COUNTRIES.map((c) => [c.code, c.name]));
-    return (code) => map.get(String(code || '').toUpperCase()) || String(code || '—');
-  }, []);
+  const staffRows = useMemo(() => (Array.isArray(users) ? users : []), [users]);
+
+  const staffColumns = useMemo(
+    () => [
+      { key: 'full_name', header: 'Full name', accessor: (u) => u?.full_name || '-' },
+      { key: 'employee_code', header: 'Employee ID', accessor: (u) => u?.employee_code || '' },
+      {
+        key: 'roles',
+        header: 'Roles',
+        sortable: false,
+        accessor: (u) => (Array.isArray(u?.roles) ? u.roles.join(', ') : ''),
+        render: (u) => {
+          const idKey = String(u?.id ?? '');
+          const isDeleted = Boolean(u?.deleted_at);
+          return (
+            <div>
+              <select
+                multiple
+                value={roleDrafts[idKey] || []}
+                disabled={isDeleted}
+                onChange={(e) => {
+                  const selected = Array.from(e.target.selectedOptions).map((o) => o.value);
+                  setRoleDrafts((prev) => ({ ...prev, [idKey]: selected }));
+                  setRoleDirty((prev) => ({ ...prev, [idKey]: true }));
+                }}
+                style={{ minWidth: 220, minHeight: 80 }}
+              >
+                {roleOptions.map((r) => (
+                  <option key={r.key} value={r.key}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+              {roleDirty[idKey] && !isDeleted ? (
+                <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button className="admin-button info" type="button" onClick={() => saveRolesForUser(u.id)}>
+                    Save roles
+                  </button>
+                  <button
+                    className="admin-button danger"
+                    type="button"
+                    onClick={() => {
+                      setRoleDrafts((prev) => ({ ...prev, [idKey]: Array.isArray(u.roles) ? u.roles : [] }));
+                      setRoleDirty((prev) => ({ ...prev, [idKey]: false }));
+                    }}
+                  >
+                    Reset
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          );
+        },
+      },
+      {
+        key: 'actions',
+        header: 'Actions',
+        sortable: false,
+        searchable: false,
+        render: (u) => {
+          const isDeleted = Boolean(u?.deleted_at);
+          return (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button className="admin-button info" type="button" onClick={() => openDetails(u)}>
+                Details
+              </button>
+              <button
+                className={`admin-button ${u.is_active ? 'warning' : 'secondary'}`}
+                type="button"
+                onClick={() => toggleActive(u)}
+                disabled={isDeleted}
+              >
+                {u.is_active ? 'Disable' : 'Enable'}
+              </button>
+              <button className="admin-button danger" type="button" onClick={() => softDelete(u)} disabled={isDeleted}>
+                Soft delete
+              </button>
+            </div>
+          );
+        },
+      },
+    ],
+    [roleDrafts, roleDirty, roleOptions, openDetails, saveRolesForUser, toggleActive, softDelete],
+  );
 
   return (
     <div className="admin-page">
@@ -352,90 +433,17 @@ export default function AdminStaffPage() {
         <h3>Staff Users</h3>
         {loading ? (
           <LoadingState label="Loading staff users…" />
-        ) : users.length === 0 ? (
+        ) : staffRows.length === 0 ? (
           <EmptyState title="No staff users yet" body="Create a staff account to grant access to the portal." />
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>Email</th>
-                  <th>Timezone</th>
-                  <th>Status</th>
-                  <th>Roles</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((u) => {
-                  const idKey = String(u.id);
-                  const isDeleted = Boolean(u.deleted_at);
-                  const statusLabel = isDeleted ? 'Deleted' : u.is_active ? 'Active' : 'Disabled';
-                  return (
-                    <tr key={u.id} style={isDeleted ? { opacity: 0.7 } : undefined}>
-                      <td>{u.email}</td>
-                      <td>{u.timezone}</td>
-                      <td>{statusLabel}</td>
-                      <td>
-                        <select
-                          multiple
-                          value={roleDrafts[idKey] || []}
-                          disabled={isDeleted}
-                          onChange={(e) => {
-                            const selected = Array.from(e.target.selectedOptions).map((o) => o.value);
-                            setRoleDrafts((prev) => ({ ...prev, [idKey]: selected }));
-                            setRoleDirty((prev) => ({ ...prev, [idKey]: true }));
-                          }}
-                          style={{ minWidth: 220, minHeight: 80 }}
-                        >
-                          {roleOptions.map((r) => (
-                            <option key={r.key} value={r.key}>
-                              {r.name}
-                            </option>
-                          ))}
-                        </select>
-                        {roleDirty[idKey] && !isDeleted ? (
-                          <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                            <button className="admin-button info" type="button" onClick={() => saveRolesForUser(u.id)}>
-                              Save roles
-                            </button>
-                            <button
-                              className="admin-button danger"
-                              type="button"
-                              onClick={() => {
-                                setRoleDrafts((prev) => ({ ...prev, [idKey]: Array.isArray(u.roles) ? u.roles : [] }));
-                                setRoleDirty((prev) => ({ ...prev, [idKey]: false }));
-                              }}
-                            >
-                              Reset
-                            </button>
-                          </div>
-                        ) : null}
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                          <button className="admin-button info" type="button" onClick={() => openDetails(u)}>
-                            Details
-                          </button>
-                          <button
-                            className={`admin-button ${u.is_active ? 'warning' : 'secondary'}`}
-                            type="button"
-                            onClick={() => toggleActive(u)}
-                            disabled={isDeleted}
-                          >
-                            {u.is_active ? 'Disable' : 'Enable'}
-                          </button>
-                          <button className="admin-button danger" type="button" onClick={() => softDelete(u)} disabled={isDeleted}>
-                            Soft delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            columns={staffColumns}
+            rows={staffRows}
+            getRowId={(u) => u.id}
+            initialPageSize={10}
+            pageSizeOptions={[5, 10, 20, 50]}
+            searchPlaceholder="Search staff..."
+          />
         )}
       </div>
 
