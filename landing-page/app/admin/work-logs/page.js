@@ -180,16 +180,22 @@ function WorkLogsPageInner() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmTitle, setConfirmTitle] = useState('Confirm');
   const [confirmBody, setConfirmBody] = useState('');
-  const openConfirm = ({ title, body, onConfirm }) => {
+  const [confirmCtaLabel, setConfirmCtaLabel] = useState('Yes, continue');
+  const [confirmCtaClassName, setConfirmCtaClassName] = useState('admin-button danger');
+  const openConfirm = ({ title, body, onConfirm, confirmLabel, confirmClassName }) => {
     confirmActionRef.current = typeof onConfirm === 'function' ? onConfirm : null;
     setConfirmTitle(title || 'Confirm');
     setConfirmBody(body || '');
+    setConfirmCtaLabel(confirmLabel || 'Yes, continue');
+    setConfirmCtaClassName(confirmClassName || 'admin-button danger');
     setConfirmOpen(true);
   };
   const closeConfirm = () => {
     setConfirmOpen(false);
     setConfirmTitle('Confirm');
     setConfirmBody('');
+    setConfirmCtaLabel('Yes, continue');
+    setConfirmCtaClassName('admin-button danger');
     confirmActionRef.current = null;
   };
   const runConfirm = async () => {
@@ -1004,37 +1010,40 @@ function WorkLogsPageInner() {
       setMessage('Reason is required when submitting a previous day.');
       return;
     }
-    try {
-      if (typeof window !== 'undefined') {
-        const ok = window.confirm(`Submit work log for ${d}? This will lock the day as read-only.`);
-        if (!ok) return;
+
+    const submit = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/admin/work-logs/upsert`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            work_date: d,
+            summary,
+            reason: d !== today ? String(workDateReason || '').trim() : '',
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 401) {
+          localStorage.removeItem('adminToken');
+          router.push('/admin');
+          return;
+        }
+        if (!res.ok) throw new Error(data.detail || 'Failed to save work log.');
+        setMessage('Submitted.');
+        loadMonth();
+        loadWorkDateLog(workDate);
+      } catch (e) {
+        setMessage(e?.message || 'Failed to save work log.');
       }
-    } catch {
-      // ignore
-    }
-    try {
-      const res = await fetch(`${API_URL}/api/admin/work-logs/upsert`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          work_date: d,
-          summary,
-          reason: d !== today ? String(workDateReason || '').trim() : '',
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.status === 401) {
-        localStorage.removeItem('adminToken');
-        router.push('/admin');
-        return;
-      }
-      if (!res.ok) throw new Error(data.detail || 'Failed to save work log.');
-      setMessage('Saved.');
-      loadMonth();
-      loadWorkDateLog(workDate);
-    } catch (e) {
-      setMessage(e?.message || 'Failed to save work log.');
-    }
+    };
+
+    openConfirm({
+      title: 'Submit work log',
+      body: `Submit work log for ${d}? This will lock the day as read-only.`,
+      onConfirm: submit,
+      confirmLabel: 'Submit',
+      confirmClassName: 'admin-button',
+    });
   };
 
   const sendReminder = async (workDate) => {
@@ -1514,53 +1523,63 @@ function WorkLogsPageInner() {
 
                   <div>
                     <h4 style={{ margin: 0 }}>Tasks</h4>
-                    {(Array.isArray(monthViewPlan?.tasks) ? monthViewPlan.tasks : []).length === 0 ? (
-                      <p className="admin-subtitle" style={{ margin: '8px 0 0 0' }}>
-                        No tasks recorded for this date.
-                      </p>
-                    ) : (
-                      <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        {(Array.isArray(monthViewPlan?.tasks) ? monthViewPlan.tasks : []).map((t, idx) => (
-                          <div key={t.id || `${t.title}-${idx}`} className="admin-card" style={{ padding: 12 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
-                              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                                <div style={{ fontWeight: 900, marginTop: 1 }}>{idx + 1}.</div>
-                                <TaskContent text={taskTextLabel(t) || 'Task'} style={{ margin: 0, fontWeight: 650 }} />
+                    {(() => {
+                      const tasks = Array.isArray(selectedLog?.tasks)
+                        ? selectedLog.tasks
+                        : Array.isArray(monthViewPlan?.tasks)
+                          ? monthViewPlan.tasks
+                          : [];
+                      if (tasks.length === 0) {
+                        return (
+                          <p className="admin-subtitle" style={{ margin: '8px 0 0 0' }}>
+                            No tasks recorded for this date.
+                          </p>
+                        );
+                      }
+                      return (
+                        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          {tasks.map((t, idx) => (
+                            <div key={t.id || `${t.title}-${idx}`} className="admin-card" style={{ padding: 12 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
+                                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                                  <div style={{ fontWeight: 900, marginTop: 1 }}>{idx + 1}.</div>
+                                  <TaskContent text={taskTextLabel(t) || 'Task'} style={{ margin: 0, fontWeight: 650 }} />
+                                </div>
+                                <span className={`admin-badge ${t.is_completed ? 'success' : 'warning'}`}>
+                                  {t.is_completed ? 'Done' : 'Open'}
+                                </span>
                               </div>
-                              <span className={`admin-badge ${t.is_completed ? 'success' : 'warning'}`}>
-                                {t.is_completed ? 'Done' : 'Open'}
-                              </span>
+
+                              {(Array.isArray(t.proof_links) ? t.proof_links : []).length > 0 ? (
+                                <div style={{ marginTop: 8 }}>
+                                  <p className="admin-subtitle" style={{ margin: 0 }}>
+                                    Proof links
+                                  </p>
+                                  <ul style={{ margin: '6px 0 0 0', paddingLeft: 18 }}>
+                                    {(Array.isArray(t.proof_links) ? t.proof_links : []).map((lnk) => (
+                                      <li key={lnk}>
+                                        <a href={lnk} target="_blank" rel="noreferrer">
+                                          {lnk}
+                                        </a>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              ) : null}
+
+                              {String(t.completion_note || '').trim() ? (
+                                <div style={{ marginTop: 8 }}>
+                                  <p className="admin-subtitle" style={{ margin: 0 }}>
+                                    Note
+                                  </p>
+                                  <p style={{ margin: '6px 0 0 0', whiteSpace: 'pre-wrap' }}>{t.completion_note}</p>
+                                </div>
+                              ) : null}
                             </div>
-
-                            {(Array.isArray(t.proof_links) ? t.proof_links : []).length > 0 ? (
-                              <div style={{ marginTop: 8 }}>
-                                <p className="admin-subtitle" style={{ margin: 0 }}>
-                                  Proof links
-                                </p>
-                                <ul style={{ margin: '6px 0 0 0', paddingLeft: 18 }}>
-                                  {(Array.isArray(t.proof_links) ? t.proof_links : []).map((lnk) => (
-                                    <li key={lnk}>
-                                      <a href={lnk} target="_blank" rel="noreferrer">
-                                        {lnk}
-                                      </a>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            ) : null}
-
-                            {String(t.completion_note || '').trim() ? (
-                              <div style={{ marginTop: 8 }}>
-                                <p className="admin-subtitle" style={{ margin: 0 }}>
-                                  Note
-                                </p>
-                                <p style={{ margin: '6px 0 0 0', whiteSpace: 'pre-wrap' }}>{t.completion_note}</p>
-                              </div>
-                            ) : null}
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   <div>
@@ -1618,8 +1637,8 @@ function WorkLogsPageInner() {
               <button className="admin-button secondary" type="button" onClick={closeConfirm}>
                 Cancel
               </button>
-              <button className="admin-button danger" type="button" onClick={runConfirm}>
-                Yes, continue
+              <button className={confirmCtaClassName} type="button" onClick={runConfirm}>
+                {confirmCtaLabel}
               </button>
             </div>
           </div>
@@ -2127,6 +2146,66 @@ function WorkLogsPageInner() {
                   </p>
                   <div style={{ marginTop: 10 }}>
                     <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{selectedLog.payload?.summary || ''}</p>
+                  </div>
+
+                  {String(selectedLog.payload?.reason || '').trim() ? (
+                    <div style={{ marginTop: 12 }}>
+                      <p className="admin-subtitle" style={{ margin: 0 }}>
+                        Reason
+                      </p>
+                      <p style={{ margin: '6px 0 0 0', whiteSpace: 'pre-wrap' }}>{String(selectedLog.payload?.reason || '').trim()}</p>
+                    </div>
+                  ) : null}
+
+                  <div style={{ marginTop: 14 }}>
+                    <h5 style={{ margin: 0 }}>Tasks</h5>
+                    {(Array.isArray(selectedLog.tasks) ? selectedLog.tasks : []).length === 0 ? (
+                      <p className="admin-subtitle" style={{ margin: '8px 0 0 0' }}>
+                        No tasks recorded for this date.
+                      </p>
+                    ) : (
+                      <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {(Array.isArray(selectedLog.tasks) ? selectedLog.tasks : []).map((t, idx) => (
+                          <div key={t.id || `${t.title}-${idx}`} className="admin-card admin-card--subtle" style={{ padding: 12 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
+                              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                                <div style={{ fontWeight: 900, marginTop: 1 }}>{idx + 1}.</div>
+                                <TaskContent text={taskTextLabel(t) || 'Task'} style={{ margin: 0, fontWeight: 650 }} />
+                              </div>
+                              <span className={`admin-badge ${t.is_completed ? 'success' : 'warning'}`}>
+                                {t.is_completed ? 'Done' : 'Open'}
+                              </span>
+                            </div>
+
+                            {(Array.isArray(t.proof_links) ? t.proof_links : []).length > 0 ? (
+                              <div style={{ marginTop: 8 }}>
+                                <p className="admin-subtitle" style={{ margin: 0 }}>
+                                  Proof links
+                                </p>
+                                <ul style={{ margin: '6px 0 0 0', paddingLeft: 18 }}>
+                                  {(Array.isArray(t.proof_links) ? t.proof_links : []).map((lnk) => (
+                                    <li key={lnk}>
+                                      <a href={lnk} target="_blank" rel="noreferrer">
+                                        {lnk}
+                                      </a>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            ) : null}
+
+                            {String(t.completion_note || '').trim() ? (
+                              <div style={{ marginTop: 8 }}>
+                                <p className="admin-subtitle" style={{ margin: 0 }}>
+                                  Note
+                                </p>
+                                <p style={{ margin: '6px 0 0 0', whiteSpace: 'pre-wrap' }}>{t.completion_note}</p>
+                              </div>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div style={{ marginTop: 14 }}>

@@ -374,6 +374,17 @@ def get_work_log(
         .order_by(StaffWorkLogComment.created_at.asc())
         .all()
     )
+
+    tasks = (
+        db.query(StaffAssignedTask)
+        .filter(
+            StaffAssignedTask.staff_user_id == int(row.staff_user_id),
+            StaffAssignedTask.work_date == row.work_date,
+            StaffAssignedTask.deleted_at.is_(None),
+        )
+        .order_by(StaffAssignedTask.id.asc())
+        .all()
+    )
     return {
         "id": row.id,
         "staff_user_id": row.staff_user_id,
@@ -381,6 +392,19 @@ def get_work_log(
         "payload": row.payload,
         "created_at": row.created_at.isoformat() if row.created_at else None,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+        "tasks": [
+            {
+                "id": t.id,
+                "work_date": t.work_date.isoformat(),
+                "text": t.text,
+                "is_completed": bool(t.is_completed),
+                "completed_at": t.completed_at.isoformat() if t.completed_at else None,
+                "completion_note": t.completion_note,
+                "proof_links": t.proof_links if isinstance(t.proof_links, list) else [],
+                "assigned_by_staff_user_id": t.assigned_by_staff_user_id,
+            }
+            for t in tasks
+        ],
         "comments": [
             {
                 "id": c.id,
