@@ -37,6 +37,15 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function toLocalDateTimeInput(iso) {
+  const s = String(iso || '').trim();
+  if (!s) return '';
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export default function WorkPlansPage() {
   const router = useRouter();
   const token = useMemo(() => (typeof window === 'undefined' ? null : localStorage.getItem('adminToken')), []);
@@ -59,11 +68,13 @@ export default function WorkPlansPage() {
   const [assignStaffId, setAssignStaffId] = useState('');
   const [assignRoleKey, setAssignRoleKey] = useState('');
   const [assignText, setAssignText] = useState('');
+  const [assignShowAt, setAssignShowAt] = useState('');
   const [assigning, setAssigning] = useState(false);
 
   const [editOpen, setEditOpen] = useState(false);
   const [editTask, setEditTask] = useState(null);
   const [editText, setEditText] = useState('');
+  const [editShowAt, setEditShowAt] = useState('');
   const [editSaving, setEditSaving] = useState(false);
 
   const loadSession = useCallback(async () => {
@@ -146,10 +157,16 @@ export default function WorkPlansPage() {
           assignMode === 'role'
             ? `${API_URL}/api/admin/work-plans/tasks/assign-role`
             : `${API_URL}/api/admin/work-plans/tasks/assign`;
+        let show_at = null;
+        if (String(assignShowAt || '').trim()) {
+          const d = new Date(String(assignShowAt).trim());
+          if (Number.isNaN(d.getTime())) throw new Error('Invalid show time.');
+          show_at = d.toISOString();
+        }
         const payload =
           assignMode === 'role'
-            ? { role_key: assignRoleKey, work_date: workDate, text }
-            : { staff_user_id: Number(assignStaffId), work_date: workDate, text };
+            ? { role_key: assignRoleKey, work_date: workDate, text, show_at }
+            : { staff_user_id: Number(assignStaffId), work_date: workDate, text, show_at };
 
         const res = await fetch(url, {
           method: 'POST',
@@ -165,6 +182,7 @@ export default function WorkPlansPage() {
         if (!res.ok) throw new Error(data.detail || 'Failed to assign task.');
 
         setAssignText('');
+        setAssignShowAt('');
         await loadDaily();
       } catch (e) {
         setMessage(e?.message || 'Failed to assign task.');
@@ -172,12 +190,13 @@ export default function WorkPlansPage() {
         setAssigning(false);
       }
     },
-    [assignMode, assignRoleKey, assignStaffId, assignText, canManage, loadDaily, router, token, workDate]
+    [assignMode, assignRoleKey, assignShowAt, assignStaffId, assignText, canManage, loadDaily, router, token, workDate]
   );
 
   const openEdit = (task) => {
     setEditTask(task);
     setEditText(toQuillHtml(task?.text || ''));
+    setEditShowAt(toLocalDateTimeInput(task?.show_at || ''));
     setEditOpen(true);
   };
 
@@ -185,6 +204,7 @@ export default function WorkPlansPage() {
     setEditOpen(false);
     setEditTask(null);
     setEditText('');
+    setEditShowAt('');
     setEditSaving(false);
   };
 
@@ -196,10 +216,16 @@ export default function WorkPlansPage() {
       setMessage('');
       try {
         if (isQuillEmpty(editText)) throw new Error('Task text is required.');
+        let show_at = null;
+        if (String(editShowAt || '').trim()) {
+          const d = new Date(String(editShowAt).trim());
+          if (Number.isNaN(d.getTime())) throw new Error('Invalid show time.');
+          show_at = d.toISOString();
+        }
         const res = await fetch(`${API_URL}/api/admin/work-plans/tasks/${editTask.id}/update`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: String(editText || '').trim(), work_date: workDate }),
+          body: JSON.stringify({ text: String(editText || '').trim(), work_date: workDate, show_at }),
         });
         const data = await res.json().catch(() => ({}));
         if (res.status === 401) {
@@ -216,7 +242,7 @@ export default function WorkPlansPage() {
         setEditSaving(false);
       }
     },
-    [canManage, editTask?.id, editText, loadDaily, router, token, workDate]
+    [canManage, editShowAt, editTask?.id, editText, loadDaily, router, token, workDate]
   );
 
   const deleteTask = useCallback(
@@ -338,6 +364,14 @@ export default function WorkPlansPage() {
                   </select>
                 </div>
               )}
+
+              <div className="admin-field">
+                <label>Show time (optional)</label>
+                <input type="datetime-local" value={assignShowAt} onChange={(e) => setAssignShowAt(e.target.value)} />
+                <p className="admin-help" style={{ marginTop: 6 }}>
+                  If set, the task stays hidden until this time (your local time).
+                </p>
+              </div>
             </div>
 
             <div className="admin-field" style={{ marginTop: 10 }}>
@@ -400,7 +434,8 @@ export default function WorkPlansPage() {
                 </thead>
                 <tbody>
                   {dailyItems.map((s) => {
-                    const open = Math.max(0, Number(s.total_count || 0) - Number(s.done_count || 0));
+                    const tasks = Array.isArray(s.tasks) ? s.tasks : [];
+                    const open = tasks.filter((t) => !Boolean(t?.is_completed) && !String(t?.unfinished_reason || '').trim()).length;
                     const expanded = Boolean(expandedStaff?.[String(s.staff_user_id)]);
                     return (
                       <>
@@ -440,12 +475,36 @@ export default function WorkPlansPage() {
                                       </div>
                                     </div>
                                     <p className="admin-subtitle" style={{ margin: '6px 0 0 0' }}>
-                                      Status: {t.is_completed ? 'Done' : 'Open'} {t.completed_at ? `• ${t.completed_at}` : ''}
+                                      Status:{' '}
+                                      {t.is_completed
+                                        ? 'Done'
+                                        : String(t.unfinished_reason || '').trim()
+                                          ? 'Unfinished'
+                                          : 'Open'}{' '}
+                                      {t.completed_at ? `• ${t.completed_at}` : ''}
                                     </p>
-                                    {t.completion_note ? (
-                                      <p className="admin-subtitle" style={{ margin: '6px 0 0 0', whiteSpace: 'pre-wrap' }}>
-                                        Note: {t.completion_note}
+                                    {t.show_at ? (
+                                      <p className="admin-subtitle" style={{ margin: '6px 0 0 0' }}>
+                                        Show at: {new Date(String(t.show_at)).toLocaleString()}
                                       </p>
+                                    ) : null}
+                                    {String(t.unfinished_reason || '').trim() ? (
+                                      <div style={{ marginTop: 8 }}>
+                                        <p className="admin-subtitle" style={{ margin: 0, fontWeight: 900, color: '#a16207' }}>
+                                          Unfinished reason
+                                        </p>
+                                        <p className="admin-subtitle" style={{ margin: '6px 0 0 0', whiteSpace: 'pre-wrap' }}>
+                                          {String(t.unfinished_reason || '').trim()}
+                                        </p>
+                                      </div>
+                                    ) : null}
+                                    {String(t.completion_note || '').trim() ? (
+                                      <div style={{ marginTop: 8 }}>
+                                        <p className="admin-subtitle" style={{ margin: 0, fontWeight: 900 }}>
+                                          Note
+                                        </p>
+                                        <TaskContent text={t.completion_note} className="admin-subtitle" style={{ margin: '6px 0 0 0' }} />
+                                      </div>
                                     ) : null}
                                     <p className="admin-subtitle" style={{ margin: '6px 0 0 0' }}>
                                       Proof links: {Array.isArray(t.proof_links) ? t.proof_links.length : 0}
@@ -477,6 +536,13 @@ export default function WorkPlansPage() {
             </div>
             <div className="admin-modal-body">
               <form onSubmit={saveEdit}>
+                <div className="admin-field">
+                  <label>Show time (optional)</label>
+                  <input type="datetime-local" value={editShowAt} onChange={(e) => setEditShowAt(e.target.value)} />
+                  <p className="admin-help" style={{ marginTop: 6 }}>
+                    Leave empty to show immediately.
+                  </p>
+                </div>
                 <div className="admin-field">
                   <label>Task</label>
                   <div className="admin-quill" style={{ border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden', background: '#fff' }}>

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, text as sa_text
+from sqlalchemy import and_, func, or_, text as sa_text
 from sqlalchemy.orm import Session
 
 from ..admin_dependencies import require_staff_permission
@@ -71,6 +72,27 @@ def _utc_today() -> date:
     return datetime.now(timezone.utc).date()
 
 
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _normalize_show_at(v: datetime | None) -> datetime | None:
+    if v is None:
+        return None
+    if v.tzinfo is None:
+        return v.replace(tzinfo=timezone.utc)
+    return v.astimezone(timezone.utc)
+
+
+def _staff_today(staff: StaffUser) -> date:
+    tz_name = str(getattr(staff, "timezone", None) or "UTC").strip() or "UTC"
+    try:
+        tz = ZoneInfo(tz_name)
+    except Exception:
+        tz = ZoneInfo("UTC")
+    return datetime.now(tz).date()
+
+
 def _monday_of_week(d: date) -> date:
     # Monday = 0 ... Sunday = 6
     return d - timedelta(days=int(d.weekday()))
@@ -110,12 +132,15 @@ class TaskAssignPayload(BaseModel):
     work_date: date
     # Allow multi-line tasks and longer instructions from managers/admins.
     text: str = Field(..., min_length=1, max_length=20000)
+    # Optional: delay visibility/notification until this time (UTC ISO datetime recommended).
+    show_at: datetime | None = None
 
 class TaskAssignRolePayload(BaseModel):
     role_key: str = Field(..., min_length=2, max_length=40)
     work_date: date
     # Allow multi-line tasks and longer instructions from managers/admins.
     text: str = Field(..., min_length=1, max_length=20000)
+    show_at: datetime | None = None
 
 
 class TaskSelfAddPayload(BaseModel):
@@ -133,6 +158,7 @@ class TaskCompletePayload(BaseModel):
 class TaskUpdatePayload(BaseModel):
     work_date: date | None = None
     text: str = Field(..., min_length=1, max_length=20000)
+    show_at: datetime | None = None
 
 
 class MilestoneCreatePayload(BaseModel):
@@ -190,15 +216,17 @@ def my_plan(
     db: Session = Depends(get_db),
     current_staff: StaffUser = Depends(require_staff_permission("work_logs.read")),
 ):
-    d = work_date or _utc_today()
+    d = work_date or _staff_today(current_staff)
     roles = StaffRBACService.get_user_role_keys(db, int(current_staff.id))
 
+    now = _utc_now()
     tasks = (
         db.query(StaffAssignedTask)
         .filter(
             StaffAssignedTask.staff_user_id == int(current_staff.id),
             StaffAssignedTask.work_date == d,
             StaffAssignedTask.deleted_at.is_(None),
+            or_(StaffAssignedTask.show_at.is_(None), StaffAssignedTask.show_at <= now),
         )
         .order_by(StaffAssignedTask.id.asc())
         .all()
@@ -255,6 +283,10 @@ def my_plan(
     return {
         "work_date": d.isoformat(),
         "roles": roles,
+        # Badge count should reflect tasks that still need a decision/action.
+        # Once a staff member marks a task "done" or "unfinished" (with a reason),
+        # it should no longer count as pending.
+        "open_tasks_count": sum(1 for t in tasks if (not bool(t.is_completed)) and not bool((getattr(t, "unfinished_reason", None) or "").strip())),
         "tasks": [
             {
                 "id": t.id,
@@ -268,6 +300,8 @@ def my_plan(
                 "unfinished_reason": getattr(t, "unfinished_reason", None),
                 "unfinished_at": t.unfinished_at.isoformat() if getattr(t, "unfinished_at", None) else None,
                 "proof_links": t.proof_links if isinstance(t.proof_links, list) else [],
+                "show_at": t.show_at.isoformat() if getattr(t, "show_at", None) else None,
+                "notified_at": t.notified_at.isoformat() if getattr(t, "notified_at", None) else None,
             }
             for t in tasks
         ],
@@ -306,6 +340,31 @@ def my_plan(
     }
 
 
+@router.get("/open-count")
+def open_task_count(
+    work_date: date | None = None,
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("work_logs.read")),
+):
+    d = work_date or _staff_today(current_staff)
+    now = _utc_now()
+    count = (
+        db.query(StaffAssignedTask.id)
+        .filter(
+            StaffAssignedTask.staff_user_id == int(current_staff.id),
+            StaffAssignedTask.work_date == d,
+            StaffAssignedTask.deleted_at.is_(None),
+            StaffAssignedTask.is_completed.is_(False),
+            # If the staff member already marked the task unfinished with a reason,
+            # treat it as "handled" for badge purposes (same as done).
+            or_(StaffAssignedTask.unfinished_reason.is_(None), func.length(func.trim(StaffAssignedTask.unfinished_reason)) == 0),
+            or_(StaffAssignedTask.show_at.is_(None), StaffAssignedTask.show_at <= now),
+        )
+        .count()
+    )
+    return {"work_date": d.isoformat(), "count": int(count)}
+
+
 @router.post("/tasks/assign")
 def assign_task(
     request: Request,
@@ -319,6 +378,9 @@ def assign_task(
 
     task_text = payload.text.strip()
     _reject_unsafe_html(task_text)
+    show_at = _normalize_show_at(payload.show_at)
+    now = _utc_now()
+    scheduled = bool(show_at and show_at > now)
     row = StaffAssignedTask(
         staff_user_id=int(payload.staff_user_id),
         assigned_by_staff_user_id=int(current_staff.id),
@@ -328,21 +390,24 @@ def assign_task(
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
         proof_links=[],
+        show_at=show_at,
+        notified_at=(now if (show_at and show_at <= now) else None),
     )
     db.add(row)
     db.flush()
 
-    db.add(
-        StaffNotification(
-            staff_user_id=int(payload.staff_user_id),
-            type="task.assigned",
-            title=f"New task for {payload.work_date.isoformat()}",
-            body=_plain_text(task_text, max_len=240),
-            data={"task_id": int(row.id), "work_date": payload.work_date.isoformat()},
-            read_at=None,
-            created_at=datetime.utcnow(),
+    if not scheduled:
+        db.add(
+            StaffNotification(
+                staff_user_id=int(payload.staff_user_id),
+                type="task.assigned",
+                title=f"New task for {payload.work_date.isoformat()}",
+                body=_plain_text(task_text, max_len=240),
+                data={"task_id": int(row.id), "work_date": payload.work_date.isoformat()},
+                read_at=None,
+                created_at=datetime.utcnow(),
+            )
         )
-    )
     db.add(
         StaffAuditLog(
             actor_id=int(current_staff.id),
@@ -357,15 +422,16 @@ def assign_task(
     )
     db.commit()
 
-    # Best-effort email notification.
-    try:
-        send_staff_notification_email(
-            to_email=str(staff.email),
-            title=f"New task for {payload.work_date.isoformat()}",
-            body=f"{task_text}\n\nOpen: {_work_log_link(request, payload.work_date)}",
-        )
-    except Exception:
-        pass
+    if not scheduled:
+        # Best-effort email notification.
+        try:
+            send_staff_notification_email(
+                to_email=str(staff.email),
+                title=f"New task for {payload.work_date.isoformat()}",
+                body=f"{task_text}\n\nOpen: {_work_log_link(request, payload.work_date)}",
+            )
+        except Exception:
+            pass
     return {"ok": True, "id": row.id}
 
 
@@ -379,6 +445,10 @@ def assign_task_to_role(
     role_key = payload.role_key.strip().lower()
     task_text = payload.text.strip()
     _reject_unsafe_html(task_text)
+
+    show_at = _normalize_show_at(payload.show_at)
+    now = _utc_now()
+    scheduled = bool(show_at and show_at > now)
 
     # Get active staff ids for this role key.
     rows = db.execute(
@@ -411,22 +481,25 @@ def assign_task_to_role(
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
             proof_links=[],
+            show_at=show_at,
+            notified_at=(now if (show_at and show_at <= now) else None),
         )
         db.add(row)
         db.flush()
         created_ids.append(int(row.id))
 
-        db.add(
-            StaffNotification(
-                staff_user_id=int(staff_id),
-                type="task.assigned",
-                title=f"New task for {payload.work_date.isoformat()}",
-                body=_plain_text(task_text, max_len=240),
-                data={"task_id": int(row.id), "work_date": payload.work_date.isoformat()},
-                read_at=None,
-                created_at=datetime.utcnow(),
+        if not scheduled:
+            db.add(
+                StaffNotification(
+                    staff_user_id=int(staff_id),
+                    type="task.assigned",
+                    title=f"New task for {payload.work_date.isoformat()}",
+                    body=_plain_text(task_text, max_len=240),
+                    data={"task_id": int(row.id), "work_date": payload.work_date.isoformat()},
+                    read_at=None,
+                    created_at=datetime.utcnow(),
+                )
             )
-        )
 
     db.add(
         StaffAuditLog(
@@ -442,20 +515,21 @@ def assign_task_to_role(
     )
     db.commit()
 
-    # Best-effort email notifications (bulk).
-    link = _work_log_link(request, payload.work_date)
-    for sid in staff_ids:
-        to_email = staff_id_to_email.get(int(sid))
-        if not to_email:
-            continue
-        try:
-            send_staff_notification_email(
-                to_email=str(to_email),
-                title=f"New task for {payload.work_date.isoformat()}",
-                body=f"{task_text}\n\nOpen: {link}",
-            )
-        except Exception:
-            pass
+    if not scheduled:
+        # Best-effort email notifications (bulk).
+        link = _work_log_link(request, payload.work_date)
+        for sid in staff_ids:
+            to_email = staff_id_to_email.get(int(sid))
+            if not to_email:
+                continue
+            try:
+                send_staff_notification_email(
+                    to_email=str(to_email),
+                    title=f"New task for {payload.work_date.isoformat()}",
+                    body=f"{task_text}\n\nOpen: {link}",
+                )
+            except Exception:
+                pass
     return {"ok": True, "count": len(created_ids), "ids": created_ids}
 
 
@@ -530,6 +604,8 @@ def list_tasks(
                 "unfinished_at": r.unfinished_at.isoformat() if getattr(r, "unfinished_at", None) else None,
                 "proof_links": r.proof_links if isinstance(r.proof_links, list) else [],
                 "assigned_by_staff_user_id": r.assigned_by_staff_user_id,
+                "show_at": r.show_at.isoformat() if getattr(r, "show_at", None) else None,
+                "notified_at": r.notified_at.isoformat() if getattr(r, "notified_at", None) else None,
             }
             for r in rows
         ]
@@ -585,6 +661,8 @@ def tasks_by_date(
                 "unfinished_at": task.unfinished_at.isoformat() if getattr(task, "unfinished_at", None) else None,
                 "proof_links": task.proof_links if isinstance(task.proof_links, list) else [],
                 "assigned_by_staff_user_id": task.assigned_by_staff_user_id,
+                "show_at": task.show_at.isoformat() if getattr(task, "show_at", None) else None,
+                "notified_at": task.notified_at.isoformat() if getattr(task, "notified_at", None) else None,
             }
         )
 
@@ -634,6 +712,8 @@ def tasks_by_week(
                 "unfinished_at": task.unfinished_at.isoformat() if getattr(task, "unfinished_at", None) else None,
                 "proof_links": task.proof_links if isinstance(task.proof_links, list) else [],
                 "assigned_by_staff_user_id": task.assigned_by_staff_user_id,
+                "show_at": task.show_at.isoformat() if getattr(task, "show_at", None) else None,
+                "notified_at": task.notified_at.isoformat() if getattr(task, "notified_at", None) else None,
             }
             for task, staff in rows
         ],
@@ -657,6 +737,9 @@ def complete_task(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
     if int(row.staff_user_id) != int(current_staff.id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+    now = _utc_now()
+    if getattr(row, "show_at", None) is not None and row.show_at and row.show_at > now:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Task is not yet available.")
     if _is_work_log_submitted(db, int(current_staff.id), row.work_date):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Work log already submitted for this date. Tasks are read-only.")
 
@@ -1283,12 +1366,19 @@ def update_task(
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
 
-    before = {"work_date": row.work_date.isoformat(), "text": row.text}
+    before = {
+        "work_date": row.work_date.isoformat(),
+        "text": row.text,
+        "show_at": row.show_at.isoformat() if getattr(row, "show_at", None) else None,
+    }
     task_text = payload.text.strip()
     _reject_unsafe_html(task_text)
     row.text = task_text[:20000]
     if payload.work_date is not None:
         row.work_date = payload.work_date
+    # Allow clearing show_at by sending null explicitly.
+    if "show_at" in getattr(payload, "model_fields_set", set()):
+        row.show_at = _normalize_show_at(payload.show_at)
     row.updated_at = datetime.utcnow()
 
     db.add(
@@ -1297,7 +1387,14 @@ def update_task(
             action="work_plans.task.update",
             entity="staff_assigned_tasks",
             entity_id=str(row.id),
-            details={"before": before, "after": {"work_date": row.work_date.isoformat(), "text": row.text}},
+            details={
+                "before": before,
+                "after": {
+                    "work_date": row.work_date.isoformat(),
+                    "text": row.text,
+                    "show_at": row.show_at.isoformat() if getattr(row, "show_at", None) else None,
+                },
+            },
             ip=request.client.host if request.client else None,
             user_agent=request.headers.get("user-agent"),
             created_at=datetime.utcnow(),

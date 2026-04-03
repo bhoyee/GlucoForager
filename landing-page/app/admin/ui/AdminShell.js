@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { adminFetch, clearAdminTokens, getAdminAccessToken, getAdminRefreshToken } from '../lib/adminAuth';
 
 export default function AdminShell({ children }) {
@@ -24,6 +24,9 @@ export default function AdminShell({ children }) {
   const [helpUnreadCount, setHelpUnreadCount] = useState(0);
   const [inboxUnreadCount, setInboxUnreadCount] = useState(0);
   const [requestsPendingCount, setRequestsPendingCount] = useState(0);
+  const [workLogsOpenCount, setWorkLogsOpenCount] = useState(0);
+  const [workLogsSubmittedUnreadCount, setWorkLogsSubmittedUnreadCount] = useState(0);
+  const prevWorkLogsOpenCountRef = useRef(0);
 
   const loadSession = useCallback(async () => {
     if (isPublicRoute) return;
@@ -121,6 +124,55 @@ export default function AdminShell({ children }) {
     }
   }, [API_URL, isPublicRoute, session?.permissions]);
 
+  const loadWorkLogsOpenCount = useCallback(async () => {
+    if (isPublicRoute) return;
+    const token = getAdminAccessToken();
+    if (!token) return;
+
+    const permissions = Array.isArray(session?.permissions) ? session.permissions : [];
+    const roles = Array.isArray(session?.roles) ? session.roles : [];
+    const isAdminForBadge = permissions.includes('*') || permissions.includes('admin.manage') || roles.includes('admin');
+    const canReadWorkLogs = permissions.includes('*') || permissions.includes('work_logs.read');
+    if (isAdminForBadge || !canReadWorkLogs) {
+      setWorkLogsOpenCount(0);
+      return;
+    }
+
+    try {
+      const response = await adminFetch(`${API_URL}/api/admin/work-plans/open-count`);
+      if (response.status === 401) return;
+      const data = await response.json().catch(() => ({}));
+      setWorkLogsOpenCount(Number(data?.count || 0) || 0);
+    } catch {
+      // ignore
+    }
+  }, [API_URL, isPublicRoute, session?.permissions, session?.roles]);
+
+  const loadWorkLogsSubmittedUnreadCount = useCallback(async () => {
+    if (isPublicRoute) return;
+    const token = getAdminAccessToken();
+    if (!token) return;
+
+    const permissions = Array.isArray(session?.permissions) ? session.permissions : [];
+    const roles = Array.isArray(session?.roles) ? session.roles : [];
+    const isAdminForBadge = permissions.includes('*') || permissions.includes('admin.manage') || roles.includes('admin');
+    const canReadNotifications = permissions.includes('*') || permissions.includes('notifications.read');
+    if (!isAdminForBadge || !canReadNotifications) {
+      setWorkLogsSubmittedUnreadCount(0);
+      return;
+    }
+
+    try {
+      const response = await adminFetch(`${API_URL}/api/admin/staff-notifications?unread_only=1&limit=200`);
+      if (response.status === 401) return;
+      const data = await response.json().catch(() => ({}));
+      const items = Array.isArray(data?.items) ? data.items : [];
+      setWorkLogsSubmittedUnreadCount(items.filter((n) => String(n?.type || '') === 'worklog.submitted').length);
+    } catch {
+      // ignore
+    }
+  }, [API_URL, isPublicRoute, session?.permissions, session?.roles]);
+
   useEffect(() => {
     if (!session?.email) return;
     if (!navSectionOpenInitialized) return;
@@ -173,6 +225,34 @@ export default function AdminShell({ children }) {
   }, [loadRequestsPendingCount, pathname]);
 
   useEffect(() => {
+    loadWorkLogsOpenCount();
+  }, [loadWorkLogsOpenCount, pathname]);
+
+  useEffect(() => {
+    loadWorkLogsSubmittedUnreadCount();
+  }, [loadWorkLogsSubmittedUnreadCount, pathname]);
+
+  useEffect(() => {
+    // If the Work Logs badge increases while the user is already on /admin/work-logs,
+    // trigger a refresh so new tasks appear without manual reloads.
+    if (pathname !== '/admin/work-logs') {
+      prevWorkLogsOpenCountRef.current = Number(workLogsOpenCount || 0) || 0;
+      return;
+    }
+
+    const prev = Number(prevWorkLogsOpenCountRef.current || 0) || 0;
+    const next = Number(workLogsOpenCount || 0) || 0;
+    prevWorkLogsOpenCountRef.current = next;
+    if (next > prev) {
+      try {
+        window.dispatchEvent(new Event('admin-work-logs-updated'));
+      } catch {
+        // ignore
+      }
+    }
+  }, [pathname, workLogsOpenCount]);
+
+  useEffect(() => {
     if (isPublicRoute) return undefined;
     const handler = () => loadHelpUnreadCount();
     window.addEventListener('admin-help-notifications-updated', handler);
@@ -188,10 +268,24 @@ export default function AdminShell({ children }) {
 
   useEffect(() => {
     if (isPublicRoute) return undefined;
+    const handler = () => loadWorkLogsSubmittedUnreadCount();
+    window.addEventListener('admin-inbox-updated', handler);
+    return () => window.removeEventListener('admin-inbox-updated', handler);
+  }, [isPublicRoute, loadWorkLogsSubmittedUnreadCount]);
+
+  useEffect(() => {
+    if (isPublicRoute) return undefined;
     const handler = () => loadRequestsPendingCount();
     window.addEventListener('admin-requests-updated', handler);
     return () => window.removeEventListener('admin-requests-updated', handler);
   }, [isPublicRoute, loadRequestsPendingCount]);
+
+  useEffect(() => {
+    if (isPublicRoute) return undefined;
+    const handler = () => loadWorkLogsOpenCount();
+    window.addEventListener('admin-work-logs-updated', handler);
+    return () => window.removeEventListener('admin-work-logs-updated', handler);
+  }, [isPublicRoute, loadWorkLogsOpenCount]);
 
   useEffect(() => {
     if (isPublicRoute) return undefined;
@@ -213,6 +307,18 @@ export default function AdminShell({ children }) {
 
   useEffect(() => {
     if (isPublicRoute) return undefined;
+    const timer = setInterval(() => loadWorkLogsOpenCount(), 20_000);
+    return () => clearInterval(timer);
+  }, [isPublicRoute, loadWorkLogsOpenCount]);
+
+  useEffect(() => {
+    if (isPublicRoute) return undefined;
+    const timer = setInterval(() => loadWorkLogsSubmittedUnreadCount(), 20_000);
+    return () => clearInterval(timer);
+  }, [isPublicRoute, loadWorkLogsSubmittedUnreadCount]);
+
+  useEffect(() => {
+    if (isPublicRoute) return undefined;
     const handler = () => {
       if (document.visibilityState !== 'visible') return;
       loadInboxUnreadCount();
@@ -224,6 +330,20 @@ export default function AdminShell({ children }) {
       window.removeEventListener('focus', handler);
     };
   }, [isPublicRoute, loadInboxUnreadCount]);
+
+  useEffect(() => {
+    if (isPublicRoute) return undefined;
+    const handler = () => {
+      if (document.visibilityState !== 'visible') return;
+      loadWorkLogsOpenCount();
+    };
+    document.addEventListener('visibilitychange', handler);
+    window.addEventListener('focus', handler);
+    return () => {
+      document.removeEventListener('visibilitychange', handler);
+      window.removeEventListener('focus', handler);
+    };
+  }, [isPublicRoute, loadWorkLogsOpenCount]);
 
   useEffect(() => {
     if (isPublicRoute) return undefined;
@@ -563,7 +683,19 @@ export default function AdminShell({ children }) {
                           key={item.href}
                           href={item.href}
                           className={pathname === item.href ? 'active' : ''}
-                          onClick={closeSidebar}
+                          onClick={(e) => {
+                            // Next.js won't "navigate" when clicking the same route.
+                            // Use this as a manual refresh gesture to avoid confusion.
+                            if (pathname === item.href) {
+                              e?.preventDefault?.();
+                              try {
+                                window.dispatchEvent(new CustomEvent('admin-route-refresh', { detail: { href: item.href } }));
+                              } catch {
+                                // ignore
+                              }
+                            }
+                            closeSidebar();
+                          }}
                           title={item.label}
                         >
                           <span className="admin-nav-icon" aria-hidden="true">
@@ -583,6 +715,16 @@ export default function AdminShell({ children }) {
                           {item.href === '/admin/requests/manage' && requestsPendingCount > 0 ? (
                             <span className="admin-badge warning" style={{ marginLeft: 'auto' }}>
                               {requestsPendingCount}
+                            </span>
+                          ) : null}
+                          {item.href === '/admin/work-logs' && !isAdmin && workLogsOpenCount > 0 ? (
+                            <span className="admin-badge danger" style={{ marginLeft: 'auto' }}>
+                              {workLogsOpenCount}
+                            </span>
+                          ) : null}
+                          {item.href === '/admin/work-logs' && isAdmin && workLogsSubmittedUnreadCount > 0 ? (
+                            <span className="admin-badge danger" style={{ marginLeft: 'auto' }}>
+                              {workLogsSubmittedUnreadCount}
                             </span>
                           ) : null}
                         </Link>
