@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
-from sqlalchemy import and_
+from sqlalchemy import and_, text as sa_text
 from sqlalchemy.orm import Session
 
 from ..admin_dependencies import require_staff_permission
@@ -75,6 +75,25 @@ def _staff_today(staff: StaffUser) -> date:
     except Exception:
         tz = ZoneInfo("UTC")
     return datetime.now(tz).date()
+
+
+def _staff_ids_with_permission(db: Session, perm_key: str) -> list[int]:
+    rows = db.execute(
+        sa_text(
+            """
+            SELECT DISTINCT su.id
+            FROM staff_users su
+            JOIN staff_user_roles ur ON ur.user_id = su.id
+            JOIN staff_role_permissions rp ON rp.role_id = ur.role_id
+            JOIN staff_permissions p ON p.id = rp.permission_id
+            WHERE p.key = :k
+              AND su.is_active = true
+              AND su.deleted_at IS NULL
+            """
+        ),
+        {"k": str(perm_key)},
+    ).fetchall()
+    return [int(r[0]) for r in rows if r and r[0] is not None]
 
 
 @router.get("/by-date")
@@ -902,4 +921,32 @@ def upsert_work_log(
 
     db.commit()
     db.refresh(row)
+
+    # Notify HR/Admin (work_logs.manage) that a staff work log was submitted.
+    try:
+        recipients = _staff_ids_with_permission(db, "work_logs.manage")
+        recipients = [int(sid) for sid in recipients if int(sid) != int(current_staff.id)]
+        title_name = (str(getattr(current_staff, "full_name", "") or "").strip() or str(current_staff.email)).strip()
+        title = f"Work log submitted: {title_name} ({work_date.isoformat()})"
+        body = str(cleaned.get("summary") or "").strip()
+        body = body[:240] if body else "A staff member submitted their work log."
+        data = {"work_log_id": int(row.id), "work_date": work_date.isoformat(), "staff_user_id": int(current_staff.id)}
+        for sid in recipients:
+            db.add(
+                StaffNotification(
+                    staff_user_id=int(sid),
+                    type="worklog.submitted",
+                    title=title[:140],
+                    body=body[:500] if body else None,
+                    data=data,
+                    read_at=None,
+                    created_at=datetime.utcnow(),
+                )
+            )
+        db.commit()
+    except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass
     return {"ok": True, "id": row.id}

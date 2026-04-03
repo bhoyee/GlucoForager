@@ -690,6 +690,40 @@ function WorkLogsPageInner() {
     }
   };
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const refresh = (event) => {
+      try {
+        const href = event?.detail?.href;
+        if (href && String(href) !== '/admin/work-logs') return;
+      } catch {
+        // ignore
+      }
+      if (document.visibilityState && document.visibilityState !== 'visible') return;
+      loadPlan();
+    };
+
+    window.addEventListener('admin-work-logs-updated', refresh);
+    window.addEventListener('admin-route-refresh', refresh);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+
+    // Poll so new tasks appear even if you're already on this page.
+    const timer = setInterval(() => {
+      if (document.visibilityState && document.visibilityState !== 'visible') return;
+      loadPlan();
+    }, 20_000);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('admin-work-logs-updated', refresh);
+      window.removeEventListener('admin-route-refresh', refresh);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [workDate]); // refresh when date changes
+
   const loadWorkDateLog = async (d) => {
     const t = getTokenNow();
     if (!t || !d) return;
@@ -770,6 +804,11 @@ function WorkLogsPageInner() {
       }
       if (!res.ok) throw new Error(data.detail || 'Failed to update task.');
       loadPlan();
+      try {
+        window.dispatchEvent(new Event('admin-work-logs-updated'));
+      } catch {
+        // ignore
+      }
     } catch (e) {
       setMessage(e?.message || 'Failed to update task.');
       try {
@@ -826,6 +865,11 @@ function WorkLogsPageInner() {
         }
       } catch {
         loadPlan();
+      }
+      try {
+        window.dispatchEvent(new Event('admin-work-logs-updated'));
+      } catch {
+        // ignore
       }
     } catch (e) {
       setMessage(e?.message || 'Failed to add task.');
@@ -1391,7 +1435,7 @@ function WorkLogsPageInner() {
                           </div>
 
                           <div className="admin-actions">
-                            <button className="admin-button secondary" type="button" onClick={() => openUnfinishedModal(t)} disabled={isWorkDateLocked}>
+                            <button className="admin-button warning" type="button" onClick={() => openUnfinishedModal(t)} disabled={isWorkDateLocked}>
                               {String(t.unfinished_reason || '').trim() ? 'Update unfinished reason' : 'Mark unfinished'}
                             </button>
                             <button className="admin-button" type="button" onClick={() => completeAssignedTask(t.id, true)} disabled={isWorkDateLocked}>
@@ -1796,7 +1840,7 @@ function WorkLogsPageInner() {
             <div className="admin-modal-header">
               <h3>Mark unfinished</h3>
               <button className="admin-icon-button danger" type="button" aria-label="Close" onClick={closeUnfinishedModal}>
-                Ã—
+                ×
               </button>
             </div>
             <div className="admin-modal-body">
@@ -1831,7 +1875,7 @@ function WorkLogsPageInner() {
               </div>
             </div>
             <div className="admin-modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-              <button className="admin-button secondary" type="button" onClick={closeUnfinishedModal}>
+              <button className="admin-button danger" type="button" onClick={closeUnfinishedModal}>
                 Cancel
               </button>
               <button className="admin-button" type="button" onClick={saveUnfinishedReason}>
@@ -1938,7 +1982,7 @@ function WorkLogsPageInner() {
         </div>
       ) : null}
 
-      {isManager ? (
+      {false ? (
         <div className="admin-card" style={{ marginTop: 16 }}>
           <div className="admin-actions" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
