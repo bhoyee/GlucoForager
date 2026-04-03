@@ -411,6 +411,8 @@ def get_work_log(
                 "is_completed": bool(t.is_completed),
                 "completed_at": t.completed_at.isoformat() if t.completed_at else None,
                 "completion_note": t.completion_note,
+                "unfinished_reason": getattr(t, "unfinished_reason", None),
+                "unfinished_at": t.unfinished_at.isoformat() if getattr(t, "unfinished_at", None) else None,
                 "proof_links": t.proof_links if isinstance(t.proof_links, list) else [],
                 "assigned_by_staff_user_id": t.assigned_by_staff_user_id,
             }

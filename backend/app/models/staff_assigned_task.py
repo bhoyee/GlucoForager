@@ -22,6 +22,9 @@ class StaffAssignedTask(Base):
     completed_at = Column(DateTime, nullable=True)
     completed_by_staff_user_id = Column(Integer, ForeignKey("staff_users.id"), nullable=True, index=True)
     completion_note = Column(String, nullable=True)
+    unfinished_reason = Column(String, nullable=True)
+    unfinished_at = Column(DateTime, nullable=True)
+    unfinished_by_staff_user_id = Column(Integer, ForeignKey("staff_users.id"), nullable=True, index=True)
     proof_links = Column(JSON, nullable=False, default=list)
 
     deleted_at = Column(DateTime, nullable=True, index=True)
@@ -29,4 +32,3 @@ class StaffAssignedTask(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
