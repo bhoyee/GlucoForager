@@ -248,6 +248,110 @@ def my_requests(
     return {"items": [_serialize(r) for r in rows]}
 
 
+@router.get("/pending-count")
+def pending_count(
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("requests.manage")),  # noqa: ARG001
+):
+    count = (
+        db.query(StaffRequest.id)
+        .filter(
+            StaffRequest.deleted_at.is_(None),
+            StaffRequest.status == "pending",
+        )
+        .count()
+    )
+    return {"count": int(count)}
+
+
+@router.get("/export.csv")
+def export_csv(
+    status_filter: str | None = None,
+    type_filter: str | None = None,
+    staff_user_id: int | None = None,
+    start: date | None = None,
+    end: date | None = None,
+    include_deleted: int = 0,
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("requests.manage")),  # noqa: ARG001
+):
+    q = db.query(StaffRequest, StaffUser).join(StaffUser, StaffUser.id == StaffRequest.staff_user_id)
+    if not include_deleted:
+        q = q.filter(StaffRequest.deleted_at.is_(None))
+
+    # Same behavior as list_all: don't include drafts unless explicitly requested.
+    status_expr = func.lower(func.trim(StaffRequest.status))
+
+    if status_filter:
+        s = str(status_filter).strip().lower()
+        if s not in ALLOWED_STATUSES:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid status filter")
+        q = q.filter(status_expr == s)
+    else:
+        q = q.filter(status_expr != "draft")
+    if type_filter:
+        t = str(type_filter).strip().lower()
+        if t not in ALLOWED_TYPES:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid type filter")
+        q = q.filter(StaffRequest.type == t)
+    if staff_user_id is not None:
+        q = q.filter(StaffRequest.staff_user_id == int(staff_user_id))
+    if start is not None:
+        q = q.filter(StaffRequest.start_date >= start)
+    if end is not None:
+        q = q.filter(or_(StaffRequest.end_date.is_(None), StaffRequest.end_date <= end))
+
+    rows = q.order_by(StaffRequest.created_at.desc().nullslast(), StaffRequest.id.desc()).limit(2000).all()
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(
+        [
+            "id",
+            "staff_user_id",
+            "staff_email",
+            "staff_name",
+            "type",
+            "status",
+            "start_date",
+            "end_date",
+            "submitted_at",
+            "decided_at",
+            "decision_comment",
+            "attachments",
+            "deleted_at",
+        ]
+    )
+    for r, u in rows:
+        w.writerow(
+            [
+                int(r.id),
+                int(r.staff_user_id),
+                str(u.email or ""),
+                str(getattr(u, "full_name", None) or ""),
+                str(r.type or ""),
+                str(r.status or ""),
+                r.start_date.isoformat() if r.start_date else "",
+                r.end_date.isoformat() if r.end_date else "",
+                r.submitted_at.isoformat() if r.submitted_at else "",
+                r.decided_at.isoformat() if r.decided_at else "",
+                str(r.decision_comment or ""),
+                len(r.attachments) if isinstance(r.attachments, list) else 0,
+                r.deleted_at.isoformat() if r.deleted_at else "",
+            ]
+        )
+
+    content = buf.getvalue().encode("utf-8")
+    return Response(
+        content=content,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": "attachment; filename=\"requests.csv\""},
+    )
+
+
+
+
+
+
 @router.get("/{request_id}")
 def get_request(
     request_id: int,
@@ -868,22 +972,6 @@ def remove_attachment(
     return {"ok": True}
 
 
-@router.get("/pending-count")
-def pending_count(
-    db: Session = Depends(get_db),
-    current_staff: StaffUser = Depends(require_staff_permission("requests.manage")),  # noqa: ARG001
-):
-    count = (
-        db.query(StaffRequest.id)
-        .filter(
-            StaffRequest.deleted_at.is_(None),
-            StaffRequest.status == "pending",
-        )
-        .count()
-    )
-    return {"count": int(count)}
-
-
 @router.get("/{request_id}/audit")
 def audit_timeline(
     request_id: int,
@@ -924,87 +1012,3 @@ def audit_timeline(
             for a, u in rows
         ]
     }
-
-
-@router.get("/export.csv")
-def export_csv(
-    status_filter: str | None = None,
-    type_filter: str | None = None,
-    staff_user_id: int | None = None,
-    start: date | None = None,
-    end: date | None = None,
-    include_deleted: int = 0,
-    db: Session = Depends(get_db),
-    current_staff: StaffUser = Depends(require_staff_permission("requests.manage")),  # noqa: ARG001
-):
-    q = db.query(StaffRequest, StaffUser).join(StaffUser, StaffUser.id == StaffRequest.staff_user_id)
-    if not include_deleted:
-        q = q.filter(StaffRequest.deleted_at.is_(None))
-
-    # Same behavior as list_all: don't include drafts unless explicitly requested.
-    status_expr = func.lower(func.trim(StaffRequest.status))
-
-    if status_filter:
-        s = str(status_filter).strip().lower()
-        if s not in ALLOWED_STATUSES:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid status filter")
-        q = q.filter(status_expr == s)
-    else:
-        q = q.filter(status_expr != "draft")
-    if type_filter:
-        t = str(type_filter).strip().lower()
-        if t not in ALLOWED_TYPES:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid type filter")
-        q = q.filter(StaffRequest.type == t)
-    if staff_user_id is not None:
-        q = q.filter(StaffRequest.staff_user_id == int(staff_user_id))
-    if start is not None:
-        q = q.filter(StaffRequest.start_date >= start)
-    if end is not None:
-        q = q.filter(or_(StaffRequest.end_date.is_(None), StaffRequest.end_date <= end))
-
-    rows = q.order_by(StaffRequest.created_at.desc().nullslast(), StaffRequest.id.desc()).limit(2000).all()
-    buf = io.StringIO()
-    w = csv.writer(buf)
-    w.writerow(
-        [
-            "id",
-            "staff_user_id",
-            "staff_email",
-            "staff_name",
-            "type",
-            "status",
-            "start_date",
-            "end_date",
-            "submitted_at",
-            "decided_at",
-            "decision_comment",
-            "attachments",
-            "deleted_at",
-        ]
-    )
-    for r, u in rows:
-        w.writerow(
-            [
-                int(r.id),
-                int(r.staff_user_id),
-                str(u.email or ""),
-                str(getattr(u, "full_name", None) or ""),
-                str(r.type or ""),
-                str(r.status or ""),
-                r.start_date.isoformat() if r.start_date else "",
-                r.end_date.isoformat() if r.end_date else "",
-                r.submitted_at.isoformat() if r.submitted_at else "",
-                r.decided_at.isoformat() if r.decided_at else "",
-                str(r.decision_comment or ""),
-                len(r.attachments) if isinstance(r.attachments, list) else 0,
-                r.deleted_at.isoformat() if r.deleted_at else "",
-            ]
-        )
-
-    content = buf.getvalue().encode("utf-8")
-    return Response(
-        content=content,
-        media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": "attachment; filename=\"requests.csv\""},
-    )
