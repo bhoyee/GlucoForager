@@ -199,9 +199,9 @@ export default function LibraryUploadPage() {
                   <h3 style={{ marginTop: 0 }}>File</h3>
                   <div className="admin-field">
                     <label>Choose file</label>
-                    <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+                    <input type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,.mp4,.xls,.xlsx" onChange={(e) => setFile(e.target.files?.[0] || null)} />
                     <p className="admin-subtitle" style={{ marginTop: 6 }}>
-                      Allowed: images (jpg/png/webp) &lt;= 1MB, PDF &lt;= 900KB, MP4 video &lt;= 25MB.
+                      Allowed: images (jpg/png/webp) &lt;= 1MB, PDF &lt;= 900KB, Excel (xls/xlsx) &lt;= 2MB, MP4 video &lt;= 25MB.
                     </p>
                   </div>
                 </div>

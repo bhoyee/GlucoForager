@@ -28,7 +28,10 @@ function kindLabel(item) {
   const k = String(item?.kind || '').toLowerCase();
   if (k === 'image') return 'Image';
   if (k === 'video') return 'Video';
-  return 'PDF';
+  if (isPdf(item)) return 'PDF';
+  const name = String(item?.original_filename || item?.url || '').toLowerCase();
+  if (name.endsWith('.xlsx') || name.endsWith('.xls')) return 'Excel';
+  return 'Document';
 }
 
 function categoryLabel(item) {
