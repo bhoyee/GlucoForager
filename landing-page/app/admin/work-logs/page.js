@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import EmptyState from '../ui/EmptyState';
 import LoadingState from '../ui/LoadingState';
@@ -8,6 +9,48 @@ import DataTable from '../ui/DataTable';
 import TaskContent from '../ui/TaskContent';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
+const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
+
+function isQuillEmpty(html) {
+  const s = String(html || '').trim();
+  if (!s) return true;
+  if (s === '<p><br></p>') return true;
+  if (!s.includes('<')) return !s;
+  try {
+    const el = document.createElement('div');
+    el.innerHTML = s;
+    const text = (el.textContent || '').replace(/\u00A0/g, ' ').trim();
+    return !text;
+  } catch {
+    return !s.replace(/<[^>]*>/g, '').trim();
+  }
+}
+
+function toQuillHtml(value) {
+  const raw = String(value || '');
+  const s = raw.trim();
+  if (!s) return '';
+  if (s.startsWith('<') && s.includes('>')) return raw;
+  const escape = (v) => v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return raw
+    .split(/\r?\n/)
+    .map((line) => `<p>${escape(line) || '<br>'}</p>`)
+    .join('');
+}
+
+function stripHtml(value) {
+  const raw = String(value || '');
+  const s = raw.trim();
+  if (!s) return '';
+  if (!s.includes('<')) return raw;
+  try {
+    const el = document.createElement('div');
+    el.innerHTML = s;
+    return (el.textContent || '').replace(/\u00A0/g, ' ').trim();
+  } catch {
+    return raw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+}
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -60,6 +103,28 @@ function formatDateTimeInTimeZone(iso, timeZone) {
   }
 }
 
+const SUMMARY_QUILL_MODULES = {
+  toolbar: [
+    [{ header: [1, 2, 3, false] }],
+    [{ size: ['small', false, 'large', 'huge'] }],
+    ['bold', 'italic', 'underline', 'strike'],
+    [{ list: 'ordered' }, { list: 'bullet' }],
+    [{ align: [] }],
+    ['link'],
+    ['clean'],
+  ],
+};
+
+const NOTE_QUILL_MODULES = {
+  toolbar: [
+    [{ size: ['small', false, 'large'] }],
+    ['bold', 'italic', 'underline'],
+    [{ list: 'bullet' }],
+    ['link'],
+    ['clean'],
+  ],
+};
+
 function mondayOfWeek(d) {
   const x = new Date(d);
   const day = x.getDay(); // 0..6 (Sun..Sat)
@@ -90,6 +155,7 @@ function WorkLogsPageInner() {
   const staffTodayISO = useMemo(() => isoDateInTimeZone(new Date(nowTick), staffTimeZone), [nowTick, staffTimeZone]);
 
   const [message, setMessage] = useState('');
+  const messageAnchorRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [monthLogs, setMonthLogs] = useState([]);
   const [monthViewOpen, setMonthViewOpen] = useState(false);
@@ -637,7 +703,7 @@ function WorkLogsPageInner() {
       const item = data?.item && typeof data.item === 'object' ? data.item : null;
       setWorkDateLog(item);
       const nextSummary = item?.payload?.summary ? String(item.payload.summary) : '';
-      setSummary(nextSummary);
+      setSummary(toQuillHtml(nextSummary));
       if (!item) {
         setWorkDateReason('');
       } else {
@@ -663,7 +729,7 @@ function WorkLogsPageInner() {
     setMessage('');
     const draft = taskDrafts?.[String(taskId)] || {};
     const proof_links = Array.isArray(draft.proof_links) ? draft.proof_links : [];
-    const completion_note = draft.completion_note || '';
+    const completion_note = isQuillEmpty(draft.completion_note) ? '' : String(draft.completion_note || '');
     try {
       const res = await fetch(`${API_URL}/api/admin/work-plans/tasks/${taskId}/complete`, {
         method: 'POST',
@@ -680,6 +746,11 @@ function WorkLogsPageInner() {
       loadPlan();
     } catch (e) {
       setMessage(e?.message || 'Failed to update task.');
+      try {
+        messageAnchorRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+      } catch {
+        // ignore
+      }
     }
   };
 
@@ -1018,7 +1089,7 @@ function WorkLogsPageInner() {
           headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             work_date: d,
-            summary,
+            summary: isQuillEmpty(summary) ? '' : summary,
             reason: d !== today ? String(workDateReason || '').trim() : '',
           }),
         });
@@ -1099,6 +1170,7 @@ function WorkLogsPageInner() {
     <div className="admin-page">
       <div className="admin-card">
         <h2 className="admin-title">Daily Work Log</h2>
+        <div ref={messageAnchorRef} />
         {message && <p className="admin-subtitle">{message}</p>}
 
         <div className="admin-card" style={{ padding: 14, marginTop: 12 }}>
@@ -1246,16 +1318,28 @@ function WorkLogsPageInner() {
                             </div>
                           </div>
 
-                          <div className="admin-field">
-                            <label>Note (optional)</label>
-                            <textarea
+                        <div className="admin-field">
+                          <label>Note (optional)</label>
+                          <div
+                            className="admin-quill"
+                            style={{
+                              border: '1px solid #e5e7eb',
+                              borderRadius: 12,
+                              overflow: 'hidden',
+                              background: '#fff',
+                              '--editor-height': '120px',
+                            }}
+                          >
+                            <ReactQuill
+                              theme="snow"
                               value={draft.completion_note || ''}
-                              disabled={isWorkDateLocked}
-                              onChange={(e) => setTaskDraft(t.id, { ...draft, completion_note: e.target.value })}
-                              rows={2}
-                              placeholder="Short note..."
+                              onChange={(v) => setTaskDraft(t.id, { ...draft, completion_note: v })}
+                              readOnly={isWorkDateLocked}
+                              modules={NOTE_QUILL_MODULES}
+                              placeholder="Add a note (optional)..."
                             />
                           </div>
+                        </div>
 
                           <div className="admin-actions">
                             <button className="admin-button" type="button" onClick={() => completeAssignedTask(t.id, true)} disabled={isWorkDateLocked}>
@@ -1391,7 +1475,31 @@ function WorkLogsPageInner() {
 
         <div className="admin-field">
           <label>Summary</label>
-          <textarea value={summary} onChange={(e) => setSummary(e.target.value)} rows={4} placeholder="What did you work on?" readOnly={isWorkDateLocked} />
+          {isWorkDateLocked ? (
+            <div className="admin-card admin-card--subtle" style={{ padding: 12 }}>
+              <TaskContent text={workDateLog?.payload?.summary || '—'} style={{ margin: 0 }} />
+            </div>
+          ) : (
+            <div
+              className="admin-quill"
+              style={{
+                border: '1px solid #e5e7eb',
+                borderRadius: 12,
+                overflow: 'hidden',
+                background: '#fff',
+                '--editor-height': '180px',
+              }}
+            >
+              <ReactQuill
+                theme="snow"
+                value={summary}
+                onChange={setSummary}
+                readOnly={false}
+                modules={SUMMARY_QUILL_MODULES}
+                placeholder="What did you work on?"
+              />
+            </div>
+          )}
         </div>
 
         <div className="admin-actions">
@@ -1415,7 +1523,7 @@ function WorkLogsPageInner() {
                 {submittedAtLabel ? <p className="admin-subtitle" style={{ margin: 0 }}>Submitted at {submittedAtLabel} ({staffTimeZone || 'UTC'}).</p> : null}
                 <div>
                   <h4 style={{ margin: 0 }}>Summary</h4>
-                  <p style={{ margin: '8px 0 0 0', whiteSpace: 'pre-wrap' }}>{workDateLog?.payload?.summary || '—'}</p>
+                  <TaskContent text={workDateLog?.payload?.summary || '—'} style={{ margin: '8px 0 0 0' }} />
                 </div>
                 {String(workDateLog?.payload?.reason || '').trim() ? (
                   <div>
@@ -1480,8 +1588,8 @@ function WorkLogsPageInner() {
                 header: 'Summary',
                 sortable: true,
                 filterable: true,
-                accessor: (r) => r.payload?.summary || '',
-                sortValue: (r) => (r.payload?.summary || '').toLowerCase(),
+                accessor: (r) => stripHtml(r.payload?.summary || ''),
+                sortValue: (r) => stripHtml(r.payload?.summary || '').toLowerCase(),
                 cellStyle: () => ({ maxWidth: 520, whiteSpace: 'pre-wrap' }),
               },
               {
@@ -1518,7 +1626,7 @@ function WorkLogsPageInner() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                   <div>
                     <h4 style={{ margin: 0 }}>Summary</h4>
-                    <p style={{ margin: '8px 0 0 0', whiteSpace: 'pre-wrap' }}>{selectedLog?.payload?.summary || '—'}</p>
+                    <TaskContent text={selectedLog?.payload?.summary || '—'} style={{ margin: '8px 0 0 0' }} />
                   </div>
 
                   <div>
@@ -1572,7 +1680,7 @@ function WorkLogsPageInner() {
                                   <p className="admin-subtitle" style={{ margin: 0 }}>
                                     Note
                                   </p>
-                                  <p style={{ margin: '6px 0 0 0', whiteSpace: 'pre-wrap' }}>{t.completion_note}</p>
+                                  <TaskContent text={t.completion_note} style={{ margin: '6px 0 0 0' }} />
                                 </div>
                               ) : null}
                             </div>
@@ -2115,7 +2223,7 @@ function WorkLogsPageInner() {
                       <tr key={d.work_date} style={d.missing_log ? { background: 'rgba(255, 99, 71, 0.10)' } : undefined}>
                         <td>{d.work_date}</td>
                         <td>{d.attendance?.clock_in_at ? 'Clocked in' : '—'}</td>
-                        <td style={{ maxWidth: 520, whiteSpace: 'pre-wrap' }}>{d.work_log?.payload?.summary || (d.missing_log ? 'Missing log' : '—')}</td>
+                        <td style={{ maxWidth: 520, whiteSpace: 'pre-wrap' }}>{stripHtml(d.work_log?.payload?.summary || '') || (d.missing_log ? 'Missing log' : '—')}</td>
                         <td>{d.comments_count || 0}</td>
                         <td>{d.reminder ? 'Sent' : '—'}</td>
                         <td>
@@ -2145,7 +2253,7 @@ function WorkLogsPageInner() {
                     Work log #{selectedLog.id} — {selectedLog.work_date}
                   </p>
                   <div style={{ marginTop: 10 }}>
-                    <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{selectedLog.payload?.summary || ''}</p>
+                    <TaskContent text={selectedLog.payload?.summary || ''} style={{ margin: 0 }} />
                   </div>
 
                   {String(selectedLog.payload?.reason || '').trim() ? (
@@ -2199,7 +2307,7 @@ function WorkLogsPageInner() {
                                 <p className="admin-subtitle" style={{ margin: 0 }}>
                                   Note
                                 </p>
-                                <p style={{ margin: '6px 0 0 0', whiteSpace: 'pre-wrap' }}>{t.completion_note}</p>
+                                <TaskContent text={t.completion_note} style={{ margin: '6px 0 0 0' }} />
                               </div>
                             ) : null}
                           </div>

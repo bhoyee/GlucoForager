@@ -125,7 +125,7 @@ class TaskSelfAddPayload(BaseModel):
 
 class TaskCompletePayload(BaseModel):
     is_completed: bool = True
-    completion_note: str | None = Field(None, max_length=1000)
+    completion_note: str | None = Field(None, max_length=5000)
     proof_links: list[str] = Field(default_factory=list)
 
 
@@ -666,7 +666,13 @@ def complete_task(
         row.completion_note = None
 
     row.proof_links = _clean_links(payload.proof_links, max_items=8) if want_completed else []
-    row.completion_note = payload.completion_note.strip()[:240] if isinstance(payload.completion_note, str) and payload.completion_note.strip() else None
+    note = payload.completion_note if isinstance(payload.completion_note, str) else None
+    note = note.strip() if isinstance(note, str) else ""
+    if note:
+        _reject_unsafe_html(note)
+        row.completion_note = note[:5000]
+    else:
+        row.completion_note = None
     row.updated_at = datetime.utcnow()
 
     db.add(
