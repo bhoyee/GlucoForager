@@ -596,17 +596,23 @@ def upload_to_library(
     is_image = content_type.startswith("image/") or extension in {".jpg", ".jpeg", ".png", ".webp"}
     is_video = content_type == "video/mp4" or extension == ".mp4"
     is_pdf = content_type == "application/pdf" or extension == ".pdf"
+    is_excel = content_type in {
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    } or extension in {".xls", ".xlsx"}
     allowed_docs = {
         "application/pdf",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     }
-    if not is_image and not is_video and not is_pdf and content_type not in allowed_docs:
+    if not is_image and not is_video and not is_pdf and not is_excel and content_type not in allowed_docs:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported file type")
 
     if is_image and extension not in {".jpg", ".jpeg", ".png", ".webp"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported image type")
     if is_video and extension != ".mp4":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported video type")
-    if (not is_image) and (not is_video) and extension != ".pdf":
+    if (not is_image) and (not is_video) and extension not in {".pdf", ".xls", ".xlsx"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported document type")
 
     folder_norm = _normalize_folder(folder) or "general"
