@@ -1,8 +1,11 @@
 import logging
 import smtplib
 import ssl
+import html as _html
+import re
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from html.parser import HTMLParser
 
 import httpx
 
@@ -247,13 +250,136 @@ def send_staff_ticket_notification(
 
 def send_staff_notification_email(*, to_email: str, title: str, body: str | None = None) -> None:
     subject = title.strip()[:140] or "Notification"
-    safe_body = (body or "").strip()
+    raw_body = (body or "").strip()
+
+    def _extract_open_url(text: str) -> tuple[str, str]:
+        s = str(text or "").strip()
+        if not s:
+            return "", ""
+        lines = [ln.rstrip() for ln in s.splitlines()]
+        open_url = ""
+        kept: list[str] = []
+        for ln in lines:
+            m = re.match(r"^\s*open:\s*(\S+)\s*$", ln, flags=re.IGNORECASE)
+            if m and not open_url:
+                open_url = m.group(1).strip()
+                continue
+            kept.append(ln)
+        return "\n".join(kept).strip(), open_url
+
+    def _looks_like_html(text: str) -> bool:
+        s = str(text or "").strip()
+        if not s:
+            return False
+        if "<" not in s or ">" not in s:
+            return False
+        return bool(re.match(r"^\s*<", s))
+
+    def _auto_link(escaped_text: str) -> str:
+        if not escaped_text:
+            return ""
+        # Replace URL-like substrings with <a> tags. Input must already be HTML-escaped.
+        url_re = re.compile(r"(https?://[^\s<]+)", flags=re.IGNORECASE)
+
+        def _repl(m: re.Match) -> str:
+            url = m.group(1)
+            # Trim trailing punctuation.
+            trimmed = url.rstrip(").,;:!?'\"")
+            tail = url[len(trimmed) :]
+            return f"<a href=\"{trimmed}\" style=\"color:#0b3d91; text-decoration:underline;\">{trimmed}</a>{tail}"
+
+        return url_re.sub(_repl, escaped_text)
+
+    class _Sanitizer(HTMLParser):
+        allowed_tags = {"p", "br", "strong", "b", "em", "i", "u", "s", "a", "ol", "ul", "li", "h1", "h2", "h3", "blockquote", "div", "span"}
+
+        def __init__(self) -> None:
+            super().__init__(convert_charrefs=True)
+            self.out: list[str] = []
+
+        def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+            t = (tag or "").lower()
+            if t not in self.allowed_tags:
+                return
+            if t == "br":
+                self.out.append("<br/>")
+                return
+            if t == "a":
+                href = ""
+                for k, v in attrs or []:
+                    if str(k or "").lower() == "href" and v:
+                        href = str(v).strip()
+                        break
+                safe_href = href.startswith("http://") or href.startswith("https://") or href.startswith("/")
+                if not safe_href:
+                    self.out.append("<span>")
+                    return
+                self.out.append(f"<a href=\"{_html.escape(href, quote=True)}\" style=\"color:#0b3d91; text-decoration:underline;\" rel=\"noreferrer noopener\">")
+                return
+            # Strip all attributes for other tags (avoid style injection).
+            self.out.append(f"<{t}>")
+
+        def handle_endtag(self, tag: str) -> None:
+            t = (tag or "").lower()
+            if t not in self.allowed_tags:
+                return
+            if t == "br":
+                return
+            if t == "a":
+                # We may have opened <span> if href was unsafe.
+                if self.out and self.out[-1] == "<span>":
+                    self.out.append("</span>")
+                else:
+                    self.out.append("</a>")
+                return
+            self.out.append(f"</{t}>")
+
+        def handle_data(self, data: str) -> None:
+            if data:
+                self.out.append(_html.escape(data))
+
+        def handle_entityref(self, name: str) -> None:
+            self.out.append(f"&{name};")
+
+        def handle_charref(self, name: str) -> None:
+            self.out.append(f"&#{name};")
+
+    def _render_body_html(text: str) -> str:
+        s = str(text or "").strip()
+        if not s:
+            return ""
+        if _looks_like_html(s):
+            p = _Sanitizer()
+            try:
+                p.feed(s)
+                safe_html = "".join(p.out).strip()
+            except Exception:
+                safe_html = ""
+            return safe_html or _auto_link(_html.escape(s)).replace("\n", "<br/>")
+        # plain text -> escaped + links + line breaks
+        escaped = _html.escape(s)
+        return _auto_link(escaped).replace("\n", "<br/>")
+
+    safe_text, open_url = _extract_open_url(raw_body)
+    body_html = _render_body_html(safe_text)
+    safe_open_url = open_url.strip()
+    if safe_open_url and not (safe_open_url.startswith("http://") or safe_open_url.startswith("https://") or safe_open_url.startswith("/")):
+        safe_open_url = ""
     html_body = f"""
     <html>
       <body style="font-family: Arial, sans-serif; color: #0C1824;">
         <div style="max-width:620px; margin:0 auto; border:1px solid #e5e7eb; border-radius:14px; padding:22px;">
           <h2 style="color:#0FB7A5; margin-top:0;">{subject}</h2>
-          {f"<div style='margin-top:14px; padding:12px; background:#f8fafc; border-radius:12px; border:1px solid #e5e7eb; white-space:pre-wrap; font-size:14px;'>{safe_body}</div>" if safe_body else ""}
+          {f"<div style='margin-top:14px; padding:12px; background:#f8fafc; border-radius:12px; border:1px solid #e5e7eb; font-size:14px; line-height:1.55;'>{body_html}</div>" if body_html else ""}
+          {f"""<div style='margin-top:16px;'>
+                <a href='{_html.escape(safe_open_url, quote=True)}'
+                   style='display:inline-block; background:#0FB7A5; color:#ffffff; text-decoration:none; padding:10px 14px; border-radius:10px; font-weight:700; font-size:13px;'>
+                  Open in Admin Console
+                </a>
+                <div style='margin-top:10px; font-size:12px; color:#6b7280;'>
+                  Link: <a href='{_html.escape(safe_open_url, quote=True)}' style='color:#0b3d91; text-decoration:underline;'>{_html.escape(safe_open_url)}</a>
+                </div>
+              </div>""" if safe_open_url else ""}
           <p style="margin-top:18px; color:#6b7280; font-size:12px;">
             Open the Admin Console to view more details.
           </p>

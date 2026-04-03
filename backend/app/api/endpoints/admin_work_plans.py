@@ -362,7 +362,7 @@ def assign_task(
         send_staff_notification_email(
             to_email=str(staff.email),
             title=f"New task for {payload.work_date.isoformat()}",
-            body=f"{_plain_text(task_text, max_len=1200)}\n\nOpen: {_work_log_link(request, payload.work_date)}",
+            body=f"{task_text}\n\nOpen: {_work_log_link(request, payload.work_date)}",
         )
     except Exception:
         pass
@@ -452,7 +452,7 @@ def assign_task_to_role(
             send_staff_notification_email(
                 to_email=str(to_email),
                 title=f"New task for {payload.work_date.isoformat()}",
-                body=f"{_plain_text(task_text, max_len=1200)}\n\nOpen: {link}",
+                body=f"{task_text}\n\nOpen: {link}",
             )
         except Exception:
             pass
