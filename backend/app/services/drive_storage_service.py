@@ -28,13 +28,18 @@ def _guess_kind(content_type: str | None, extension: str) -> str:
         return "video"
     return "document"
 
+_EXCEL_EXTS = {".xls", ".xlsx"}
 
-def _max_bytes_for_kind(kind: str) -> int:
+
+def _max_bytes_for_upload(kind: str, extension: str) -> int:
     k = str(kind or "").strip().lower()
     if k == "image":
         return int(settings.drive_max_image_bytes)
     if k == "video":
         return int(settings.drive_max_video_bytes)
+    ext = str(extension or "").strip().lower()
+    if ext in _EXCEL_EXTS:
+        return int(getattr(settings, "drive_max_excel_bytes", settings.drive_max_pdf_bytes))
     return int(settings.drive_max_pdf_bytes)
 
 
@@ -69,14 +74,14 @@ def store_drive_upload(*, staff_user_id: int, file: UploadFile) -> StoredDriveOb
     extension = os.path.splitext(file.filename or "")[1].lower()
     kind = _guess_kind(file.content_type, extension)
 
-    max_bytes = _max_bytes_for_kind(kind)
+    max_bytes = _max_bytes_for_upload(kind, extension)
     size = _read_upload_size(file)
     if size is not None and size > max_bytes:
         raise ValueError(f"File too large. Max {max_bytes} bytes.")
 
     if kind == "image" and extension not in {".jpg", ".jpeg", ".png", ".webp"}:
         raise ValueError("Unsupported image type")
-    if kind == "document" and extension != ".pdf":
+    if kind == "document" and extension not in ({".pdf"} | _EXCEL_EXTS):
         raise ValueError("Unsupported document type")
     if kind == "video" and extension != ".mp4":
         raise ValueError("Unsupported video type")
@@ -153,4 +158,3 @@ def delete_drive_object(*, storage_backend: str, remote_dir: str, filename: str)
         os.remove(path)
     except FileNotFoundError:
         pass
-

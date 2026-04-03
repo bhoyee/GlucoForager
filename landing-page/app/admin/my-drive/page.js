@@ -295,7 +295,7 @@ export default function MyDrivePage() {
         {driveStatus?.limits ? (
           <div className="admin-alert info" style={{ marginTop: 12 }}>
             Allowed: images (jpg/png/webp) ≤ {formatBytes(driveStatus.limits.image_max_bytes)}, PDF ≤ {formatBytes(driveStatus.limits.pdf_max_bytes)}, MP4 video ≤{' '}
-            {formatBytes(driveStatus.limits.video_max_bytes)}.
+            {formatBytes(driveStatus.limits.video_max_bytes)}. Excel (xls/xlsx) ≤ {formatBytes(driveStatus.limits.excel_max_bytes || driveStatus.limits.pdf_max_bytes)}.
           </div>
         ) : null}
         {message ? <div className="admin-alert warning">{message}</div> : null}
@@ -307,7 +307,7 @@ export default function MyDrivePage() {
           </div>
           <div className="admin-field">
             <label>File</label>
-            <input type="file" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} />
+            <input type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,.mp4,.xls,.xlsx" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} />
           </div>
           <div className="admin-actions" style={{ justifyContent: 'flex-end', marginTop: 10 }}>
             <button className="admin-button info" type="submit" disabled={uploading}>

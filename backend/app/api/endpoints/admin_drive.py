@@ -83,11 +83,13 @@ def drive_status(
         "limits": {
             "image_max_bytes": int(settings.drive_max_image_bytes),
             "pdf_max_bytes": int(settings.drive_max_pdf_bytes),
+            "excel_max_bytes": int(getattr(settings, "drive_max_excel_bytes", settings.drive_max_pdf_bytes)),
             "video_max_bytes": int(settings.drive_max_video_bytes),
         },
         "allowed": {
             "images": ["jpg", "jpeg", "png", "webp"],
             "pdfs": ["pdf"],
+            "excels": ["xls", "xlsx"],
             "videos": ["mp4"],
         },
     }
