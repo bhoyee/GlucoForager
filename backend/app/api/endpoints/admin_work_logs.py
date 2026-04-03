@@ -27,10 +27,18 @@ router = APIRouter(prefix="/admin/work-logs", tags=["admin-work-logs"])
 
 class WorkLogUpsertPayload(BaseModel):
     work_date: date | None = None
-    summary: str = Field("", max_length=1200)
+    summary: str = Field("", max_length=20000)
     tasks: list[dict] = Field(default_factory=list)
     links: list[str] = Field(default_factory=list)
     reason: str = Field("", max_length=240)
+
+
+def _reject_unsafe_html(v: str) -> None:
+    s = str(v or "")
+    low = s.lower()
+    # Keep this simple; the UI sanitizes for display, but reject obvious script injection.
+    if "<script" in low or "javascript:" in low or "onerror=" in low or "onload=" in low:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Unsupported content in text.")
 
 
 def _clean_payload(payload: WorkLogUpsertPayload) -> dict:
@@ -50,7 +58,10 @@ def _clean_payload(payload: WorkLogUpsertPayload) -> dict:
             continue
         links_out.append(s[:300])
 
-    out: dict = {"summary": str(payload.summary or "").strip()[:1200], "tasks": tasks_out, "links": links_out}
+    summary = str(payload.summary or "").strip()
+    if summary:
+        _reject_unsafe_html(summary)
+    out: dict = {"summary": summary[:20000], "tasks": tasks_out, "links": links_out}
     reason = str(getattr(payload, "reason", "") or "").strip()
     if reason:
         out["reason"] = reason[:240]
