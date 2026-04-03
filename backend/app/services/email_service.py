@@ -365,21 +365,34 @@ def send_staff_notification_email(*, to_email: str, title: str, body: str | None
     safe_open_url = open_url.strip()
     if safe_open_url and not (safe_open_url.startswith("http://") or safe_open_url.startswith("https://") or safe_open_url.startswith("/")):
         safe_open_url = ""
+
+    body_block = (
+        f"<div style='margin-top:14px; padding:12px; background:#f8fafc; border-radius:12px; border:1px solid #e5e7eb; font-size:14px; line-height:1.55;'>{body_html}</div>"
+        if body_html
+        else ""
+    )
+    open_block = ""
+    if safe_open_url:
+        esc_url_attr = _html.escape(safe_open_url, quote=True)
+        esc_url_text = _html.escape(safe_open_url)
+        open_block = f"""
+          <div style='margin-top:16px;'>
+            <a href='{esc_url_attr}'
+               style='display:inline-block; background:#0FB7A5; color:#ffffff; text-decoration:none; padding:10px 14px; border-radius:10px; font-weight:700; font-size:13px;'>
+              Open in Admin Console
+            </a>
+            <div style='margin-top:10px; font-size:12px; color:#6b7280;'>
+              Link: <a href='{esc_url_attr}' style='color:#0b3d91; text-decoration:underline;'>{esc_url_text}</a>
+            </div>
+          </div>
+        """
     html_body = f"""
     <html>
       <body style="font-family: Arial, sans-serif; color: #0C1824;">
         <div style="max-width:620px; margin:0 auto; border:1px solid #e5e7eb; border-radius:14px; padding:22px;">
           <h2 style="color:#0FB7A5; margin-top:0;">{subject}</h2>
-          {f"<div style='margin-top:14px; padding:12px; background:#f8fafc; border-radius:12px; border:1px solid #e5e7eb; font-size:14px; line-height:1.55;'>{body_html}</div>" if body_html else ""}
-          {f"""<div style='margin-top:16px;'>
-                <a href='{_html.escape(safe_open_url, quote=True)}'
-                   style='display:inline-block; background:#0FB7A5; color:#ffffff; text-decoration:none; padding:10px 14px; border-radius:10px; font-weight:700; font-size:13px;'>
-                  Open in Admin Console
-                </a>
-                <div style='margin-top:10px; font-size:12px; color:#6b7280;'>
-                  Link: <a href='{_html.escape(safe_open_url, quote=True)}' style='color:#0b3d91; text-decoration:underline;'>{_html.escape(safe_open_url)}</a>
-                </div>
-              </div>""" if safe_open_url else ""}
+          {body_block}
+          {open_block}
           <p style="margin-top:18px; color:#6b7280; font-size:12px;">
             Open the Admin Console to view more details.
           </p>
