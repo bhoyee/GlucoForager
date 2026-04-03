@@ -69,6 +69,11 @@ class Settings(BaseSettings):
     ai_queue_redis_claim_idle_ms: int = Field(60000, env="AI_QUEUE_REDIS_CLAIM_IDLE_MS")
     redis_url: str | None = Field(None, env="REDIS_URL")
 
+    # Work plans scheduler: delivers scheduled tasks at show_at time (in-app notification + email).
+    work_plans_scheduler_enabled: bool = Field(True, env="WORK_PLANS_SCHEDULER_ENABLED")
+    work_plans_scheduler_poll_seconds: float = Field(30.0, env="WORK_PLANS_SCHEDULER_POLL_SECONDS")
+    work_plans_scheduler_batch_size: int = Field(50, env="WORK_PLANS_SCHEDULER_BATCH_SIZE")
+
     # General API burst limits (requests per minute).
     # These protect the API from accidental client retry loops and basic scraping.
     # AI endpoints have their own per-user limits (see ai_rate_limit_*).

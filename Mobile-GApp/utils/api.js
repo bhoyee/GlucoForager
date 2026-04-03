@@ -180,6 +180,23 @@ export const apiFetch = async (
     }
     return safeResponse;
   } catch (error) {
+    const method = String(fetchOptions.method || 'GET').toUpperCase();
+    const canRetry =
+      !_retry &&
+      method === 'GET' &&
+      (error?.name === 'AbortError' || String(error?.message || '').toLowerCase().includes('aborted'));
+    if (canRetry) {
+      try {
+        clearTimeout(timeoutId);
+      } catch {
+        // ignore
+      }
+      return await apiFetch(
+        url,
+        { ...fetchOptions, _retry: true },
+        { onUnauthorized, timeoutMs: Math.min(Number(timeoutMs || 10000) + 7000, 25000) }
+      );
+    }
     const ms = Date.now() - startedAt;
     addDebugLog({
       source: 'API',
