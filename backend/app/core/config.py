@@ -124,6 +124,7 @@ class Settings(BaseSettings):
     # Default upload limits (bytes). Can be tuned per environment.
     library_max_image_bytes: int = Field(1_048_576, env="LIBRARY_MAX_IMAGE_BYTES")  # 1 MB
     library_max_pdf_bytes: int = Field(921_600, env="LIBRARY_MAX_PDF_BYTES")  # 900 KB
+    library_max_excel_bytes: int = Field(2_097_152, env="LIBRARY_MAX_EXCEL_BYTES")  # 2 MB
     library_max_video_bytes: int = Field(25 * 1024 * 1024, env="LIBRARY_MAX_VIDEO_BYTES")  # 25 MB
 
     # Staff inbox attachments (shared hosting via FTP recommended)
@@ -150,6 +151,7 @@ class Settings(BaseSettings):
     drive_ftp_base_dir: str = Field("/public_html/glucoforager.com/private-drive", env="DRIVE_FTP_BASE_DIR")
     drive_max_image_bytes: int = Field(1_048_576, env="DRIVE_MAX_IMAGE_BYTES")  # 1 MB
     drive_max_pdf_bytes: int = Field(2_097_152, env="DRIVE_MAX_PDF_BYTES")  # 2 MB
+    drive_max_excel_bytes: int = Field(2_097_152, env="DRIVE_MAX_EXCEL_BYTES")  # 2 MB
     drive_max_video_bytes: int = Field(25 * 1024 * 1024, env="DRIVE_MAX_VIDEO_BYTES")  # 25 MB
 
     # Recipe image upload storage (used by /api/admin/uploads)

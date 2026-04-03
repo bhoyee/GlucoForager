@@ -48,13 +48,18 @@ def _guess_kind(content_type: str | None, extension: str) -> str:
         return "video"
     return "document"
 
+_EXCEL_EXTS = {".xls", ".xlsx"}
 
-def _max_bytes_for_kind(kind: str) -> int:
+
+def _max_bytes_for_upload(kind: str, extension: str) -> int:
     k = str(kind or "").strip().lower()
     if k == "image":
         return int(settings.library_max_image_bytes)
     if k == "video":
         return int(settings.library_max_video_bytes)
+    ext = str(extension or "").strip().lower()
+    if ext in _EXCEL_EXTS:
+        return int(getattr(settings, "library_max_excel_bytes", settings.library_max_pdf_bytes))
     return int(settings.library_max_pdf_bytes)
 
 
@@ -80,7 +85,7 @@ def store_library_upload(file: UploadFile) -> StoredLibraryObject:
     kind = _guess_kind(file.content_type, extension)
 
     # Enforce size limits (best effort).
-    max_bytes = _max_bytes_for_kind(kind)
+    max_bytes = _max_bytes_for_upload(kind, extension)
     size = _read_upload_size(file)
     if size is not None and size > max_bytes:
         raise ValueError(f"File too large. Max {max_bytes} bytes.")
@@ -88,7 +93,7 @@ def store_library_upload(file: UploadFile) -> StoredLibraryObject:
     # Enforce type/extension constraints (tight MVP).
     if kind == "image" and extension not in {".jpg", ".jpeg", ".png", ".webp"}:
         raise ValueError("Unsupported image type")
-    if kind == "document" and extension != ".pdf":
+    if kind == "document" and extension not in ({".pdf"} | _EXCEL_EXTS):
         raise ValueError("Unsupported document type")
     if kind == "video" and extension != ".mp4":
         raise ValueError("Unsupported video type")
