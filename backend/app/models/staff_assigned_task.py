@@ -22,11 +22,19 @@ class StaffAssignedTask(Base):
     completed_at = Column(DateTime, nullable=True)
     completed_by_staff_user_id = Column(Integer, ForeignKey("staff_users.id"), nullable=True, index=True)
     completion_note = Column(String, nullable=True)
+    unfinished_reason = Column(String, nullable=True)
+    unfinished_at = Column(DateTime, nullable=True)
+    unfinished_by_staff_user_id = Column(Integer, ForeignKey("staff_users.id"), nullable=True, index=True)
     proof_links = Column(JSON, nullable=False, default=list)
+
+    # When set, the task is hidden from the recipient until this UTC timestamp.
+    # Admin/manager views still show the row for planning.
+    show_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    # When set, the "task.assigned" notification/email has been sent.
+    notified_at = Column(DateTime(timezone=True), nullable=True, index=True)
 
     deleted_at = Column(DateTime, nullable=True, index=True)
     deleted_by_staff_user_id = Column(Integer, ForeignKey("staff_users.id"), nullable=True, index=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-

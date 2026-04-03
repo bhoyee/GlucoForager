@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import EmptyState from '../ui/EmptyState';
 import LoadingState from '../ui/LoadingState';
@@ -8,6 +9,49 @@ import DataTable from '../ui/DataTable';
 import TaskContent from '../ui/TaskContent';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
+const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
+const MAX_UNFINISHED_REASON_CHARS = 500;
+
+function isQuillEmpty(html) {
+  const s = String(html || '').trim();
+  if (!s) return true;
+  if (s === '<p><br></p>') return true;
+  if (!s.includes('<')) return !s;
+  try {
+    const el = document.createElement('div');
+    el.innerHTML = s;
+    const text = (el.textContent || '').replace(/\u00A0/g, ' ').trim();
+    return !text;
+  } catch {
+    return !s.replace(/<[^>]*>/g, '').trim();
+  }
+}
+
+function toQuillHtml(value) {
+  const raw = String(value || '');
+  const s = raw.trim();
+  if (!s) return '';
+  if (s.startsWith('<') && s.includes('>')) return raw;
+  const escape = (v) => v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return raw
+    .split(/\r?\n/)
+    .map((line) => `<p>${escape(line) || '<br>'}</p>`)
+    .join('');
+}
+
+function stripHtml(value) {
+  const raw = String(value || '');
+  const s = raw.trim();
+  if (!s) return '';
+  if (!s.includes('<')) return raw;
+  try {
+    const el = document.createElement('div');
+    el.innerHTML = s;
+    return (el.textContent || '').replace(/\u00A0/g, ' ').trim();
+  } catch {
+    return raw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+}
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -60,6 +104,28 @@ function formatDateTimeInTimeZone(iso, timeZone) {
   }
 }
 
+const SUMMARY_QUILL_MODULES = {
+  toolbar: [
+    [{ header: [1, 2, 3, false] }],
+    [{ size: ['small', false, 'large', 'huge'] }],
+    ['bold', 'italic', 'underline', 'strike'],
+    [{ list: 'ordered' }, { list: 'bullet' }],
+    [{ align: [] }],
+    ['link'],
+    ['clean'],
+  ],
+};
+
+const NOTE_QUILL_MODULES = {
+  toolbar: [
+    [{ size: ['small', false, 'large'] }],
+    ['bold', 'italic', 'underline'],
+    [{ list: 'bullet' }],
+    ['link'],
+    ['clean'],
+  ],
+};
+
 function mondayOfWeek(d) {
   const x = new Date(d);
   const day = x.getDay(); // 0..6 (Sun..Sat)
@@ -90,6 +156,7 @@ function WorkLogsPageInner() {
   const staffTodayISO = useMemo(() => isoDateInTimeZone(new Date(nowTick), staffTimeZone), [nowTick, staffTimeZone]);
 
   const [message, setMessage] = useState('');
+  const messageAnchorRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [monthLogs, setMonthLogs] = useState([]);
   const [monthViewOpen, setMonthViewOpen] = useState(false);
@@ -112,6 +179,10 @@ function WorkLogsPageInner() {
   const lastStaffTodayRef = useRef(staffTodayISO);
   const [workDateLog, setWorkDateLog] = useState(null);
   const [submittedModalOpen, setSubmittedModalOpen] = useState(false);
+  const [unfinishedModalOpen, setUnfinishedModalOpen] = useState(false);
+  const [unfinishedTaskId, setUnfinishedTaskId] = useState(null);
+  const [unfinishedReason, setUnfinishedReason] = useState('');
+  const [unfinishedError, setUnfinishedError] = useState('');
 
   const now = useMemo(() => new Date(), []);
   const [year, setYear] = useState(now.getFullYear());
@@ -180,16 +251,22 @@ function WorkLogsPageInner() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmTitle, setConfirmTitle] = useState('Confirm');
   const [confirmBody, setConfirmBody] = useState('');
-  const openConfirm = ({ title, body, onConfirm }) => {
+  const [confirmCtaLabel, setConfirmCtaLabel] = useState('Yes, continue');
+  const [confirmCtaClassName, setConfirmCtaClassName] = useState('admin-button danger');
+  const openConfirm = ({ title, body, onConfirm, confirmLabel, confirmClassName }) => {
     confirmActionRef.current = typeof onConfirm === 'function' ? onConfirm : null;
     setConfirmTitle(title || 'Confirm');
     setConfirmBody(body || '');
+    setConfirmCtaLabel(confirmLabel || 'Yes, continue');
+    setConfirmCtaClassName(confirmClassName || 'admin-button danger');
     setConfirmOpen(true);
   };
   const closeConfirm = () => {
     setConfirmOpen(false);
     setConfirmTitle('Confirm');
     setConfirmBody('');
+    setConfirmCtaLabel('Yes, continue');
+    setConfirmCtaClassName('admin-button danger');
     confirmActionRef.current = null;
   };
   const runConfirm = async () => {
@@ -613,6 +690,40 @@ function WorkLogsPageInner() {
     }
   };
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const refresh = (event) => {
+      try {
+        const href = event?.detail?.href;
+        if (href && String(href) !== '/admin/work-logs') return;
+      } catch {
+        // ignore
+      }
+      if (document.visibilityState && document.visibilityState !== 'visible') return;
+      loadPlan();
+    };
+
+    window.addEventListener('admin-work-logs-updated', refresh);
+    window.addEventListener('admin-route-refresh', refresh);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+
+    // Poll so new tasks appear even if you're already on this page.
+    const timer = setInterval(() => {
+      if (document.visibilityState && document.visibilityState !== 'visible') return;
+      loadPlan();
+    }, 20_000);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('admin-work-logs-updated', refresh);
+      window.removeEventListener('admin-route-refresh', refresh);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [workDate]); // refresh when date changes
+
   const loadWorkDateLog = async (d) => {
     const t = getTokenNow();
     if (!t || !d) return;
@@ -631,7 +742,7 @@ function WorkLogsPageInner() {
       const item = data?.item && typeof data.item === 'object' ? data.item : null;
       setWorkDateLog(item);
       const nextSummary = item?.payload?.summary ? String(item.payload.summary) : '';
-      setSummary(nextSummary);
+      setSummary(toQuillHtml(nextSummary));
       if (!item) {
         setWorkDateReason('');
       } else {
@@ -651,18 +762,39 @@ function WorkLogsPageInner() {
   };
 
 
-  const completeAssignedTask = async (taskId, isCompleted) => {
+  const openUnfinishedModal = (task) => {
+    const id = task?.id ? Number(task.id) : null;
+    if (!id) return;
+    setUnfinishedTaskId(id);
+    setUnfinishedReason(String(task?.unfinished_reason || '').slice(0, MAX_UNFINISHED_REASON_CHARS));
+    setUnfinishedError('');
+    setUnfinishedModalOpen(true);
+  };
+
+  const closeUnfinishedModal = () => {
+    setUnfinishedModalOpen(false);
+    setUnfinishedTaskId(null);
+    setUnfinishedReason('');
+    setUnfinishedError('');
+  };
+
+  const completeAssignedTask = async (taskId, isCompleted, extraPayload) => {
     const t = getTokenNow();
     if (!t) return;
     setMessage('');
     const draft = taskDrafts?.[String(taskId)] || {};
     const proof_links = Array.isArray(draft.proof_links) ? draft.proof_links : [];
-    const completion_note = draft.completion_note || '';
+    const completion_note = isQuillEmpty(draft.completion_note) ? '' : String(draft.completion_note || '');
     try {
       const res = await fetch(`${API_URL}/api/admin/work-plans/tasks/${taskId}/complete`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_completed: Boolean(isCompleted), proof_links, completion_note }),
+        body: JSON.stringify({
+          is_completed: Boolean(isCompleted),
+          proof_links,
+          completion_note,
+          ...(extraPayload && typeof extraPayload === 'object' ? extraPayload : {}),
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.status === 401) {
@@ -672,9 +804,34 @@ function WorkLogsPageInner() {
       }
       if (!res.ok) throw new Error(data.detail || 'Failed to update task.');
       loadPlan();
+      try {
+        window.dispatchEvent(new Event('admin-work-logs-updated'));
+      } catch {
+        // ignore
+      }
     } catch (e) {
       setMessage(e?.message || 'Failed to update task.');
+      try {
+        messageAnchorRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+      } catch {
+        // ignore
+      }
     }
+  };
+
+  const saveUnfinishedReason = async () => {
+    if (!unfinishedTaskId) return;
+    const reason = String(unfinishedReason || '').trim();
+    if (reason.length < 3) {
+      setUnfinishedError('Reason is required (min 3 characters).');
+      return;
+    }
+    if (reason.length > MAX_UNFINISHED_REASON_CHARS) {
+      setUnfinishedError(`Max ${MAX_UNFINISHED_REASON_CHARS} characters.`);
+      return;
+    }
+    closeUnfinishedModal();
+    await completeAssignedTask(unfinishedTaskId, false, { unfinished_reason: reason });
   };
 
   const addMyTask = async () => {
@@ -708,6 +865,11 @@ function WorkLogsPageInner() {
         }
       } catch {
         loadPlan();
+      }
+      try {
+        window.dispatchEvent(new Event('admin-work-logs-updated'));
+      } catch {
+        // ignore
       }
     } catch (e) {
       setMessage(e?.message || 'Failed to add task.');
@@ -1004,37 +1166,40 @@ function WorkLogsPageInner() {
       setMessage('Reason is required when submitting a previous day.');
       return;
     }
-    try {
-      if (typeof window !== 'undefined') {
-        const ok = window.confirm(`Submit work log for ${d}? This will lock the day as read-only.`);
-        if (!ok) return;
+
+    const submit = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/admin/work-logs/upsert`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            work_date: d,
+            summary: isQuillEmpty(summary) ? '' : summary,
+            reason: d !== today ? String(workDateReason || '').trim() : '',
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 401) {
+          localStorage.removeItem('adminToken');
+          router.push('/admin');
+          return;
+        }
+        if (!res.ok) throw new Error(data.detail || 'Failed to save work log.');
+        setMessage('Submitted.');
+        loadMonth();
+        loadWorkDateLog(workDate);
+      } catch (e) {
+        setMessage(e?.message || 'Failed to save work log.');
       }
-    } catch {
-      // ignore
-    }
-    try {
-      const res = await fetch(`${API_URL}/api/admin/work-logs/upsert`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          work_date: d,
-          summary,
-          reason: d !== today ? String(workDateReason || '').trim() : '',
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.status === 401) {
-        localStorage.removeItem('adminToken');
-        router.push('/admin');
-        return;
-      }
-      if (!res.ok) throw new Error(data.detail || 'Failed to save work log.');
-      setMessage('Saved.');
-      loadMonth();
-      loadWorkDateLog(workDate);
-    } catch (e) {
-      setMessage(e?.message || 'Failed to save work log.');
-    }
+    };
+
+    openConfirm({
+      title: 'Submit work log',
+      body: `Submit work log for ${d}? This will lock the day as read-only.`,
+      onConfirm: submit,
+      confirmLabel: 'Submit',
+      confirmClassName: 'admin-button',
+    });
   };
 
   const sendReminder = async (workDate) => {
@@ -1090,6 +1255,7 @@ function WorkLogsPageInner() {
     <div className="admin-page">
       <div className="admin-card">
         <h2 className="admin-title">Daily Work Log</h2>
+        <div ref={messageAnchorRef} />
         {message && <p className="admin-subtitle">{message}</p>}
 
         <div className="admin-card" style={{ padding: 14, marginTop: 12 }}>
@@ -1196,6 +1362,14 @@ function WorkLogsPageInner() {
 
                       {!t.is_completed ? (
                         <div style={{ marginTop: 10 }}>
+                          {String(t.unfinished_reason || '').trim() ? (
+                            <div className="admin-card admin-card--subtle" style={{ padding: 10, marginBottom: 10 }}>
+                              <p className="admin-subtitle" style={{ margin: 0 }}>
+                                Marked unfinished
+                              </p>
+                              <p style={{ margin: '6px 0 0 0', whiteSpace: 'pre-wrap' }}>{String(t.unfinished_reason || '').trim()}</p>
+                            </div>
+                          ) : null}
                           <div className="admin-field">
                             <label style={{ color: '#f57c00', fontWeight: 800 }}>Proof links (optional)</label>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1237,18 +1411,33 @@ function WorkLogsPageInner() {
                             </div>
                           </div>
 
-                          <div className="admin-field">
-                            <label>Note (optional)</label>
-                            <textarea
+                        <div className="admin-field">
+                          <label>Note (optional)</label>
+                          <div
+                            className="admin-quill"
+                            style={{
+                              border: '1px solid #e5e7eb',
+                              borderRadius: 12,
+                              overflow: 'hidden',
+                              background: '#fff',
+                              '--editor-height': '120px',
+                            }}
+                          >
+                            <ReactQuill
+                              theme="snow"
                               value={draft.completion_note || ''}
-                              disabled={isWorkDateLocked}
-                              onChange={(e) => setTaskDraft(t.id, { ...draft, completion_note: e.target.value })}
-                              rows={2}
-                              placeholder="Short note..."
+                              onChange={(v) => setTaskDraft(t.id, { ...draft, completion_note: v })}
+                              readOnly={isWorkDateLocked}
+                              modules={NOTE_QUILL_MODULES}
+                              placeholder="Add a note (optional)..."
                             />
+                          </div>
                           </div>
 
                           <div className="admin-actions">
+                            <button className="admin-button warning" type="button" onClick={() => openUnfinishedModal(t)} disabled={isWorkDateLocked}>
+                              {String(t.unfinished_reason || '').trim() ? 'Update unfinished reason' : 'Mark unfinished'}
+                            </button>
                             <button className="admin-button" type="button" onClick={() => completeAssignedTask(t.id, true)} disabled={isWorkDateLocked}>
                               Mark done
                             </button>
@@ -1382,7 +1571,31 @@ function WorkLogsPageInner() {
 
         <div className="admin-field">
           <label>Summary</label>
-          <textarea value={summary} onChange={(e) => setSummary(e.target.value)} rows={4} placeholder="What did you work on?" readOnly={isWorkDateLocked} />
+          {isWorkDateLocked ? (
+            <div className="admin-card admin-card--subtle" style={{ padding: 12 }}>
+              <TaskContent text={workDateLog?.payload?.summary || '—'} style={{ margin: 0 }} />
+            </div>
+          ) : (
+            <div
+              className="admin-quill"
+              style={{
+                border: '1px solid #e5e7eb',
+                borderRadius: 12,
+                overflow: 'hidden',
+                background: '#fff',
+                '--editor-height': '180px',
+              }}
+            >
+              <ReactQuill
+                theme="snow"
+                value={summary}
+                onChange={setSummary}
+                readOnly={false}
+                modules={SUMMARY_QUILL_MODULES}
+                placeholder="What did you work on?"
+              />
+            </div>
+          )}
         </div>
 
         <div className="admin-actions">
@@ -1406,7 +1619,7 @@ function WorkLogsPageInner() {
                 {submittedAtLabel ? <p className="admin-subtitle" style={{ margin: 0 }}>Submitted at {submittedAtLabel} ({staffTimeZone || 'UTC'}).</p> : null}
                 <div>
                   <h4 style={{ margin: 0 }}>Summary</h4>
-                  <p style={{ margin: '8px 0 0 0', whiteSpace: 'pre-wrap' }}>{workDateLog?.payload?.summary || '—'}</p>
+                  <TaskContent text={workDateLog?.payload?.summary || '—'} style={{ margin: '8px 0 0 0' }} />
                 </div>
                 {String(workDateLog?.payload?.reason || '').trim() ? (
                   <div>
@@ -1471,8 +1684,8 @@ function WorkLogsPageInner() {
                 header: 'Summary',
                 sortable: true,
                 filterable: true,
-                accessor: (r) => r.payload?.summary || '',
-                sortValue: (r) => (r.payload?.summary || '').toLowerCase(),
+                accessor: (r) => stripHtml(r.payload?.summary || ''),
+                sortValue: (r) => stripHtml(r.payload?.summary || '').toLowerCase(),
                 cellStyle: () => ({ maxWidth: 520, whiteSpace: 'pre-wrap' }),
               },
               {
@@ -1509,58 +1722,77 @@ function WorkLogsPageInner() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                   <div>
                     <h4 style={{ margin: 0 }}>Summary</h4>
-                    <p style={{ margin: '8px 0 0 0', whiteSpace: 'pre-wrap' }}>{selectedLog?.payload?.summary || '—'}</p>
+                    <TaskContent text={selectedLog?.payload?.summary || '—'} style={{ margin: '8px 0 0 0' }} />
                   </div>
 
                   <div>
                     <h4 style={{ margin: 0 }}>Tasks</h4>
-                    {(Array.isArray(monthViewPlan?.tasks) ? monthViewPlan.tasks : []).length === 0 ? (
-                      <p className="admin-subtitle" style={{ margin: '8px 0 0 0' }}>
-                        No tasks recorded for this date.
-                      </p>
-                    ) : (
-                      <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        {(Array.isArray(monthViewPlan?.tasks) ? monthViewPlan.tasks : []).map((t, idx) => (
-                          <div key={t.id || `${t.title}-${idx}`} className="admin-card" style={{ padding: 12 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
-                              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                                <div style={{ fontWeight: 900, marginTop: 1 }}>{idx + 1}.</div>
-                                <TaskContent text={taskTextLabel(t) || 'Task'} style={{ margin: 0, fontWeight: 650 }} />
+                    {(() => {
+                      const tasks = Array.isArray(selectedLog?.tasks)
+                        ? selectedLog.tasks
+                        : Array.isArray(monthViewPlan?.tasks)
+                          ? monthViewPlan.tasks
+                          : [];
+                      if (tasks.length === 0) {
+                        return (
+                          <p className="admin-subtitle" style={{ margin: '8px 0 0 0' }}>
+                            No tasks recorded for this date.
+                          </p>
+                        );
+                      }
+                      return (
+                        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          {tasks.map((t, idx) => (
+                            <div key={t.id || `${t.title}-${idx}`} className="admin-card" style={{ padding: 12 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
+                                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                                  <div style={{ fontWeight: 900, marginTop: 1 }}>{idx + 1}.</div>
+                                  <TaskContent text={taskTextLabel(t) || 'Task'} style={{ margin: 0, fontWeight: 650 }} />
+                                </div>
+                                <span className={`admin-badge ${t.is_completed ? 'success' : 'warning'}`}>
+                                  {t.is_completed ? 'Done' : 'Open'}
+                                </span>
                               </div>
-                              <span className={`admin-badge ${t.is_completed ? 'success' : 'warning'}`}>
-                                {t.is_completed ? 'Done' : 'Open'}
-                              </span>
+
+                              {(Array.isArray(t.proof_links) ? t.proof_links : []).length > 0 ? (
+                                <div style={{ marginTop: 8 }}>
+                                  <p className="admin-subtitle" style={{ margin: 0 }}>
+                                    Proof links
+                                  </p>
+                                  <ul style={{ margin: '6px 0 0 0', paddingLeft: 18 }}>
+                                    {(Array.isArray(t.proof_links) ? t.proof_links : []).map((lnk) => (
+                                      <li key={lnk}>
+                                        <a href={lnk} target="_blank" rel="noreferrer">
+                                          {lnk}
+                                        </a>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              ) : null}
+
+                              {String(t.unfinished_reason || '').trim() ? (
+                                <div style={{ marginTop: 8 }}>
+                                  <p className="admin-subtitle" style={{ margin: 0 }}>
+                                    Unfinished reason
+                                  </p>
+                                  <p style={{ margin: '6px 0 0 0', whiteSpace: 'pre-wrap' }}>{String(t.unfinished_reason || '').trim()}</p>
+                                </div>
+                              ) : null}
+
+                              {String(t.completion_note || '').trim() ? (
+                                <div style={{ marginTop: 8 }}>
+                                  <p className="admin-subtitle" style={{ margin: 0 }}>
+                                    Note
+                                  </p>
+                                  <TaskContent text={t.completion_note} style={{ margin: '6px 0 0 0' }} />
+                                </div>
+                              ) : null}
                             </div>
-
-                            {(Array.isArray(t.proof_links) ? t.proof_links : []).length > 0 ? (
-                              <div style={{ marginTop: 8 }}>
-                                <p className="admin-subtitle" style={{ margin: 0 }}>
-                                  Proof links
-                                </p>
-                                <ul style={{ margin: '6px 0 0 0', paddingLeft: 18 }}>
-                                  {(Array.isArray(t.proof_links) ? t.proof_links : []).map((lnk) => (
-                                    <li key={lnk}>
-                                      <a href={lnk} target="_blank" rel="noreferrer">
-                                        {lnk}
-                                      </a>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            ) : null}
-
-                            {String(t.completion_note || '').trim() ? (
-                              <div style={{ marginTop: 8 }}>
-                                <p className="admin-subtitle" style={{ margin: 0 }}>
-                                  Note
-                                </p>
-                                <p style={{ margin: '6px 0 0 0', whiteSpace: 'pre-wrap' }}>{t.completion_note}</p>
-                              </div>
-                            ) : null}
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   <div>
@@ -1602,6 +1834,58 @@ function WorkLogsPageInner() {
         </div>
       ) : null}
 
+      {unfinishedModalOpen ? (
+        <div className="admin-modal-backdrop" role="presentation" onClick={closeUnfinishedModal}>
+          <div className="admin-modal" role="dialog" aria-modal="true" aria-label="Mark unfinished" onClick={(e) => e.stopPropagation()}>
+            <div className="admin-modal-header">
+              <h3>Mark unfinished</h3>
+              <button className="admin-icon-button danger" type="button" aria-label="Close" onClick={closeUnfinishedModal}>
+                ×
+              </button>
+            </div>
+            <div className="admin-modal-body">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <p className="admin-subtitle" style={{ margin: 0 }}>
+                  Add a short reason. Admin/HR can see this when reviewing your work log.
+                </p>
+                <div className="admin-field">
+                  <label>Reason</label>
+                  <textarea
+                    value={unfinishedReason}
+                    onChange={(e) => {
+                      const next = String(e.target.value || '');
+                      setUnfinishedReason(next.slice(0, MAX_UNFINISHED_REASON_CHARS));
+                      setUnfinishedError('');
+                    }}
+                    rows={4}
+                    placeholder="Why is this task unfinished?"
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+                    <p className="admin-subtitle" style={{ margin: 0 }}>
+                      {unfinishedReason.length}/{MAX_UNFINISHED_REASON_CHARS}
+                      {unfinishedReason.length >= MAX_UNFINISHED_REASON_CHARS ? ' â€” max characters reached' : ''}
+                    </p>
+                    {unfinishedError ? (
+                      <p className="admin-subtitle" style={{ margin: 0, color: '#b71c1c', fontWeight: 800 }}>
+                        {unfinishedError}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="admin-modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button className="admin-button danger" type="button" onClick={closeUnfinishedModal}>
+                Cancel
+              </button>
+              <button className="admin-button" type="button" onClick={saveUnfinishedReason}>
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {confirmOpen ? (
         <div className="admin-modal-backdrop" role="presentation" onClick={closeConfirm}>
           <div className="admin-modal" role="dialog" aria-modal="true" aria-label="Confirm action" onClick={(e) => e.stopPropagation()}>
@@ -1618,8 +1902,8 @@ function WorkLogsPageInner() {
               <button className="admin-button secondary" type="button" onClick={closeConfirm}>
                 Cancel
               </button>
-              <button className="admin-button danger" type="button" onClick={runConfirm}>
-                Yes, continue
+              <button className={confirmCtaClassName} type="button" onClick={runConfirm}>
+                {confirmCtaLabel}
               </button>
             </div>
           </div>
@@ -1698,7 +1982,7 @@ function WorkLogsPageInner() {
         </div>
       ) : null}
 
-      {isManager ? (
+      {false ? (
         <div className="admin-card" style={{ marginTop: 16 }}>
           <div className="admin-actions" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
@@ -2096,7 +2380,7 @@ function WorkLogsPageInner() {
                       <tr key={d.work_date} style={d.missing_log ? { background: 'rgba(255, 99, 71, 0.10)' } : undefined}>
                         <td>{d.work_date}</td>
                         <td>{d.attendance?.clock_in_at ? 'Clocked in' : '—'}</td>
-                        <td style={{ maxWidth: 520, whiteSpace: 'pre-wrap' }}>{d.work_log?.payload?.summary || (d.missing_log ? 'Missing log' : '—')}</td>
+                        <td style={{ maxWidth: 520, whiteSpace: 'pre-wrap' }}>{stripHtml(d.work_log?.payload?.summary || '') || (d.missing_log ? 'Missing log' : '—')}</td>
                         <td>{d.comments_count || 0}</td>
                         <td>{d.reminder ? 'Sent' : '—'}</td>
                         <td>
@@ -2126,7 +2410,76 @@ function WorkLogsPageInner() {
                     Work log #{selectedLog.id} — {selectedLog.work_date}
                   </p>
                   <div style={{ marginTop: 10 }}>
-                    <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{selectedLog.payload?.summary || ''}</p>
+                    <TaskContent text={selectedLog.payload?.summary || ''} style={{ margin: 0 }} />
+                  </div>
+
+                  {String(selectedLog.payload?.reason || '').trim() ? (
+                    <div style={{ marginTop: 12 }}>
+                      <p className="admin-subtitle" style={{ margin: 0 }}>
+                        Reason
+                      </p>
+                      <p style={{ margin: '6px 0 0 0', whiteSpace: 'pre-wrap' }}>{String(selectedLog.payload?.reason || '').trim()}</p>
+                    </div>
+                  ) : null}
+
+                  <div style={{ marginTop: 14 }}>
+                    <h5 style={{ margin: 0 }}>Tasks</h5>
+                    {(Array.isArray(selectedLog.tasks) ? selectedLog.tasks : []).length === 0 ? (
+                      <p className="admin-subtitle" style={{ margin: '8px 0 0 0' }}>
+                        No tasks recorded for this date.
+                      </p>
+                    ) : (
+                      <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {(Array.isArray(selectedLog.tasks) ? selectedLog.tasks : []).map((t, idx) => (
+                          <div key={t.id || `${t.title}-${idx}`} className="admin-card admin-card--subtle" style={{ padding: 12 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
+                              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                                <div style={{ fontWeight: 900, marginTop: 1 }}>{idx + 1}.</div>
+                                <TaskContent text={taskTextLabel(t) || 'Task'} style={{ margin: 0, fontWeight: 650 }} />
+                              </div>
+                              <span className={`admin-badge ${t.is_completed ? 'success' : 'warning'}`}>
+                                {t.is_completed ? 'Done' : 'Open'}
+                              </span>
+                            </div>
+
+                            {(Array.isArray(t.proof_links) ? t.proof_links : []).length > 0 ? (
+                              <div style={{ marginTop: 8 }}>
+                                <p className="admin-subtitle" style={{ margin: 0 }}>
+                                  Proof links
+                                </p>
+                                <ul style={{ margin: '6px 0 0 0', paddingLeft: 18 }}>
+                                  {(Array.isArray(t.proof_links) ? t.proof_links : []).map((lnk) => (
+                                    <li key={lnk}>
+                                      <a href={lnk} target="_blank" rel="noreferrer">
+                                        {lnk}
+                                      </a>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            ) : null}
+
+                            {String(t.unfinished_reason || '').trim() ? (
+                              <div style={{ marginTop: 8 }}>
+                                <p className="admin-subtitle" style={{ margin: 0 }}>
+                                  Unfinished reason
+                                </p>
+                                <p style={{ margin: '6px 0 0 0', whiteSpace: 'pre-wrap' }}>{String(t.unfinished_reason || '').trim()}</p>
+                              </div>
+                            ) : null}
+
+                            {String(t.completion_note || '').trim() ? (
+                              <div style={{ marginTop: 8 }}>
+                                <p className="admin-subtitle" style={{ margin: 0 }}>
+                                  Note
+                                </p>
+                                <TaskContent text={t.completion_note} style={{ margin: '6px 0 0 0' }} />
+                              </div>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div style={{ marginTop: 14 }}>

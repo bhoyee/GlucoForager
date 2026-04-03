@@ -73,7 +73,7 @@ export default function HomeScreen() {
       const response = await apiFetch(
         `${API_URL}/api/app/tips/config`,
         { method: 'GET' },
-        { timeoutMs: 5000 }
+        { timeoutMs: 12000 }
       );
       if (!response.ok) return;
       const data = await response.json();
@@ -92,7 +92,7 @@ export default function HomeScreen() {
       const response = await apiFetch(
         `${API_URL}/api/app/tips/today`,
         { method: 'GET', headers: token ? { Authorization: `Bearer ${token}` } : undefined },
-        { timeoutMs: 5000 }
+        { timeoutMs: 12000 }
       );
       if (!response.ok) return;
       const data = await response.json();
@@ -115,7 +115,7 @@ export default function HomeScreen() {
       const response = await apiFetch(
         `${API_URL}/api/app/challenge/today`,
         { method: 'GET', headers: { Authorization: `Bearer ${token}` } },
-        { timeoutMs: 5000 }
+        { timeoutMs: 12000 }
       );
       if (!response.ok) return;
       const data = await response.json();
@@ -252,7 +252,7 @@ export default function HomeScreen() {
     const response = await apiFetch(
       `${API_URL}${API_ENDPOINTS.SCANS_TODAY}`,
       { headers: { Authorization: `Bearer ${token}`, 'X-Device-Id': deviceId } },
-      { onUnauthorized: signOut, timeoutMs: 5000 }
+      { onUnauthorized: signOut, timeoutMs: 12000 }
     );
     if (response.status === 401) {
       setUserIsPremium(false);
@@ -312,7 +312,7 @@ export default function HomeScreen() {
     const response = await apiFetch(
       `${API_URL}${API_ENDPOINTS.USER_STATS}`,
       { headers: { Authorization: `Bearer ${token}` } },
-      { onUnauthorized: signOut, timeoutMs: 5000 }
+      { onUnauthorized: signOut, timeoutMs: 12000 }
     );
     if (response.status === 401) {
       setUserStats({ recipesGenerated: 0, scansToday: 0, favoritesSaved: 0 });
@@ -364,7 +364,7 @@ export default function HomeScreen() {
     const response = await apiFetch(
       `${API_URL}${API_ENDPOINTS.RECIPE_SUGGESTIONS}?limit=3&meal_type=${mealType}`,
       { headers: { Authorization: `Bearer ${token}` } },
-      { onUnauthorized: signOut, timeoutMs: 5000 }
+      { onUnauthorized: signOut, timeoutMs: 12000 }
     );
     if (response.status === 401) {
       return;
@@ -379,7 +379,7 @@ export default function HomeScreen() {
     const response = await apiFetch(
       `${API_URL}${API_ENDPOINTS.RECENT_RECIPES}`,
       { headers: { Authorization: `Bearer ${token}` } },
-      { onUnauthorized: signOut, timeoutMs: 5000 }
+      { onUnauthorized: signOut, timeoutMs: 12000 }
     );
     if (response.status === 401) {
       return;

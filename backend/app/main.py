@@ -103,6 +103,7 @@ from .models import (  # ensure models are registered with SQLAlchemy
 from .services.cache_service import CacheService
 from .services.system_log_service import log_system_event
 from .services.backup_scheduler import start_backup_scheduler
+from .services.work_plans_scheduler import start_work_plans_scheduler
 from .services.ai_job_runner import runner as ai_job_runner
 
 logging.basicConfig(
@@ -254,6 +255,10 @@ def on_startup():
         start_backup_scheduler()
     except Exception as exc:  # noqa: BLE001
         logger.warning("Backup scheduler start failed: %s", exc)
+    try:
+        start_work_plans_scheduler()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Work plans scheduler start failed: %s", exc)
     try:
         # Only run the DB-backed in-process runner when configured.
         if (settings.ai_queue_backend or "db").strip().lower() == "db":
