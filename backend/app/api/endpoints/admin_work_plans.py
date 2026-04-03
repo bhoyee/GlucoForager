@@ -126,6 +126,7 @@ class TaskSelfAddPayload(BaseModel):
 class TaskCompletePayload(BaseModel):
     is_completed: bool = True
     completion_note: str | None = Field(None, max_length=20000)
+    unfinished_reason: str | None = Field(None, max_length=500)
     proof_links: list[str] = Field(default_factory=list)
 
 
@@ -264,6 +265,8 @@ def my_plan(
                 "is_completed": bool(t.is_completed),
                 "completed_at": t.completed_at.isoformat() if t.completed_at else None,
                 "completion_note": t.completion_note,
+                "unfinished_reason": getattr(t, "unfinished_reason", None),
+                "unfinished_at": t.unfinished_at.isoformat() if getattr(t, "unfinished_at", None) else None,
                 "proof_links": t.proof_links if isinstance(t.proof_links, list) else [],
             }
             for t in tasks
@@ -523,6 +526,8 @@ def list_tasks(
                 "is_completed": bool(r.is_completed),
                 "completed_at": r.completed_at.isoformat() if r.completed_at else None,
                 "completion_note": r.completion_note,
+                "unfinished_reason": getattr(r, "unfinished_reason", None),
+                "unfinished_at": r.unfinished_at.isoformat() if getattr(r, "unfinished_at", None) else None,
                 "proof_links": r.proof_links if isinstance(r.proof_links, list) else [],
                 "assigned_by_staff_user_id": r.assigned_by_staff_user_id,
             }
@@ -576,6 +581,8 @@ def tasks_by_date(
                 "is_completed": bool(task.is_completed),
                 "completed_at": task.completed_at.isoformat() if task.completed_at else None,
                 "completion_note": task.completion_note,
+                "unfinished_reason": getattr(task, "unfinished_reason", None),
+                "unfinished_at": task.unfinished_at.isoformat() if getattr(task, "unfinished_at", None) else None,
                 "proof_links": task.proof_links if isinstance(task.proof_links, list) else [],
                 "assigned_by_staff_user_id": task.assigned_by_staff_user_id,
             }
@@ -623,6 +630,8 @@ def tasks_by_week(
                 "is_completed": bool(task.is_completed),
                 "completed_at": task.completed_at.isoformat() if task.completed_at else None,
                 "completion_note": task.completion_note,
+                "unfinished_reason": getattr(task, "unfinished_reason", None),
+                "unfinished_at": task.unfinished_at.isoformat() if getattr(task, "unfinished_at", None) else None,
                 "proof_links": task.proof_links if isinstance(task.proof_links, list) else [],
                 "assigned_by_staff_user_id": task.assigned_by_staff_user_id,
             }
@@ -659,11 +668,25 @@ def complete_task(
     if want_completed:
         row.completed_at = datetime.utcnow()
         row.completed_by_staff_user_id = int(current_staff.id)
+        row.unfinished_reason = None
+        row.unfinished_at = None
+        row.unfinished_by_staff_user_id = None
     else:
         row.completed_at = None
         row.completed_by_staff_user_id = None
         row.proof_links = []
         row.completion_note = None
+        reason = payload.unfinished_reason if isinstance(payload.unfinished_reason, str) else None
+        reason = reason.strip() if isinstance(reason, str) else ""
+        if reason:
+            _reject_unsafe_html(reason)
+            row.unfinished_reason = reason[:500]
+            row.unfinished_at = datetime.utcnow()
+            row.unfinished_by_staff_user_id = int(current_staff.id)
+        else:
+            row.unfinished_reason = None
+            row.unfinished_at = None
+            row.unfinished_by_staff_user_id = None
 
     row.proof_links = _clean_links(payload.proof_links, max_items=8) if want_completed else []
     note = payload.completion_note if isinstance(payload.completion_note, str) else None

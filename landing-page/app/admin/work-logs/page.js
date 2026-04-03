@@ -10,6 +10,7 @@ import TaskContent from '../ui/TaskContent';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
+const MAX_UNFINISHED_REASON_CHARS = 500;
 
 function isQuillEmpty(html) {
   const s = String(html || '').trim();
@@ -178,6 +179,10 @@ function WorkLogsPageInner() {
   const lastStaffTodayRef = useRef(staffTodayISO);
   const [workDateLog, setWorkDateLog] = useState(null);
   const [submittedModalOpen, setSubmittedModalOpen] = useState(false);
+  const [unfinishedModalOpen, setUnfinishedModalOpen] = useState(false);
+  const [unfinishedTaskId, setUnfinishedTaskId] = useState(null);
+  const [unfinishedReason, setUnfinishedReason] = useState('');
+  const [unfinishedError, setUnfinishedError] = useState('');
 
   const now = useMemo(() => new Date(), []);
   const [year, setYear] = useState(now.getFullYear());
@@ -723,7 +728,23 @@ function WorkLogsPageInner() {
   };
 
 
-  const completeAssignedTask = async (taskId, isCompleted) => {
+  const openUnfinishedModal = (task) => {
+    const id = task?.id ? Number(task.id) : null;
+    if (!id) return;
+    setUnfinishedTaskId(id);
+    setUnfinishedReason(String(task?.unfinished_reason || '').slice(0, MAX_UNFINISHED_REASON_CHARS));
+    setUnfinishedError('');
+    setUnfinishedModalOpen(true);
+  };
+
+  const closeUnfinishedModal = () => {
+    setUnfinishedModalOpen(false);
+    setUnfinishedTaskId(null);
+    setUnfinishedReason('');
+    setUnfinishedError('');
+  };
+
+  const completeAssignedTask = async (taskId, isCompleted, extraPayload) => {
     const t = getTokenNow();
     if (!t) return;
     setMessage('');
@@ -734,7 +755,12 @@ function WorkLogsPageInner() {
       const res = await fetch(`${API_URL}/api/admin/work-plans/tasks/${taskId}/complete`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_completed: Boolean(isCompleted), proof_links, completion_note }),
+        body: JSON.stringify({
+          is_completed: Boolean(isCompleted),
+          proof_links,
+          completion_note,
+          ...(extraPayload && typeof extraPayload === 'object' ? extraPayload : {}),
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.status === 401) {
@@ -752,6 +778,21 @@ function WorkLogsPageInner() {
         // ignore
       }
     }
+  };
+
+  const saveUnfinishedReason = async () => {
+    if (!unfinishedTaskId) return;
+    const reason = String(unfinishedReason || '').trim();
+    if (reason.length < 3) {
+      setUnfinishedError('Reason is required (min 3 characters).');
+      return;
+    }
+    if (reason.length > MAX_UNFINISHED_REASON_CHARS) {
+      setUnfinishedError(`Max ${MAX_UNFINISHED_REASON_CHARS} characters.`);
+      return;
+    }
+    closeUnfinishedModal();
+    await completeAssignedTask(unfinishedTaskId, false, { unfinished_reason: reason });
   };
 
   const addMyTask = async () => {
@@ -1277,6 +1318,14 @@ function WorkLogsPageInner() {
 
                       {!t.is_completed ? (
                         <div style={{ marginTop: 10 }}>
+                          {String(t.unfinished_reason || '').trim() ? (
+                            <div className="admin-card admin-card--subtle" style={{ padding: 10, marginBottom: 10 }}>
+                              <p className="admin-subtitle" style={{ margin: 0 }}>
+                                Marked unfinished
+                              </p>
+                              <p style={{ margin: '6px 0 0 0', whiteSpace: 'pre-wrap' }}>{String(t.unfinished_reason || '').trim()}</p>
+                            </div>
+                          ) : null}
                           <div className="admin-field">
                             <label style={{ color: '#f57c00', fontWeight: 800 }}>Proof links (optional)</label>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1339,9 +1388,12 @@ function WorkLogsPageInner() {
                               placeholder="Add a note (optional)..."
                             />
                           </div>
-                        </div>
+                          </div>
 
                           <div className="admin-actions">
+                            <button className="admin-button secondary" type="button" onClick={() => openUnfinishedModal(t)} disabled={isWorkDateLocked}>
+                              {String(t.unfinished_reason || '').trim() ? 'Update unfinished reason' : 'Mark unfinished'}
+                            </button>
                             <button className="admin-button" type="button" onClick={() => completeAssignedTask(t.id, true)} disabled={isWorkDateLocked}>
                               Mark done
                             </button>
@@ -1675,6 +1727,15 @@ function WorkLogsPageInner() {
                                 </div>
                               ) : null}
 
+                              {String(t.unfinished_reason || '').trim() ? (
+                                <div style={{ marginTop: 8 }}>
+                                  <p className="admin-subtitle" style={{ margin: 0 }}>
+                                    Unfinished reason
+                                  </p>
+                                  <p style={{ margin: '6px 0 0 0', whiteSpace: 'pre-wrap' }}>{String(t.unfinished_reason || '').trim()}</p>
+                                </div>
+                              ) : null}
+
                               {String(t.completion_note || '').trim() ? (
                                 <div style={{ marginTop: 8 }}>
                                   <p className="admin-subtitle" style={{ margin: 0 }}>
@@ -1723,6 +1784,58 @@ function WorkLogsPageInner() {
             <div className="admin-modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
               <button className="admin-button danger" type="button" onClick={closeMonthLogView}>
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {unfinishedModalOpen ? (
+        <div className="admin-modal-backdrop" role="presentation" onClick={closeUnfinishedModal}>
+          <div className="admin-modal" role="dialog" aria-modal="true" aria-label="Mark unfinished" onClick={(e) => e.stopPropagation()}>
+            <div className="admin-modal-header">
+              <h3>Mark unfinished</h3>
+              <button className="admin-icon-button danger" type="button" aria-label="Close" onClick={closeUnfinishedModal}>
+                Ã—
+              </button>
+            </div>
+            <div className="admin-modal-body">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <p className="admin-subtitle" style={{ margin: 0 }}>
+                  Add a short reason. Admin/HR can see this when reviewing your work log.
+                </p>
+                <div className="admin-field">
+                  <label>Reason</label>
+                  <textarea
+                    value={unfinishedReason}
+                    onChange={(e) => {
+                      const next = String(e.target.value || '');
+                      setUnfinishedReason(next.slice(0, MAX_UNFINISHED_REASON_CHARS));
+                      setUnfinishedError('');
+                    }}
+                    rows={4}
+                    placeholder="Why is this task unfinished?"
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+                    <p className="admin-subtitle" style={{ margin: 0 }}>
+                      {unfinishedReason.length}/{MAX_UNFINISHED_REASON_CHARS}
+                      {unfinishedReason.length >= MAX_UNFINISHED_REASON_CHARS ? ' â€” max characters reached' : ''}
+                    </p>
+                    {unfinishedError ? (
+                      <p className="admin-subtitle" style={{ margin: 0, color: '#b71c1c', fontWeight: 800 }}>
+                        {unfinishedError}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="admin-modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button className="admin-button secondary" type="button" onClick={closeUnfinishedModal}>
+                Cancel
+              </button>
+              <button className="admin-button" type="button" onClick={saveUnfinishedReason}>
+                Save
               </button>
             </div>
           </div>
@@ -2299,6 +2412,15 @@ function WorkLogsPageInner() {
                                     </li>
                                   ))}
                                 </ul>
+                              </div>
+                            ) : null}
+
+                            {String(t.unfinished_reason || '').trim() ? (
+                              <div style={{ marginTop: 8 }}>
+                                <p className="admin-subtitle" style={{ margin: 0 }}>
+                                  Unfinished reason
+                                </p>
+                                <p style={{ margin: '6px 0 0 0', whiteSpace: 'pre-wrap' }}>{String(t.unfinished_reason || '').trim()}</p>
                               </div>
                             ) : null}
 
