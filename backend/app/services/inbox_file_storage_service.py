@@ -1,4 +1,5 @@
 import os
+import os
 import uuid
 from dataclasses import dataclass
 
@@ -46,6 +47,8 @@ def _guess_kind(content_type: str | None, extension: str) -> str:
         return "image"
     if ct == "application/pdf" or ext == ".pdf":
         return "document"
+    if ct in {"application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"} or ext in {".xls", ".xlsx"}:
+        return "document"
     if ct == "video/mp4" or ext == ".mp4":
         return "video"
     return "document"
@@ -76,7 +79,7 @@ def store_inbox_attachment(file: UploadFile) -> StoredInboxAttachment:
     if size is not None and size > max_bytes:
         raise ValueError(f"File too large. Max {max_bytes} bytes.")
 
-    if extension not in {".jpg", ".jpeg", ".png", ".webp", ".pdf", ".mp4"}:
+    if extension not in {".jpg", ".jpeg", ".png", ".webp", ".pdf", ".mp4", ".xls", ".xlsx"}:
         raise ValueError("Unsupported attachment type")
 
     filename = f"{uuid.uuid4().hex}{extension}"
@@ -135,4 +138,3 @@ def store_inbox_attachment(file: UploadFile) -> StoredInboxAttachment:
         storage_backend="local",
         remote_dir=None,
     )
-

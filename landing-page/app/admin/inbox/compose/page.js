@@ -21,6 +21,8 @@ export default function ComposeMailPage() {
   const [to, setTo] = useState('');
   const [subject, setSubject] = useState('');
   const [bodyHtml, setBodyHtml] = useState('');
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
+  const [scheduleAtLocal, setScheduleAtLocal] = useState('');
   const [attachment, setAttachment] = useState(null);
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState('');
@@ -49,6 +51,23 @@ export default function ComposeMailPage() {
     loadSession();
   }, [token]);
 
+  const isAdmin = useMemo(() => {
+    const roles = Array.isArray(session?.roles) ? session.roles : [];
+    const perms = Array.isArray(session?.permissions) ? session.permissions : [];
+    return perms.includes('*') || perms.includes('admin.manage') || roles.includes('admin');
+  }, [session]);
+
+  const defaultScheduleLocal = () => {
+    const dt = new Date(Date.now() + 30 * 60 * 1000);
+    const pad = (n) => String(n).padStart(2, '0');
+    const yyyy = dt.getFullYear();
+    const mm = pad(dt.getMonth() + 1);
+    const dd = pad(dt.getDate());
+    const hh = pad(dt.getHours());
+    const mi = pad(dt.getMinutes());
+    return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+  };
+
   const send = async () => {
     if (!token) return;
     setMessage('');
@@ -76,6 +95,34 @@ export default function ComposeMailPage() {
       fd.set('to', to);
       fd.set('subject', subject);
       fd.set('body_html', bodyHtml);
+      if (scheduleEnabled) {
+        if (!isAdmin) {
+          setTone('danger');
+          setMessage('Only admins can schedule mail.');
+          setSending(false);
+          return;
+        }
+        if (!scheduleAtLocal) {
+          setTone('danger');
+          setMessage('Pick a schedule date/time.');
+          setSending(false);
+          return;
+        }
+        const sendAt = new Date(scheduleAtLocal);
+        if (!Number.isFinite(sendAt.valueOf())) {
+          setTone('danger');
+          setMessage('Invalid schedule date/time.');
+          setSending(false);
+          return;
+        }
+        if (sendAt.valueOf() <= Date.now() + 60 * 1000) {
+          setTone('danger');
+          setMessage('Schedule time must be at least 1 minute in the future.');
+          setSending(false);
+          return;
+        }
+        fd.set('send_at', sendAt.toISOString());
+      }
       if (attachment) fd.set('attachment', attachment);
 
       const res = await fetch(`${API_URL}/api/admin/inbox/messages/form`, {
@@ -91,7 +138,11 @@ export default function ComposeMailPage() {
       }
       if (!res.ok) throw new Error(data.detail || 'Failed to send.');
       setTone('info');
-      setMessage('Sent.');
+      if (data?.scheduled) {
+        setMessage('Scheduled.');
+      } else {
+        setMessage('Sent.');
+      }
       if (typeof window !== 'undefined') window.dispatchEvent(new Event('admin-inbox-updated'));
       router.push('/admin/inbox?tab=mail');
     } catch (e) {
@@ -139,15 +190,49 @@ export default function ComposeMailPage() {
                 <label>Subject</label>
                 <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject" />
               </div>
+
+              {isAdmin ? (
+                <div className="admin-field">
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <input
+                      type="checkbox"
+                      checked={scheduleEnabled}
+                      onChange={(e) => {
+                        const checked = Boolean(e.target.checked);
+                        setScheduleEnabled(checked);
+                        if (checked && !scheduleAtLocal) setScheduleAtLocal(defaultScheduleLocal());
+                      }}
+                    />
+                    Schedule send
+                  </label>
+                  {scheduleEnabled ? (
+                    <>
+                      <input
+                        type="datetime-local"
+                        value={scheduleAtLocal}
+                        onChange={(e) => setScheduleAtLocal(e.target.value)}
+                      />
+                      <p className="admin-subtitle" style={{ marginTop: 6 }}>
+                        Mail will be delivered automatically at the chosen time (your local time).
+                      </p>
+                    </>
+                  ) : (
+                    <p className="admin-subtitle" style={{ marginTop: 6 }}>
+                      Optional: schedule this mail to send later.
+                    </p>
+                  )}
+                </div>
+              ) : null}
+
               <div className="admin-field">
                 <label>Attachment (optional)</label>
                 <input
                   type="file"
                   onChange={(e) => setAttachment(e.target.files?.[0] || null)}
-                  accept=".pdf,.jpg,.jpeg,.png,.webp,.mp4"
+                  accept=".pdf,.jpg,.jpeg,.png,.webp,.mp4,.xls,.xlsx"
                 />
                 <p className="admin-subtitle" style={{ marginTop: 6 }}>
-                  Allowed: images (jpg/png/webp), PDF, MP4 video.
+                  Allowed: images (jpg/png/webp), PDF, MP4 video, Excel (xls/xlsx).
                 </p>
               </div>
             </div>
@@ -159,7 +244,7 @@ export default function ComposeMailPage() {
               </div>
               <div className="admin-actions" style={{ justifyContent: 'flex-end' }}>
                 <button className="admin-button info" type="button" onClick={send} disabled={sending}>
-                  {sending ? 'Sending...' : 'Send'}
+                  {sending ? (scheduleEnabled ? 'Scheduling...' : 'Sending...') : (scheduleEnabled ? 'Schedule' : 'Send')}
                 </button>
               </div>
             </div>
