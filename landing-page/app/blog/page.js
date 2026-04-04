@@ -3,6 +3,9 @@ import Footer from '../../components/Footer';
 import ScrollControls from '../../components/ScrollControls';
 import BlogTopBar from '../../components/BlogTopBar';
 import BlogCoverImage from '../../components/BlogCoverImage';
+import WhatsAppCtaCard from '../../components/WhatsAppCtaCard';
+import { formatDMY } from '../../lib/formatDate';
+import AppDownloadCard from '../../components/AppDownloadCard';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 const API_BASE = API_URL.replace(/\/+$/, '');
@@ -31,8 +34,9 @@ const stripHtml = (value) => String(value || '').replace(/<[^>]*>/g, '').replace
 const resolveImageUrl = (value) => {
   const url = typeof value === 'string' ? value.trim() : '';
   if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
   if (url.startsWith('/')) return `${API_BASE}${url}`;
-  return url;
+  return `${API_BASE}/${url.replace(/^\/+/, '')}`;
 };
 
 export default async function BlogIndexPage({ searchParams }) {
@@ -59,7 +63,9 @@ export default async function BlogIndexPage({ searchParams }) {
     <>
       <main className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
         <BlogTopBar rightHref="/" rightLabel="Back to home" />
-        <div className="container mx-auto max-w-6xl px-4 py-10 space-y-8">
+        <div className="container mx-auto max-w-6xl px-4 py-10">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-8 items-start">
+            <div className="space-y-8 min-w-0">
 
         <div className="flex items-end justify-between gap-6 flex-wrap">
           <div>
@@ -93,7 +99,7 @@ export default async function BlogIndexPage({ searchParams }) {
               />
               <div className="p-6">
                 <p className="text-sm text-gray-500">
-                  {post.published_at ? new Date(post.published_at).toLocaleDateString() : 'Unpublished'}
+                  {post.published_at ? formatDMY(post.published_at) : 'Unpublished'}
                 </p>
                 <h2 className="text-2xl font-bold text-gray-900 mt-2">
                   <Link href={`/blog/${post.slug}`} className="hover:text-teal-700">
@@ -137,6 +143,12 @@ export default async function BlogIndexPage({ searchParams }) {
             </Link>
           </div>
         ) : null}
+            </div>
+            <div className="space-y-6 lg:sticky lg:top-24">
+              <WhatsAppCtaCard />
+              <AppDownloadCard />
+            </div>
+          </div>
         </div>
       </main>
       <ScrollControls />

@@ -1,4 +1,6 @@
 export default function Contact() {
+  const WHATSAPP_CHANNEL_URL = 'https://whatsapp.com/channel/0029VbC5ghU6GcGBY7FOni0n';
+
   return (
     <div className="max-w-4xl mx-auto">
       <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 md:p-8 border border-white/20">
@@ -49,6 +51,24 @@ export default function Contact() {
                   <p className="text-gray-400 text-xs mt-1">Weekend responses may be slower</p>
                 </div>
               </div>
+            </div>
+
+            <div className="mt-8 pt-6 border-t border-white/20">
+              <h4 className="font-medium text-white mb-2">Community</h4>
+              <p className="text-gray-300 text-sm">
+                Join our WhatsApp Channel for daily diabetes hacks, meal ideas, and low-glycemic swaps.
+              </p>
+              <a
+                href={WHATSAPP_CHANNEL_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-4 inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 px-4 py-3 text-white font-semibold text-sm transition-all duration-200"
+              >
+                Join the GlucoForager WhatsApp Channel
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+              </a>
             </div>
             
             {/* Quick Links */}
