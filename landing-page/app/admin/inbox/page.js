@@ -664,7 +664,7 @@ function InboxPageInner() {
               <RichTextEditor value={replyHtml} onChange={setReplyHtml} minHeight={140} />
               <div className="admin-field" style={{ marginTop: 10 }}>
                 <label>Attachment (optional)</label>
-                <input type="file" onChange={(e) => setReplyAttachment(e.target.files?.[0] || null)} accept=".pdf,.jpg,.jpeg,.png,.webp,.mp4" />
+                <input type="file" onChange={(e) => setReplyAttachment(e.target.files?.[0] || null)} accept=".pdf,.jpg,.jpeg,.png,.webp,.mp4,.xls,.xlsx" />
               </div>
               <div className="admin-actions" style={{ justifyContent: 'flex-end', marginTop: 10 }}>
                 <button className="admin-button warning" type="button" onClick={sendReply} disabled={replySending}>
