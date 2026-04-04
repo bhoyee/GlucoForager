@@ -3,6 +3,9 @@ import BlogComments from '../../../components/BlogComments';
 import BlogShare from '../../../components/BlogShare';
 import BlogTopBar from '../../../components/BlogTopBar';
 import BlogCoverImage from '../../../components/BlogCoverImage';
+import WhatsAppCtaCard from '../../../components/WhatsAppCtaCard';
+import { formatDMY } from '../../../lib/formatDate';
+import AppDownloadCard from '../../../components/AppDownloadCard';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 const API_BASE = API_URL.replace(/\/+$/, '');
@@ -28,8 +31,9 @@ const stripHtml = (value) =>
 const resolveImageUrl = (value) => {
   const url = typeof value === 'string' ? value.trim() : '';
   if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
   if (url.startsWith('/')) return `${API_BASE}${url}`;
-  return url;
+  return `${API_BASE}/${url.replace(/^\/+/, '')}`;
 };
 
 function renderContent(content) {
@@ -129,7 +133,7 @@ export default async function BlogPostPage({ params }) {
         <BlogTopBar rightHref="/blog" rightLabel="Back to blog" />
         <div className="container mx-auto max-w-4xl px-4 py-10 space-y-6">
           <h1 className="text-3xl font-bold text-gray-900">Post not found</h1>
-          <Link href="/blog" className="text-teal-700 font-semibold hover:text-teal-900">
+              <Link href="/blog" className="text-teal-700 font-semibold hover:text-teal-900">
             Back to blog
           </Link>
         </div>
@@ -145,13 +149,15 @@ export default async function BlogPostPage({ params }) {
   return (
     <main className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
       <BlogTopBar rightHref="/" rightLabel="Back to home" />
-      <div className="container mx-auto max-w-4xl px-4 py-10 space-y-6">
-        <div className="flex items-center justify-between gap-6 flex-wrap">
+      <div className="container mx-auto max-w-6xl px-4 py-10 space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-8 items-start">
+          <div className="min-w-0 space-y-6 max-w-3xl">
+            <div className="flex items-center justify-between gap-6 flex-wrap">
           <Link href="/blog" className="text-teal-700 font-semibold hover:text-teal-900">
             ← Blog
-          </Link>
-          <BlogShare title={post.title} url={url} />
-        </div>
+              </Link>
+              <BlogShare title={post.title} url={url} />
+            </div>
 
         <BlogCoverImage
           title={post.title}
@@ -165,7 +171,7 @@ export default async function BlogPostPage({ params }) {
           <h1 className="text-4xl font-bold text-gray-900">{post.title}</h1>
           <div className="flex items-center gap-3 text-sm text-gray-600">
             {post.author_name ? <span>By {post.author_name}</span> : null}
-            {post.published_at ? <span>{new Date(post.published_at).toLocaleDateString()}</span> : null}
+            {post.published_at ? <span>{formatDMY(post.published_at)}</span> : null}
           </div>
           {excerptText ? <p className="text-lg text-gray-700">{excerptText}</p> : null}
         </header>
@@ -175,6 +181,13 @@ export default async function BlogPostPage({ params }) {
         </article>
 
         <BlogComments slug={post.slug} initialComments={initialComments} />
+          </div>
+
+          <div className="space-y-6 lg:sticky lg:top-24">
+            <WhatsAppCtaCard />
+            <AppDownloadCard />
+          </div>
+        </div>
       </div>
     </main>
   );

@@ -2,9 +2,18 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { formatDMY } from '../lib/formatDate';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
+const API_BASE = API_URL.replace(/\/+$/, '');
 const stripHtml = (value) => String(value || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+const resolveImageUrl = (value) => {
+  const url = typeof value === 'string' ? value.trim() : '';
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  if (url.startsWith('/')) return `${API_BASE}${url}`;
+  return `${API_BASE}/${url.replace(/^\/+/, '')}`;
+};
 
 export default function LatestBlogPosts({ initialItems = [] }) {
   const [items, setItems] = useState(() => (Array.isArray(initialItems) ? initialItems : []));
@@ -82,13 +91,13 @@ export default function LatestBlogPosts({ initialItems = [] }) {
               ) : (
                 <>
                   <p className="text-sm text-gray-500">
-                    {post.published_at ? new Date(post.published_at).toLocaleDateString() : 'Unpublished'}
+                    {post.published_at ? formatDMY(post.published_at) : 'Unpublished'}
                   </p>
                   {post.image_url ? (
                     <div className="mt-4 overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
                       <div className="aspect-[16/9]">
                         <img
-                          src={post.image_url}
+                          src={resolveImageUrl(post.image_url)}
                           alt={post.title ? `${post.title} cover` : 'Post cover'}
                           className="h-full w-full object-cover"
                           loading="lazy"
