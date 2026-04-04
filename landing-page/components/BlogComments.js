@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { formatDMY } from '../lib/formatDate';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -84,7 +85,7 @@ export default function BlogComments({ slug, initialComments = [] }) {
                 <p className="font-semibold text-gray-900">{comment.name}</p>
                 {comment.created_at ? (
                   <p className="text-xs text-gray-500">
-                    {new Date(comment.created_at).toLocaleDateString()}
+                    {formatDMY(comment.created_at)}
                   </p>
                 ) : null}
               </div>
@@ -134,4 +135,3 @@ export default function BlogComments({ slug, initialComments = [] }) {
     </section>
   );
 }
-

@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
+const WHATSAPP_CHANNEL_URL = 'https://whatsapp.com/channel/0029VbC5ghU6GcGBY7FOni0n';
 
 export default function Footer() {
   const [newsletterEmail, setNewsletterEmail] = useState('');
@@ -93,6 +94,20 @@ export default function Footer() {
                   </svg>
                 </a>
                 
+                {/* WhatsApp */}
+                <a
+                  href={WHATSAPP_CHANNEL_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-8 h-8 rounded-full bg-gray-800 hover:bg-teal-600 flex items-center justify-center transition-colors"
+                  aria-label="WhatsApp Channel"
+                  title="Join our WhatsApp Channel"
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M20.52 3.48A11.94 11.94 0 0 0 12.02 0C5.44 0 .1 5.33.1 11.9c0 2.09.55 4.13 1.6 5.93L0 24l6.3-1.65a11.9 11.9 0 0 0 5.7 1.45h.01c6.58 0 11.92-5.33 11.92-11.9 0-3.18-1.24-6.17-3.41-8.42zM12 21.8h-.01a9.9 9.9 0 0 1-5.05-1.38l-.36-.21-3.74.98 1-3.64-.23-.37a9.87 9.87 0 0 1-1.52-5.26C2.1 6.44 6.55 2 12.02 2a9.9 9.9 0 0 1 7.03 2.92 9.86 9.86 0 0 1 2.92 7c0 5.46-4.45 9.88-9.97 9.88zm5.74-7.38c-.31-.16-1.85-.92-2.14-1.02-.29-.11-.5-.16-.71.16-.2.31-.82 1.02-1 1.23-.18.2-.36.23-.67.08-.31-.16-1.3-.48-2.47-1.52-.91-.81-1.52-1.81-1.7-2.11-.18-.31-.02-.47.14-.63.14-.14.31-.36.47-.53.16-.18.2-.31.31-.51.1-.2.05-.39-.02-.55-.08-.16-.71-1.72-.97-2.36-.26-.62-.52-.54-.71-.55h-.6c-.2 0-.55.08-.84.39-.29.31-1.1 1.07-1.1 2.62 0 1.54 1.12 3.03 1.28 3.24.16.2 2.2 3.36 5.32 4.71.74.32 1.32.51 1.77.66.74.24 1.42.21 1.96.13.6-.09 1.85-.76 2.11-1.49.26-.74.26-1.37.18-1.5-.08-.13-.29-.2-.6-.36z" />
+                  </svg>
+                </a>
+
                 {/* Instagram */}
                 <a href="#" className="w-8 h-8 rounded-full bg-gray-800 hover:bg-teal-600 flex items-center justify-center transition-colors" aria-label="Instagram">
                   <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -134,6 +149,7 @@ export default function Footer() {
             <ul className="space-y-3">
               <li><a href={homeSectionHref('#faq')} className="text-gray-400 hover:text-teal-400 transition-colors">FAQ</a></li>
               <li><a href={homeSectionHref('#contact')} className="text-gray-400 hover:text-teal-400 transition-colors">Contact Us</a></li>
+              <li><a href={WHATSAPP_CHANNEL_URL} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-teal-400 transition-colors">Join the GlucoForager WhatsApp Channel</a></li>
               <li><a href="/privacy-policy" className="text-gray-400 hover:text-teal-400 transition-colors">Privacy Policy</a></li>
               <li><a href="/terms" className="text-gray-400 hover:text-teal-400 transition-colors">Terms & Conditions</a></li>
             </ul>
@@ -198,6 +214,8 @@ export default function Footer() {
               <a href="/sitemap" className="text-gray-500 hover:text-white transition-colors">Sitemap</a>
               <span className="text-gray-600">•</span>
               <Link href="/blog" className="text-gray-500 hover:text-white transition-colors">Blog</Link>
+              <span className="text-gray-600">•</span>
+              <a href={WHATSAPP_CHANNEL_URL} target="_blank" rel="noreferrer" className="text-gray-500 hover:text-white transition-colors">WhatsApp Channel</a>
             </div>
           </div>
           

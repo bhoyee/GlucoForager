@@ -282,29 +282,6 @@ export default function FAQ() {
         </div>
       </div>
 
-      {/* Still have questions? (Only shown when category is selected) */}
-      {isCategorySelected && (
-        <div className="mt-8 p-6 bg-gradient-to-r from-teal-50 to-emerald-50 rounded-2xl border border-teal-100 text-center">
-          <h3 className="text-xl font-bold text-gray-900 mb-2">Still have questions?</h3>
-          <p className="text-gray-600 mb-4">
-            We're here to help! Reach out to our support team for more information.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <a 
-              href="#contact" 
-              className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors font-medium"
-            >
-              Contact Support
-            </a>
-            <a 
-              href="#pricing" 
-              className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-white text-teal-600 border border-teal-200 rounded-lg hover:bg-teal-50 transition-colors font-medium"
-            >
-              View Pricing
-            </a>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
