@@ -17,6 +17,7 @@ import NewsletterPopup from './NewsletterPopup';
 
 export default function HomePageClient({ latestPosts }) {
   const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const WHATSAPP_CHANNEL_URL = 'https://whatsapp.com/channel/0029VbC5ghU6GcGBY7FOni0n';
   return (
     <div className="min-h-screen bg-white text-gray-900">
       <NewsletterPopup />
@@ -133,6 +134,35 @@ export default function HomePageClient({ latestPosts }) {
             </div>
 
             <FAQ />
+          </div>
+        </section>
+
+        {/* WHATSAPP CTA - Standalone full-width block */}
+        <section className="py-10 bg-white">
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="w-full rounded-3xl bg-gradient-to-r from-teal-50 to-emerald-50 border border-teal-100 p-6 md:p-10">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+                <div className="min-w-0">
+                  <h3 className="text-2xl md:text-3xl font-extrabold text-gray-900">
+                    Join the GlucoForager WhatsApp Channel
+                  </h3>
+                  <p className="mt-2 text-gray-700">
+                    Get daily diabetes hacks, meal ideas, and low-glycemic swaps.
+                  </p>
+                </div>
+                <a
+                  href={WHATSAPP_CHANNEL_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex w-full md:w-auto items-center justify-center gap-2 rounded-2xl bg-teal-600 px-7 py-4 text-white font-semibold shadow-sm hover:bg-teal-700 transition-colors"
+                >
+                  Join the GlucoForager WhatsApp Channel
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </a>
+              </div>
+            </div>
           </div>
         </section>
 
