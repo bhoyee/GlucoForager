@@ -30,6 +30,29 @@ function InboxPageInner() {
     }
   };
 
+  const parsePartyLabel = (value) => {
+    const text = String(value || '').trim();
+    if (!text) return { name: '', email: '' };
+    const match = text.match(/^(.*)\(([^)]+)\)\s*$/);
+    if (match && String(match[2] || '').includes('@')) {
+      return { name: String(match[1] || '').trim(), email: String(match[2] || '').trim() };
+    }
+    return { name: text, email: '' };
+  };
+
+  const IconButton = ({ title, danger = false, disabled = false, onClick, children }) => (
+    <button
+      type="button"
+      className={`admin-icon-button${danger ? ' danger' : ''}`}
+      aria-label={title}
+      title={title}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+
   const initialTab = (searchParams?.get('tab') || '').toLowerCase() === 'mail' ? 'mail' : 'notifications';
   const initialBox = (searchParams?.get('box') || '').toLowerCase() === 'sent' ? 'sent' : 'inbox';
 
@@ -515,8 +538,24 @@ function InboxPageInner() {
                 header: 'Subject',
                 sortable: true,
                 searchable: true,
+                width: 420,
                 accessor: (m) => String(m.subject || ''),
-                render: (m) => <span style={{ fontWeight: m.read_at ? 600 : 900, opacity: m.is_deleted ? 0.6 : 1 }}>{m.subject}</span>,
+                cellStyle: () => ({ maxWidth: 420 }),
+                render: (m) => (
+                  <span
+                    style={{
+                      display: 'block',
+                      fontWeight: m.read_at ? 650 : 900,
+                      opacity: m.is_deleted ? 0.6 : 1,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                    title={String(m.subject || '')}
+                  >
+                    {String(m.subject || '')}
+                  </span>
+                ),
                 sortValue: (m) => String(m.subject || ''),
               },
               {
@@ -524,12 +563,61 @@ function InboxPageInner() {
                 header: mailBox === 'sent' ? 'To' : 'From',
                 sortable: true,
                 searchable: true,
+                width: 280,
                 accessor: (m) => String(mailBox === 'sent' ? m.to : m.from),
-                render: (m) => (
-                  <span className="admin-subtitle" style={{ opacity: m.is_deleted ? 0.6 : 1 }}>
-                    {mailBox === 'sent' ? m.to : m.from}
-                  </span>
-                ),
+                cellStyle: () => ({ maxWidth: 280 }),
+                render: (m) => {
+                  const raw = mailBox === 'sent' ? m.to : m.from;
+                  const muted = Boolean(m.is_deleted);
+                  const parsed = parsePartyLabel(raw);
+                  if (parsed.email) {
+                    return (
+                      <div style={{ minWidth: 0, opacity: muted ? 0.6 : 1 }}>
+                        <div
+                          style={{
+                            fontWeight: 750,
+                            color: '#0f172a',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                          title={parsed.name}
+                        >
+                          {parsed.name}
+                        </div>
+                        <div
+                          className="admin-subtitle"
+                          style={{
+                            marginTop: 2,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                          title={parsed.email}
+                        >
+                          {parsed.email}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  const text = parsed.name || '';
+                  return (
+                    <span
+                      className="admin-subtitle"
+                      style={{
+                        display: 'block',
+                        opacity: muted ? 0.6 : 1,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                      title={text}
+                    >
+                      {text || '—'}
+                    </span>
+                  );
+                },
                 sortValue: (m) => String(mailBox === 'sent' ? m.to : m.from),
               },
               {
@@ -537,12 +625,14 @@ function InboxPageInner() {
                 header: 'Date',
                 sortable: true,
                 searchable: false,
+                width: 170,
                 accessor: (m) => formatDateTime(m.created_at),
                 render: (m) => (
-                  <span className="admin-subtitle" style={{ opacity: m.is_deleted ? 0.6 : 1 }}>
+                  <span className="admin-subtitle" style={{ opacity: m.is_deleted ? 0.6 : 1, whiteSpace: 'nowrap' }}>
                     {formatDateTime(m.created_at)}
                   </span>
                 ),
+                cellStyle: () => ({ whiteSpace: 'nowrap' }),
                 sortValue: (m) => (m.created_at ? new Date(String(m.created_at)).getTime() : 0),
               },
               {
@@ -550,6 +640,7 @@ function InboxPageInner() {
                 header: 'Status',
                 sortable: true,
                 searchable: false,
+                width: 110,
                 accessor: (m) => (m.read_at ? 'Read' : 'Unread'),
                 render: (m) =>
                   m.read_at ? <span className="admin-badge secondary">Read</span> : <span className="admin-badge warning">Unread</span>,
@@ -560,21 +651,36 @@ function InboxPageInner() {
                 header: 'Action',
                 sortable: false,
                 searchable: false,
-                width: 260,
+                width: 140,
+                cellStyle: () => ({ whiteSpace: 'nowrap' }),
                 render: (m) => (
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    <button className="admin-button secondary" type="button" onClick={() => openMail(m.id)}>
-                      View
-                    </button>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <IconButton title="View" onClick={() => openMail(m.id)}>
+                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                        <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                    </IconButton>
                     {mailBox === 'inbox' && !m.is_deleted ? (
-                      <button className="admin-button danger" type="button" onClick={() => softDeleteMail(m.id)}>
-                        Soft delete
-                      </button>
+                      <IconButton title="Soft delete" danger onClick={() => softDeleteMail(m.id)}>
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                          <path d="M3 6h18" />
+                          <path d="M8 6V4h8v2" />
+                          <path d="M19 6l-1 14H6L5 6" />
+                          <path d="M10 11v6" />
+                          <path d="M14 11v6" />
+                        </svg>
+                      </IconButton>
                     ) : null}
                     {mailBox === 'inbox' && isAdmin ? (
-                      <button className="admin-button danger" type="button" onClick={() => purgeMail(m.id)}>
-                        Hard delete
-                      </button>
+                      <IconButton title="Hard delete" danger onClick={() => purgeMail(m.id)}>
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                          <path d="M3 6h18" />
+                          <path d="M8 6V4h8v2" />
+                          <path d="M19 6l-1 14H6L5 6" />
+                          <path d="M10 11l4 4m0-4l-4 4" />
+                        </svg>
+                      </IconButton>
                     ) : null}
                   </div>
                 ),
