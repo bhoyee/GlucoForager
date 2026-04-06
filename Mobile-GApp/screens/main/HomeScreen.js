@@ -617,9 +617,14 @@ export default function HomeScreen() {
       <LinearGradient colors={['#EEF2FF', '#ECFEFF']} style={[styles.heroHeader, { paddingTop: headerPaddingTop }]}>
         <View style={styles.heroTopRow}>
           <View>
-            <Text style={styles.greeting}>
+            <Text style={styles.greeting} numberOfLines={1} ellipsizeMode="tail">
               {getDayGreeting()}
-              {greetingName ? `, ${greetingName}` : ''}
+              {greetingName ? (
+                <>
+                  {', '}
+                  <Text style={styles.greetingName}>{greetingName}</Text>
+                </>
+              ) : null}
             </Text>
             <Text style={styles.subGreeting}>
               {`It's ${getMealLabel()} time • ${userIsPremium ? 'Unlimited scans' : `${remainingScans} scans left`}`}
@@ -632,7 +637,7 @@ export default function HomeScreen() {
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickActionsRow}>
           <Pressable
-            style={({ pressed }) => [styles.quickActionChip, pressed && styles.cardPressed]}
+            style={({ pressed }) => [styles.quickActionChip, styles.quickActionChipEatNow, pressed && styles.cardPressed]}
             android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
             onPress={handleOpenEatNow}
           >
@@ -640,7 +645,7 @@ export default function HomeScreen() {
             <Text style={styles.quickActionText}>Eat now</Text>
           </Pressable>
           <Pressable
-            style={({ pressed }) => [styles.quickActionChip, pressed && styles.cardPressed]}
+            style={({ pressed }) => [styles.quickActionChip, styles.quickActionChipSwaps, pressed && styles.cardPressed]}
             android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
             onPress={handleOpenSwaps}
           >
@@ -1071,12 +1076,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: Colors.surface,
+    backgroundColor: 'rgba(255,255,255,0.45)',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: 'rgba(255,255,255,0.75)',
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 10,
+  },
+  quickActionChipEatNow: {
+    backgroundColor: `${Colors.primary}14`,
+    borderColor: `${Colors.primary}33`,
+  },
+  quickActionChipSwaps: {
+    backgroundColor: `${Colors.secondary}14`,
+    borderColor: `${Colors.secondary}33`,
   },
   quickActionText: {
     fontSize: 13,
@@ -1171,8 +1184,13 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   greeting: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 'bold',
+    color: Colors.text,
+  },
+  greetingName: {
+    fontSize: 20,
+    fontWeight: '900',
     color: Colors.text,
   },
   subGreeting: {
