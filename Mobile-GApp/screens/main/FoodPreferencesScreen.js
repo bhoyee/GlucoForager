@@ -90,8 +90,8 @@ const EQUIPMENT_OPTIONS = [
 
 const COOK_TIME_OPTIONS = [
   { value: 'under_15', label: 'Under 15 minutes' },
-  { value: '15_30', label: '15–30 minutes' },
-  { value: '30_45', label: '30–45 minutes' },
+  { value: '15_30', label: '15-30 minutes' },
+  { value: '30_45', label: '30-45 minutes' },
   { value: 'any', label: 'Any time' },
 ];
 

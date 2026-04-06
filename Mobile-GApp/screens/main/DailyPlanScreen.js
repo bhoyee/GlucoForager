@@ -54,7 +54,7 @@ function MealCard({ meal, item }) {
         ) : null}
       </View>
 
-      <Text style={styles.mealName}>{item?.title || item?.name || '—'}</Text>
+      <Text style={styles.mealName}>{item?.title || item?.name || '--'}</Text>
       {typeof item?.description === 'string' && item.description.trim() ? (
         <Text style={styles.mealDescription}>{item.description.trim()}</Text>
       ) : null}
@@ -273,7 +273,7 @@ export default function DailyPlanScreen() {
         {loading ? (
           <View style={styles.center}>
             <ActivityIndicator size="large" color={Colors.primary} />
-            <Text style={styles.centerText}>Loading your daily plan…</Text>
+            <Text style={styles.centerText}>Loading your daily plan...</Text>
           </View>
         ) : meals.length ? (
           <>
@@ -311,7 +311,7 @@ export default function DailyPlanScreen() {
               </View>
               <Text style={styles.emptyTitle}>Your plan for today</Text>
               <Text style={styles.emptyText}>
-                Generate a practical breakfast, lunch, dinner, and snack—tailored to your profile.
+                Generate a practical breakfast, lunch, dinner, and snack - tailored to your profile.
               </Text>
               <Pressable
                 disabled={generating}
@@ -319,7 +319,7 @@ export default function DailyPlanScreen() {
                 style={[styles.primaryButton, generating ? { opacity: 0.65 } : null]}
               >
                 {generating ? <ActivityIndicator size="small" color="white" /> : <Ionicons name="sparkles" size={16} color="white" />}
-                <Text style={styles.primaryButtonText}>{generating ? 'Generating…' : 'Generate today’s plan'}</Text>
+                <Text style={styles.primaryButtonText}>{generating ? 'Generating...' : 'Generate today’s plan'}</Text>
               </Pressable>
               <Text style={styles.hintText}>
                 You can generate a new plan anytime.

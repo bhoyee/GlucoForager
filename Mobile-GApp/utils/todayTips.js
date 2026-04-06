@@ -20,7 +20,7 @@ export const TIPS = [
     title: 'Walk after meals',
     tip: 'A short walk after eating helps glucose control.',
     why: 'Muscles use glucose during activity.',
-    try_today: 'Walk for 10–15 minutes after dinner.',
+    try_today: 'Walk for 10-15 minutes after dinner.',
     category: 'movement',
   },
   {
@@ -218,7 +218,7 @@ export const TIPS = [
   {
     id: 'balance-plate',
     title: 'Balance every plate',
-    tip: 'Use a protein–fiber–carb balance.',
+    tip: 'Use a protein-fiber-carb balance.',
     why: 'Balanced plates stabilize glucose.',
     try_today: 'Include protein and vegetables at dinner.',
     category: 'meals',
@@ -392,7 +392,7 @@ export const TIPS = [
     category: 'habits',
   },
 
-  // Extra curated tips (51–90) to extend the daily rotation.
+// Extra curated tips (51-90) to extend the daily rotation.
   {
     id: 'protein-at-every-meal',
     title: 'Protein at each meal',
@@ -606,7 +606,7 @@ export const TIPS = [
     title: 'Short movement break',
     tip: 'Add a movement break during long sitting.',
     why: 'Small activity bouts can help glucose control.',
-    try_today: 'Stand and walk 2–3 minutes each hour.',
+    try_today: 'Stand and walk 2-3 minutes each hour.',
     category: 'movement',
   },
   {

@@ -15,11 +15,12 @@ import {
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/Colors';
+import { Colors, Gradients } from '../../constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
+import { LinearGradient } from 'expo-linear-gradient';
 import { getRecipeImageSettings } from '../../utils/recipeImageSettings';
 import { getTodayTip } from '../../utils/todayTips';
 import { scheduleDailyPlanNotifications } from '../../utils/mealReminders';
@@ -546,6 +547,16 @@ export default function HomeScreen() {
     navigation.navigate('Profile', { openPremium: true });
   };
 
+  const viewSuggestedAll = () => {
+    if (!suggestedRecipes?.length) return;
+    navigation.navigate('RecipeResults', {
+      recipes: suggestedRecipes,
+      selectedIngredients: [],
+      detectedIngredients: [],
+      source: 'suggestions',
+    });
+  };
+
   if (isLoading && isInitialLoad) {
     return (
       <View style={styles.loadingContainer}>
@@ -557,19 +568,92 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
-      <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
-        <View>
-          <Text style={styles.greeting}>Welcome back</Text>
-          <Text style={styles.subGreeting}>What's cooking today?</Text>
+      <StatusBar barStyle="dark-content" backgroundColor="#E9FBF4" />
+      <LinearGradient colors={['#E9FBF4', '#F7FFFB']} style={[styles.heroHeader, { paddingTop: headerPaddingTop }]}>
+        <View style={styles.heroTopRow}>
+          <View>
+            <Text style={styles.greeting}>Welcome back</Text>
+            <Text style={styles.subGreeting}>What's cooking today?</Text>
+          </View>
+          <TouchableOpacity style={styles.notificationButton} onPress={() => navigation.navigate('Profile')}>
+            <Ionicons name="notifications-outline" size={24} color={Colors.text} />
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity 
-          style={styles.notificationButton}
-          onPress={() => navigation.navigate('Profile')}
-        >
-          <Ionicons name="notifications-outline" size={24} color={Colors.text} />
-        </TouchableOpacity>
-      </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickActionsRow}>
+          <Pressable
+            style={({ pressed }) => [styles.quickActionChip, pressed && styles.cardPressed]}
+            android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
+            onPress={handleScanPress}
+          >
+            <Ionicons name="camera-outline" size={18} color={Colors.primary} />
+            <Text style={styles.quickActionText}>Scan</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.quickActionChip, pressed && styles.cardPressed]}
+            android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
+            onPress={handleManualInputPress}
+          >
+            <Ionicons name="create-outline" size={18} color={Colors.secondary} />
+            <Text style={styles.quickActionText}>Type</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.quickActionChip, pressed && styles.cardPressed]}
+            android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
+            onPress={handleOpenEatNow}
+          >
+            <Ionicons name="sparkles-outline" size={18} color={Colors.primary} />
+            <Text style={styles.quickActionText}>Eat now</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.quickActionChip, pressed && styles.cardPressed]}
+            android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
+            onPress={handleOpenSwaps}
+          >
+            <Ionicons name="swap-horizontal-outline" size={18} color={Colors.secondary} />
+            <Text style={styles.quickActionText}>Swaps</Text>
+          </Pressable>
+        </ScrollView>
+
+        <View style={styles.heroCtaWrap}>
+          <LinearGradient colors={Gradients.primary} style={styles.heroPrimaryCta}>
+            <View style={styles.heroPrimaryCtaContent}>
+              <View style={styles.heroCtaIcon}>
+                <Ionicons name="camera-outline" size={22} color="white" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.heroCtaTitle}>Scan your fridge</Text>
+                <Text style={styles.heroCtaSub} numberOfLines={1}>
+                  {userIsPremium ? 'Unlimited scans' : `${remainingScans} scans left today`}
+                </Text>
+              </View>
+              <TouchableOpacity style={styles.heroCtaButton} onPress={handleScanPress} activeOpacity={0.9}>
+                <Text style={styles.heroCtaButtonText}>Start</Text>
+                <Ionicons name="arrow-forward" size={16} color="white" />
+              </TouchableOpacity>
+            </View>
+          </LinearGradient>
+
+          <Pressable
+            style={({ pressed }) => [styles.heroSecondaryCta, pressed && styles.cardPressed]}
+            android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
+            onPress={handleManualInputPress}
+          >
+            <View style={styles.heroSecondaryLeft}>
+              <View style={[styles.heroCtaIcon, { backgroundColor: `${Colors.secondary}20` }]}>
+                <Ionicons name="create-outline" size={20} color={Colors.secondary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.heroSecondaryTitle}>Type ingredients</Text>
+                <Text style={styles.heroSecondarySub} numberOfLines={1}>
+                  {userIsPremium ? 'Manual input' : `${remainingScans} searches left today`}
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
+          </Pressable>
+        </View>
+      </LinearGradient>
       <ScrollView 
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
@@ -591,7 +675,7 @@ export default function HomeScreen() {
         )}
 
         {/* Search Counter Card */}
-        <View style={styles.counterCard}>
+        <LinearGradient colors={Gradients.primary} style={styles.counterCard}>
           <View style={styles.counterHeader}>
             <View>
               <Text style={styles.counterTitle}>Daily Scans</Text>
@@ -600,7 +684,7 @@ export default function HomeScreen() {
               </Text>
             </View>
             <View style={styles.counterIcon}>
-              <Ionicons name="camera-outline" size={24} color={Colors.primary} />
+              <Ionicons name="camera-outline" size={24} color="white" />
             </View>
           </View>
           
@@ -624,7 +708,7 @@ export default function HomeScreen() {
               <Ionicons name="arrow-forward" size={16} color={Colors.primary} />
             </TouchableOpacity>
           )}
-        </View>
+        </LinearGradient>
 
         {foodProfileHasPreferences === true ? null : (
           <View style={styles.section}>
@@ -718,7 +802,8 @@ export default function HomeScreen() {
 
         {/* Main Actions */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Find Recipes</Text>
+          <Text style={styles.sectionTitle}>Quick start</Text>
+          <Text style={styles.sectionSubtitle}>Choose a path to get ideas fast.</Text>
 
           {/* Eat now */}
           <TouchableOpacity style={styles.eatNowCard} activeOpacity={0.9} onPress={handleOpenEatNow}>
@@ -733,73 +818,14 @@ export default function HomeScreen() {
             </View>
             <Ionicons name="chevron-forward" size={22} color="rgba(255,255,255,0.9)" />
           </TouchableOpacity>
-          
-          {/* Camera Scan Card */}
-          <TouchableOpacity 
-            style={[styles.actionCard, styles.actionCardPrimary]}
-            onPress={handleScanPress}
-          >
-            <View style={[styles.cardAccent, { backgroundColor: Colors.primary }]} pointerEvents="none" />
-            <View style={styles.actionContent}>
-              <View style={[styles.actionIcon, { backgroundColor: `${Colors.primary}15` }]}>
-                <Ionicons name="camera-outline" size={28} color={Colors.primary} />
-              </View>
-              <View style={styles.actionText}>
-                <Text style={styles.actionTitle}>Scan Ingredients</Text>
-                <Text style={styles.actionDescription}>
-                  {userIsPremium 
-                    ? 'Take a photo of your fridge' 
-                    : `${remainingScans} scans left today`
-                  }
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={24} color={Colors.textLight} />
-            </View>
-          </TouchableOpacity>
 
-          {/* Manual Input Card */}
-          <TouchableOpacity 
-            style={[styles.actionCard, styles.actionCardSecondary]}
-            onPress={handleManualInputPress}
-          >
-            <View style={[styles.cardAccent, { backgroundColor: Colors.secondary }]} pointerEvents="none" />
-            <View style={styles.actionContent}>
-              <View style={[styles.actionIcon, { backgroundColor: `${Colors.secondary}15` }]}>
-                <Ionicons name="create-outline" size={28} color={Colors.secondary} />
-              </View>
-              <View style={styles.actionText}>
-                <Text style={styles.actionTitle}>Type Ingredients</Text>
-                <Text style={styles.actionDescription}>
-                  {userIsPremium
-                    ? 'Enter what you have manually'
-                    : `${remainingScans} searches left today`}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={24} color={Colors.textLight} />
-            </View>
-          </TouchableOpacity>
-
-          {recentRecipes.length > 0 && (
-            <TouchableOpacity
-              style={styles.recentRow}
-              onPress={handleViewRecentRecipes}
-            >
-              <View style={[styles.cardAccent, { backgroundColor: Colors.primary }]} pointerEvents="none" />
-              <View style={styles.recentRowContent}>
-                <Ionicons name="time-outline" size={18} color={Colors.primary} />
-                <Text style={styles.recentRowText}>Last Recipes</Text>
-              </View>
-              <View style={styles.recentRowRight}>
-                <Text style={styles.recentRowCount}>{recentRecipes.length}</Text>
-                <Ionicons name="chevron-forward" size={18} color={Colors.textLight} />
-              </View>
-            </TouchableOpacity>
-          )}
         </View>
 
         {/* Tools */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Tools</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Tools</Text>
+          </View>
           <Text style={styles.sectionSubtitle}>Quick helpers for smarter choices.</Text>
 
           <View style={styles.miniRow}>
@@ -827,9 +853,13 @@ export default function HomeScreen() {
         {/* Suggested Recipes */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>
-              3 picks for you
-            </Text>
+            <Text style={styles.sectionTitle}>3 picks for you</Text>
+            {suggestedRecipes.length ? (
+              <TouchableOpacity style={styles.viewAllButton} onPress={viewSuggestedAll} activeOpacity={0.85}>
+                <Text style={styles.viewAllText}>View all</Text>
+                <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
+              </TouchableOpacity>
+            ) : null}
           </View>
           
           <ScrollView 
@@ -837,7 +867,18 @@ export default function HomeScreen() {
             showsHorizontalScrollIndicator={false}
             style={styles.recipesScroll}
           >
-            {suggestedRecipes.map((recipe, index) => (
+            {isFetchingRecipes && suggestedRecipes.length === 0 ? (
+              Array.from({ length: 3 }).map((_, idx) => (
+                <View key={`skeleton-${idx}`} style={styles.recipeSkeletonCard}>
+                  <View style={styles.recipeSkeletonImage} />
+                  <View style={styles.recipeSkeletonInfo}>
+                    <View style={styles.recipeSkeletonLineShort} />
+                    <View style={styles.recipeSkeletonLine} />
+                    <View style={styles.recipeSkeletonLine} />
+                  </View>
+                </View>
+              ))
+            ) : suggestedRecipes.map((recipe, index) => (
               <TouchableOpacity 
                 key={recipe.id || `${recipe.name || 'recipe'}-${index}`}
                 style={styles.recipeCard}
@@ -898,6 +939,58 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Recent Recipes */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Recent recipes</Text>
+            {recentRecipes.length ? (
+              <TouchableOpacity style={styles.viewAllButton} onPress={handleViewRecentRecipes} activeOpacity={0.85}>
+                <Text style={styles.viewAllText}>View all</Text>
+                <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+          <Text style={styles.sectionSubtitle}>Your latest generated meals.</Text>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.recipesScroll}>
+            {isFetchingRecipes && recentRecipes.length === 0 ? (
+              Array.from({ length: 2 }).map((_, idx) => (
+                <View key={`recent-skeleton-${idx}`} style={styles.recentMiniCard}>
+                  <View style={styles.recentMiniThumb} />
+                  <View style={styles.recentMiniTextWrap}>
+                    <View style={styles.recipeSkeletonLine} />
+                    <View style={styles.recipeSkeletonLineShort} />
+                  </View>
+                </View>
+              ))
+            ) : recentRecipes.length ? (
+              recentRecipes.slice(0, 5).map((recipe, index) => (
+                <TouchableOpacity
+                  key={recipe.id || `${recipe.name || 'recent'}-${index}`}
+                  style={styles.recentMiniCard}
+                  onPress={() => handleViewRecipeDetail(recipe)}
+                  activeOpacity={0.9}
+                >
+                  {recipeImagesEnabled && recipe.image_url && recipe.image_source !== 'placeholder' ? (
+                    <Image source={{ uri: recipe.image_url }} style={styles.recentMiniThumb} />
+                  ) : (
+                    <View style={[styles.recentMiniThumb, { backgroundColor: Colors.border }]} />
+                  )}
+                  <View style={styles.recentMiniTextWrap}>
+                    <Text style={styles.recentMiniTitle} numberOfLines={2}>
+                      {recipe.name || recipe.title}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))
+            ) : (
+              <View style={styles.emptyInline}>
+                <Text style={styles.emptyInlineText}>No recent recipes yet.</Text>
+              </View>
+            )}
+          </ScrollView>
+        </View>
+
       </ScrollView>
 
     </View>
@@ -921,14 +1014,115 @@ const styles = StyleSheet.create({
     color: Colors.textLight,
   },
   scrollContent: {
-    paddingTop: 8,
+    paddingTop: 14,
   },
-  header: {
+  heroHeader: {
+    paddingHorizontal: 20,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  heroTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingBottom: 10,
+  },
+  quickActionsRow: {
+    gap: 10,
+    paddingTop: 12,
+    paddingBottom: 6,
+  },
+  quickActionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  quickActionText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  heroCtaWrap: {
+    marginTop: 12,
+    gap: 10,
+    paddingBottom: 6,
+  },
+  heroPrimaryCta: {
+    borderRadius: 18,
+    padding: 14,
+  },
+  heroPrimaryCtaContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  heroCtaIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroCtaTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: 'white',
+  },
+  heroCtaSub: {
+    marginTop: 2,
+    fontSize: 12,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.9)',
+  },
+  heroCtaButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.16)',
+  },
+  heroCtaButtonText: {
+    color: 'white',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  heroSecondaryCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  heroSecondaryLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  heroSecondaryTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.text,
+  },
+  heroSecondarySub: {
+    marginTop: 2,
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textLight,
   },
   refreshRow: {
     flexDirection: 'row',
@@ -1076,6 +1270,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textLight,
     fontWeight: '600',
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: `${Colors.primary}12`,
+  },
+  viewAllText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Colors.primary,
   },
   cardPressed: {
     opacity: 0.92,
@@ -1388,6 +1596,68 @@ const styles = StyleSheet.create({
   },
   recipeFib: {
     color: Colors.secondary,
+  },
+  recipeSkeletonCard: {
+    width: 280,
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    marginRight: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  recipeSkeletonImage: {
+    height: 140,
+    width: '100%',
+    backgroundColor: Colors.border,
+  },
+  recipeSkeletonInfo: {
+    padding: 16,
+    gap: 10,
+  },
+  recipeSkeletonLine: {
+    height: 12,
+    borderRadius: 8,
+    backgroundColor: Colors.border,
+    width: '100%',
+  },
+  recipeSkeletonLineShort: {
+    height: 12,
+    borderRadius: 8,
+    backgroundColor: Colors.border,
+    width: '62%',
+  },
+  recentMiniCard: {
+    width: 160,
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    marginRight: 14,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  recentMiniThumb: {
+    width: '100%',
+    height: 96,
+    backgroundColor: Colors.border,
+  },
+  recentMiniTextWrap: {
+    padding: 12,
+  },
+  recentMiniTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: Colors.text,
+    lineHeight: 18,
+  },
+  emptyInline: {
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+  },
+  emptyInlineText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.textLight,
   },
   shuffleButton: {
     flexDirection: 'row',
