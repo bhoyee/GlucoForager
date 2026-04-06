@@ -707,34 +707,36 @@ const RecipeDetailsScreen = () => {
     );
   };
 
-  const renderDetailsTabs = () => (
-    <View style={styles.detailsTabs}>
-      <TouchableOpacity
-        style={[styles.detailsTab, detailsTab === 'nutrition' ? styles.detailsTabActive : null]}
-        onPress={() => setDetailsTab('nutrition')}
-        activeOpacity={0.9}
-      >
-        <Ionicons name="bar-chart-outline" size={16} color={detailsTab === 'nutrition' ? 'white' : '#4CAF50'} />
-        <Text style={[styles.detailsTabText, detailsTab === 'nutrition' ? styles.detailsTabTextActive : null]}>Nutrition</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[styles.detailsTab, detailsTab === 'ingredients' ? styles.detailsTabActive : null]}
-        onPress={() => setDetailsTab('ingredients')}
-        activeOpacity={0.9}
-      >
-        <Ionicons name="leaf-outline" size={16} color={detailsTab === 'ingredients' ? 'white' : '#4CAF50'} />
-        <Text style={[styles.detailsTabText, detailsTab === 'ingredients' ? styles.detailsTabTextActive : null]}>Ingredients</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[styles.detailsTab, detailsTab === 'instructions' ? styles.detailsTabActive : null]}
-        onPress={() => setDetailsTab('instructions')}
-        activeOpacity={0.9}
-      >
-        <Ionicons name="list-outline" size={16} color={detailsTab === 'instructions' ? 'white' : '#4CAF50'} />
-        <Text style={[styles.detailsTabText, detailsTab === 'instructions' ? styles.detailsTabTextActive : null]}>Instructions</Text>
-      </TouchableOpacity>
-    </View>
-  );
+  const renderDetailsTabs = () => {
+    const renderTab = ({ key, icon, label }) => {
+      const active = detailsTab === key;
+      return (
+        <Pressable
+          key={key}
+          style={({ pressed }) => [
+            styles.detailsTab,
+            active ? styles.detailsTabActive : null,
+            pressed && !active ? styles.detailsTabPressed : null,
+          ]}
+          android_ripple={{ color: active ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.06)' }}
+          onPress={() => setDetailsTab(key)}
+        >
+          <View style={styles.detailsTabInner}>
+            <Ionicons name={icon} size={16} color={active ? 'white' : '#4CAF50'} />
+            <Text style={[styles.detailsTabText, active ? styles.detailsTabTextActive : null]}>{label}</Text>
+          </View>
+        </Pressable>
+      );
+    };
+
+    return (
+      <View style={styles.detailsTabs}>
+        {renderTab({ key: 'nutrition', icon: 'bar-chart-outline', label: 'Nutrition' })}
+        {renderTab({ key: 'ingredients', icon: 'leaf-outline', label: 'Ingredients' })}
+        {renderTab({ key: 'instructions', icon: 'list-outline', label: 'Instructions' })}
+      </View>
+    );
+  };
 
   const renderActiveDetailsSection = () => {
     if (detailsTab === 'nutrition') return renderNutritionSection();
@@ -1052,16 +1054,24 @@ const styles = StyleSheet.create({
   },
   detailsTab: {
     flex: 1,
-    flexDirection: 'row',
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
     paddingVertical: 10,
     borderRadius: 14,
     backgroundColor: '#F1F5F9',
   },
+  detailsTabInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
   detailsTabActive: {
     backgroundColor: '#4CAF50',
+  },
+  detailsTabPressed: {
+    backgroundColor: '#E2E8F0',
   },
   detailsTabText: {
     fontSize: 13,
