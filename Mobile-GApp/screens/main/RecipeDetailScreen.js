@@ -717,7 +717,7 @@ const RecipeDetailsScreen = () => {
           style={({ pressed }) => [
             styles.detailsTab,
             active ? styles.detailsTabActive : null,
-            pressed ? styles.detailsTabPressed : null,
+            pressed ? (active ? styles.detailsTabActivePressed : styles.detailsTabPressed) : null,
           ]}
           onPress={() => setDetailsTab(key)}
         >
@@ -1056,6 +1056,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
+    height: 42,
     paddingVertical: 10,
     paddingHorizontal: 10,
     borderRadius: 14,
@@ -1066,6 +1067,10 @@ const styles = StyleSheet.create({
   detailsTabActive: {
     backgroundColor: '#111827',
     borderColor: '#111827',
+  },
+  detailsTabActivePressed: {
+    backgroundColor: '#0B1220',
+    borderColor: '#0B1220',
   },
   detailsTabPressed: {
     backgroundColor: '#EEF2F7',
