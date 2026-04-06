@@ -641,16 +641,16 @@ export default function HomeScreen() {
             android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
             onPress={handleOpenEatNow}
           >
-            <Ionicons name="sparkles-outline" size={18} color={Colors.primary} />
-            <Text style={styles.quickActionText}>Eat now</Text>
+            <Ionicons name="sparkles-outline" size={18} color="white" />
+            <Text style={[styles.quickActionText, styles.quickActionTextOnDark]}>Eat now</Text>
           </Pressable>
           <Pressable
             style={({ pressed }) => [styles.quickActionChip, styles.quickActionChipSwaps, pressed && styles.cardPressed]}
             android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
             onPress={handleOpenSwaps}
           >
-            <Ionicons name="swap-horizontal-outline" size={18} color={Colors.secondary} />
-            <Text style={styles.quickActionText}>Swaps</Text>
+            <Ionicons name="swap-horizontal-outline" size={18} color="white" />
+            <Text style={[styles.quickActionText, styles.quickActionTextOnDark]}>Swaps</Text>
           </Pressable>
         </ScrollView>
 
@@ -1084,17 +1084,20 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   quickActionChipEatNow: {
-    backgroundColor: `${Colors.primary}14`,
-    borderColor: `${Colors.primary}33`,
+    backgroundColor: Colors.primary,
+    borderColor: 'transparent',
   },
   quickActionChipSwaps: {
-    backgroundColor: `${Colors.secondary}14`,
-    borderColor: `${Colors.secondary}33`,
+    backgroundColor: Colors.secondary,
+    borderColor: 'transparent',
   },
   quickActionText: {
     fontSize: 13,
     fontWeight: '600',
     color: Colors.text,
+  },
+  quickActionTextOnDark: {
+    color: 'white',
   },
   heroCtaWrap: {
     marginTop: 12,
@@ -1189,7 +1192,7 @@ const styles = StyleSheet.create({
     color: Colors.text,
   },
   greetingName: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '900',
     color: Colors.text,
   },
