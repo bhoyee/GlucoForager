@@ -975,7 +975,7 @@ export default function HomeScreen() {
           </View>
           <Text style={styles.sectionSubtitle}>Your latest generated meals.</Text>
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.recipesScroll}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.recipesScroll, { marginTop: 10 }]}>
             {isFetchingRecipes && recentRecipes.length === 0 ? (
               Array.from({ length: 2 }).map((_, idx) => (
                 <View key={`recent-skeleton-${idx}`} style={styles.recentMiniCard}>
