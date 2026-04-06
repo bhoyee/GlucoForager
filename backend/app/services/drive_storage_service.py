@@ -29,6 +29,7 @@ def _guess_kind(content_type: str | None, extension: str) -> str:
     return "document"
 
 _EXCEL_EXTS = {".xls", ".xlsx"}
+_WORD_EXTS = {".doc", ".docx"}
 
 
 def _max_bytes_for_upload(kind: str, extension: str) -> int:
@@ -81,7 +82,7 @@ def store_drive_upload(*, staff_user_id: int, file: UploadFile) -> StoredDriveOb
 
     if kind == "image" and extension not in {".jpg", ".jpeg", ".png", ".webp"}:
         raise ValueError("Unsupported image type")
-    if kind == "document" and extension not in ({".pdf"} | _EXCEL_EXTS):
+    if kind == "document" and extension not in ({".pdf"} | _EXCEL_EXTS | _WORD_EXTS):
         raise ValueError("Unsupported document type")
     if kind == "video" and extension != ".mp4":
         raise ValueError("Unsupported video type")
