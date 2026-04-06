@@ -90,6 +90,7 @@ def drive_status(
             "images": ["jpg", "jpeg", "png", "webp"],
             "pdfs": ["pdf"],
             "excels": ["xls", "xlsx"],
+            "words": ["doc", "docx"],
             "videos": ["mp4"],
         },
     }
