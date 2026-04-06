@@ -99,6 +99,7 @@ const RecipeDetailsScreen = () => {
   const [recipe, setRecipe] = useState(mockRecipe);
   const [showIngredientsModal, setShowIngredientsModal] = useState(false);
   const [showSafetyModal, setShowSafetyModal] = useState(false);
+  const [detailsTab, setDetailsTab] = useState('ingredients'); // 'nutrition' | 'ingredients' | 'instructions'
   const [servings, setServings] = useState(recipe.servings);
   const [expandedTip, setExpandedTip] = useState(null);
   const [isSavingFavorite, setIsSavingFavorite] = useState(false);
@@ -706,6 +707,41 @@ const RecipeDetailsScreen = () => {
     );
   };
 
+  const renderDetailsTabs = () => (
+    <View style={styles.detailsTabs}>
+      <TouchableOpacity
+        style={[styles.detailsTab, detailsTab === 'nutrition' ? styles.detailsTabActive : null]}
+        onPress={() => setDetailsTab('nutrition')}
+        activeOpacity={0.9}
+      >
+        <Ionicons name="bar-chart-outline" size={16} color={detailsTab === 'nutrition' ? 'white' : '#4CAF50'} />
+        <Text style={[styles.detailsTabText, detailsTab === 'nutrition' ? styles.detailsTabTextActive : null]}>Nutrition</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.detailsTab, detailsTab === 'ingredients' ? styles.detailsTabActive : null]}
+        onPress={() => setDetailsTab('ingredients')}
+        activeOpacity={0.9}
+      >
+        <Ionicons name="leaf-outline" size={16} color={detailsTab === 'ingredients' ? 'white' : '#4CAF50'} />
+        <Text style={[styles.detailsTabText, detailsTab === 'ingredients' ? styles.detailsTabTextActive : null]}>Ingredients</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.detailsTab, detailsTab === 'instructions' ? styles.detailsTabActive : null]}
+        onPress={() => setDetailsTab('instructions')}
+        activeOpacity={0.9}
+      >
+        <Ionicons name="list-outline" size={16} color={detailsTab === 'instructions' ? 'white' : '#4CAF50'} />
+        <Text style={[styles.detailsTabText, detailsTab === 'instructions' ? styles.detailsTabTextActive : null]}>Instructions</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  const renderActiveDetailsSection = () => {
+    if (detailsTab === 'nutrition') return renderNutritionSection();
+    if (detailsTab === 'instructions') return renderInstructionsSection();
+    return renderIngredientsSection();
+  };
+
   const renderIngredientsSection = () => (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
@@ -990,10 +1026,9 @@ const RecipeDetailsScreen = () => {
           {renderStatsBar()}
           {renderTitleSection()}
           {renderSafetySection()}
-          {renderNutritionSection()}
-          {renderIngredientsSection()}
+          {renderDetailsTabs()}
+          {renderActiveDetailsSection()}
           {renderTipsSection()}
-          {renderInstructionsSection()}
           {renderActionsSection()}
         </View>
       </ScrollView>
@@ -1008,6 +1043,33 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFF',
+  },
+  detailsTabs: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: 20,
+    marginTop: 14,
+  },
+  detailsTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: '#F1F5F9',
+  },
+  detailsTabActive: {
+    backgroundColor: '#4CAF50',
+  },
+  detailsTabText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#1F2937',
+  },
+  detailsTabTextActive: {
+    color: 'white',
   },
   header: {
     position: 'absolute',
