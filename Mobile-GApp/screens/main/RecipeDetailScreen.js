@@ -814,13 +814,7 @@ const RecipeDetailsScreen = () => {
             <View style={styles.stepNumber}>
               <Text style={styles.stepNumberText}>{index + 1}</Text>
             </View>
-            <Text style={styles.stepText}>
-              {typeof step === 'string'
-                ? step
-                : typeof step === 'object' && step
-                ? step.text || step.description || step.step || step.title || JSON.stringify(step)
-                : ''}
-            </Text>
+            <Text style={styles.stepText}>{step}</Text>
           </View>
         ))
       )}
@@ -1421,13 +1415,11 @@ const styles = StyleSheet.create({
   instructionStep: {
     flexDirection: 'row',
     marginBottom: 20,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F8FDF9',
     padding: 16,
     borderRadius: 12,
     borderLeftWidth: 3,
-    borderLeftColor: '#111827',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderLeftColor: '#4CAF50',
   },
   instructionsList: {
     marginTop: 12,
@@ -1436,23 +1428,22 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: '#111827',
+    backgroundColor: '#4CAF50',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
     flexShrink: 0,
   },
   stepNumberText: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '700',
     color: '#FFF',
   },
   stepText: {
     flex: 1,
-    flexShrink: 1,
-    fontSize: 14,
-    color: '#111827',
-    lineHeight: 20,
+    fontSize: 15,
+    color: '#333',
+    lineHeight: 22,
   },
   tipsContainer: {
     marginTop: 8,
