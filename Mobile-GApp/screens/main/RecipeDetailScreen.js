@@ -721,21 +721,18 @@ const RecipeDetailsScreen = () => {
           ]}
           onPress={() => setDetailsTab(key)}
         >
-          <View style={styles.detailsTabInner}>
-            <Ionicons name={icon} size={16} color={active ? 'white' : '#4CAF50'} />
-            <Text style={[styles.detailsTabText, active ? styles.detailsTabTextActive : null]} numberOfLines={1}>
-              {label}
-            </Text>
-          </View>
+          <Text style={[styles.detailsTabText, active ? styles.detailsTabTextActive : null]} numberOfLines={1}>
+            {label}
+          </Text>
         </Pressable>
       );
     };
 
     return (
       <View style={styles.detailsTabs}>
-        {renderTab({ key: 'nutrition', icon: 'bar-chart-outline', label: 'Nutrition' })}
-        {renderTab({ key: 'ingredients', icon: 'leaf-outline', label: 'Ingredients' })}
-        {renderTab({ key: 'instructions', icon: 'list-outline', label: 'Instructions' })}
+        {renderTab({ key: 'nutrition', icon: null, label: 'Nutrition' })}
+        {renderTab({ key: 'ingredients', icon: null, label: 'Ingredients' })}
+        {renderTab({ key: 'instructions', icon: null, label: 'Instructions' })}
       </View>
     );
   };
@@ -1050,7 +1047,7 @@ const styles = StyleSheet.create({
   },
   detailsTabs: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
     paddingHorizontal: 20,
     marginTop: 14,
   },
@@ -1062,25 +1059,21 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 10,
     borderRadius: 14,
-    backgroundColor: '#F1F5F9',
-  },
-  detailsTabInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    width: '100%',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   detailsTabActive: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#111827',
+    borderColor: '#111827',
   },
   detailsTabPressed: {
-    backgroundColor: '#E8F5E9',
+    backgroundColor: '#EEF2F7',
   },
   detailsTabText: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#4CAF50',
+    color: '#111827',
   },
   detailsTabTextActive: {
     color: 'white',
