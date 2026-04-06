@@ -183,7 +183,7 @@ export default function TodayTipScreen() {
             </View>
           ) : null}
 
-          {feedback ? <Text style={styles.feedbackThanks}>Thanks — we’ll use this to improve tips.</Text> : null}
+          {feedback ? <Text style={styles.feedbackThanks}>Thanks - we'll use this to improve tips.</Text> : null}
 
           <TouchableOpacity
             style={styles.moreLink}

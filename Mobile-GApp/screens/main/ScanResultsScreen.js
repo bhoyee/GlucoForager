@@ -105,8 +105,8 @@ export default function ScanResultsScreen() {
         const excludedList = excluded.slice(0, limitShown).join(', ');
         const optionalList = optional.slice(0, limitShown).join(', ');
         const parts = [];
-        if (excludedList) parts.push(`Avoid: ${excludedList}${excluded.length > limitShown ? '…' : ''}`);
-        if (optionalList) parts.push(`Use sparingly: ${optionalList}${optional.length > limitShown ? '…' : ''}`);
+        if (excludedList) parts.push(`Avoid: ${excludedList}${excluded.length > limitShown ? '...' : ''}`);
+        if (optionalList) parts.push(`Use sparingly: ${optionalList}${optional.length > limitShown ? '...' : ''}`);
         return parts.join(' • ');
       };
 

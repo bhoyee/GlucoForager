@@ -53,8 +53,8 @@ const mockRecipe = {
     { id: '2', name: 'Chicken breast', amount: '200g', owned: true },
     { id: '3', name: 'Cherry tomatoes', amount: '1 cup', owned: true },
     { id: '4', name: 'Cucumber', amount: '1 medium', owned: true },
-    { id: '5', name: 'Red onion', amount: '½ cup', owned: false },
-    { id: '6', name: 'Kalamata olives', amount: '¼ cup', owned: false },
+    { id: '5', name: 'Red onion', amount: '1/2 cup', owned: false },
+    { id: '6', name: 'Kalamata olives', amount: '1/4 cup', owned: false },
     { id: '7', name: 'Feta cheese', amount: '50g', owned: true },
     { id: '8', name: 'Lemon juice', amount: '2 tbsp', owned: true },
     { id: '9', name: 'Olive oil', amount: '1 tbsp', owned: true },
@@ -665,7 +665,7 @@ const RecipeDetailsScreen = () => {
             disabled={isGeneratingImage}
           >
             <Text style={styles.generateImageButtonText}>
-              {isGeneratingImage ? 'Generating…' : 'Generate image'}
+              {isGeneratingImage ? 'Generating...' : 'Generate image'}
             </Text>
           </TouchableOpacity>
         </View>
