@@ -592,16 +592,6 @@ export default function HomeScreen() {
     return 'Snack';
   };
 
-  const viewSuggestedAll = () => {
-    if (!suggestedRecipes?.length) return;
-    navigation.navigate('RecipeResults', {
-      recipes: suggestedRecipes,
-      selectedIngredients: [],
-      detectedIngredients: [],
-      source: 'suggestions',
-    });
-  };
-
   if (isLoading && isInitialLoad) {
     return (
       <View style={styles.loadingContainer}>
@@ -893,12 +883,6 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>3 picks for you</Text>
-            {suggestedRecipes.length ? (
-              <TouchableOpacity style={styles.viewAllButton} onPress={viewSuggestedAll} activeOpacity={0.85}>
-                <Text style={styles.viewAllText}>View all</Text>
-                <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
-              </TouchableOpacity>
-            ) : null}
           </View>
           
           <ScrollView 
