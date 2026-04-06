@@ -31,6 +31,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const headerPaddingTop = Math.max(insets.top, 16);
   const contentBottomPadding = Math.max(insets.bottom + 4, 6);
+  const [greetingName, setGreetingName] = useState('');
   
   const [userIsPremium, setUserIsPremium] = useState(false);
   const [todayScans, setTodayScans] = useState(0);
@@ -128,6 +129,33 @@ export default function HomeScreen() {
     }
   };
 
+  const loadGreetingName = async () => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        setGreetingName('');
+        return;
+      }
+
+      const response = await apiFetch(
+        `${API_URL}${API_ENDPOINTS.USER_PROFILE}`,
+        { method: 'GET', headers: { Authorization: `Bearer ${token}` } },
+        { onUnauthorized: signOut, timeoutMs: 12000 }
+      );
+      if (!response.ok) return;
+      const data = await response.json().catch(() => ({}));
+      const fullName = typeof data?.full_name === 'string' ? data.full_name.trim() : '';
+      if (!fullName) {
+        setGreetingName('');
+        return;
+      }
+      const first = fullName.split(/\s+/).filter(Boolean)[0] || '';
+      setGreetingName(first);
+    } catch {
+      // ignore network errors
+    }
+  };
+
   const getDeviceId = async () => {
     const existing = await AsyncStorage.getItem('deviceId');
     if (existing) return existing;
@@ -206,6 +234,7 @@ export default function HomeScreen() {
         loadUserStats(),
         loadRecipes(),
         loadRecipeImagesFlag(),
+        loadGreetingName(),
         loadTipConfig(),
         loadTodayTip(),
         loadDailyChallenge(),
@@ -547,6 +576,22 @@ export default function HomeScreen() {
     navigation.navigate('Profile', { openPremium: true });
   };
 
+  const getDayGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour <= 11) return 'Good morning';
+    if (hour >= 12 && hour <= 16) return 'Good afternoon';
+    if (hour >= 17 && hour <= 21) return 'Good evening';
+    return 'Good night';
+  };
+
+  const getMealLabel = () => {
+    const t = getMealType();
+    if (t === 'breakfast') return 'Breakfast';
+    if (t === 'lunch') return 'Lunch';
+    if (t === 'dinner') return 'Dinner';
+    return 'Snack';
+  };
+
   const viewSuggestedAll = () => {
     if (!suggestedRecipes?.length) return;
     navigation.navigate('RecipeResults', {
@@ -568,12 +613,17 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#E9FBF4" />
-      <LinearGradient colors={['#E9FBF4', '#F7FFFB']} style={[styles.heroHeader, { paddingTop: headerPaddingTop }]}>
+      <StatusBar barStyle="dark-content" backgroundColor="#EEF2FF" />
+      <LinearGradient colors={['#EEF2FF', '#ECFEFF']} style={[styles.heroHeader, { paddingTop: headerPaddingTop }]}>
         <View style={styles.heroTopRow}>
           <View>
-            <Text style={styles.greeting}>Welcome back</Text>
-            <Text style={styles.subGreeting}>What's cooking today?</Text>
+            <Text style={styles.greeting}>
+              {getDayGreeting()}
+              {greetingName ? `, ${greetingName}` : ''}
+            </Text>
+            <Text style={styles.subGreeting}>
+              {`It's ${getMealLabel()} time • ${userIsPremium ? 'Unlimited scans' : `${remainingScans} scans left`}`}
+            </Text>
           </View>
           <TouchableOpacity style={styles.notificationButton} onPress={() => navigation.navigate('Profile')}>
             <Ionicons name="notifications-outline" size={24} color={Colors.text} />
@@ -581,22 +631,6 @@ export default function HomeScreen() {
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickActionsRow}>
-          <Pressable
-            style={({ pressed }) => [styles.quickActionChip, pressed && styles.cardPressed]}
-            android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
-            onPress={handleScanPress}
-          >
-            <Ionicons name="camera-outline" size={18} color={Colors.primary} />
-            <Text style={styles.quickActionText}>Scan</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.quickActionChip, pressed && styles.cardPressed]}
-            android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
-            onPress={handleManualInputPress}
-          >
-            <Ionicons name="create-outline" size={18} color={Colors.secondary} />
-            <Text style={styles.quickActionText}>Type</Text>
-          </Pressable>
           <Pressable
             style={({ pressed }) => [styles.quickActionChip, pressed && styles.cardPressed]}
             android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
