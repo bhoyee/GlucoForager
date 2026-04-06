@@ -1,4 +1,4 @@
-import json
+﻿import json
 import logging
 import re
 from typing import Any, Dict, List
@@ -27,7 +27,11 @@ Rules:
 - Avoid extreme diets unless necessary.
 - Focus on common grocery-store or restaurant options.
 - Keep responses concise and practical, in plain language.
-- GI is REQUIRED for every swap candidate: always provide gi_min and gi_max as integers in range 0–110.
+- Keep the JSON compact: short strings; avoid long paragraphs.
+- For lists: keep watch_outs max 3, pair_with max 3.
+- For each swap candidate: keep fit_tags max 3, cuisine_fit max 2.
+- If you are unsure about a numeric/macros field, return null (do not guess aggressively).
+- GI is REQUIRED for every swap candidate: always provide gi_min and gi_max as integers in range 0â€“110.
   If you are not sure, provide your best estimate range and set gi_note="Estimated".
 
 Return ONLY valid JSON with this exact shape:
@@ -595,6 +599,10 @@ For each swap candidate, include:
 - A short portion_suggestion when the swap is still starchy (e.g. "keep to 1/2 cup cooked").
 Do NOT include cooking instructions or times.
 Write in very simple words (no jargon). Use short reasons (one sentence each).
+Keep each reason under 120 characters.
+Keep assessment.summary under 160 characters.
+Keep lists compact (watch_outs/pair_with max 3; fit_tags max 3; cuisine_fit max 2).
+If unsure about macros, use null.
 Return ONLY the required JSON.
 """
 
@@ -607,9 +615,9 @@ Return ONLY the required JSON.
                         {"role": "system", "content": SYSTEM_PROMPT},
                         {"role": "user", "content": user_prompt},
                     ],
-                    "temperature": 0.4 if attempt == 0 else 0.2,
-                    # Rich swap candidates (GI + macros) need more output room; keep bounded to control costs.
-                    "max_tokens": 900,
+                    "temperature": 0.25 if attempt == 0 else 0.15,
+                    # 6 candidates can exceed 900 tokens when models get verbose; allow more room to avoid truncation.
+                    "max_tokens": 1400,
                     # Prefer strict JSON mode where supported.
                     "response_format": {"type": "json_object"},
                 }
@@ -619,7 +627,7 @@ Return ONLY the required JSON.
                         {
                             "role": "user",
                             "content": user_prompt
-                            + "\n\nIMPORTANT: For recognizable foods/drinks you MUST return exactly 6 swap_candidates. Do not return swap_candidates=null.",
+                            + "\n\nIMPORTANT: For recognizable foods/drinks you MUST return exactly 6 swap_candidates. Do not return swap_candidates=null. Keep output compact.",
                         },
                     ]
                 resp = self._openai.chat.completions.create(**params, timeout=timeout_seconds)
