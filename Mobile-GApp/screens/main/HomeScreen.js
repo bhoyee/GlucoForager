@@ -1084,7 +1084,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   quickActionChipEatNow: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.accent,
     borderColor: 'transparent',
   },
   quickActionChipSwaps: {
