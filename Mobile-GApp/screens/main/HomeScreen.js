@@ -875,15 +875,15 @@ export default function HomeScreen() {
             >
               <View style={styles.miniRowContent}>
                 <View style={styles.miniLeft}>
-                  <Ionicons name="swap-horizontal-outline" size={20} color="white" />
+                  <Ionicons name="swap-horizontal-outline" size={20} color={Colors.secondary} />
                   <View style={styles.miniText}>
-                    <Text style={[styles.miniTitle, styles.miniTitleOnDark]}>Food swaps</Text>
-                    <Text style={[styles.miniSub, styles.miniSubOnDark]} numberOfLines={1}>
+                    <Text style={styles.miniTitle}>Food swaps</Text>
+                    <Text style={styles.miniSub} numberOfLines={1}>
                       Carbs, desserts, drinks
                     </Text>
                   </View>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.9)" />
+                <Ionicons name="chevron-forward" size={18} color={Colors.textLight} />
               </View>
             </Pressable>
           </View>
@@ -1459,15 +1459,13 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   miniCardSwaps: {
-    backgroundColor: Colors.secondary,
+    backgroundColor: 'rgba(49, 130, 206, 0.08)',
   },
   miniCardChallenge: {
     backgroundColor: `${Colors.primary}14`,
   },
   miniTitle: { fontSize: 16, fontWeight: '900', color: Colors.text },
   miniSub: { marginTop: 3, fontSize: 13, color: Colors.textLight, fontWeight: '600' },
-  miniTitleOnDark: { color: 'white' },
-  miniSubOnDark: { color: 'rgba(255,255,255,0.9)' },
   seeAllText: {
     color: Colors.primary,
     fontSize: 14,
