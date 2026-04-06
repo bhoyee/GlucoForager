@@ -717,14 +717,15 @@ const RecipeDetailsScreen = () => {
           style={({ pressed }) => [
             styles.detailsTab,
             active ? styles.detailsTabActive : null,
-            pressed && !active ? styles.detailsTabPressed : null,
+            pressed ? styles.detailsTabPressed : null,
           ]}
-          android_ripple={{ color: active ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.06)' }}
           onPress={() => setDetailsTab(key)}
         >
           <View style={styles.detailsTabInner}>
             <Ionicons name={icon} size={16} color={active ? 'white' : '#4CAF50'} />
-            <Text style={[styles.detailsTabText, active ? styles.detailsTabTextActive : null]}>{label}</Text>
+            <Text style={[styles.detailsTabText, active ? styles.detailsTabTextActive : null]} numberOfLines={1}>
+              {label}
+            </Text>
           </View>
         </Pressable>
       );
@@ -1059,6 +1060,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
+    paddingHorizontal: 10,
     borderRadius: 14,
     backgroundColor: '#F1F5F9',
   },
@@ -1067,17 +1069,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    width: '100%',
   },
   detailsTabActive: {
     backgroundColor: '#4CAF50',
   },
   detailsTabPressed: {
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#E8F5E9',
   },
   detailsTabText: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#1F2937',
+    color: '#4CAF50',
   },
   detailsTabTextActive: {
     color: 'white',
