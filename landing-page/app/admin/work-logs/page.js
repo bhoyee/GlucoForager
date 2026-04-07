@@ -181,6 +181,7 @@ function WorkLogsPageInner() {
   const lastStaffTodayRef = useRef(staffTodayISO);
   const [workDateLog, setWorkDateLog] = useState(null);
   const [submittedModalOpen, setSubmittedModalOpen] = useState(false);
+  const [submittingWorkLog, setSubmittingWorkLog] = useState(false);
   const [unfinishedModalOpen, setUnfinishedModalOpen] = useState(false);
   const [unfinishedTaskId, setUnfinishedTaskId] = useState(null);
   const [unfinishedReason, setUnfinishedReason] = useState('');
@@ -1191,6 +1192,7 @@ function WorkLogsPageInner() {
     }
 
     const submit = async () => {
+      setSubmittingWorkLog(true);
       try {
         const fd = new FormData();
         fd.set('work_date', d);
@@ -1218,6 +1220,8 @@ function WorkLogsPageInner() {
         loadWorkDateLog(workDate);
       } catch (e) {
         setMessage(e?.message || 'Failed to save work log.');
+      } finally {
+        setSubmittingWorkLog(false);
       }
     };
 
@@ -1716,8 +1720,17 @@ function WorkLogsPageInner() {
         </div>
 
         <div className="admin-actions">
-          <button className="admin-button" type="button" onClick={saveToday} disabled={isWorkDateLocked}>
-            {isWorkDateLocked ? 'Submitted' : 'Submit work log'}
+          <button className="admin-button" type="button" onClick={saveToday} disabled={isWorkDateLocked || submittingWorkLog}>
+            {submittingWorkLog ? (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <span className="admin-spinner" aria-hidden="true" style={{ width: 14, height: 14, borderWidth: 2, marginTop: 0 }} />
+                Submitting…
+              </span>
+            ) : isWorkDateLocked ? (
+              'Submitted'
+            ) : (
+              'Submit work log'
+            )}
           </button>
         </div>
       </div>
