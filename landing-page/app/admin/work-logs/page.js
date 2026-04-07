@@ -172,6 +172,7 @@ function WorkLogsPageInner() {
 
   const [summary, setSummary] = useState('');
   const [workLogAttachments, setWorkLogAttachments] = useState([]);
+  const attachmentsInputRef = useRef(null);
   const [workDate, setWorkDate] = useState(todayISO());
   const [workDateReason, setWorkDateReason] = useState('');
   const [workDateLoading, setWorkDateLoading] = useState(false);
@@ -246,6 +247,26 @@ function WorkLogsPageInner() {
     if (typeof task?.title === 'string') return task.title;
     const fallback = direct == null ? '' : String(direct);
     return fallback === '[object Object]' ? '[Invalid task text]' : fallback;
+  };
+
+  const fileKey = (f) => {
+    if (!f) return '';
+    return `${String(f.name || '')}::${String(f.size || '')}::${String(f.lastModified || '')}`;
+  };
+
+  const mergeFiles = (prevFiles, nextFiles, max = 5) => {
+    const prev = Array.isArray(prevFiles) ? prevFiles.filter(Boolean) : [];
+    const incoming = Array.isArray(nextFiles) ? nextFiles.filter(Boolean) : [];
+    const seen = new Set(prev.map(fileKey).filter(Boolean));
+    const out = [...prev];
+    for (const f of incoming) {
+      if (out.length >= max) break;
+      const k = fileKey(f);
+      if (!k || seen.has(k)) continue;
+      seen.add(k);
+      out.push(f);
+    }
+    return out.slice(0, max);
   };
 
   const confirmActionRef = useRef(null);
@@ -1628,17 +1649,59 @@ function WorkLogsPageInner() {
           ) : (
             <div>
               <input
+                ref={attachmentsInputRef}
                 type="file"
                 multiple
-                onChange={(e) => setWorkLogAttachments(Array.from(e.target.files || []).slice(0, 5))}
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const picked = Array.from(e.target.files || []);
+                  if (picked.length) setWorkLogAttachments((prev) => mergeFiles(prev, picked, 5));
+                  // Reset so picking the same file again still triggers onChange.
+                  try {
+                    e.target.value = '';
+                  } catch {
+                    // ignore
+                  }
+                }}
                 accept=".pdf,.jpg,.jpeg,.png,.webp,.mp4,.xls,.xlsx,.doc,.docx,.zip"
               />
+
+              <div className="admin-actions" style={{ justifyContent: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
+                <button
+                  className="admin-button secondary"
+                  type="button"
+                  onClick={() => {
+                    try {
+                      attachmentsInputRef.current?.click?.();
+                    } catch {
+                      // ignore
+                    }
+                  }}
+                >
+                  Add files
+                </button>
+                <div className="admin-subtitle" style={{ margin: 0 }}>
+                  Add up to 5 attachments (you can pick files multiple times).
+                </div>
+              </div>
               {(Array.isArray(workLogAttachments) ? workLogAttachments : []).length > 0 ? (
                 <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <div className="admin-subtitle">Selected: {(Array.isArray(workLogAttachments) ? workLogAttachments : []).length} file(s) (max 5)</div>
                   <ul style={{ margin: 0, paddingLeft: 18 }}>
                     {(Array.isArray(workLogAttachments) ? workLogAttachments : []).map((f) => (
-                      <li key={`${f?.name}-${f?.size}`}>{String(f?.name || 'file')}</li>
+                      <li key={fileKey(f) || `${f?.name}-${f?.size}`} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {String(f?.name || 'file')}
+                        </span>
+                        <button
+                          className="admin-icon-button danger"
+                          type="button"
+                          aria-label="Remove file"
+                          onClick={() => setWorkLogAttachments((prev) => (Array.isArray(prev) ? prev.filter((x) => fileKey(x) !== fileKey(f)) : []))}
+                        >
+                          ×
+                        </button>
+                      </li>
                     ))}
                   </ul>
                   <div>
