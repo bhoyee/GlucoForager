@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, text as sa_text
 from sqlalchemy.orm import Session
@@ -20,6 +20,7 @@ from ...models.staff_work_log_reminder import StaffWorkLogReminder
 from ...models.staff_notification import StaffNotification
 from ...services.email_service import send_staff_notification_email
 from ...services.staff_rbac_service import StaffRBACService
+from ...services.work_log_file_storage_service import store_work_log_attachment
 
 
 router = APIRouter(prefix="/admin/work-logs", tags=["admin-work-logs"])
@@ -949,4 +950,112 @@ def upsert_work_log(
             db.rollback()
         except Exception:
             pass
+    return {"ok": True, "id": row.id}
+
+
+@router.post("/upsert/form")
+def upsert_work_log_form(
+    work_date: date | None = Form(None),
+    summary: str = Form(""),
+    reason: str = Form(""),
+    attachments: list[UploadFile] | None = File(None),
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("work_logs.write")),
+):
+    payload = WorkLogUpsertPayload(work_date=work_date, summary=summary, reason=reason)
+
+    today = _staff_today(current_staff)
+    d = payload.work_date or today
+
+    if d > today:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Work date cannot be in the future")
+
+    min_date = today - timedelta(days=6)
+    if d < min_date:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Work date is too far in the past. You can only submit logs from {min_date.isoformat()} to {today.isoformat()}.",
+        )
+
+    if d != today:
+        r = str(payload.reason or "").strip()
+        if len(r) < 3:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Reason is required for past-day work logs")
+
+    row = (
+        db.query(StaffWorkLog)
+        .filter(StaffWorkLog.staff_user_id == current_staff.id, StaffWorkLog.work_date == d)
+        .first()
+    )
+    if row:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Work log already submitted for this date")
+
+    cleaned = _clean_payload(payload)
+
+    stored_items: list[dict] = []
+    for f in list(attachments or [])[:5]:
+        if not f:
+            continue
+        if not (getattr(f, "filename", None) or "").strip():
+            continue
+        try:
+            stored = store_work_log_attachment(f)
+            stored_items.append(
+                {
+                    "filename": stored.filename,
+                    "original_name": stored.original_name,
+                    "url": stored.url,
+                    "content_type": stored.content_type,
+                    "size_bytes": stored.size_bytes,
+                    "storage_backend": stored.storage_backend,
+                    "remote_dir": stored.remote_dir,
+                }
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        except Exception:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Failed to store attachment")
+
+    if stored_items:
+        cleaned["attachments"] = stored_items
+
+    row = StaffWorkLog(
+        staff_user_id=current_staff.id,
+        work_date=d,
+        payload=cleaned,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+
+    # Notify HR/Admin (work_logs.manage) that a staff work log was submitted.
+    try:
+        recipients = _staff_ids_with_permission(db, "work_logs.manage")
+        recipients = [int(sid) for sid in recipients if int(sid) != int(current_staff.id)]
+        title_name = (str(getattr(current_staff, "full_name", "") or "").strip() or str(current_staff.email)).strip()
+        title = f"Work log submitted: {title_name} ({d.isoformat()})"
+        body = str(cleaned.get("summary") or "").strip()
+        body = body[:240] if body else "A staff member submitted their work log."
+        data = {"work_log_id": int(row.id), "work_date": d.isoformat(), "staff_user_id": int(current_staff.id)}
+        for sid in recipients:
+            db.add(
+                StaffNotification(
+                    staff_user_id=int(sid),
+                    type="worklog.submitted",
+                    title=title[:140],
+                    body=body[:500] if body else None,
+                    data=data,
+                    read_at=None,
+                    created_at=datetime.utcnow(),
+                )
+            )
+        db.commit()
+    except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
     return {"ok": True, "id": row.id}
