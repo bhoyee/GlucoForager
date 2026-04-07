@@ -239,6 +239,10 @@ function InboxPageInner() {
 
   const sendReply = async () => {
     if (!token || !mailThread?.messages?.length) return;
+    if (mailThread && mailThread.can_reply === false) {
+      setMessage('You can only reply to messages that involve your own account. Use Compose to send a new message.');
+      return;
+    }
     const rootId = Number(mailThread.messages[0].id);
     const stripped = String(replyHtml || '').replace(/<[^>]*>/g, '').trim();
     if (!stripped) {
@@ -767,13 +771,24 @@ function InboxPageInner() {
 
             <div className="admin-card admin-card--subtle admin-card--compact" style={{ padding: 12, marginTop: 12 }}>
               <div style={{ fontWeight: 900, marginBottom: 6 }}>Reply</div>
-              <RichTextEditor value={replyHtml} onChange={setReplyHtml} minHeight={140} />
+              {mailThread && mailThread.can_reply === false ? (
+                <div className="admin-subtitle" style={{ marginBottom: 10 }}>
+                  You’re viewing a thread that doesn’t involve your account. Reply is disabled — use{' '}
+                  <a href="/admin/inbox/compose">Compose</a> to message staff.
+                </div>
+              ) : null}
+              <RichTextEditor value={replyHtml} onChange={setReplyHtml} minHeight={140} readOnly={mailThread && mailThread.can_reply === false} />
               <div className="admin-field" style={{ marginTop: 10 }}>
                 <label>Attachment (optional)</label>
-                <input type="file" onChange={(e) => setReplyAttachment(e.target.files?.[0] || null)} accept=".pdf,.jpg,.jpeg,.png,.webp,.mp4,.xls,.xlsx" />
+                <input
+                  type="file"
+                  onChange={(e) => setReplyAttachment(e.target.files?.[0] || null)}
+                  accept=".pdf,.jpg,.jpeg,.png,.webp,.mp4,.xls,.xlsx"
+                  disabled={mailThread && mailThread.can_reply === false}
+                />
               </div>
               <div className="admin-actions" style={{ justifyContent: 'flex-end', marginTop: 10 }}>
-                <button className="admin-button warning" type="button" onClick={sendReply} disabled={replySending}>
+                <button className="admin-button warning" type="button" onClick={sendReply} disabled={replySending || (mailThread && mailThread.can_reply === false)}>
                   {replySending ? 'Sending...' : 'Send reply'}
                 </button>
               </div>
