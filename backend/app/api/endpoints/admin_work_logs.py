@@ -384,132 +384,6 @@ class CommentCreatePayload(BaseModel):
     comment: str = Field(..., min_length=1, max_length=1000)
 
 
-@router.get("/{work_log_id}")
-def get_work_log(
-    request: Request,
-    work_log_id: int,
-    db: Session = Depends(get_db),
-    current_staff: StaffUser = Depends(require_staff_permission("work_logs.read")),
-):
-    row = db.query(StaffWorkLog).filter(StaffWorkLog.id == int(work_log_id)).first()
-    if not row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-
-    perms = _get_permissions(request, db, current_staff)
-    if int(row.staff_user_id) != int(current_staff.id) and not _can_manage_any(perms):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
-
-    comments = (
-        db.query(StaffWorkLogComment)
-        .filter(StaffWorkLogComment.work_log_id == int(row.id))
-        .order_by(StaffWorkLogComment.created_at.asc())
-        .all()
-    )
-
-    tasks = (
-        db.query(StaffAssignedTask)
-        .filter(
-            StaffAssignedTask.staff_user_id == int(row.staff_user_id),
-            StaffAssignedTask.work_date == row.work_date,
-            StaffAssignedTask.deleted_at.is_(None),
-        )
-        .order_by(StaffAssignedTask.id.asc())
-        .all()
-    )
-    return {
-        "id": row.id,
-        "staff_user_id": row.staff_user_id,
-        "work_date": row.work_date.isoformat(),
-        "payload": row.payload,
-        "created_at": row.created_at.isoformat() if row.created_at else None,
-        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
-        "tasks": [
-            {
-                "id": t.id,
-                "work_date": t.work_date.isoformat(),
-                "text": t.text,
-                "is_completed": bool(t.is_completed),
-                "completed_at": t.completed_at.isoformat() if t.completed_at else None,
-                "completion_note": t.completion_note,
-                "unfinished_reason": getattr(t, "unfinished_reason", None),
-                "unfinished_at": t.unfinished_at.isoformat() if getattr(t, "unfinished_at", None) else None,
-                "proof_links": t.proof_links if isinstance(t.proof_links, list) else [],
-                "assigned_by_staff_user_id": t.assigned_by_staff_user_id,
-            }
-            for t in tasks
-        ],
-        "comments": [
-            {
-                "id": c.id,
-                "author_staff_user_id": c.author_staff_user_id,
-                "comment": c.comment,
-                "created_at": c.created_at.isoformat() if c.created_at else None,
-            }
-            for c in comments
-        ],
-    }
-
-
-@router.post("/{work_log_id}/comments")
-def add_comment(
-    request: Request,
-    work_log_id: int,
-    payload: CommentCreatePayload,
-    db: Session = Depends(get_db),
-    current_staff: StaffUser = Depends(require_staff_permission("work_logs.manage")),
-):
-    row = db.query(StaffWorkLog).filter(StaffWorkLog.id == int(work_log_id)).first()
-    if not row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-
-    comment = StaffWorkLogComment(
-        work_log_id=int(row.id),
-        author_staff_user_id=int(current_staff.id),
-        comment=payload.comment.strip()[:1000],
-        created_at=datetime.utcnow(),
-    )
-    db.add(comment)
-
-    # Notify the owner of the work log (in-app + optional email).
-    if int(row.staff_user_id) != int(current_staff.id):
-        db.add(
-            StaffNotification(
-                staff_user_id=int(row.staff_user_id),
-                type="work_log.comment",
-                title=f"New feedback on your work log ({row.work_date.isoformat()})",
-                body=payload.comment.strip()[:500],
-                data={"work_log_id": int(row.id), "work_date": row.work_date.isoformat()},
-                read_at=None,
-                created_at=datetime.utcnow(),
-            )
-        )
-        try:
-            target = db.query(StaffUser).filter(StaffUser.id == int(row.staff_user_id)).first()
-            if target and target.email:
-                send_staff_notification_email(
-                    to_email=str(target.email),
-                    title=f"New feedback on your work log ({row.work_date.isoformat()})",
-                    body=payload.comment.strip()[:1000],
-                )
-        except Exception:
-            pass
-    db.add(
-        StaffAuditLog(
-            actor_id=int(current_staff.id),
-            action="work_logs.comment.add",
-            entity="staff_work_logs",
-            entity_id=str(row.id),
-            details={"staff_user_id": int(row.staff_user_id), "work_date": row.work_date.isoformat()},
-            ip=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent"),
-            created_at=datetime.utcnow(),
-        )
-    )
-    db.commit()
-    db.refresh(comment)
-    return {"ok": True, "id": comment.id}
-
-
 class ReminderCreatePayload(BaseModel):
     staff_user_id: int
     work_date: date
@@ -1059,3 +933,131 @@ def upsert_work_log_form(
             pass
 
     return {"ok": True, "id": row.id}
+
+
+# NOTE: Keep dynamic routes like "/{work_log_id}" at the very end so they don't
+# accidentally capture static paths (e.g. "/missing") and cause validation noise.
+@router.get("/{work_log_id}")
+def get_work_log(
+    request: Request,
+    work_log_id: int,
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("work_logs.read")),
+):
+    row = db.query(StaffWorkLog).filter(StaffWorkLog.id == int(work_log_id)).first()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    perms = _get_permissions(request, db, current_staff)
+    if int(row.staff_user_id) != int(current_staff.id) and not _can_manage_any(perms):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+
+    comments = (
+        db.query(StaffWorkLogComment)
+        .filter(StaffWorkLogComment.work_log_id == int(row.id))
+        .order_by(StaffWorkLogComment.created_at.asc())
+        .all()
+    )
+
+    tasks = (
+        db.query(StaffAssignedTask)
+        .filter(
+            StaffAssignedTask.staff_user_id == int(row.staff_user_id),
+            StaffAssignedTask.work_date == row.work_date,
+            StaffAssignedTask.deleted_at.is_(None),
+        )
+        .order_by(StaffAssignedTask.id.asc())
+        .all()
+    )
+    return {
+        "id": row.id,
+        "staff_user_id": row.staff_user_id,
+        "work_date": row.work_date.isoformat(),
+        "payload": row.payload,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+        "tasks": [
+            {
+                "id": t.id,
+                "work_date": t.work_date.isoformat(),
+                "text": t.text,
+                "is_completed": bool(t.is_completed),
+                "completed_at": t.completed_at.isoformat() if t.completed_at else None,
+                "completion_note": t.completion_note,
+                "unfinished_reason": getattr(t, "unfinished_reason", None),
+                "unfinished_at": t.unfinished_at.isoformat() if getattr(t, "unfinished_at", None) else None,
+                "proof_links": t.proof_links if isinstance(t.proof_links, list) else [],
+                "assigned_by_staff_user_id": t.assigned_by_staff_user_id,
+            }
+            for t in tasks
+        ],
+        "comments": [
+            {
+                "id": c.id,
+                "author_staff_user_id": c.author_staff_user_id,
+                "comment": c.comment,
+                "created_at": c.created_at.isoformat() if c.created_at else None,
+            }
+            for c in comments
+        ],
+    }
+
+
+@router.post("/{work_log_id}/comments")
+def add_comment(
+    request: Request,
+    work_log_id: int,
+    payload: CommentCreatePayload,
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("work_logs.manage")),
+):
+    row = db.query(StaffWorkLog).filter(StaffWorkLog.id == int(work_log_id)).first()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    comment = StaffWorkLogComment(
+        work_log_id=int(row.id),
+        author_staff_user_id=int(current_staff.id),
+        comment=payload.comment.strip()[:1000],
+        created_at=datetime.utcnow(),
+    )
+    db.add(comment)
+
+    # Notify the owner of the work log (in-app + optional email).
+    if int(row.staff_user_id) != int(current_staff.id):
+        db.add(
+            StaffNotification(
+                staff_user_id=int(row.staff_user_id),
+                type="work_log.comment",
+                title=f"New feedback on your work log ({row.work_date.isoformat()})",
+                body=payload.comment.strip()[:500],
+                data={"work_log_id": int(row.id), "work_date": row.work_date.isoformat()},
+                read_at=None,
+                created_at=datetime.utcnow(),
+            )
+        )
+        try:
+            target = db.query(StaffUser).filter(StaffUser.id == int(row.staff_user_id)).first()
+            if target and target.email:
+                send_staff_notification_email(
+                    to_email=str(target.email),
+                    title=f"New feedback on your work log ({row.work_date.isoformat()})",
+                    body=payload.comment.strip()[:1000],
+                )
+        except Exception:
+            pass
+    db.add(
+        StaffAuditLog(
+            actor_id=int(current_staff.id),
+            action="work_logs.comment.add",
+            entity="staff_work_logs",
+            entity_id=str(row.id),
+            details={"staff_user_id": int(row.staff_user_id), "work_date": row.work_date.isoformat()},
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            created_at=datetime.utcnow(),
+        )
+    )
+    db.commit()
+    db.refresh(comment)
+    return {"ok": True, "id": comment.id}
