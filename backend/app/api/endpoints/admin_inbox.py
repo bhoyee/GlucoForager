@@ -427,8 +427,9 @@ def get_thread(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
 
     is_admin = _is_admin(db, current_staff)
+    is_participant = int(root.recipient_staff_user_id) == int(current_staff.id) or int(root.sender_staff_user_id) == int(current_staff.id)
     if not is_admin:
-        if int(root.recipient_staff_user_id) != int(current_staff.id) and int(root.sender_staff_user_id) != int(current_staff.id):
+        if not is_participant:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
 
     thread_id = int(root.thread_id or root.id)
@@ -455,6 +456,10 @@ def get_thread(
         return email or f"Staff #{staff_id}"
 
     return {
+        "current_staff_id": int(current_staff.id),
+        "is_admin": bool(is_admin),
+        "is_participant": bool(is_participant),
+        "can_reply": bool(is_participant),
         "thread_id": thread_id,
         "messages": [
             {
