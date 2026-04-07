@@ -254,7 +254,7 @@ function WorkLogsPageInner() {
     return `${String(f.name || '')}::${String(f.size || '')}::${String(f.lastModified || '')}`;
   };
 
-  const mergeFiles = (prevFiles, nextFiles, max = 5) => {
+  const mergeFiles = (prevFiles, nextFiles, max = 10) => {
     const prev = Array.isArray(prevFiles) ? prevFiles.filter(Boolean) : [];
     const incoming = Array.isArray(nextFiles) ? nextFiles.filter(Boolean) : [];
     const seen = new Set(prev.map(fileKey).filter(Boolean));
@@ -1196,7 +1196,7 @@ function WorkLogsPageInner() {
         fd.set('work_date', d);
         fd.set('summary', isQuillEmpty(summary) ? '' : summary);
         fd.set('reason', d !== today ? String(workDateReason || '').trim() : '');
-        (Array.isArray(workLogAttachments) ? workLogAttachments : []).slice(0, 5).forEach((f) => {
+        (Array.isArray(workLogAttachments) ? workLogAttachments : []).slice(0, 10).forEach((f) => {
           if (f) fd.append('attachments', f);
         });
 
@@ -1655,7 +1655,7 @@ function WorkLogsPageInner() {
                 style={{ display: 'none' }}
                 onChange={(e) => {
                   const picked = Array.from(e.target.files || []);
-                  if (picked.length) setWorkLogAttachments((prev) => mergeFiles(prev, picked, 5));
+                  if (picked.length) setWorkLogAttachments((prev) => mergeFiles(prev, picked, 10));
                   // Reset so picking the same file again still triggers onChange.
                   try {
                     e.target.value = '';
@@ -1681,12 +1681,12 @@ function WorkLogsPageInner() {
                   Add files
                 </button>
                 <div className="admin-subtitle" style={{ margin: 0 }}>
-                  Add up to 5 attachments (you can pick files multiple times).
+                  Add up to 10 attachments (you can pick files multiple times).
                 </div>
               </div>
               {(Array.isArray(workLogAttachments) ? workLogAttachments : []).length > 0 ? (
                 <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <div className="admin-subtitle">Selected: {(Array.isArray(workLogAttachments) ? workLogAttachments : []).length} file(s) (max 5)</div>
+                  <div className="admin-subtitle">Selected: {(Array.isArray(workLogAttachments) ? workLogAttachments : []).length} file(s) (max 10)</div>
                   <ul style={{ margin: 0, paddingLeft: 18 }}>
                     {(Array.isArray(workLogAttachments) ? workLogAttachments : []).map((f) => (
                       <li key={fileKey(f) || `${f?.name}-${f?.size}`} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
