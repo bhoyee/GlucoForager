@@ -1,6 +1,7 @@
 import hashlib
 import json
 import re
+import time
 import uuid
 from typing import Annotated, Literal
 
@@ -236,6 +237,37 @@ def _run_text_job(job_id: str) -> None:
         db.close()
 
 
+def _run_text_job_delayed(job_id: str, delay_seconds: int = 12) -> None:
+    """
+    Safety net for Redis queue mode:
+    - If the Redis enqueue succeeds but the worker is down/misconfigured, jobs can get stuck in pending/queued.
+    - Run a delayed fallback in BackgroundTasks to avoid infinite pending jobs.
+
+    The delay reduces the chance of double-processing when a healthy worker picks the job quickly.
+    """
+
+    try:
+        time.sleep(max(0, int(delay_seconds)))
+    except Exception:
+        # If sleep fails, just continue.
+        pass
+
+    db = SessionLocal()
+    try:
+        job = db.query(AIJob).filter(AIJob.id == job_id).first()
+        if not job:
+            return
+        if job.status not in {"pending", "queued"}:
+            return
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
+
+    _run_text_job(job_id)
+
+
 @router.post("/recipes")
 def generate_from_text(
     payload: TextRecipeRequest,
@@ -393,6 +425,20 @@ def generate_from_text_async(
                 queued = True
         except Exception:
             queued = False
+
+        if queued:
+            try:
+                # Reflect that we handed off to the queue.
+                job.status = "queued"
+                db.commit()
+            except Exception:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+
+            # Safety net: if the worker never picks it up, run it here after a short delay.
+            background_tasks.add_task(_run_text_job_delayed, job_id)
         if not queued:
             # Fallback: run inline via BackgroundTasks to avoid jobs getting stuck when Redis misbehaves.
             background_tasks.add_task(_run_text_job, job_id)
