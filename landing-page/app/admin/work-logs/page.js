@@ -171,6 +171,8 @@ function WorkLogsPageInner() {
   const [myTaskText, setMyTaskText] = useState('');
 
   const [summary, setSummary] = useState('');
+  const [workLogAttachments, setWorkLogAttachments] = useState([]);
+  const attachmentsInputRef = useRef(null);
   const [workDate, setWorkDate] = useState(todayISO());
   const [workDateReason, setWorkDateReason] = useState('');
   const [workDateLoading, setWorkDateLoading] = useState(false);
@@ -179,6 +181,7 @@ function WorkLogsPageInner() {
   const lastStaffTodayRef = useRef(staffTodayISO);
   const [workDateLog, setWorkDateLog] = useState(null);
   const [submittedModalOpen, setSubmittedModalOpen] = useState(false);
+  const [submittingWorkLog, setSubmittingWorkLog] = useState(false);
   const [unfinishedModalOpen, setUnfinishedModalOpen] = useState(false);
   const [unfinishedTaskId, setUnfinishedTaskId] = useState(null);
   const [unfinishedReason, setUnfinishedReason] = useState('');
@@ -245,6 +248,26 @@ function WorkLogsPageInner() {
     if (typeof task?.title === 'string') return task.title;
     const fallback = direct == null ? '' : String(direct);
     return fallback === '[object Object]' ? '[Invalid task text]' : fallback;
+  };
+
+  const fileKey = (f) => {
+    if (!f) return '';
+    return `${String(f.name || '')}::${String(f.size || '')}::${String(f.lastModified || '')}`;
+  };
+
+  const mergeFiles = (prevFiles, nextFiles, max = 10) => {
+    const prev = Array.isArray(prevFiles) ? prevFiles.filter(Boolean) : [];
+    const incoming = Array.isArray(nextFiles) ? nextFiles.filter(Boolean) : [];
+    const seen = new Set(prev.map(fileKey).filter(Boolean));
+    const out = [...prev];
+    for (const f of incoming) {
+      if (out.length >= max) break;
+      const k = fileKey(f);
+      if (!k || seen.has(k)) continue;
+      seen.add(k);
+      out.push(f);
+    }
+    return out.slice(0, max);
   };
 
   const confirmActionRef = useRef(null);
@@ -741,6 +764,7 @@ function WorkLogsPageInner() {
       if (!res.ok) throw new Error(data.detail || 'Failed to load work log.');
       const item = data?.item && typeof data.item === 'object' ? data.item : null;
       setWorkDateLog(item);
+      setWorkLogAttachments([]);
       const nextSummary = item?.payload?.summary ? String(item.payload.summary) : '';
       setSummary(toQuillHtml(nextSummary));
       if (!item) {
@@ -1168,15 +1192,20 @@ function WorkLogsPageInner() {
     }
 
     const submit = async () => {
+      setSubmittingWorkLog(true);
       try {
-        const res = await fetch(`${API_URL}/api/admin/work-logs/upsert`, {
+        const fd = new FormData();
+        fd.set('work_date', d);
+        fd.set('summary', isQuillEmpty(summary) ? '' : summary);
+        fd.set('reason', d !== today ? String(workDateReason || '').trim() : '');
+        (Array.isArray(workLogAttachments) ? workLogAttachments : []).slice(0, 10).forEach((f) => {
+          if (f) fd.append('attachments', f);
+        });
+
+        const res = await fetch(`${API_URL}/api/admin/work-logs/upsert/form`, {
           method: 'POST',
-          headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            work_date: d,
-            summary: isQuillEmpty(summary) ? '' : summary,
-            reason: d !== today ? String(workDateReason || '').trim() : '',
-          }),
+          headers: { Authorization: `Bearer ${t}` },
+          body: fd,
         });
         const data = await res.json().catch(() => ({}));
         if (res.status === 401) {
@@ -1186,10 +1215,13 @@ function WorkLogsPageInner() {
         }
         if (!res.ok) throw new Error(data.detail || 'Failed to save work log.');
         setMessage('Submitted.');
+        setWorkLogAttachments([]);
         loadMonth();
         loadWorkDateLog(workDate);
       } catch (e) {
         setMessage(e?.message || 'Failed to save work log.');
+      } finally {
+        setSubmittingWorkLog(false);
       }
     };
 
@@ -1598,9 +1630,107 @@ function WorkLogsPageInner() {
           )}
         </div>
 
+        <div className="admin-field">
+          <label>Attachments (optional)</label>
+          {isWorkDateLocked ? (
+            <div className="admin-card admin-card--subtle" style={{ padding: 12 }}>
+              {(Array.isArray(workDateLog?.payload?.attachments) ? workDateLog.payload.attachments : []).length === 0 ? (
+                <p className="admin-subtitle" style={{ margin: 0 }}>
+                  No attachments.
+                </p>
+              ) : (
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                  {(Array.isArray(workDateLog?.payload?.attachments) ? workDateLog.payload.attachments : []).map((a, idx) => (
+                    <li key={`${a?.filename || a?.url || idx}`}>
+                      <a href={String(a?.url || '#')} target="_blank" rel="noreferrer">
+                        {String(a?.original_name || a?.filename || `Attachment ${idx + 1}`)}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : (
+            <div>
+              <input
+                ref={attachmentsInputRef}
+                type="file"
+                multiple
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const picked = Array.from(e.target.files || []);
+                  if (picked.length) setWorkLogAttachments((prev) => mergeFiles(prev, picked, 10));
+                  // Reset so picking the same file again still triggers onChange.
+                  try {
+                    e.target.value = '';
+                  } catch {
+                    // ignore
+                  }
+                }}
+                accept=".pdf,.jpg,.jpeg,.png,.webp,.mp4,.xls,.xlsx,.doc,.docx,.zip"
+              />
+
+              <div className="admin-actions" style={{ justifyContent: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
+                <button
+                  className="admin-button secondary"
+                  type="button"
+                  onClick={() => {
+                    try {
+                      attachmentsInputRef.current?.click?.();
+                    } catch {
+                      // ignore
+                    }
+                  }}
+                >
+                  Add files
+                </button>
+                <div className="admin-subtitle" style={{ margin: 0 }}>
+                  Add up to 10 attachments (you can pick files multiple times).
+                </div>
+              </div>
+              {(Array.isArray(workLogAttachments) ? workLogAttachments : []).length > 0 ? (
+                <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div className="admin-subtitle">Selected: {(Array.isArray(workLogAttachments) ? workLogAttachments : []).length} file(s) (max 10)</div>
+                  <ul style={{ margin: 0, paddingLeft: 18 }}>
+                    {(Array.isArray(workLogAttachments) ? workLogAttachments : []).map((f) => (
+                      <li key={fileKey(f) || `${f?.name}-${f?.size}`} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {String(f?.name || 'file')}
+                        </span>
+                        <button
+                          className="admin-icon-button danger"
+                          type="button"
+                          aria-label="Remove file"
+                          onClick={() => setWorkLogAttachments((prev) => (Array.isArray(prev) ? prev.filter((x) => fileKey(x) !== fileKey(f)) : []))}
+                        >
+                          ×
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  <div>
+                    <button className="admin-button secondary" type="button" onClick={() => setWorkLogAttachments([])}>
+                      Clear attachments
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          )}
+        </div>
+
         <div className="admin-actions">
-          <button className="admin-button" type="button" onClick={saveToday} disabled={isWorkDateLocked}>
-            {isWorkDateLocked ? 'Submitted' : 'Submit work log'}
+          <button className="admin-button" type="button" onClick={saveToday} disabled={isWorkDateLocked || submittingWorkLog}>
+            {submittingWorkLog ? (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <span className="admin-spinner" aria-hidden="true" style={{ width: 14, height: 14, borderWidth: 2, marginTop: 0 }} />
+                Submitting…
+              </span>
+            ) : isWorkDateLocked ? (
+              'Submitted'
+            ) : (
+              'Submit work log'
+            )}
           </button>
         </div>
       </div>
@@ -1621,6 +1751,20 @@ function WorkLogsPageInner() {
                   <h4 style={{ margin: 0 }}>Summary</h4>
                   <TaskContent text={workDateLog?.payload?.summary || '—'} style={{ margin: '8px 0 0 0' }} />
                 </div>
+                {(Array.isArray(workDateLog?.payload?.attachments) ? workDateLog.payload.attachments : []).length > 0 ? (
+                  <div>
+                    <h4 style={{ margin: 0 }}>Attachments</h4>
+                    <ul style={{ margin: '8px 0 0 0', paddingLeft: 18 }}>
+                      {(Array.isArray(workDateLog?.payload?.attachments) ? workDateLog.payload.attachments : []).map((a, idx) => (
+                        <li key={`${a?.filename || a?.url || idx}`}>
+                          <a href={String(a?.url || '#')} target="_blank" rel="noreferrer">
+                            {String(a?.original_name || a?.filename || `Attachment ${idx + 1}`)}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
                 {String(workDateLog?.payload?.reason || '').trim() ? (
                   <div>
                     <h4 style={{ margin: 0 }}>Reason</h4>
@@ -1724,6 +1868,21 @@ function WorkLogsPageInner() {
                     <h4 style={{ margin: 0 }}>Summary</h4>
                     <TaskContent text={selectedLog?.payload?.summary || '—'} style={{ margin: '8px 0 0 0' }} />
                   </div>
+
+                  {(Array.isArray(selectedLog?.payload?.attachments) ? selectedLog.payload.attachments : []).length > 0 ? (
+                    <div>
+                      <h4 style={{ margin: 0 }}>Attachments</h4>
+                      <ul style={{ margin: '8px 0 0 0', paddingLeft: 18 }}>
+                        {(Array.isArray(selectedLog?.payload?.attachments) ? selectedLog.payload.attachments : []).map((a, idx) => (
+                          <li key={`${a?.filename || a?.url || idx}`}>
+                            <a href={String(a?.url || '#')} target="_blank" rel="noreferrer">
+                              {String(a?.original_name || a?.filename || `Attachment ${idx + 1}`)}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
 
                   <div>
                     <h4 style={{ margin: 0 }}>Tasks</h4>
@@ -2412,6 +2571,23 @@ function WorkLogsPageInner() {
                   <div style={{ marginTop: 10 }}>
                     <TaskContent text={selectedLog.payload?.summary || ''} style={{ margin: 0 }} />
                   </div>
+
+                  {(Array.isArray(selectedLog.payload?.attachments) ? selectedLog.payload.attachments : []).length > 0 ? (
+                    <div style={{ marginTop: 12 }}>
+                      <p className="admin-subtitle" style={{ margin: 0 }}>
+                        Attachments
+                      </p>
+                      <ul style={{ margin: '6px 0 0 0', paddingLeft: 18 }}>
+                        {(Array.isArray(selectedLog.payload?.attachments) ? selectedLog.payload.attachments : []).map((a, idx) => (
+                          <li key={`${a?.filename || a?.url || idx}`}>
+                            <a href={String(a?.url || '#')} target="_blank" rel="noreferrer">
+                              {String(a?.original_name || a?.filename || `Attachment ${idx + 1}`)}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
 
                   {String(selectedLog.payload?.reason || '').trim() ? (
                     <div style={{ marginTop: 12 }}>
