@@ -44,9 +44,9 @@ const GOAL_LABELS = {
 const formatGi = (gi) => {
   const min = gi && typeof gi === "object" ? gi.min : null;
   const max = gi && typeof gi === "object" ? gi.max : null;
-  if (typeof min === "number" && typeof max === "number") return `${min}–${max}`;
+  if (typeof min === "number" && typeof max === "number") return `${min}-${max}`;
   if (typeof min === "number") return `${min}+`;
-  if (typeof max === "number") return `≤${max}`;
+  if (typeof max === "number") return `<=${max}`;
   return null;
 };
 
@@ -256,7 +256,7 @@ export default function CarbSwapsScreen() {
           ) : loading ? (
             <View style={styles.loadingBox}>
               <ActivityIndicator size="small" color={Colors.secondary} />
-              <Text style={styles.loadingText}>Finding swaps…</Text>
+              <Text style={styles.loadingText}>Finding swaps...</Text>
             </View>
           ) : aiResult ? (
             <>

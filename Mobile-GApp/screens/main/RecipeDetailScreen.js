@@ -5,6 +5,7 @@ import {
   ScrollView,
   Image,
   TouchableOpacity,
+  Pressable,
   Share,
   Alert,
   StyleSheet,
@@ -53,8 +54,8 @@ const mockRecipe = {
     { id: '2', name: 'Chicken breast', amount: '200g', owned: true },
     { id: '3', name: 'Cherry tomatoes', amount: '1 cup', owned: true },
     { id: '4', name: 'Cucumber', amount: '1 medium', owned: true },
-    { id: '5', name: 'Red onion', amount: '½ cup', owned: false },
-    { id: '6', name: 'Kalamata olives', amount: '¼ cup', owned: false },
+    { id: '5', name: 'Red onion', amount: '1/2 cup', owned: false },
+    { id: '6', name: 'Kalamata olives', amount: '1/4 cup', owned: false },
     { id: '7', name: 'Feta cheese', amount: '50g', owned: true },
     { id: '8', name: 'Lemon juice', amount: '2 tbsp', owned: true },
     { id: '9', name: 'Olive oil', amount: '1 tbsp', owned: true },
@@ -99,6 +100,7 @@ const RecipeDetailsScreen = () => {
   const [recipe, setRecipe] = useState(mockRecipe);
   const [showIngredientsModal, setShowIngredientsModal] = useState(false);
   const [showSafetyModal, setShowSafetyModal] = useState(false);
+  const [detailsTab, setDetailsTab] = useState('ingredients'); // 'nutrition' | 'ingredients' | 'instructions'
   const [servings, setServings] = useState(recipe.servings);
   const [expandedTip, setExpandedTip] = useState(null);
   const [isSavingFavorite, setIsSavingFavorite] = useState(false);
@@ -665,7 +667,7 @@ const RecipeDetailsScreen = () => {
             disabled={isGeneratingImage}
           >
             <Text style={styles.generateImageButtonText}>
-              {isGeneratingImage ? 'Generating…' : 'Generate image'}
+              {isGeneratingImage ? 'Generating...' : 'Generate image'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -704,6 +706,41 @@ const RecipeDetailsScreen = () => {
       </View>
     </TouchableOpacity>
     );
+  };
+
+  const renderDetailsTabs = () => {
+    const renderTab = ({ key, icon, label }) => {
+      const active = detailsTab === key;
+      return (
+        <Pressable
+          key={key}
+          style={({ pressed }) => [
+            styles.detailsTab,
+            active ? styles.detailsTabActive : null,
+            pressed ? (active ? styles.detailsTabActivePressed : styles.detailsTabPressed) : null,
+          ]}
+          onPress={() => setDetailsTab(key)}
+        >
+          <Text style={[styles.detailsTabText, active ? styles.detailsTabTextActive : null]} numberOfLines={1}>
+            {label}
+          </Text>
+        </Pressable>
+      );
+    };
+
+    return (
+      <View style={styles.detailsTabs}>
+        {renderTab({ key: 'nutrition', icon: null, label: 'Nutrition' })}
+        {renderTab({ key: 'ingredients', icon: null, label: 'Ingredients' })}
+        {renderTab({ key: 'instructions', icon: null, label: 'Instructions' })}
+      </View>
+    );
+  };
+
+  const renderActiveDetailsSection = () => {
+    if (detailsTab === 'nutrition') return renderNutritionSection();
+    if (detailsTab === 'instructions') return renderInstructionsSection();
+    return renderIngredientsSection();
   };
 
   const renderIngredientsSection = () => (
@@ -990,10 +1027,9 @@ const RecipeDetailsScreen = () => {
           {renderStatsBar()}
           {renderTitleSection()}
           {renderSafetySection()}
-          {renderNutritionSection()}
-          {renderIngredientsSection()}
+          {renderDetailsTabs()}
+          {renderActiveDetailsSection()}
           {renderTipsSection()}
-          {renderInstructionsSection()}
           {renderActionsSection()}
         </View>
       </ScrollView>
@@ -1008,6 +1044,44 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFF',
+  },
+  detailsTabs: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 20,
+    marginTop: 14,
+  },
+  detailsTab: {
+    flex: 1,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 42,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  detailsTabActive: {
+    backgroundColor: '#111827',
+    borderColor: '#111827',
+  },
+  detailsTabActivePressed: {
+    backgroundColor: '#0B1220',
+    borderColor: '#0B1220',
+  },
+  detailsTabPressed: {
+    backgroundColor: '#EEF2F7',
+  },
+  detailsTabText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  detailsTabTextActive: {
+    color: 'white',
   },
   header: {
     position: 'absolute',

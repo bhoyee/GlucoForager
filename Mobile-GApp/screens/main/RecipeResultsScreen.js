@@ -236,7 +236,7 @@ export default function RecipeResultsScreen() {
           <Ionicons name="sparkles" size={60} color="white" />
           <Text style={styles.loadingTitle}>AI Recipe Generation</Text>
           <Text style={styles.loadingSubtitle}>
-            {statusLine || 'Generating your recipes…'}
+            {statusLine || 'Generating your recipes...'}
           </Text>
 
           <View style={styles.loadingMetaRow}>

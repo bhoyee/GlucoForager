@@ -112,7 +112,7 @@ export default function ChallengeScreen() {
           {loading ? (
             <View style={styles.loadingRow}>
               <ActivityIndicator size="small" color={Colors.primary} />
-              <Text style={styles.loadingText}>Loading…</Text>
+              <Text style={styles.loadingText}>Loading...</Text>
             </View>
           ) : error ? (
             <Text style={styles.errorText}>{error}</Text>

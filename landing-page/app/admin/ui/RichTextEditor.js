@@ -9,7 +9,7 @@ const TOOLBAR = [
   { cmd: 'insertUnorderedList', label: '• List' },
 ];
 
-export default function RichTextEditor({ value, onChange, placeholder = 'Write your message…', minHeight = 180 }) {
+export default function RichTextEditor({ value, onChange, placeholder = 'Write your message…', minHeight = 180, readOnly = false }) {
   const ref = useRef(null);
 
   useEffect(() => {
@@ -43,6 +43,7 @@ export default function RichTextEditor({ value, onChange, placeholder = 'Write y
   };
 
   const handleInput = () => {
+    if (readOnly) return;
     const el = ref.current;
     if (!el) return;
     onChange?.(el.innerHTML);
@@ -53,11 +54,18 @@ export default function RichTextEditor({ value, onChange, placeholder = 'Write y
       <div className="admin-card admin-card--subtle admin-card--compact" style={{ padding: 10, marginBottom: 8 }}>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           {TOOLBAR.map((t) => (
-            <button key={t.cmd} className="admin-button secondary" type="button" onClick={() => exec(t.cmd)} style={{ padding: '8px 12px' }}>
+            <button
+              key={t.cmd}
+              className="admin-button secondary"
+              type="button"
+              onClick={() => exec(t.cmd)}
+              style={{ padding: '8px 12px' }}
+              disabled={readOnly}
+            >
               {t.label}
             </button>
           ))}
-          <button className="admin-button secondary" type="button" onClick={addLink} style={{ padding: '8px 12px' }}>
+          <button className="admin-button secondary" type="button" onClick={addLink} style={{ padding: '8px 12px' }} disabled={readOnly}>
             Link
           </button>
           <span className="admin-subtitle" style={{ marginLeft: 8 }}>
@@ -67,7 +75,7 @@ export default function RichTextEditor({ value, onChange, placeholder = 'Write y
       </div>
       <div
         ref={ref}
-        contentEditable
+        contentEditable={!readOnly}
         suppressContentEditableWarning
         onInput={handleInput}
         onBlur={handleInput}
@@ -78,7 +86,7 @@ export default function RichTextEditor({ value, onChange, placeholder = 'Write y
           border: '1px solid rgba(0,0,0,0.12)',
           padding: 12,
           outline: 'none',
-          background: '#fff',
+          background: readOnly ? 'rgba(0,0,0,0.03)' : '#fff',
         }}
       />
       <style jsx>{`
