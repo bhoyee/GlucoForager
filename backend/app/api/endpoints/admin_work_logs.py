@@ -993,7 +993,7 @@ def upsert_work_log_form(
     cleaned = _clean_payload(payload)
 
     stored_items: list[dict] = []
-    for f in list(attachments or [])[:5]:
+    for f in list(attachments or [])[:10]:
         if not f:
             continue
         if not (getattr(f, "filename", None) or "").strip():
