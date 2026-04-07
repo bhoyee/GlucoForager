@@ -46,6 +46,8 @@ def _guess_kind(content_type: str | None, extension: str) -> str:
         return "image"
     if ct == "application/pdf" or ext == ".pdf":
         return "document"
+    if ct in {"application/zip", "application/x-zip-compressed"} or ext == ".zip":
+        return "archive"
     if ct in {"application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"} or ext in {".xls", ".xlsx"}:
         return "document"
     if ct in {
@@ -64,6 +66,9 @@ def _max_bytes_for_kind(kind: str) -> int:
     if k == "image":
         return int(settings.inbox_file_max_image_bytes)
     if k == "video":
+        return int(settings.inbox_file_max_video_bytes)
+    if k == "archive":
+        # Archives can contain many images; allow up to the video limit.
         return int(settings.inbox_file_max_video_bytes)
     return int(settings.inbox_file_max_pdf_bytes)
 
@@ -85,7 +90,7 @@ def store_work_log_attachment(file: UploadFile) -> StoredWorkLogAttachment:
     if size is not None and size > max_bytes:
         raise ValueError(f"File too large. Max {max_bytes} bytes.")
 
-    if extension not in {".jpg", ".jpeg", ".png", ".webp", ".pdf", ".mp4", ".xls", ".xlsx", ".doc", ".docx"}:
+    if extension not in {".jpg", ".jpeg", ".png", ".webp", ".pdf", ".mp4", ".xls", ".xlsx", ".doc", ".docx", ".zip"}:
         raise ValueError("Unsupported attachment type")
 
     filename = f"{uuid.uuid4().hex}{extension}"
@@ -146,4 +151,3 @@ def store_work_log_attachment(file: UploadFile) -> StoredWorkLogAttachment:
         storage_backend="local",
         remote_dir=None,
     )
-

@@ -1631,7 +1631,7 @@ function WorkLogsPageInner() {
                 type="file"
                 multiple
                 onChange={(e) => setWorkLogAttachments(Array.from(e.target.files || []).slice(0, 5))}
-                accept=".pdf,.jpg,.jpeg,.png,.webp,.mp4,.xls,.xlsx,.doc,.docx"
+                accept=".pdf,.jpg,.jpeg,.png,.webp,.mp4,.xls,.xlsx,.doc,.docx,.zip"
               />
               {(Array.isArray(workLogAttachments) ? workLogAttachments : []).length > 0 ? (
                 <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
