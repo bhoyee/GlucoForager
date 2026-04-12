@@ -92,10 +92,13 @@ export default function ScanProcessingScreen() {
         }
         const deviceId = await getDeviceId();
 
-        // Adapt compression slightly for multi-photo scans to keep payload sizes down.
+        // Keep payload sizes aggressively small to reduce "Network request failed" on slow links.
+        // Notes:
+        // - We upload base64 in JSON (adds overhead). Smaller JPEGs dramatically reduce timeouts.
+        // - Ingredient detection works well at lower resolutions; we don't need large photos here.
         const sources = Array.isArray(images) ? images.slice(0, 5) : [];
-        const targetWidth = sources.length > 2 ? 896 : 1024;
-        const jpegCompress = sources.length > 2 ? 0.55 : 0.6;
+        const targetWidth = sources.length > 2 ? 640 : 768;
+        const jpegCompress = sources.length > 2 ? 0.45 : 0.5;
 
         const toCompressedBase64 = async (uri) => {
           if (!uri) return null;
@@ -145,8 +148,10 @@ export default function ScanProcessingScreen() {
             ? API_ENDPOINTS.AI_VISION_RECIPES_BATCH_ASYNC
             : API_ENDPOINTS.AI_VISION_RECIPES_ASYNC;
 
+        // Starting the async job should be fast, but on slow networks the upload itself can take time.
+        // Give extra headroom so we don't abort mid-upload.
         const startTimeoutMs =
-          imagesBase64.length <= 1 ? 90000 : imagesBase64.length <= 2 ? 120000 : 180000;
+          imagesBase64.length <= 1 ? 180000 : imagesBase64.length <= 2 ? 240000 : 300000;
         const response = await apiFetch(
           `${API_URL}${endpoint}`,
           {
@@ -189,7 +194,8 @@ export default function ScanProcessingScreen() {
           pollJob(data.job_id);
         }, 3000);
         const count = imagesBase64.length || (images?.length || 1);
-        const overallTimeoutMs = count <= 2 ? 120000 : count <= 4 ? 180000 : 240000;
+        // Backend work (vision -> ingredients) can occasionally be slow under load; don't hard-fail too early.
+        const overallTimeoutMs = count <= 2 ? 240000 : count <= 4 ? 360000 : 480000;
         timeoutRef.current = setTimeout(() => {
           stopPolling();
           Alert.alert(
@@ -200,7 +206,14 @@ export default function ScanProcessingScreen() {
         }, overallTimeoutMs);
       } catch (error) {
         console.warn('Scan analysis error:', error?.message || error);
-        Alert.alert('Scan failed', 'Unable to analyze image. Please try again.');
+        if (error?.name === 'AbortError') {
+          Alert.alert(
+            'Scan failed',
+            'Upload timed out. Please try again on a stronger connection or scan fewer photos.'
+          );
+        } else {
+          Alert.alert('Scan failed', 'Unable to analyze image. Please try again.');
+        }
         navigation.goBack();
       }
     };
