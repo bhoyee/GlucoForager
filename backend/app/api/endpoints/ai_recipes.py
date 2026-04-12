@@ -146,6 +146,8 @@ def _run_vision_job(job_id: str) -> None:
                 recipes=result.get("recipes", []) or [],
                 ingredients=result.get("detected", []) or [],
                 base_url=base_url,
+                # Keep async jobs fast/reliable: use placeholders by default.
+                max_generate=0,
             )
         except Exception:
             pass

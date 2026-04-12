@@ -238,8 +238,8 @@ def generate_today_plan(
             recipes=[m for m in meals if isinstance(m, dict)],
             ingredients=[],
             base_url=str(request.base_url).rstrip("/"),
-            # Daily plan generation endpoint is synchronous; keep image generation bounded for latency.
-            max_generate=4,
+            # Daily plan generation endpoint is synchronous; don't block on image generation.
+            max_generate=0,
         )
     except Exception:
         pass
