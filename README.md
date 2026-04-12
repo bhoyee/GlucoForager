@@ -97,6 +97,20 @@ App identifiers (from `Mobile-GApp/app.json`):
 - iOS bundle id: `com.glucoforager.app`
 - Android package: `com.glucoforager.app`
 
+### What the mobile app does (core flows)
+- **Generate recipes from what you have**:
+  - **Scan ingredients** (camera/photo) → ingredient detection → recipe generation
+  - **Type ingredients** → recipe generation
+- **Eat Now / Quick ideas**: fast “what can I eat right now?” suggestions using a tighter prompt + fewer steps.
+- **Food swaps**: diabetes-friendly substitution suggestions (e.g., “swap X for Y”).
+- **Browse & learn**: recommended/recent recipes, recipe details (nutrition, ingredients, instructions).
+- **Personalization**: onboarding/preferences that shape suggestions (as configured).
+- **Accounts & history**: profile, favorites, generated history (as enabled by backend features).
+
+### Engine and reliability model
+- The app calls the backend and typically receives a **job id quickly** for AI workloads; results are fetched when ready (avoids long “waiting for LLM” requests on weak networks).
+- The backend uses bounded worker concurrency + queueing so AI provider latency/rate limits don’t freeze the app UI.
+
 EAS configuration:
 - `Mobile-GApp/eas.json` (development/preview/production channels).
 
@@ -126,5 +140,3 @@ This project can run on small instances (e.g. 1 vCPU / 2 GB), but AI workloads m
 ## Configuration
 Copy and edit:
 - `backend/.env.example` → `backend/.env`
-
-Never commit secrets (API keys, SMTP passwords, FTP credentials, etc.).
