@@ -18,17 +18,17 @@ GlucoForager is a mobile-first diabetes-friendly food assistant with a productio
 
 ```mermaid
 flowchart LR
-  Mobile[Mobile App (Expo RN)] -->|REST| API[FastAPI API]
-  Admin[Admin/Staff Console (Next.js)] -->|REST| API
-  Landing[Marketing Site (Next.js)] -->|SSR/ISR| Landing
+  Mobile["Mobile App<br/>(Expo RN)"] --> API["FastAPI API"]
+  Console["Admin/Staff Console<br/>(Next.js)"] --> API
+  Marketing["Marketing Site<br/>(Next.js)"] --> API
 
   API --> DB[(PostgreSQL)]
   API --> Redis[(Redis)]
-  Worker[AI Worker\n(redis streams)] --> DB
+  Worker["AI Worker<br/>(Redis Streams)"] --> DB
   Worker --> Redis
-  Worker --> Providers[LLM/Image providers]
-  API --> Storage[Local disk or FTP\n(assets/attachments)]
-  API --> Email[SMTP/Resend]
+  Worker --> Providers["AI Providers<br/>(LLM/Image)"]
+  API --> Storage["Uploads<br/>(Local disk or FTP)"]
+  API --> Email["Email<br/>(SMTP/Resend)"]
 ```
 
 ## Backend (FastAPI) Design
