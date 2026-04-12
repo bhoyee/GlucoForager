@@ -42,6 +42,7 @@ export default function RecipeResultsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [detectedIngredients, setDetectedIngredients] = useState([]);
   const [recipes, setRecipes] = useState([]);
+  const [failedRecipeImages, setFailedRecipeImages] = useState({});
   const pollingRef = useRef(null);
   const elapsedRef = useRef(null);
   const phaseRef = useRef(null);
@@ -405,6 +406,7 @@ export default function RecipeResultsScreen() {
               typeof recipe?.image_url === 'string' && recipe.image_url.trim()
                 ? recipe.image_url.trim()
                 : null;
+            const imageFailed = Boolean(failedRecipeImages?.[imageKey]);
             const macroText = (label, value, unit = '') => {
               const text = `${value ?? ''}`.trim();
               if (!text || text.toLowerCase() === 'n/a') return `${label} --`;
@@ -424,8 +426,18 @@ export default function RecipeResultsScreen() {
                 }
               >
                 <View style={styles.recipeThumbWrap}>
-                  {recipeImageUrl ? (
-                    <Image source={{ uri: recipeImageUrl }} style={styles.recipeThumb} resizeMode="cover" />
+                  {recipeImageUrl && !imageFailed ? (
+                    <Image
+                      source={{ uri: recipeImageUrl }}
+                      style={styles.recipeThumb}
+                      resizeMode="cover"
+                      onError={() =>
+                        setFailedRecipeImages((prev) => ({
+                          ...(prev || {}),
+                          [imageKey]: true,
+                        }))
+                      }
+                    />
                   ) : (
                     <View style={styles.recipeThumbPlaceholder}>
                       <Ionicons name="restaurant-outline" size={26} color={Colors.textMuted} />
