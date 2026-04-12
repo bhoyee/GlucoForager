@@ -16,20 +16,7 @@ GlucoForager is a mobile-first diabetes-friendly food assistant with a productio
 
 ## High-Level Architecture
 
-```mermaid
-flowchart LR
-  Mobile["Mobile App<br/>(Expo RN)"] --> API["FastAPI API"]
-  Console["Admin/Staff Console<br/>(Next.js)"] --> API
-  Marketing["Marketing Site<br/>(Next.js)"] --> API
-
-  API --> DB[(PostgreSQL)]
-  API --> Redis[(Redis)]
-  Worker["AI Worker<br/>(Redis Streams)"] --> DB
-  Worker --> Redis
-  Worker --> Providers["AI Providers<br/>(LLM/Image)"]
-  API --> Storage["Uploads<br/>(Local disk or FTP)"]
-  API --> Email["Email<br/>(SMTP/Resend)"]
-```
+<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/1e7eb354-06db-4726-ad34-b5dd8ca78422" />
 
 ## What Architecture Is This?
 This project uses a **modular monolith** (single FastAPI backend + one database) with **asynchronous background workers** for long-running/AI workloads.
