@@ -144,7 +144,10 @@ def _normalize_non_negative(value: int, default: int) -> int:
 
 def get_recipe_image_settings(db: Session) -> RecipeImageSettings:
     enabled_raw = (_get_value(db, RECIPE_IMAGES_ENABLED_KEY) or "").strip()
-    enabled = enabled_raw == "1"
+    # Default to enabled when unset. This matches the expected UX of showing real
+    # generated images out-of-the-box when an image provider is configured.
+    # Admins can explicitly disable by setting "0".
+    enabled = enabled_raw != "0"
 
     size = _normalize_size(_to_int(_get_value(db, RECIPE_IMAGES_SIZE_KEY), 512))
 
