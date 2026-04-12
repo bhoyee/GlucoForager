@@ -179,9 +179,9 @@ def _run_text_job(job_id: str) -> None:
                 recipes=recipes or [],
                 ingredients=ingredients,
                 base_url=base_url,
-                # Keep async jobs fast/reliable: use placeholders by default.
-                # Users can still generate images explicitly via /api/ai/recipes/image if needed.
-                max_generate=0,
+                # Generate up to 3 thumbnails so the results screen looks premium.
+                # Daily limits and per-recipe caps still apply via App Settings.
+                max_generate=3,
             )
         except Exception:
             # Image generation is best-effort; never fail the recipe result.

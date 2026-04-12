@@ -146,8 +146,9 @@ def _run_vision_job(job_id: str) -> None:
                 recipes=result.get("recipes", []) or [],
                 ingredients=result.get("detected", []) or [],
                 base_url=base_url,
-                # Keep async jobs fast/reliable: use placeholders by default.
-                max_generate=0,
+                # Generate up to 3 thumbnails so the results screen looks premium.
+                # Daily limits and per-recipe caps still apply via App Settings.
+                max_generate=3,
             )
         except Exception:
             pass
@@ -587,6 +588,7 @@ def generate_recipe_image(
         "description": payload.description or "",
         "ingredients": [{"name": name} for name in (payload.ingredients or []) if name],
     }
+    title_norm = str(recipe_payload.get("title") or "").strip().lower()
 
     today = datetime.now(timezone.utc).date().isoformat()
     fingerprint = stable_recipe_fingerprint(
