@@ -423,11 +423,15 @@ export default function RecipeResultsScreen() {
                   })
                 }
               >
-                {recipeImageUrl ? (
-                  <View style={styles.recipeThumbWrap}>
+                <View style={styles.recipeThumbWrap}>
+                  {recipeImageUrl ? (
                     <Image source={{ uri: recipeImageUrl }} style={styles.recipeThumb} resizeMode="cover" />
-                  </View>
-                ) : null}
+                  ) : (
+                    <View style={styles.recipeThumbPlaceholder}>
+                      <Ionicons name="restaurant-outline" size={26} color={Colors.textMuted} />
+                    </View>
+                  )}
+                </View>
                 <View style={styles.recipeInfo}>
                   <View style={styles.recipeHeader}>
                     <Text style={styles.recipeName} numberOfLines={2}>{title}</Text>
@@ -713,15 +717,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.surface,
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 18,
+    padding: 14,
     marginHorizontal: 20,
-    marginBottom: 12,
+    marginBottom: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
   recipeThumbWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 14,
+    width: 112,
+    height: 84,
+    borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: '#F2F4F7',
     marginRight: 14,
@@ -729,6 +738,12 @@ const styles = StyleSheet.create({
   recipeThumb: {
     width: '100%',
     height: '100%',
+  },
+  recipeThumbPlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F2F4F7',
   },
   recipeInfo: {
     flex: 1,
