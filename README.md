@@ -31,6 +31,20 @@ flowchart LR
   API --> Email["Email<br/>(SMTP/Resend)"]
 ```
 
+## What Architecture Is This?
+This project uses a **modular monolith** (single FastAPI backend + one database) with **asynchronous background workers** for long-running/AI workloads.
+
+- **Not microservices (yet):** we intentionally keep one backend deployable to reduce complexity (network hops, distributed tracing, service orchestration, and data consistency issues).
+- **Not a “pure monolith” either:** AI work is decoupled into jobs + workers (queue-driven), which gives many of the resilience benefits of event-driven systems without the overhead of a full microservices fleet.
+
+### Deployment topology
+- `glucoforager-api`: serves HTTP requests (mobile + admin/staff).
+- `glucoforager-worker`: processes queued AI jobs (and other long-running tasks where needed).
+- `glucoforager-db`: PostgreSQL as the system of record.
+- `glucoforager-redis`: queue/caching primitives.
+
+This keeps the API responsive under burst traffic while the worker absorbs AI latency/overload.
+
 ## Backend (FastAPI) Design
 - **API surface**: Mobile endpoints + internal staff/admin endpoints. Interactive docs are available via FastAPI (OpenAPI/Swagger).
 - **Data layer**: PostgreSQL (SQLAlchemy) for core product data, staff operations data, and AI job state/results.
@@ -43,6 +57,18 @@ flowchart LR
 - **Scheduled/triggered operations**: scheduled work-plan tasks become visible at “show time” and drive notification badges (see `WORK_PLANS_SCHEDULER_*` in `backend/.env.example`).
 - **Storage abstraction**: consistent upload handling across modules, backed by local disk in dev or FTP on shared hosting.
 - **Role-based operations**: the admin/staff console is designed for real ops workflows (approvals, auditability, soft delete patterns where needed).
+
+### Why this design (vs alternatives)
+- **Why async jobs instead of synchronous AI calls?** LLMs can take 10–60s and may be rate-limited. Synchronous calls tie up API workers and cause timeouts on mobile networks. Jobs let the API return quickly and the worker retries/fails cleanly.
+- **Why Redis Streams instead of RabbitMQ/Kafka right now?** Streams are “good enough” at this stage: lightweight, easy to run on small servers, and integrated into the same Redis used for caching. If throughput grows, the design can migrate to a dedicated queue without rewriting business logic because job state is stored in Postgres.
+- **Why one database (Postgres)?** Strong consistency for operational workflows (work logs, approvals, notifications) and simpler reporting/auditability. We avoid distributed transactions across services.
+
+### Scaling path (when traffic grows)
+This repo is built so you can scale incrementally:
+- **Scale-out API**: run multiple `api` instances behind a load balancer.
+- **Scale workers independently**: run more `worker` replicas and tune `AI_JOB_RUNNER_*` for CPU/RAM.
+- **Move queue to managed services**: if Redis becomes a bottleneck, switch to a dedicated queue while keeping `ai_jobs` as the source of truth.
+- **Isolate hotspots**: if a specific subsystem (e.g., AI) needs separation, it can become its own service later because it is already job- and message-oriented.
 
 ## AI Job System (Resilience + Parallel Optimization)
 The system is designed to stay responsive even when AI providers are slow or rate-limited.
