@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlsplit
 
 from sqlalchemy.orm import Session
@@ -120,6 +121,8 @@ def attach_recipe_images(
     generated_this_response = 0
     normalized_ingredients = [str(x).strip() for x in (ingredients or []) if isinstance(x, str) and str(x).strip()]
 
+    # Phase 1: attach placeholders + cached images and collect candidates for generation.
+    candidates: list[dict] = []
     for recipe in recipes:
         if not isinstance(recipe, dict):
             continue
@@ -151,66 +154,107 @@ def attach_recipe_images(
         if not can_generate_more():
             continue
 
-        try:
-            image_payload = helper.generate_image_for_recipe(
-                recipe,
-                tier,
-                normalized_ingredients or [],
-                size=settings.size,
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.info(
-                "Auto recipe image generation failed user_id=%s fp=%s: %s",
-                getattr(user, "id", None),
-                fingerprint[:10],
-                str(exc)[:200],
-            )
-            continue
+        candidates.append(
+            {
+                "recipe": recipe,
+                "fingerprint": fingerprint,
+                "per_recipe_key": per_recipe_key,
+                "per_recipe_count": per_recipe_count,
+            }
+        )
 
-        image_url = str(image_payload.get("image_url") or "")
-        if not image_url:
-            continue
-
-        image_url = _normalize_image_url(image_url, base_url=base_url)
-
-        recipe["image_url"] = image_url
-        recipe["image_source"] = "ai"
-
-        # Track successful image generations for admin cost/usage reporting.
-        # Note: only count true AI generations (not cached image attaches).
-        try:
-            provider = (core_settings.recipe_image_provider or "").strip().lower() or "gemini"
-            model_used = str(
-                core_settings.runware_image_model
-                if provider == "runware"
-                else core_settings.gemini_image_model
-                if provider == "gemini"
-                else (core_settings.runware_image_model or core_settings.gemini_image_model or provider or "unknown")
-            )
-            record_ai_request(
-                db,
-                user.id,
-                tier,
-                "recipe_image",
-                model_used=model_used,
-                tokens_used=0,
-                cost_estimate=float(settings.cost_usd or 0.0),
-                device_id=None,
-            )
-        except Exception:  # noqa: BLE001
-            pass
-
-        cache.set(per_recipe_key, str(per_recipe_count + 1), ttl_seconds=24 * 60 * 60)
-        cache.set(f"{per_recipe_key}:url", str(image_url), ttl_seconds=24 * 60 * 60)
-        cache.set(f"recipeimg:{fingerprint}:url", str(image_url), ttl_seconds=60 * 24 * 60 * 60)
-
-        generated_this_response += 1
+    # Phase 2: generate missing images in parallel (network-bound) so 3 thumbnails don't take forever.
+    if max_generate > 0 and candidates and can_generate_more():
+        remaining_daily = None
         if daily_limit != -1:
-            daily_count += 1
-            cache.set(daily_key, str(daily_count), ttl_seconds=24 * 60 * 60)
+            remaining_daily = max(0, int(daily_limit) - int(daily_count))
+        slots = int(max_generate)
+        if remaining_daily is not None:
+            slots = min(slots, int(remaining_daily))
+        slots = max(0, slots)
 
-        if generated_this_response >= max_generate:
-            break
+        selected = candidates[:slots]
+        if selected:
+            def _gen_one(recipe_dict: dict) -> dict:
+                local_helper = AIRecipeGenerator()
+                return local_helper.generate_image_for_recipe(
+                    recipe_dict,
+                    tier,
+                    normalized_ingredients or [],
+                    size=settings.size,
+                )
+
+            max_workers = min(3, len(selected))
+            futures = {}
+            with ThreadPoolExecutor(max_workers=max_workers) as pool:
+                for item in selected:
+                    futures[pool.submit(_gen_one, item["recipe"])] = item
+
+                for future in as_completed(futures):
+                    item = futures[future]
+                    try:
+                        image_payload = future.result()
+                    except Exception as exc:  # noqa: BLE001
+                        logger.info(
+                            "Auto recipe image generation failed user_id=%s fp=%s: %s",
+                            getattr(user, "id", None),
+                            str(item.get("fingerprint") or "")[:10],
+                            str(exc)[:200],
+                        )
+                        continue
+
+                    image_url = str((image_payload or {}).get("image_url") or "")
+                    if not image_url:
+                        continue
+
+                    image_url = _normalize_image_url(image_url, base_url=base_url)
+                    recipe_dict = item["recipe"]
+                    recipe_dict["image_url"] = image_url
+                    recipe_dict["image_source"] = "ai"
+
+                    # Track successful image generations for admin cost/usage reporting.
+                    try:
+                        provider = (core_settings.recipe_image_provider or "").strip().lower() or "gemini"
+                        model_used = str(
+                            core_settings.runware_image_model
+                            if provider == "runware"
+                            else core_settings.gemini_image_model
+                            if provider == "gemini"
+                            else (
+                                core_settings.runware_image_model
+                                or core_settings.gemini_image_model
+                                or provider
+                                or "unknown"
+                            )
+                        )
+                        record_ai_request(
+                            db,
+                            user.id,
+                            tier,
+                            "recipe_image",
+                            model_used=model_used,
+                            tokens_used=0,
+                            cost_estimate=float(settings.cost_usd or 0.0),
+                            device_id=None,
+                        )
+                    except Exception:  # noqa: BLE001
+                        pass
+
+                    per_recipe_key = str(item["per_recipe_key"])
+                    fingerprint = str(item["fingerprint"])
+                    per_recipe_count = int(item.get("per_recipe_count") or 0)
+
+                    cache.set(per_recipe_key, str(per_recipe_count + 1), ttl_seconds=24 * 60 * 60)
+                    cache.set(f"{per_recipe_key}:url", str(image_url), ttl_seconds=24 * 60 * 60)
+                    cache.set(f"recipeimg:{fingerprint}:url", str(image_url), ttl_seconds=60 * 24 * 60 * 60)
+
+                    generated_this_response += 1
+                    if daily_limit != -1:
+                        daily_count += 1
+                        cache.set(daily_key, str(daily_count), ttl_seconds=24 * 60 * 60)
+
+                    if generated_this_response >= max_generate:
+                        break
 
     # Make sure every recipe has at least a placeholder.
     helper._attach_placeholders(recipes)
