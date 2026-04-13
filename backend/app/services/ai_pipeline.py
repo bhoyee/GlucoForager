@@ -309,10 +309,9 @@ class AIPipeline:
             except Exception:
                 pass
         started = time.time()
-        # Mobile polling stops at ~60s; Surprise/Quick should complete within that window.
-        overall_budget_seconds = (
-            float(settings.ai_eat_now_budget_seconds) if mode in ("surprise", "quick") else 55.0
-        )
+        # "Eat now" flows should stay tight for UX, but "Type ingredients" is async and can take longer.
+        # Increasing the budget reduces false "Request failed" when providers have brief latency spikes.
+        overall_budget_seconds = float(settings.ai_eat_now_budget_seconds) if mode in ("surprise", "quick") else 85.0
 
         recipes = self.ai.generate_recipes(
             self._cap_recipe_ingredients(ingredients),
