@@ -640,7 +640,7 @@ export default function HomeScreen() {
             onPress={handleOpenSwaps}
           >
             <Ionicons name="swap-horizontal-outline" size={18} color="white" />
-            <Text style={[styles.quickActionText, styles.quickActionTextOnDark]}>Swaps</Text>
+            <Text style={[styles.quickActionText, styles.quickActionTextOnDark]}>Food swaps</Text>
           </Pressable>
         </ScrollView>
 
