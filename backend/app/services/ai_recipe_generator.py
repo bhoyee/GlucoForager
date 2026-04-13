@@ -295,13 +295,14 @@ class AIRecipeGenerator:
         ingredient_text = ", ".join(normalized[:16]) if normalized else ""
 
         parts = [
-            "Create a real-looking food photograph of the finished dish (not an illustration, not CGI, not 3D).",
-            "Look like a real photo taken with a modern smartphone or DSLR in natural lighting.",
-            "Square 1:1 composition, centered plating, clean simple background, high detail, realistic textures.",
-            "Include subtle, natural imperfections (not overly polished) so it does not look AI-generated.",
-            "Avoid common AI artifacts: plastic/glossy textures, over-saturated colors, unnatural bokeh, warped cutlery, smeared details.",
+            "Photorealistic food photography of the finished dish (NOT an illustration, NOT a cartoon, NOT anime, NOT CGI, NOT 3D render).",
+            "Looks like a real photo shot by a professional food photographer using a modern smartphone or DSLR, natural window light, soft shadows.",
+            "High-end editorial style with realistic textures and believable colors (avoid glossy/plastic look).",
+            "Square 1:1 composition, centered plating, natural shallow depth-of-field (no weird AI bokeh).",
+            "Serve the dish on a clean ceramic plate/bowl on a simple table surface; minimal realistic props only if they look correct (not warped).",
             "IMPORTANT: Absolutely no text of any kind (no letters, numbers, titles, captions, labels, watermarks, logos, UI).",
-            "Do not generate menus, recipe cards, app screens, packaging, or any overlay text.",
+            "Avoid AI artifacts: smeared details, warped cutlery, floating garnish, melting edges, unreadable shapes, over-saturated colors.",
+            "Do not generate recipe cards, menus, app screens, packaging, or any overlay text.",
             "No borders, no frames, no top banners, no UI elements — the image must be an edge-to-edge food photo only.",
         ]
         # Avoid including structured labels like "Recipe name:" / "Ingredients:" which increases the chance
@@ -426,6 +427,10 @@ class AIRecipeGenerator:
                 "taskUUID": task_uuid,
                 "model": self.runware_image_model,
                 "positivePrompt": prompt,
+                "negativePrompt": (
+                    "text, words, letters, numbers, watermark, logo, caption, recipe card, menu, UI, border, frame, "
+                    "cartoon, illustration, anime, CGI, 3d, render, plastic, glossy, fake, lowres, blurry"
+                ),
                 "width": target,
                 "height": target,
                 "numberResults": 1,
@@ -441,7 +446,7 @@ class AIRecipeGenerator:
         }
 
         try:
-            resp = httpx.post(self.runware_api_url, json=payload, headers=headers, timeout=60.0)
+            resp = httpx.post(self.runware_api_url, json=payload, headers=headers, timeout=25.0)
         except Exception as exc:  # noqa: BLE001
             raise RuntimeError("Runware request failed") from exc
 
@@ -484,7 +489,7 @@ class AIRecipeGenerator:
             raise RuntimeError("Runware response missing image URL")
 
         try:
-            img_resp = httpx.get(image_url, timeout=60.0)
+            img_resp = httpx.get(image_url, timeout=25.0)
         except Exception as exc:  # noqa: BLE001
             raise RuntimeError("Failed to download Runware image") from exc
         if img_resp.status_code >= 400 or not img_resp.content:
