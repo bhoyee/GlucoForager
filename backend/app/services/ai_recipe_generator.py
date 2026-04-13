@@ -1126,7 +1126,9 @@ class AIRecipeGenerator:
                             # Eat-now flows are async but UX-sensitive; allow a bit more time to avoid unnecessary fallbacks.
                             cap = 45.0 if budget <= 60.0 else 60.0
                         else:
-                            cap = 25.0
+                            # Non "Eat now" flows run async (job queue) so we can afford a longer per-request timeout.
+                            # This significantly reduces false failures on slower networks / provider latency spikes.
+                            cap = 45.0
                         per_request_timeout = max(5.0, min(cap, remaining_total))
                         if phase_timeout is not None:
                             remaining_phase = phase_timeout - (time.time() - phase_started)
