@@ -179,9 +179,9 @@ def _run_text_job(job_id: str) -> None:
                 recipes=recipes or [],
                 ingredients=ingredients,
                 base_url=base_url,
-                # Generate up to 3 thumbnails so the results screen looks premium.
+                # Keep the API fast: auto-generate a single thumbnail, let users generate the rest on-demand.
                 # Daily limits and per-recipe caps still apply via App Settings.
-                max_generate=3,
+                max_generate=1,
             )
         except Exception:
             # Image generation is best-effort; never fail the recipe result.
