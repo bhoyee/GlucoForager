@@ -297,9 +297,9 @@ class AIRecipeGenerator:
         parts = [
             "Photorealistic food photography of the finished dish (NOT an illustration, NOT a cartoon, NOT anime, NOT CGI, NOT 3D render).",
             "Looks like a real photo shot by a professional food photographer using a modern smartphone or DSLR, natural window light, soft shadows.",
-            "High-end editorial style with realistic textures and believable colors (avoid glossy/plastic look).",
+            "The dish must look fully cooked and ready-to-eat (restaurant plating), not an ingredient pile.",
             "Square 1:1 composition, centered plating, natural shallow depth-of-field (no weird AI bokeh).",
-            "Serve the dish on a clean ceramic plate/bowl on a simple table surface; minimal realistic props only if they look correct (not warped).",
+            "High-end editorial style with realistic textures and believable colors (avoid glossy/plastic look). Serve the dish on a clean ceramic plate/bowl on a simple table surface; minimal realistic props only if they look correct (not warped).",
             "IMPORTANT: Absolutely no text of any kind (no letters, numbers, titles, captions, labels, watermarks, logos, UI).",
             "Avoid AI artifacts: smeared details, warped cutlery, floating garnish, melting edges, unreadable shapes, over-saturated colors.",
             "Do not generate recipe cards, menus, app screens, packaging, or any overlay text.",
@@ -317,6 +317,8 @@ class AIRecipeGenerator:
             [
                 "The subject must look like a finished, plated, ready-to-eat meal (served dish, not prep).",
                 "Main proteins must look clearly cooked (golden-brown sear, grill marks, roasted surface, crisp edges, flaky cooked fish as appropriate).",
+                "Vegetables and sides must look cooked/seasoned (sauteed, roasted, steamed) — not raw or straight from packaging.",
+                "Do not show raw ingredient piles, cutting boards, prep scenes, or supermarket-style raw displays.",
                 "Absolutely no raw meat, no raw fish, no uncooked chicken, no sashimi, no ingredient pile, no cutting board, no prep scene.",
                 "Add subtle steam/heat cues when it makes sense for the dish.",
                 "If the recipe is a drink/smoothie, show a finished ready-to-drink beverage instead (still no prep scene).",

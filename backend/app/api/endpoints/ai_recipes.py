@@ -146,9 +146,9 @@ def _run_vision_job(job_id: str) -> None:
                 recipes=result.get("recipes", []) or [],
                 ingredients=result.get("detected", []) or [],
                 base_url=base_url,
-                # Generate up to 3 thumbnails so the results screen looks premium.
+                # Keep scan results fast: auto-generate a single thumbnail, let users generate the rest on-demand.
                 # Daily limits and per-recipe caps still apply via App Settings.
-                max_generate=3,
+                max_generate=1,
             )
         except Exception:
             pass
