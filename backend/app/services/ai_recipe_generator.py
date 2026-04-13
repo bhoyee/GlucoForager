@@ -431,7 +431,8 @@ class AIRecipeGenerator:
                 "positivePrompt": prompt,
                 "negativePrompt": (
                     "text, words, letters, numbers, watermark, logo, caption, recipe card, menu, UI, border, frame, "
-                    "cartoon, illustration, anime, CGI, 3d, render, plastic, glossy, fake, lowres, blurry"
+                    "cartoon, illustration, anime, CGI, 3d, render, plastic, glossy, fake, lowres, blurry, "
+                    "raw ingredients, ingredient pile, cutting board, prep scene, uncooked"
                 ),
                 "width": target,
                 "height": target,
