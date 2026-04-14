@@ -1,12 +1,14 @@
 export const Colors = {
-  primary: "#2E8B57",
-  primaryLight: "#48BB78",
-  primaryDark: "#276749",
+  // Brand green (single source of truth for the app)
+  primary: "#4CAF50",
+  primaryLight: "#66BB6A",
+  primaryDark: "#388E3C",
   secondary: "#3182CE",
   secondaryLight: "#63B3ED",
   accent: "#ED8936",
   accentLight: "#FBD38D",
-  success: "#38A169",
+  // Keep success aligned with brand green for consistency.
+  success: "#4CAF50",
   warning: "#D69E2E",
   danger: "#E53E3E",
   error: "#E53E3E",
@@ -20,7 +22,7 @@ export const Colors = {
 };
 
 export const Gradients = {
-  primary: ["#2E8B57", "#48BB78"],
+  primary: ["#4CAF50", "#66BB6A"],
   secondary: ["#3182CE", "#63B3ED"],
   accent: ["#ED8936", "#FBD38D"],
 };

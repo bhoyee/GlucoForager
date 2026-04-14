@@ -1,6 +1,7 @@
 // screens/SplashScreen.js
 import React from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
+import { Colors } from '../constants/Colors';
 
 export default function SplashScreen() {
   return (
@@ -18,7 +19,7 @@ export default function SplashScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#2E8B57',
+    backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
