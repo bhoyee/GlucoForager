@@ -738,7 +738,14 @@ const RecipeDetailsScreen = () => {
   };
 
   const renderActiveDetailsSection = () => {
-    if (detailsTab === 'nutrition') return renderNutritionSection();
+    if (detailsTab === 'nutrition') {
+      return (
+        <>
+          {renderNutritionSection()}
+          {renderTipsSection()}
+        </>
+      );
+    }
     if (detailsTab === 'instructions') return renderInstructionsSection();
     return renderIngredientsSection();
   };
@@ -1029,7 +1036,6 @@ const RecipeDetailsScreen = () => {
           {renderSafetySection()}
           {renderDetailsTabs()}
           {renderActiveDetailsSection()}
-          {renderTipsSection()}
           {renderActionsSection()}
         </View>
       </ScrollView>
