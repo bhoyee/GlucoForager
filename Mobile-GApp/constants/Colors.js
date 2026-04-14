@@ -1,14 +1,15 @@
 export const Colors = {
-  // Brand green (single source of truth for the app)
-  primary: "#4CAF50",
-  primaryLight: "#66BB6A",
-  primaryDark: "#388E3C",
+  // Brand deep green (single source of truth for the app)
+  // Chosen to match GlucoForager social brand styling.
+  primary: "#0B5A46",
+  primaryLight: "#0F6B52",
+  primaryDark: "#084337",
   secondary: "#3182CE",
   secondaryLight: "#63B3ED",
   accent: "#ED8936",
   accentLight: "#FBD38D",
-  // Keep success aligned with brand green for consistency.
-  success: "#4CAF50",
+  // Keep success aligned with brand primary for consistency.
+  success: "#0B5A46",
   warning: "#D69E2E",
   danger: "#E53E3E",
   error: "#E53E3E",
@@ -22,7 +23,7 @@ export const Colors = {
 };
 
 export const Gradients = {
-  primary: ["#4CAF50", "#66BB6A"],
+  primary: ["#0B5A46", "#0F6B52"],
   secondary: ["#3182CE", "#63B3ED"],
   accent: ["#ED8936", "#FBD38D"],
 };
