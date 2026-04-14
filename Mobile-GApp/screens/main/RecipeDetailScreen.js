@@ -23,6 +23,7 @@ import { getRecipeImageSettings } from '../../utils/recipeImageSettings';
 import { getCachedRecipeImageUrl, setCachedRecipeImageUrl } from '../../utils/recipeImageCache';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import RecipePlaceholder from '../../assets/images/recipe-placeholder.jpeg';
+import { Colors } from '../../constants/Colors';
 
 const { width } = Dimensions.get('window');
 
@@ -641,17 +642,17 @@ const RecipeDetailsScreen = () => {
   const renderStatsBar = () => (
     <View style={styles.statsBar}>
       <View style={styles.statItem}>
-        <Ionicons name="time-outline" size={20} color="#4CAF50" />
+        <Ionicons name="time-outline" size={20} color={Colors.primary} />
         <Text style={styles.statText}>{recipe.totalTime} mins</Text>
       </View>
       <View style={styles.statDivider} />
       <View style={styles.statItem}>
-        <Feather name="users" size={20} color="#4CAF50" />
+        <Feather name="users" size={20} color={Colors.primary} />
         <Text style={styles.statText}>Serves {servings}</Text>
       </View>
       <View style={styles.statDivider} />
       <View style={styles.statItem}>
-        <MaterialIcons name="speed" size={20} color="#4CAF50" />
+        <MaterialIcons name="speed" size={20} color={Colors.primary} />
         <Text style={styles.statText}>{recipe.difficulty}</Text>
       </View>
     </View>
@@ -693,13 +694,13 @@ const RecipeDetailsScreen = () => {
           <Text style={styles.safetyTitle}>Why This Is Diabetes-Safe</Text>
           <Text style={styles.safetySubtitle}>Based on nutrition per serving</Text>
         </View>
-        <Ionicons name="chevron-forward" size={20} color="#4CAF50" />
+        <Ionicons name="chevron-forward" size={20} color={Colors.primary} />
       </View>
       
       <View style={styles.safetyHighlights}>
         {highlights.map((item, index) => (
           <View key={`${item.text}-${index}`} style={styles.highlightItem}>
-            <Ionicons name={item.icon} size={16} color="#4CAF50" />
+            <Ionicons name={item.icon} size={16} color={Colors.primary} />
             <Text style={styles.highlightText}>{item.text}</Text>
           </View>
         ))}
@@ -789,7 +790,7 @@ const RecipeDetailsScreen = () => {
             <View style={styles.ingredientHeader}>
               {item.owned ? (
                 <View style={styles.ownedIndicator}>
-                  <Ionicons name="checkmark-circle" size={18} color="#4CAF50" />
+                  <Ionicons name="checkmark-circle" size={18} color={Colors.primary} />
                 </View>
               ) : (
                 <View style={styles.missingIndicator}>
@@ -850,7 +851,7 @@ const RecipeDetailsScreen = () => {
             >
               <View style={styles.tipHeader}>
                 <View style={styles.tipIcon}>
-                  <Ionicons name="medical" size={18} color="#4CAF50" />
+                  <Ionicons name="medical" size={18} color={Colors.primary} />
                 </View>
                 <Text style={styles.tipTitle}>Tip {index + 1}</Text>
                 <Ionicons 
@@ -900,7 +901,7 @@ const RecipeDetailsScreen = () => {
     <View style={[styles.section, styles.sectionLast]}>
       <View style={styles.recipeActions}>
         <TouchableOpacity style={styles.secondaryActionButton} onPress={handleShare}>
-          <Ionicons name="share-social-outline" size={18} color="#4CAF50" />
+          <Ionicons name="share-social-outline" size={18} color={Colors.primary} />
           <Text style={styles.secondaryActionText}>Share</Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -944,7 +945,7 @@ const RecipeDetailsScreen = () => {
               <View key={`${section.title}-${index}`}>
                 <View style={styles.modalSection}>
                   <View style={styles.modalIcon}>
-                    <Ionicons name={section.icon} size={28} color="#4CAF50" />
+                    <Ionicons name={section.icon} size={28} color={Colors.primary} />
                   </View>
                   <Text style={styles.modalSectionTitle}>{section.title}</Text>
                   <Text style={styles.modalSectionText}>{section.text}</Text>
@@ -987,7 +988,7 @@ const RecipeDetailsScreen = () => {
               <View key={item.id} style={styles.modalIngredientItem}>
                 <View style={styles.modalIngredientInfo}>
                   {item.owned ? (
-                    <Ionicons name="checkmark-circle" size={22} color="#4CAF50" />
+                    <Ionicons name="checkmark-circle" size={22} color={Colors.primary} />
                   ) : (
                     <View style={styles.modalMissingIcon} />
                   )}
@@ -1243,7 +1244,7 @@ const styles = StyleSheet.create({
   },
   authorRole: {
     fontSize: 14,
-    color: '#4CAF50',
+    color: Colors.primary,
   },
   ratingContainer: {
     flexDirection: 'row',
@@ -1282,7 +1283,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#4CAF50',
+    backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -1309,7 +1310,7 @@ const styles = StyleSheet.create({
   },
   highlightText: {
     fontSize: 12,
-    color: '#4CAF50',
+    color: Colors.primary,
     marginTop: 4,
     fontWeight: '500',
   },
@@ -1339,7 +1340,7 @@ const styles = StyleSheet.create({
   },
   viewAllText: {
     fontSize: 14,
-    color: '#4CAF50',
+    color: Colors.primary,
     fontWeight: '600',
   },
   ingredientsProgress: {
@@ -1368,7 +1369,7 @@ const styles = StyleSheet.create({
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#4CAF50',
+    backgroundColor: Colors.primary,
     borderRadius: 3,
   },
   ingredientsGrid: {
@@ -1415,7 +1416,7 @@ const styles = StyleSheet.create({
   },
   ingredientAmount: {
     fontSize: 13,
-    color: '#4CAF50',
+    color: Colors.primary,
     fontWeight: '600',
   },
   emptyText: {
@@ -1430,7 +1431,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     borderLeftWidth: 3,
-    borderLeftColor: '#4CAF50',
+    borderLeftColor: Colors.primary,
   },
   instructionsList: {
     marginTop: 12,
@@ -1439,7 +1440,7 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: '#4CAF50',
+    backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -1538,14 +1539,14 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#4CAF50',
+    borderColor: Colors.primary,
     backgroundColor: '#F1F8E9',
   },
   secondaryActionText: {
     marginLeft: 8,
     fontSize: 15,
     fontWeight: '600',
-    color: '#4CAF50',
+    color: Colors.primary,
   },
   primaryActionButton: {
     flex: 1,
@@ -1555,7 +1556,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 10,
     borderRadius: 12,
-    backgroundColor: '#4CAF50',
+    backgroundColor: Colors.primary,
   },
   primaryActionText: {
     marginLeft: 8,
@@ -1623,7 +1624,7 @@ const styles = StyleSheet.create({
     marginVertical: 20,
   },
   modalButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: Colors.primary,
     marginHorizontal: 20,
     marginVertical: 16,
     paddingVertical: 14,
@@ -1685,7 +1686,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   ownedText: {
-    color: '#4CAF50',
+    color: Colors.primary,
   },
   neededText: {
     color: '#FF9800',
