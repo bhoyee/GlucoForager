@@ -662,7 +662,7 @@ export default function ManualInputScreen() {
         <View style={styles.loadingOverlay}>
           <View style={styles.loadingCard}>
             <LinearGradient
-              colors={[Colors.primary, '#4CAF50']}
+              colors={[Colors.primary, Colors.primaryLight]}
               style={styles.loadingGradient}
             >
               <Ionicons name="sparkles" size={56} color="white" />

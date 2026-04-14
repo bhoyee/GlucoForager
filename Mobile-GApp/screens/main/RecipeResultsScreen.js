@@ -231,7 +231,7 @@ export default function RecipeResultsScreen() {
     return (
       <View style={styles.loadingContainer}>
         <LinearGradient
-          colors={[Colors.primary, '#4CAF50']}
+          colors={[Colors.primary, Colors.primaryLight]}
           style={styles.loadingGradient}
         >
           <Ionicons name="sparkles" size={60} color="white" />
@@ -461,7 +461,7 @@ export default function RecipeResultsScreen() {
 
                   <View style={styles.matchContainer}>
                     <LinearGradient
-                      colors={[Colors.success, '#4CAF50']}
+                      colors={[Colors.success, Colors.primaryLight]}
                       style={styles.matchBadge}
                     >
                       <Text style={styles.matchText}>{matchText}</Text>
