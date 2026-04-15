@@ -537,6 +537,91 @@ class AIRecipeGenerator:
         model_chain: List[str] = tier_cfg.get("recipe_models") or [self.primary_model]
 
         banned_titles_norm = {self._normalize_title(t) for t in exclude_titles if t}
+
+        def _looks_like(text: str, needles: list[str]) -> bool:
+            t = (text or "").strip().lower()
+            return any(n in t for n in needles)
+
+        def _has_any(ings: list[str], needles: list[str]) -> bool:
+            return any(_looks_like(i, needles) for i in (ings or []) if isinstance(i, str))
+
+        def _optional_addons_instruction(ings: list[str]) -> str | None:
+            """
+            For starchy / low-protein scans, allow OPTIONAL add-ons so recipes can be truly diabetes-friendly
+            without pretending those add-ons were detected.
+            """
+            clean = [str(x).strip().lower() for x in (ings or []) if isinstance(x, str) and str(x).strip()]
+            if not clean:
+                return None
+
+            starchy = _has_any(
+                clean,
+                [
+                    "yam",
+                    "potato",
+                    "cassava",
+                    "plantain",
+                    "rice",
+                    "pasta",
+                    "noodle",
+                    "bread",
+                    "flour",
+                    "semolina",
+                    "garri",
+                    "fufu",
+                ],
+            )
+            has_protein = _has_any(
+                clean,
+                [
+                    "chicken",
+                    "turkey",
+                    "beef",
+                    "pork",
+                    "fish",
+                    "salmon",
+                    "tuna",
+                    "egg",
+                    "tofu",
+                    "beans",
+                    "lentil",
+                    "chickpea",
+                    "yogurt",
+                    "cheese",
+                ],
+            )
+            has_nonstarchy_veg = _has_any(
+                clean,
+                [
+                    "spinach",
+                    "broccoli",
+                    "kale",
+                    "cabbage",
+                    "zucchini",
+                    "cauliflower",
+                    "mushroom",
+                    "pepper",
+                    "tomato",
+                    "cucumber",
+                    "salad",
+                    "lettuce",
+                ],
+            )
+
+            # Only add this guidance when it can improve diabetes-friendliness.
+            if has_protein and has_nonstarchy_veg:
+                return None
+            if not starchy and has_protein:
+                return None
+
+            return (
+                "If the detected ingredients are missing a clear protein or non-starchy vegetables, "
+                "you MAY include up to 2 OPTIONAL add-ons to make the meal truly diabetes-friendly: "
+                "one protein (e.g., eggs, tofu, chicken, fish, beans) and one non-starchy veg (e.g., spinach, broccoli, mixed salad). "
+                "When you include them, label the ingredient name starting with 'Optional:' and do NOT imply they were detected in the scan. "
+                "Update nutrition estimates to reflect any optional add-ons you actually include."
+            )
+
         extra_instructions = None
         if exclude_titles or variety_mode:
             parts = [
@@ -550,6 +635,10 @@ class AIRecipeGenerator:
 
         mode_norm = (mode or "").strip().lower()
         prompt_template = EAT_NOW_PROMPT if mode_norm in ("surprise", "quick") else OPENAI_PROMPT
+
+        addons = _optional_addons_instruction(ingredients)
+        if addons:
+            extra_instructions = " ".join([x for x in [(extra_instructions or "").strip(), addons.strip()] if x]).strip()
         if mode_norm in ("surprise", "quick"):
             fast_chain = tier_cfg.get("recipe_models_fast") or []
             if isinstance(fast_chain, list) and fast_chain:
