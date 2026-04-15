@@ -72,7 +72,7 @@ export default function ScanProcessingScreen() {
       const phases = [
         images.length > 1 ? 'Optimizing photos...' : 'Optimizing photo...',
         images.length > 1 ? 'Uploading photos...' : 'Uploading photo...',
-        'AI is analyzing ingredients...',
+        'Analyzing ingredients...',
         'Selecting diabetes-friendly recipes...',
         'Finalizing results...',
       ];
@@ -329,9 +329,9 @@ export default function ScanProcessingScreen() {
   return (
     <View style={styles.container}>
       <Animated.View style={[styles.iconWrapper, { opacity: glow }]}>
-        <Ionicons name="sparkles" size={56} color="white" />
+        <Ionicons name="scan-outline" size={56} color="white" />
       </Animated.View>
-      <Text style={styles.title}>AI Analysis in Progress</Text>
+      <Text style={styles.title}>Analyzing ingredients</Text>
       <Text style={styles.subtitle}>{statusLine}</Text>
       <ActivityIndicator size="large" color="white" style={styles.spinner} />
       <Text style={styles.progressText}>

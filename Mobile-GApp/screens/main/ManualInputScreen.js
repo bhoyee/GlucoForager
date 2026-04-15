@@ -546,7 +546,7 @@ export default function ManualInputScreen() {
         )}
         {scanStatus.isPremium && (
           <View style={styles.scanBadge}>
-            <Ionicons name="sparkles" size={16} color={Colors.primary} />
+            <Ionicons name="infinite-outline" size={16} color={Colors.primary} />
             <Text style={styles.scanBadgeText}>Unlimited scans</Text>
           </View>
         )}
@@ -665,9 +665,9 @@ export default function ManualInputScreen() {
               colors={[Colors.primary, Colors.primaryLight]}
               style={styles.loadingGradient}
             >
-              <Ionicons name="sparkles" size={56} color="white" />
+              <Ionicons name="restaurant-outline" size={56} color="white" />
               <Text style={styles.loadingTitle}>
-                {isEatNow ? 'AI Meals' : 'AI Recipes'}
+                {isEatNow ? 'Meal ideas' : 'Recipes'}
               </Text>
               <Text style={styles.loadingSubtitle}>
                 {statusLine || (isEatNow ? 'Preparing meal ideas...' : 'Generating recipes...')}

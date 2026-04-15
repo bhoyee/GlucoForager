@@ -81,7 +81,7 @@ export default function EatNowScreen() {
         key: 'surprise',
         title: 'Surprise me',
         subtitle: 'No input needed - just 3 diabetes-friendly meals.',
-        icon: 'sparkles-outline',
+        icon: 'shuffle-outline',
         accent: Colors.secondary,
         action: async () => {
           navigation.navigate('ManualInput', {
