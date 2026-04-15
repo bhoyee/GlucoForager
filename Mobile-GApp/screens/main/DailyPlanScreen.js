@@ -257,7 +257,7 @@ export default function DailyPlanScreen() {
               {generating ? (
                 <ActivityIndicator size="small" color="white" />
               ) : (
-                <Ionicons name="sparkles-outline" size={16} color="white" />
+                <Ionicons name="refresh-outline" size={16} color="white" />
               )}
               <Text style={styles.headerPrimaryButtonText}>Regenerate</Text>
             </Pressable>
@@ -307,7 +307,7 @@ export default function DailyPlanScreen() {
           <View style={styles.emptyWrap}>
             <View style={styles.heroCard}>
               <View style={styles.heroIcon}>
-                <Ionicons name="sparkles-outline" size={20} color="white" />
+                <Ionicons name="calendar-clear-outline" size={20} color="white" />
               </View>
               <Text style={styles.emptyTitle}>Your plan for today</Text>
               <Text style={styles.emptyText}>
@@ -318,8 +318,8 @@ export default function DailyPlanScreen() {
                 onPress={generateToday}
                 style={[styles.primaryButton, generating ? { opacity: 0.65 } : null]}
               >
-                {generating ? <ActivityIndicator size="small" color="white" /> : <Ionicons name="sparkles" size={16} color="white" />}
-                <Text style={styles.primaryButtonText}>{generating ? 'Generating...' : 'Generate today’s plan'}</Text>
+                {generating ? <ActivityIndicator size="small" color="white" /> : <Ionicons name="calendar-outline" size={16} color="white" />}
+                <Text style={styles.primaryButtonText}>{generating ? 'Generating...' : "Generate today's plan"}</Text>
               </Pressable>
               <Text style={styles.hintText}>
                 You can generate a new plan anytime.

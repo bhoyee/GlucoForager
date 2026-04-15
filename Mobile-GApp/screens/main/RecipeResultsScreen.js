@@ -47,7 +47,7 @@ export default function RecipeResultsScreen() {
   const elapsedRef = useRef(null);
   const phaseRef = useRef(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [statusLine, setStatusLine] = useState('Starting AI recipe generation...');
+  const [statusLine, setStatusLine] = useState('Starting recipe generation...');
 
   useEffect(() => {
     const ingredientSource = source === 'text' ? 'Input' : 'Detected';
@@ -106,7 +106,7 @@ export default function RecipeResultsScreen() {
     };
 
     const pollJob = async (jobId) => {
-      setStatusLine('Generating recipes with AI...');
+      setStatusLine('Generating recipes...');
       const token = await AsyncStorage.getItem('userToken');
       if (!token) return;
       const res = await apiFetch(
@@ -234,8 +234,8 @@ export default function RecipeResultsScreen() {
           colors={[Colors.primary, Colors.primaryLight]}
           style={styles.loadingGradient}
         >
-          <Ionicons name="sparkles" size={60} color="white" />
-          <Text style={styles.loadingTitle}>AI Recipe Generation</Text>
+          <Ionicons name="restaurant-outline" size={60} color="white" />
+          <Text style={styles.loadingTitle}>Generating recipes</Text>
           <Text style={styles.loadingSubtitle}>
             {statusLine || 'Generating your recipes...'}
           </Text>

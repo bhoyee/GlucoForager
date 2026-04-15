@@ -356,7 +356,7 @@ export default function CarbSwapsScreen() {
                       {aiResult.swaps.better_options.map((item) => (
                         <View key={item} style={styles.row}>
                           <View style={styles.rowIcon}>
-                            <Ionicons name="sparkles-outline" size={16} color={Colors.secondary} />
+                            <Ionicons name="swap-horizontal-outline" size={16} color={Colors.secondary} />
                           </View>
                           <Text style={styles.rowText}>{item}</Text>
                         </View>
@@ -384,10 +384,10 @@ export default function CarbSwapsScreen() {
                 Swaps for <Text style={styles.bold}>{matches.key}</Text>
               </Text>
               <View style={styles.rows}>
-                {matches.items.map((item) => (
+                  {matches.items.map((item) => (
                   <View key={item} style={styles.row}>
                     <View style={styles.rowIcon}>
-                      <Ionicons name="sparkles-outline" size={16} color={Colors.secondary} />
+                      <Ionicons name="swap-horizontal-outline" size={16} color={Colors.secondary} />
                     </View>
                     <Text style={styles.rowText}>{item}</Text>
                   </View>
