@@ -42,25 +42,32 @@ TIER_CONFIG = {
     },
 }
 
-OPENAI_PROMPT = """You are a certified diabetes nutritionist. Create 3 diabetic-friendly recipes using ONLY: {ingredients}.
+OPENAI_PROMPT = """You are a certified diabetes nutritionist.
+
+Create 3 diabetes-friendly recipes based on these detected ingredients: {ingredients}.
+
+You may use *basic pantry staples* in small amounts (e.g., water, salt, pepper, dried herbs/spices, lemon/lime, vinegar, garlic, onion, a small amount of olive oil) but do NOT invent a major ingredient (especially a main protein) that is not in the detected list.
+
+If the detected ingredients are mostly starchy/sugary and cannot be made strongly diabetes-friendly on their own, still return recipes but:
+- keep portions realistic,
+- be honest in the diabetes analysis (e.g., “moderate/high glycemic impact”),
+- include practical tips to reduce glucose spikes (pair with protein/fiber, add non-starchy veg, smaller portion, etc.).
 
 REQUIREMENTS FOR EACH RECIPE:
 1. Name the recipe specifically
 2. Include prep_time, cook_time (minutes)
 3. List ingredients with quantities and units
-4. Step-by-step cooking instructions (at least 5 steps). Start with prep (e.g., washing, chopping), end with plating/serving.
+4. Step-by-step cooking instructions (at least 5 steps). Start with prep (e.g., washing, chopping), end with plating/serving. Do not use generic placeholders like “cook protein” unless that protein is explicitly listed in ingredients.
 5. Nutritional info PER SERVING: calories, carbs, protein, fat, fiber, sugar, sodium
 6. Short description (1-2 sentences) describing why it is diabetes-friendly
 7. Diabetes analysis: glycemic impact, carb type, safety rating
 8. Diabetes management tips: 3-5 concise tips (array of strings)
 9. Tags: diabetes-friendly, low-carb, etc.
 
-NUTRITIONAL CONSTRAINTS:
-- Calories: 250-400 per serving
-- Carbs: MAX 30g per serving
-- Protein: MIN 25g per serving
-- Fiber: MIN 5g per serving
-- No added sugars
+NUTRITION GUIDANCE (REALISM FIRST):
+- Provide realistic estimates based on the listed ingredients and portions.
+- Do NOT force high protein or high fiber numbers if the ingredients do not support it.
+- If sugar is present in detected ingredients (e.g., ketchup), reflect that in the estimate and call it out in tips.
 
 FORMAT: Return VALID JSON with this EXACT structure:
 {

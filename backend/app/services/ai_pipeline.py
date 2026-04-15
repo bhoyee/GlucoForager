@@ -166,7 +166,7 @@ class AIPipeline:
                 generate_images=False,
                 food_profile=food_profile,
             )
-            recipes = self._validated_recipes_or_none(recipes) or []
+            recipes = self._validated_recipes_or_none(recipes, source_ingredients=selected_food_only) or []
             if not recipes:
                 recipes_retry = self.ai.generate_recipes(
                     selected_food_only,
@@ -177,7 +177,7 @@ class AIPipeline:
                     generate_images=False,
                     food_profile=food_profile,
                 )
-                recipes = self._validated_recipes_or_none(recipes_retry) or []
+                recipes = self._validated_recipes_or_none(recipes_retry, source_ingredients=selected_food_only) or []
             if not recipes:
                 raise RuntimeError("Recipe generation failed. Please try again.")
             record_ai_request(db, user_id, tier, "recipes", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
@@ -254,7 +254,7 @@ class AIPipeline:
                 generate_images=False,
                 food_profile=food_profile,
             )
-            recipes = self._validated_recipes_or_none(recipes) or []
+            recipes = self._validated_recipes_or_none(recipes, source_ingredients=selected_food_only) or []
             if not recipes:
                 recipes_retry = self.ai.generate_recipes(
                     selected_food_only,
@@ -265,7 +265,7 @@ class AIPipeline:
                     generate_images=False,
                     food_profile=food_profile,
                 )
-                recipes = self._validated_recipes_or_none(recipes_retry) or []
+                recipes = self._validated_recipes_or_none(recipes_retry, source_ingredients=selected_food_only) or []
             if not recipes:
                 raise RuntimeError("Recipe generation failed. Please try again.")
             record_ai_request(db, user_id, tier, "recipes", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
@@ -324,7 +324,7 @@ class AIPipeline:
             generate_images=False,
             food_profile=food_profile,
         )
-        recipes = self._validated_recipes_or_none(recipes, mode=mode)
+        recipes = self._validated_recipes_or_none(recipes, mode=mode, source_ingredients=ingredients)
         if recipes is None:
             remaining = overall_budget_seconds - (time.time() - started)
             # One retry (variety on, cache bypassed) only if there is enough time left.
@@ -341,7 +341,7 @@ class AIPipeline:
                 generate_images=False,
                 food_profile=food_profile,
             )
-            recipes = self._validated_recipes_or_none(recipes_retry, mode=mode)
+            recipes = self._validated_recipes_or_none(recipes_retry, mode=mode, source_ingredients=ingredients)
 
         if recipes is None:
             raise RuntimeError("Recipe generation failed. Please try again.")
@@ -365,6 +365,7 @@ class AIPipeline:
         recipes: List[Dict[str, Any]] | None,
         *,
         mode: str = "ingredients",
+        source_ingredients: list[str] | None = None,
     ) -> List[Dict[str, Any]] | None:
         if not recipes or not isinstance(recipes, list):
             return None
@@ -400,6 +401,32 @@ class AIPipeline:
                         (len(ingredients) if isinstance(ingredients, list) else "n/a"),
                     )
                 return None
+
+            # Ensure the recipe content actually references the detected ingredients (avoid placeholder/fallback output).
+            if source_ingredients:
+                try:
+                    src = [
+                        str(x).strip().lower()
+                        for x in source_ingredients
+                        if isinstance(x, str) and str(x).strip()
+                    ]
+                    ing_text = " ".join(
+                        [
+                            str((x.get("name") if isinstance(x, dict) else x) or "").lower()
+                            for x in (ingredients or [])
+                        ]
+                    )
+                    title_text = (title or "").lower()
+                    instr_text = " ".join([str(s).lower() for s in (instructions or []) if isinstance(s, str)])
+                    hay = f"{title_text} {ing_text} {instr_text}"
+                    used = any(s and (s in hay) for s in src)
+                    if not used:
+                        if settings.ai_debug_logging:
+                            logger.info("AI validation failed mode=%s reason=no_source_ingredient_match", mode)
+                        return None
+                except Exception:
+                    # If this check fails unexpectedly, don't block otherwise valid recipes.
+                    pass
             ni = recipe.get("nutritional_info") or {}
             calories = ni.get("calories")
             carbs = ni.get("carbs")
