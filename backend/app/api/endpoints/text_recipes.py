@@ -154,6 +154,20 @@ def _run_text_job(job_id: str) -> None:
                 db.commit()
                 return
             ingredients = classified["food"]
+            try:
+                pipeline._ensure_diabetes_friendly_or_raise(ingredients, mode=mode)
+            except IngredientValidationError as exc:
+                job.status = "failed"
+                job.error = exc.message
+                job.result = {
+                    "error": {
+                        "type": "invalid_input",
+                        "code": exc.code,
+                        "message": exc.message,
+                    }
+                }
+                db.commit()
+                return
         else:
             classified = {"food": [], "non_food": [], "source": "mode"}
             ingredients = []
@@ -307,6 +321,13 @@ def generate_from_text(
                 detail="Content not related to food. Please enter real ingredients.",
             )
         ingredients = classified["food"]
+        try:
+            pipeline._ensure_diabetes_friendly_or_raise(ingredients, mode=mode)
+        except IngredientValidationError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"code": exc.code, "message": exc.message},
+            ) from exc
         filters = payload.filters or []
         warning = None
         if classified["non_food"]:

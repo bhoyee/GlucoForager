@@ -383,7 +383,7 @@ class AIPipeline:
         started = time.time()
         # "Eat now" flows should stay tight for UX, but "Type ingredients" is async and can take longer.
         # Increasing the budget reduces false "Request failed" when providers have brief latency spikes.
-        overall_budget_seconds = float(settings.ai_eat_now_budget_seconds) if mode in ("surprise", "quick") else 85.0
+        overall_budget_seconds = float(settings.ai_eat_now_budget_seconds) if mode in ("surprise", "quick") else 60.0
 
         self._ensure_diabetes_friendly_or_raise(self._cap_recipe_ingredients(ingredients), mode=mode)
 
