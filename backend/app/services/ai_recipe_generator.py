@@ -616,7 +616,7 @@ class AIRecipeGenerator:
 
             return (
                 "If the detected ingredients are missing a clear protein or non-starchy vegetables, "
-                "you MAY include up to 2 OPTIONAL add-ons to make the meal truly diabetes-friendly: "
+                "you MUST include up to 2 OPTIONAL add-ons to make the meal truly diabetes-friendly: "
                 "one protein (e.g., eggs, tofu, chicken, fish, beans) and one non-starchy veg (e.g., spinach, broccoli, mixed salad). "
                 "When you include them, label the ingredient name starting with 'Optional:' and do NOT imply they were detected in the scan. "
                 "Update nutrition estimates to reflect any optional add-ons you actually include."

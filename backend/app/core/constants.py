@@ -48,7 +48,7 @@ Create 3 diabetes-friendly recipes based on these detected ingredients: {ingredi
 
 You may use *basic pantry staples* in small amounts (e.g., water, salt, pepper, dried herbs/spices, lemon/lime, vinegar, garlic, onion, a small amount of olive oil).
 
-If the detected list is missing a clear protein or non-starchy vegetables, you MAY include up to 2 OPTIONAL add-ons to make the meal truly diabetes-friendly:
+If the detected list is missing a clear protein or non-starchy vegetables, you SHOULD include up to 2 OPTIONAL add-ons to make the meal truly diabetes-friendly:
 - one protein (e.g., eggs, tofu, chicken, fish, beans)
 - one non-starchy veg (e.g., spinach, broccoli, mixed salad)
 When you do this, you MUST label those ingredient names starting with "Optional:" and you must NOT imply they were detected in the scan.
