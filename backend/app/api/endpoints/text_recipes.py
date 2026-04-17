@@ -14,7 +14,7 @@ from ...database import get_db
 from ...database import SessionLocal
 from ...models.ai_job import AIJob
 from ...models.user import User
-from ...services.ai_pipeline import AIPipeline
+from ...services.ai_pipeline import AIPipeline, IngredientValidationError
 from ...services.ai_recipe_generator import AIRecipeGenerator
 from ...services.cache_service import CacheService
 from ...services.cost_tracker import record_ai_request
@@ -160,17 +160,30 @@ def _run_text_job(job_id: str) -> None:
             filters = [*(_filters_for_mode(mode)), *filters]
             variety_mode = True
 
-        recipes = pipeline.text_to_recipes(
-            db,
-            user.id,
-            get_effective_subscription_tier(db, user) or "free",
-            ingredients,
-            filters=filters,
-            exclude_titles=exclude_titles,
-            variety_mode=variety_mode,
-            mode=mode,
-            device_id=device_id,
-        )
+        try:
+            recipes = pipeline.text_to_recipes(
+                db,
+                user.id,
+                get_effective_subscription_tier(db, user) or "free",
+                ingredients,
+                filters=filters,
+                exclude_titles=exclude_titles,
+                variety_mode=variety_mode,
+                mode=mode,
+                device_id=device_id,
+            )
+        except IngredientValidationError as exc:
+            job.status = "failed"
+            job.error = exc.message
+            job.result = {
+                "error": {
+                    "type": "invalid_input",
+                    "code": exc.code,
+                    "message": exc.message,
+                }
+            }
+            db.commit()
+            return
 
         try:
             attach_recipe_images(
@@ -350,6 +363,11 @@ def generate_from_text(
             mode=mode,
             device_id=device_id,
         )
+    except IngredientValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
     except RuntimeError as exc:
         # AI not configured (missing keys) or other pipeline errors
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc

@@ -99,6 +99,22 @@ class AIPipeline:
             }
         return None
 
+    def _ensure_diabetes_friendly_or_raise(self, ingredients: list[str], *, mode: str = "ingredients") -> None:
+        """
+        For ingredient-driven flows, block early when the input can't realistically produce a diabetes-friendly
+        result without inventing ingredients.
+        """
+        if (mode or "").strip().lower() in ("surprise", "quick"):
+            return
+        verdict = self.classifier.classify(ingredients or [])
+        if verdict.get("diabetes_friendly"):
+            return
+        reason = verdict.get("reason") or "Ingredients may not be diabetes-friendly."
+        raise IngredientValidationError(
+            "not_diabetes_friendly",
+            f"{reason} Add at least one protein (eggs/fish/chicken/beans) and one non-starchy veg (spinach/broccoli/salad), then try again.",
+        )
+
     def _cap_recipe_ingredients(self, ingredients: list[str], *, limit: int = 18) -> list[str]:
         """
         Keep recipe generation inputs bounded to reduce latency and invalid/truncated JSON outputs.
@@ -138,6 +154,7 @@ class AIPipeline:
         selected_food_only = self._cap_recipe_ingredients(selected_food_only)
         risk_meta = flagged if isinstance(flagged, dict) else {}
         warning = self._get_diabetes_warning(selected_food_only) or risk_meta
+        self._ensure_diabetes_friendly_or_raise(selected_food_only, mode="ingredients")
         if non_food and (not isinstance(warning, dict) or not warning.get("code")):
             warning = {
                 "code": "non_food_ignored",
@@ -226,6 +243,7 @@ class AIPipeline:
         selected_food_only = self._cap_recipe_ingredients(selected_food_only, limit=14)
         risk_meta = flagged if isinstance(flagged, dict) else {}
         warning = self._get_diabetes_warning(selected_food_only) or risk_meta
+        self._ensure_diabetes_friendly_or_raise(selected_food_only, mode="ingredients")
         if non_food and (not isinstance(warning, dict) or not warning.get("code")):
             warning = {
                 "code": "non_food_ignored",
@@ -304,6 +322,8 @@ class AIPipeline:
         # Increasing the budget reduces false "Request failed" when providers have brief latency spikes.
         overall_budget_seconds = float(settings.ai_eat_now_budget_seconds) if mode in ("surprise", "quick") else 85.0
 
+        self._ensure_diabetes_friendly_or_raise(self._cap_recipe_ingredients(ingredients), mode=mode)
+
         recipes = self.ai.generate_recipes(
             self._cap_recipe_ingredients(ingredients),
             tier,
@@ -358,10 +378,94 @@ class AIPipeline:
         mode: str = "ingredients",
         source_ingredients: list[str] | None = None,
     ) -> List[Dict[str, Any]] | None:
+        import re
+
         if not recipes or not isinstance(recipes, list):
             return None
         if len(recipes) < 3:
             return None
+
+        # Strictness for ingredient-driven recipes: the model must not invent ingredients.
+        pantry_staples = {
+            "water",
+            "salt",
+            "pepper",
+            "black pepper",
+            "chili",
+            "chilli",
+            "dried herbs",
+            "herbs",
+            "spices",
+            "garlic",
+            "onion",
+            "lemon",
+            "lime",
+            "vinegar",
+            "olive oil",
+            "oil",
+        }
+
+        def _norm(text: str) -> str:
+            t = (text or "").strip().lower()
+            t = re.sub(r"[^a-z0-9\s]+", " ", t)
+            t = re.sub(r"\s+", " ", t).strip()
+            return t
+
+        src_norm: list[str] = []
+        src_set: set[str] = set()
+        if source_ingredients:
+            src_norm = [_norm(str(x)) for x in source_ingredients if isinstance(x, str) and str(x).strip()]
+            src_set = {x for x in src_norm if x}
+
+        def _matches_source(ingredient_name: str) -> bool:
+            n = _norm(ingredient_name)
+            if not n:
+                return True
+            if n in pantry_staples:
+                return True
+            if n in src_set:
+                return True
+            # Substring match (bounded) to handle simple variants like "ketchup" vs "tomato ketchup".
+            for s in src_norm:
+                if not s:
+                    continue
+                if f" {s} " in f" {n} ":
+                    return True
+                if f" {n} " in f" {s} ":
+                    return True
+            return False
+
+        def _has_banned_placeholders(instructions_text: str, allowed_text: str) -> bool:
+            # Block common hallucinated add-ons + placeholders when they aren't actually listed as ingredients.
+            banned = [
+                "protein",
+                "broccoli",
+                "spinach",
+                "kale",
+                "salad",
+                "lettuce",
+                "cabbage",
+                "zucchini",
+                "cauliflower",
+                "chicken",
+                "turkey",
+                "beef",
+                "pork",
+                "fish",
+                "salmon",
+                "tuna",
+                "tofu",
+                "beans",
+                "lentil",
+                "chickpea",
+                "egg",
+                "eggs",
+            ]
+            for b in banned:
+                pattern = rf"\b{re.escape(b)}\b"
+                if re.search(pattern, instructions_text) and not re.search(pattern, allowed_text):
+                    return True
+            return False
 
         cleaned: list[dict] = []
         for recipe in recipes[:3]:
@@ -393,14 +497,11 @@ class AIPipeline:
                     )
                 return None
 
-            # Ensure the recipe content actually references the detected ingredients (avoid placeholder/fallback output).
+            # Ensure the recipe content actually references the detected ingredients (avoid placeholder/fallback output),
+            # and does NOT invent non-pantry ingredients.
             if source_ingredients:
                 try:
-                    src = [
-                        str(x).strip().lower()
-                        for x in source_ingredients
-                        if isinstance(x, str) and str(x).strip()
-                    ]
+                    src = [str(x).strip().lower() for x in source_ingredients if isinstance(x, str) and str(x).strip()]
                     ing_text = " ".join(
                         [
                             str((x.get("name") if isinstance(x, dict) else x) or "").lower()
@@ -410,10 +511,50 @@ class AIPipeline:
                     title_text = (title or "").lower()
                     instr_text = " ".join([str(s).lower() for s in (instructions or []) if isinstance(s, str)])
                     hay = f"{title_text} {ing_text} {instr_text}"
-                    used = any(s and (s in hay) for s in src)
-                    if not used:
+                    used_sources = {s for s in src if s and (s in hay)}
+                    min_required = 1 if len(src) <= 1 else 2
+                    if len(used_sources) < min_required:
                         if settings.ai_debug_logging:
-                            logger.info("AI validation failed mode=%s reason=no_source_ingredient_match", mode)
+                            logger.info(
+                                "AI validation failed mode=%s reason=insufficient_source_ingredient_match used=%s",
+                                mode,
+                                len(used_sources),
+                            )
+                        return None
+
+                    # Ingredient list must be a subset of detected ingredients + pantry staples.
+                    for ing in ingredients or []:
+                        if isinstance(ing, dict):
+                            nm = str(ing.get("name") or ing.get("title") or "").strip()
+                        else:
+                            nm = str(ing or "").strip()
+                        if not nm:
+                            continue
+                        if "optional:" in nm.lower():
+                            if settings.ai_debug_logging:
+                                logger.info("AI validation failed mode=%s reason=optional_prefix_present", mode)
+                            return None
+                        if not _matches_source(nm):
+                            if settings.ai_debug_logging:
+                                logger.info(
+                                    "AI validation failed mode=%s reason=ingredient_not_in_source name=%s",
+                                    mode,
+                                    nm[:80],
+                                )
+                            return None
+
+                    allowed_parts = [_norm(x) for x in src]
+                    for ing in ingredients or []:
+                        if isinstance(ing, dict):
+                            nm = str(ing.get("name") or ing.get("title") or "").strip()
+                        else:
+                            nm = str(ing or "").strip()
+                        if nm:
+                            allowed_parts.append(_norm(nm))
+                    allowed_text = " ".join([p for p in allowed_parts if p])
+                    if _has_banned_placeholders(instr_text, allowed_text):
+                        if settings.ai_debug_logging:
+                            logger.info("AI validation failed mode=%s reason=instruction_mentions_missing_ingredient", mode)
                         return None
                 except Exception:
                     # If this check fails unexpectedly, don't block otherwise valid recipes.
