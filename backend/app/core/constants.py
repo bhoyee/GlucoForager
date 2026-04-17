@@ -48,6 +48,10 @@ Create 3 diabetes-friendly recipes based on these detected ingredients: {ingredi
 
 You may use *basic pantry staples* in small amounts (e.g., water, salt, pepper, dried herbs/spices, lemon/lime, vinegar, garlic, onion, a small amount of olive oil).
 
+CRITICAL CONSTRAINTS:
+- Do NOT add any non-pantry ingredients that were not detected (no “greens”, no “veggies”, no “protein” items) unless they are explicitly listed in the detected ingredients.
+- Do NOT mention cooking steps for ingredients that are not listed. Never write placeholders like "prep protein" or "cook protein" unless a protein ingredient is actually in the ingredients list.
+
 If the detected ingredients are mostly starchy/sugary and cannot be made strongly diabetes-friendly on their own, still return recipes but:
 - keep portions realistic,
 - be honest in the diabetes analysis (e.g., "moderate/high glycemic impact"),

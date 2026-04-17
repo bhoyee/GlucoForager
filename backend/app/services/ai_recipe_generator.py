@@ -1136,7 +1136,7 @@ class AIRecipeGenerator:
                         else:
                             # Non "Eat now" flows run async (job queue) so we can afford a longer per-request timeout.
                             # This significantly reduces false failures on slower networks / provider latency spikes.
-                            cap = 45.0
+                            cap = 30.0 if remaining_total <= 60.0 else 45.0
                         per_request_timeout = max(5.0, min(cap, remaining_total))
                         if phase_timeout is not None:
                             remaining_phase = phase_timeout - (time.time() - phase_started)
@@ -1164,7 +1164,7 @@ class AIRecipeGenerator:
                         timeout_seconds=per_request_timeout,
                         # Give enough room to finish valid JSON (truncation => invalid JSON => slow fallback chain).
                         # The prompt already enforces concision, so a higher cap doesn't mean longer outputs.
-                        max_output_tokens=2200 if mode_norm in ("surprise", "quick") else 2000,
+                        max_output_tokens=2200 if mode_norm in ("surprise", "quick") else 1400,
                     )
                     parsed = parse_content(content)
                     recipes = self._filter_recipes(parsed, banned_titles_norm)
