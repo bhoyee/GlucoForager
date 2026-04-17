@@ -228,6 +228,28 @@ def generate_from_vision(
         except json.JSONDecodeError:
             cached_result = None
         if cached_result:
+            # Cache can outlive prompt/validation changes; re-validate on read to avoid returning stale/hallucinated content.
+            try:
+                detected_cached = cached_result.get("detected", []) if isinstance(cached_result, dict) else []
+                pipeline._ensure_diabetes_friendly_or_raise(detected_cached or [], mode="ingredients")
+                validated = pipeline._validated_recipes_or_none(
+                    cached_result.get("recipes", []) if isinstance(cached_result, dict) else None,
+                    source_ingredients=detected_cached if isinstance(detected_cached, list) else [],
+                )
+                if not validated:
+                    cache.delete(cache_key)
+                    cached_result = None
+                else:
+                    cached_result["recipes"] = validated
+            except IngredientValidationError:
+                cache.delete(cache_key)
+                cached_result = None
+            except Exception:
+                # If validation itself errors, don't trust the cache.
+                cache.delete(cache_key)
+                cached_result = None
+
+        if cached_result:
             cached_recipes = _ensure_images(
                 cached_result.get("recipes", []),
                 tier,
@@ -323,6 +345,27 @@ def generate_from_vision_batch(
             cached_result = json.loads(cached) if isinstance(cached, str) else cached
         except json.JSONDecodeError:
             cached_result = None
+        if cached_result:
+            # Cache can outlive prompt/validation changes; re-validate on read to avoid returning stale/hallucinated content.
+            try:
+                detected_cached = cached_result.get("detected", []) if isinstance(cached_result, dict) else []
+                pipeline._ensure_diabetes_friendly_or_raise(detected_cached or [], mode="ingredients")
+                validated = pipeline._validated_recipes_or_none(
+                    cached_result.get("recipes", []) if isinstance(cached_result, dict) else None,
+                    source_ingredients=detected_cached if isinstance(detected_cached, list) else [],
+                )
+                if not validated:
+                    cache.delete(cache_key)
+                    cached_result = None
+                else:
+                    cached_result["recipes"] = validated
+            except IngredientValidationError:
+                cache.delete(cache_key)
+                cached_result = None
+            except Exception:
+                cache.delete(cache_key)
+                cached_result = None
+
         if cached_result:
             cached_recipes = _ensure_images(
                 cached_result.get("recipes", []),

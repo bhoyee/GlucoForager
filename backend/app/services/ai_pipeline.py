@@ -106,6 +106,69 @@ class AIPipeline:
         """
         if (mode or "").strip().lower() in ("surprise", "quick"):
             return
+
+        lowered = [str(x).strip().lower() for x in (ingredients or []) if isinstance(x, str) and str(x).strip()]
+        if lowered:
+            starchy_keywords = [
+                "yam",
+                "potato",
+                "cassava",
+                "plantain",
+                "rice",
+                "pasta",
+                "noodle",
+                "bread",
+                "flour",
+                "semolina",
+                "garri",
+                "fufu",
+            ]
+            protein_keywords = [
+                "chicken",
+                "turkey",
+                "beef",
+                "pork",
+                "fish",
+                "salmon",
+                "tuna",
+                "egg",
+                "eggs",
+                "tofu",
+                "beans",
+                "lentil",
+                "lentils",
+                "chickpea",
+                "chickpeas",
+            ]
+            nonstarchy_veg_keywords = [
+                "spinach",
+                "broccoli",
+                "kale",
+                "cabbage",
+                "zucchini",
+                "cauliflower",
+                "mushroom",
+                "pepper",
+                "tomato",
+                "cucumber",
+                "salad",
+                "lettuce",
+            ]
+            sugary_condiments = ["ketchup", "tomato ketchup", "syrup", "sugar", "honey", "jam"]
+
+            has_starch = any(any(k in item for k in starchy_keywords) for item in lowered)
+            has_protein = any(any(k in item for k in protein_keywords) for item in lowered)
+            has_nonstarchy_veg = any(any(k in item for k in nonstarchy_veg_keywords) for item in lowered)
+            has_sugary_condiment = any(any(k in item for k in sugary_condiments) for item in lowered)
+
+            # Hard stop: starchy/sugary sets without any protein or non-starchy veg cannot be made truly diabetes-friendly
+            # without inventing ingredients.
+            if (has_starch or has_sugary_condiment) and not (has_protein or has_nonstarchy_veg):
+                raise IngredientValidationError(
+                    "not_diabetes_friendly",
+                    "These ingredients can’t reliably make a diabetes-friendly meal. Add at least one protein (eggs/fish/chicken/beans/tofu) "
+                    "and one non-starchy veg (spinach/broccoli/salad), then try again.",
+                )
         verdict = self.classifier.classify(ingredients or [])
         if verdict.get("diabetes_friendly"):
             return

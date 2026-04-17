@@ -331,26 +331,44 @@ def generate_from_text(
             except json.JSONDecodeError:
                 cached_recipes = None
             if cached_recipes:
-                cached_recipes = _ensure_images(cached_recipes, tier, ingredients)
-                cache.set(cache_key, json.dumps(cached_recipes), ttl_seconds=TEXT_CACHE_TTL_SECONDS)
-                record_ai_request(
-                    db,
-                    current_user.id,
-                    tier,
-                    "text",
-                    model_used="cache",
-                    tokens_used=0,
-                    cost_estimate=0,
-                    device_id=device_id,
+                # Cache can outlive prompt/validation changes; re-validate on read to avoid returning stale/hallucinated content.
+                try:
+                    pipeline._ensure_diabetes_friendly_or_raise(ingredients, mode=mode)
+                except IngredientValidationError as exc:
+                    cache.delete(cache_key)
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail={"code": exc.code, "message": exc.message},
+                    ) from exc
+
+                validated = pipeline._validated_recipes_or_none(
+                    cached_recipes if isinstance(cached_recipes, list) else None,
+                    mode=mode,
+                    source_ingredients=ingredients,
                 )
-                return {
-                    "results": cached_recipes,
-                    "access": access,
-                    "detected": classified.get("food") or [],
-                    "filtered_out": classified.get("non_food") or [],
-                    "classification_source": classified["source"],
-                    "warning": warning,
-                }
+                if not validated:
+                    cache.delete(cache_key)
+                else:
+                    cached_recipes = _ensure_images(validated, tier, ingredients)
+                    cache.set(cache_key, json.dumps(cached_recipes), ttl_seconds=TEXT_CACHE_TTL_SECONDS)
+                    record_ai_request(
+                        db,
+                        current_user.id,
+                        tier,
+                        "text",
+                        model_used="cache",
+                        tokens_used=0,
+                        cost_estimate=0,
+                        device_id=device_id,
+                    )
+                    return {
+                        "results": cached_recipes,
+                        "access": access,
+                        "detected": classified.get("food") or [],
+                        "filtered_out": classified.get("non_food") or [],
+                        "classification_source": classified["source"],
+                        "warning": warning,
+                    }
     try:
         recipes = pipeline.text_to_recipes(
             db,
