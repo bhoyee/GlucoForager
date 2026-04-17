@@ -538,90 +538,6 @@ class AIRecipeGenerator:
 
         banned_titles_norm = {self._normalize_title(t) for t in exclude_titles if t}
 
-        def _looks_like(text: str, needles: list[str]) -> bool:
-            t = (text or "").strip().lower()
-            return any(n in t for n in needles)
-
-        def _has_any(ings: list[str], needles: list[str]) -> bool:
-            return any(_looks_like(i, needles) for i in (ings or []) if isinstance(i, str))
-
-        def _optional_addons_instruction(ings: list[str]) -> str | None:
-            """
-            For starchy / low-protein scans, allow OPTIONAL add-ons so recipes can be truly diabetes-friendly
-            without pretending those add-ons were detected.
-            """
-            clean = [str(x).strip().lower() for x in (ings or []) if isinstance(x, str) and str(x).strip()]
-            if not clean:
-                return None
-
-            starchy = _has_any(
-                clean,
-                [
-                    "yam",
-                    "potato",
-                    "cassava",
-                    "plantain",
-                    "rice",
-                    "pasta",
-                    "noodle",
-                    "bread",
-                    "flour",
-                    "semolina",
-                    "garri",
-                    "fufu",
-                ],
-            )
-            has_protein = _has_any(
-                clean,
-                [
-                    "chicken",
-                    "turkey",
-                    "beef",
-                    "pork",
-                    "fish",
-                    "salmon",
-                    "tuna",
-                    "egg",
-                    "tofu",
-                    "beans",
-                    "lentil",
-                    "chickpea",
-                    "yogurt",
-                    "cheese",
-                ],
-            )
-            has_nonstarchy_veg = _has_any(
-                clean,
-                [
-                    "spinach",
-                    "broccoli",
-                    "kale",
-                    "cabbage",
-                    "zucchini",
-                    "cauliflower",
-                    "mushroom",
-                    "pepper",
-                    "tomato",
-                    "cucumber",
-                    "salad",
-                    "lettuce",
-                ],
-            )
-
-            # Only add this guidance when it can improve diabetes-friendliness.
-            if has_protein and has_nonstarchy_veg:
-                return None
-            if not starchy and has_protein:
-                return None
-
-            return (
-                "If the detected ingredients are missing a clear protein or non-starchy vegetables, "
-                "you MUST include up to 2 OPTIONAL add-ons to make the meal truly diabetes-friendly: "
-                "one protein (e.g., eggs, tofu, chicken, fish, beans) and one non-starchy veg (e.g., spinach, broccoli, mixed salad). "
-                "When you include them, label the ingredient name starting with 'Optional:' and do NOT imply they were detected in the scan. "
-                "Update nutrition estimates to reflect any optional add-ons you actually include."
-            )
-
         extra_instructions = None
         if exclude_titles or variety_mode:
             parts = [
@@ -635,10 +551,6 @@ class AIRecipeGenerator:
 
         mode_norm = (mode or "").strip().lower()
         prompt_template = EAT_NOW_PROMPT if mode_norm in ("surprise", "quick") else OPENAI_PROMPT
-
-        addons = _optional_addons_instruction(ingredients)
-        if addons:
-            extra_instructions = " ".join([x for x in [(extra_instructions or "").strip(), addons.strip()] if x]).strip()
         if mode_norm in ("surprise", "quick"):
             fast_chain = tier_cfg.get("recipe_models_fast") or []
             if isinstance(fast_chain, list) and fast_chain:
@@ -791,10 +703,6 @@ class AIRecipeGenerator:
         except Exception:
             # Never fail recipe generation due to profile formatting errors.
             pass
-
-        optional_addons_needed = bool(addons)
-        optional_addon_protein = "Optional: eggs"
-        optional_addon_veg = "Optional: spinach"
 
         def parse_content(raw: str) -> List[Dict[str, Any]]:
             import json, re
@@ -960,71 +868,6 @@ class AIRecipeGenerator:
                         item.setdefault("servings", _num(item.get("servings")) or 2)
                         normalized.append(item)
                     if normalized:
-                        # Enforce OPTIONAL add-ons for low-protein / low-veg scans so output is actually diabetes-friendly.
-                        if optional_addons_needed:
-                            for rec in normalized[:3]:
-                                if not isinstance(rec, dict):
-                                    continue
-                                ing_list = rec.get("ingredients") or []
-                                if not isinstance(ing_list, list):
-                                    ing_list = []
-                                names: list[str] = []
-                                for ing in ing_list:
-                                    if isinstance(ing, dict):
-                                        nm = str(ing.get("name") or ing.get("title") or "").strip()
-                                    else:
-                                        nm = str(ing or "").strip()
-                                    if nm:
-                                        names.append(nm.lower())
-
-                                def _has_prefix(prefix: str) -> bool:
-                                    p = prefix.lower()
-                                    return any(n.startswith(p) for n in names)
-
-                                added_protein = False
-                                added_veg = False
-                                if not _has_prefix("optional:"):
-                                    # If we don't have any optional markers at all, add both for clarity.
-                                    ing_list.append({"name": optional_addon_protein, "quantity": 2, "unit": "large"})
-                                    ing_list.append({"name": optional_addon_veg, "quantity": 2, "unit": "cups"})
-                                    added_protein = True
-                                    added_veg = True
-                                else:
-                                    # If we already have some optional, ensure we have at least one protein + one veg.
-                                    if not any("optional:" in n and any(x in n for x in ["egg", "tofu", "chicken", "fish", "bean", "lentil", "turkey", "salmon", "tuna"]) for n in names):
-                                        ing_list.append({"name": optional_addon_protein, "quantity": 2, "unit": "large"})
-                                        added_protein = True
-                                    if not any("optional:" in n and any(x in n for x in ["spinach", "broccoli", "salad", "kale", "cabbage", "zucchini", "cauliflower", "lettuce"]) for n in names):
-                                        ing_list.append({"name": optional_addon_veg, "quantity": 2, "unit": "cups"})
-                                        added_veg = True
-
-                                rec["ingredients"] = ing_list
-
-                                # Nudge nutrition estimates only when we added items.
-                                ni = rec.get("nutritional_info") or {}
-                                if isinstance(ni, dict) and (added_protein or added_veg):
-                                    try:
-                                        ni["calories"] = int(ni.get("calories") or 0)
-                                        ni["carbs"] = int(ni.get("carbs") or 0)
-                                        ni["protein"] = int(ni.get("protein") or 0)
-                                        ni["fat"] = int(ni.get("fat") or 0)
-                                        ni["fiber"] = int(ni.get("fiber") or 0)
-                                        ni["sugar"] = int(ni.get("sugar") or 0)
-                                    except Exception:
-                                        ni = {"calories": 0, "carbs": 0, "protein": 0, "fat": 0, "fiber": 0, "sugar": 0}
-
-                                    if added_protein:
-                                        ni["calories"] += 140
-                                        ni["protein"] += 12
-                                        ni["fat"] += 10
-                                        ni["carbs"] += 1
-                                    if added_veg:
-                                        ni["calories"] += 20
-                                        ni["protein"] += 2
-                                        ni["carbs"] += 3
-                                        ni["fiber"] += 3
-                                    rec["nutritional_info"] = ni
-
                         return normalized
             except Exception as exc:
                 if settings.ai_debug_logging:
