@@ -65,7 +65,6 @@ class AIPipeline:
         risk_by_name = risks.get("risk_by_name") or {}
 
         selected: list[str] = []
-        optional: list[str] = []
         excluded: list[str] = []
 
         for item in ingredients or []:
@@ -73,25 +72,17 @@ class AIPipeline:
             label = (risk_by_name.get(key) or {}).get("risk") or "ok"
             if label == "avoid":
                 excluded.append(item)
-            elif label == "limit":
-                optional.append(item)
             else:
                 selected.append(item)
 
-        # If we excluded too much, fall back to keep some optional items.
-        if len(selected) < 3 and optional:
-            selected = selected + optional[: max(0, 3 - len(selected))]
-            optional = optional[max(0, 3 - len(selected)) :]
-
         warning = None
-        if excluded or optional:
+        if excluded:
             warning = {
                 "code": "ingredients_flagged",
-                "message": "Some ingredients were treated as optional or excluded for better diabetes-friendly results.",
+                "message": "Some ingredients were excluded for better diabetes-friendly results.",
                 "risk_level": "moderate",
                 "source": risks.get("source") or "ai",
                 "excluded": excluded,
-                "optional": optional,
                 "risk_by_name": risk_by_name,
             }
 
@@ -188,7 +179,7 @@ class AIPipeline:
             "detected": selected_food_only,
             "detected_all": food_only,
             "flagged_out": (warning or {}).get("excluded", []) if isinstance(warning, dict) else [],
-            "flagged_optional": (warning or {}).get("optional", []) if isinstance(warning, dict) else [],
+            "flagged_optional": [],
             "non_food": non_food,
             "filters": filters or [],
             "warning": warning,
@@ -276,7 +267,7 @@ class AIPipeline:
             "detected": selected_food_only,
             "detected_all": food_only,
             "flagged_out": (warning or {}).get("excluded", []) if isinstance(warning, dict) else [],
-            "flagged_optional": (warning or {}).get("optional", []) if isinstance(warning, dict) else [],
+            "flagged_optional": [],
             "non_food": non_food,
             "filters": filters or [],
             "warning": warning,
