@@ -8,6 +8,7 @@ import {
   Image,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
@@ -48,6 +49,7 @@ export default function RecipeResultsScreen() {
   const phaseRef = useRef(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [statusLine, setStatusLine] = useState('Starting recipe generation...');
+  const errorShownRef = useRef(false);
 
   useEffect(() => {
     const ingredientSource = source === 'text' ? 'Input' : 'Detected';
@@ -132,6 +134,17 @@ export default function RecipeResultsScreen() {
         if (pollingRef.current) clearInterval(pollingRef.current);
         pollingRef.current = null;
         setIsLoading(false);
+        if (!errorShownRef.current) {
+          errorShownRef.current = true;
+          const result = data.result || {};
+          const message =
+            result?.error?.message ||
+            data.error ||
+            'Unable to generate recipes right now. Please try again.';
+          Alert.alert('Recipe generation failed', message, [
+            { text: 'OK', onPress: () => navigation.goBack() },
+          ]);
+        }
       }
     };
 
