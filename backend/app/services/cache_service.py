@@ -57,6 +57,15 @@ class CacheService:
                 self.client = None
         self.memory_cache[key] = (time.time() + ttl_seconds, value)
 
+    def delete(self, key: str) -> None:
+        if self.client:
+            try:
+                self.client.delete(key)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Redis delete failed: %s", exc)
+                self.client = None
+        self.memory_cache.pop(key, None)
+
     def incr(self, key: str, ttl_seconds: int = 300) -> int:
         if self.client:
             try:
