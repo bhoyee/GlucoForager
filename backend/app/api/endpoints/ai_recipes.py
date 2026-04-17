@@ -494,8 +494,9 @@ def generate_from_vision_async(
         if not queued:
             background_tasks.add_task(_run_vision_job, job_id)
     else:
-        if not core_settings.ai_job_runner_enabled:
-            background_tasks.add_task(_run_vision_job, job_id)
+        # DB queue mode: always run a background task as a safety net.
+        # Otherwise jobs can remain "pending" forever in local/dev if an external poller isn't running.
+        background_tasks.add_task(_run_vision_job, job_id)
     return {"job_id": job_id, "status": job.status, "access": access}
 
 
@@ -558,8 +559,9 @@ def generate_from_vision_batch_async(
         if not queued:
             background_tasks.add_task(_run_vision_job, job_id)
     else:
-        if not core_settings.ai_job_runner_enabled:
-            background_tasks.add_task(_run_vision_job, job_id)
+        # DB queue mode: always run a background task as a safety net.
+        # Otherwise jobs can remain "pending" forever in local/dev if an external poller isn't running.
+        background_tasks.add_task(_run_vision_job, job_id)
     return {"job_id": job_id, "status": job.status, "access": access}
 
 
