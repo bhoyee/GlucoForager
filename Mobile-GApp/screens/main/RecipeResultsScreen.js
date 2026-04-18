@@ -21,6 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
 import { useAuth } from '../../context/authContext';
+import { addDebugLog } from '../../utils/debugLogger';
 
 export default function RecipeResultsScreen() {
   const navigation = useNavigation();
@@ -50,6 +51,7 @@ export default function RecipeResultsScreen() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [statusLine, setStatusLine] = useState('Starting recipe generation...');
   const errorShownRef = useRef(false);
+  const lastJobStatusRef = useRef(null);
 
   useEffect(() => {
     const ingredientSource = source === 'text' ? 'Input' : 'Detected';
@@ -118,6 +120,15 @@ export default function RecipeResultsScreen() {
       );
       if (!res.ok) return;
       const data = await res.json();
+      if (data?.status && lastJobStatusRef.current !== data.status) {
+        lastJobStatusRef.current = data.status;
+        addDebugLog({
+          source: 'AI',
+          level: 'info',
+          message: 'Text recipes job status',
+          details: JSON.stringify({ job_id: jobId, status: data.status }),
+        });
+      }
       if (data.status === 'pending' || data.status === 'queued') {
         setStatusLine('Waiting to start...');
       }
@@ -129,6 +140,12 @@ export default function RecipeResultsScreen() {
         pollingRef.current = null;
         const result = data.result || {};
         const nextRecipes = Array.isArray(result?.results) ? result.results : (Array.isArray(result?.recipes) ? result.recipes : []);
+        addDebugLog({
+          source: 'AI',
+          level: 'info',
+          message: 'Text recipes job completed',
+          details: JSON.stringify({ job_id: jobId, recipes_count: nextRecipes.length }),
+        });
         await hydrateImages(nextRecipes);
       } else if (data.status === 'failed') {
         if (pollingRef.current) clearInterval(pollingRef.current);
@@ -141,6 +158,12 @@ export default function RecipeResultsScreen() {
             result?.error?.message ||
             data.error ||
             'Unable to generate recipes right now. Please try again.';
+          addDebugLog({
+            source: 'AI',
+            level: 'warn',
+            message: 'Text recipes job failed',
+            details: JSON.stringify({ job_id: jobId, message }),
+          });
           Alert.alert('Recipe generation failed', message, [
             { text: 'OK', onPress: () => navigation.goBack() },
           ]);
@@ -190,6 +213,12 @@ export default function RecipeResultsScreen() {
         }
         const deviceId = await getDeviceId();
         const ingredients = normalizedSelected;
+        addDebugLog({
+          source: 'AI',
+          level: 'info',
+          message: 'Starting text recipe job',
+          details: JSON.stringify({ ingredients_count: ingredients.length, ingredients_preview: ingredients.slice(0, 10) }),
+        });
         const response = await apiFetch(
           `${API_URL}${API_ENDPOINTS.AI_TEXT_RECIPES_ASYNC}`,
           {
@@ -215,12 +244,24 @@ export default function RecipeResultsScreen() {
               (typeof detail === 'string' ? detail : null) ||
               data?.message ||
               'Unable to start recipe generation. Please try again.';
+            addDebugLog({
+              source: 'AI',
+              level: 'warn',
+              message: 'Text recipe job start failed',
+              details: JSON.stringify({ status: response.status, message }),
+            });
             Alert.alert('Recipe generation failed', message, [
               { text: 'OK', onPress: () => navigation.goBack() },
             ]);
           }
           return;
         }
+        addDebugLog({
+          source: 'AI',
+          level: 'info',
+          message: 'Text recipe job started',
+          details: JSON.stringify({ job_id: data.job_id }),
+        });
         await pollJob(data.job_id);
         pollingRef.current = setInterval(() => {
           pollJob(data.job_id);
@@ -229,6 +270,12 @@ export default function RecipeResultsScreen() {
         setIsLoading(false);
         if (!errorShownRef.current) {
           errorShownRef.current = true;
+          addDebugLog({
+            source: 'AI',
+            level: 'warn',
+            message: 'Text recipe job start network error',
+            details: 'apiFetch threw before receiving response',
+          });
           Alert.alert('Recipe generation failed', 'Network error. Please try again.', [
             { text: 'OK', onPress: () => navigation.goBack() },
           ]);

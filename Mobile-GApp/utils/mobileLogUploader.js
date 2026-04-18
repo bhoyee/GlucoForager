@@ -3,6 +3,7 @@ import Constants from 'expo-constants';
 import { API_URL } from '../config/api';
 import { apiFetch } from './api';
 import { addDebugLog, getDebugLogs, subscribeDebugLogs } from './debugLogger';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 let uploadTimer = null;
 let isUploading = false;

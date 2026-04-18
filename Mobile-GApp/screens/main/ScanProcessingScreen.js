@@ -15,6 +15,7 @@ import { Colors } from '../../constants/Colors';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
+import { addDebugLog } from '../../utils/debugLogger';
 import * as ImageManipulator from 'expo-image-manipulator';
 
 const LAST_INGREDIENTS_KEY = 'last_used_ingredients_v1';
@@ -152,6 +153,16 @@ export default function ScanProcessingScreen() {
         // Give extra headroom so we don't abort mid-upload.
         const startTimeoutMs =
           imagesBase64.length <= 1 ? 180000 : imagesBase64.length <= 2 ? 240000 : 300000;
+        addDebugLog({
+          source: 'AI',
+          level: 'info',
+          message: 'Starting scan analysis',
+          details: JSON.stringify({
+            endpoint,
+            images_count: imagesBase64.length,
+            timeout_ms: startTimeoutMs,
+          }),
+        });
         const response = await apiFetch(
           `${API_URL}${endpoint}`,
           {
@@ -177,17 +188,35 @@ export default function ScanProcessingScreen() {
         if (!response.ok) {
           const detail = data?.detail;
           const message = detail?.message || detail || 'Unable to analyze image.';
+          addDebugLog({
+            source: 'AI',
+            level: 'warn',
+            message: 'Scan analysis start failed',
+            details: JSON.stringify({ endpoint, status: response.status, message }),
+          });
           Alert.alert('Scan failed', message);
           navigation.goBack();
           return;
         }
 
         if (!data?.job_id) {
+          addDebugLog({
+            source: 'AI',
+            level: 'warn',
+            message: 'Scan analysis missing job_id',
+            details: JSON.stringify({ endpoint, status: response.status }),
+          });
           Alert.alert('Scan failed', 'Unable to start analysis.');
           navigation.goBack();
           return;
         }
 
+        addDebugLog({
+          source: 'AI',
+          level: 'info',
+          message: 'Scan analysis job started',
+          details: JSON.stringify({ job_id: data.job_id }),
+        });
         setJobId(data.job_id);
         await pollJob(data.job_id);
         pollingRef.current = setInterval(() => {
@@ -263,6 +292,15 @@ export default function ScanProcessingScreen() {
       }
       const data = await response.json();
       if (data.status === 'completed') {
+        addDebugLog({
+          source: 'AI',
+          level: 'info',
+          message: 'Scan vision job completed',
+          details: JSON.stringify({
+            job_id: id,
+            detected_count: Array.isArray(data?.result?.detected) ? data.result.detected.length : 0,
+          }),
+        });
         stopPolling();
         const result = data.result || {};
         if (!result?.detected?.length) {
@@ -300,6 +338,12 @@ export default function ScanProcessingScreen() {
           warning: result.warning || null,
         });
       } else if (data.status === 'failed') {
+        addDebugLog({
+          source: 'AI',
+          level: 'warn',
+          message: 'Scan vision job failed',
+          details: JSON.stringify({ job_id: id, error: data?.error || null }),
+        });
         stopPolling();
         Alert.alert('Scan failed', data.error || 'Unable to analyze image.');
         navigation.goBack();

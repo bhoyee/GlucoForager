@@ -24,6 +24,7 @@ from ...services.rate_limit_service import check_ai_rate_limit
 from ...services.subscription_service import get_effective_subscription_tier
 from ...core.config import settings
 from ...services.redis_ai_queue import RedisAIQueue
+from ...services.system_log_service import log_system_event
 from .ai_recipes import _safe_job_error
 
 router = APIRouter(prefix="/ai/text", tags=["ai"])
@@ -114,6 +115,7 @@ def _filters_for_mode(mode: str) -> list[str]:
 
 def _run_text_job(job_id: str) -> None:
     db = SessionLocal()
+    started = time.time()
     try:
         job = db.query(AIJob).filter(AIJob.id == job_id).first()
         if not job:
@@ -132,11 +134,42 @@ def _run_text_job(job_id: str) -> None:
         device_id = payload.get("device_id")
         base_url = payload.get("base_url")
 
+        try:
+            log_system_event(
+                {
+                    "ts": time.time(),
+                    "level": "info",
+                    "type": "ai.text.job.start",
+                    "job_id": job_id,
+                    "user_id": job.user_id,
+                    "mode": mode,
+                    "ingredients_count": len(ingredients) if isinstance(ingredients, list) else None,
+                    "filters_count": len(filters) if isinstance(filters, list) else None,
+                }
+            )
+        except Exception:
+            pass
+
         user = db.query(User).filter(User.id == job.user_id).first()
         if not user:
             job.status = "failed"
             job.error = "User not found."
             db.commit()
+            try:
+                log_system_event(
+                    {
+                        "ts": time.time(),
+                        "level": "error",
+                        "type": "ai.text.job.done",
+                        "job_id": job_id,
+                        "user_id": job.user_id,
+                        "status": "failed",
+                        "error_code": "user_not_found",
+                        "elapsed_ms": int((time.time() - started) * 1000),
+                    }
+                )
+            except Exception:
+                pass
             return
 
         if mode not in ("surprise", "quick"):
@@ -152,6 +185,21 @@ def _run_text_job(job_id: str) -> None:
                     }
                 }
                 db.commit()
+                try:
+                    log_system_event(
+                        {
+                            "ts": time.time(),
+                            "level": "warn",
+                            "type": "ai.text.job.done",
+                            "job_id": job_id,
+                            "user_id": job.user_id,
+                            "status": "failed",
+                            "error_code": "not_food",
+                            "elapsed_ms": int((time.time() - started) * 1000),
+                        }
+                    )
+                except Exception:
+                    pass
                 return
             ingredients = classified["food"]
             try:
@@ -167,6 +215,21 @@ def _run_text_job(job_id: str) -> None:
                     }
                 }
                 db.commit()
+                try:
+                    log_system_event(
+                        {
+                            "ts": time.time(),
+                            "level": "warn",
+                            "type": "ai.text.job.done",
+                            "job_id": job_id,
+                            "user_id": job.user_id,
+                            "status": "failed",
+                            "error_code": exc.code,
+                            "elapsed_ms": int((time.time() - started) * 1000),
+                        }
+                    )
+                except Exception:
+                    pass
                 return
         else:
             classified = {"food": [], "non_food": [], "source": "mode"}
@@ -197,6 +260,21 @@ def _run_text_job(job_id: str) -> None:
                 }
             }
             db.commit()
+            try:
+                log_system_event(
+                    {
+                        "ts": time.time(),
+                        "level": "warn",
+                        "type": "ai.text.job.done",
+                        "job_id": job_id,
+                        "user_id": job.user_id,
+                        "status": "failed",
+                        "error_code": exc.code,
+                        "elapsed_ms": int((time.time() - started) * 1000),
+                    }
+                )
+            except Exception:
+                pass
             return
 
         try:
@@ -251,6 +329,21 @@ def _run_text_job(job_id: str) -> None:
         job.status = "completed"
         job.error = None
         db.commit()
+        try:
+            log_system_event(
+                {
+                    "ts": time.time(),
+                    "level": "info",
+                    "type": "ai.text.job.done",
+                    "job_id": job_id,
+                    "user_id": job.user_id,
+                    "status": "completed",
+                    "recipes_count": len(recipes) if isinstance(recipes, list) else None,
+                    "elapsed_ms": int((time.time() - started) * 1000),
+                }
+            )
+        except Exception:
+            pass
     except Exception as exc:  # noqa: BLE001
         if "job" in locals() and job:
             job.status = "failed"
@@ -263,6 +356,22 @@ def _run_text_job(job_id: str) -> None:
                 }
             }
             db.commit()
+        try:
+            log_system_event(
+                {
+                    "ts": time.time(),
+                    "level": "error",
+                    "type": "ai.text.job.done",
+                    "job_id": job_id,
+                    "user_id": job.user_id if "job" in locals() and job else None,
+                    "status": "failed",
+                    "error_code": "exception",
+                    "error_message": str(exc)[:200],
+                    "elapsed_ms": int((time.time() - started) * 1000),
+                }
+            )
+        except Exception:
+            pass
     finally:
         db.close()
 
