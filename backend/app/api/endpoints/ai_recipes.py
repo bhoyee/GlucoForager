@@ -25,6 +25,7 @@ from ...services.settings_service import get_recipe_image_settings
 from ...services.subscription_service import get_effective_subscription_tier
 from ...models.recipe_history import RecipeHistory
 from ...services.redis_ai_queue import RedisAIQueue
+from ...services.system_log_service import log_system_event
 
 router = APIRouter(prefix="/ai/recipes", tags=["ai"])
 pipeline = AIPipeline()
@@ -79,6 +80,7 @@ def _ensure_images(recipes: list[dict], tier: str, ingredients: list[str]) -> li
 
 def _run_vision_job(job_id: str) -> None:
     db = SessionLocal()
+    started = datetime.now(timezone.utc)
     try:
         job = db.query(AIJob).filter(AIJob.id == job_id).first()
         if not job:
@@ -96,11 +98,43 @@ def _run_vision_job(job_id: str) -> None:
         mode = payload.get("mode") or "single"
         base_url = payload.get("base_url")
 
+        try:
+            log_system_event(
+                {
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                    "level": "info",
+                    "type": "ai.vision.job.start",
+                    "job_id": job_id,
+                    "user_id": job.user_id,
+                    "mode": mode,
+                    "images_count": len(images_base64) if isinstance(images_base64, list) else None,
+                    "include_recipes": include_recipes,
+                    "filters_count": len(filters) if isinstance(filters, list) else None,
+                }
+            )
+        except Exception:
+            pass
+
         user = db.query(User).filter(User.id == job.user_id).first()
         if not user:
             job.status = "failed"
             job.error = "User not found."
             db.commit()
+            try:
+                log_system_event(
+                    {
+                        "ts": datetime.now(timezone.utc).isoformat(),
+                        "level": "error",
+                        "type": "ai.vision.job.done",
+                        "job_id": job_id,
+                        "user_id": job.user_id,
+                        "status": "failed",
+                        "error_code": "user_not_found",
+                        "elapsed_ms": int((datetime.now(timezone.utc) - started).total_seconds() * 1000),
+                    }
+                )
+            except Exception:
+                pass
             return
 
         tier = get_effective_subscription_tier(db, user) or "free"
@@ -137,6 +171,21 @@ def _run_vision_job(job_id: str) -> None:
                 }
             }
             db.commit()
+            try:
+                log_system_event(
+                    {
+                        "ts": datetime.now(timezone.utc).isoformat(),
+                        "level": "warn",
+                        "type": "ai.vision.job.done",
+                        "job_id": job_id,
+                        "user_id": job.user_id,
+                        "status": "failed",
+                        "error_code": exc.code,
+                        "elapsed_ms": int((datetime.now(timezone.utc) - started).total_seconds() * 1000),
+                    }
+                )
+            except Exception:
+                pass
             return
 
         try:
@@ -166,6 +215,22 @@ def _run_vision_job(job_id: str) -> None:
         job.status = "completed"
         job.error = None
         db.commit()
+        try:
+            log_system_event(
+                {
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                    "level": "info",
+                    "type": "ai.vision.job.done",
+                    "job_id": job_id,
+                    "user_id": job.user_id,
+                    "status": "completed",
+                    "elapsed_ms": int((datetime.now(timezone.utc) - started).total_seconds() * 1000),
+                    "detected_count": len((result or {}).get("detected") or []),
+                    "recipes_count": len((result or {}).get("recipes") or []),
+                }
+            )
+        except Exception:
+            pass
     except Exception as exc:  # noqa: BLE001
         if "job" in locals() and job:
             job.status = "failed"
@@ -178,6 +243,22 @@ def _run_vision_job(job_id: str) -> None:
                 }
             }
             db.commit()
+        try:
+            log_system_event(
+                {
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                    "level": "error",
+                    "type": "ai.vision.job.done",
+                    "job_id": job_id,
+                    "user_id": job.user_id if "job" in locals() and job else None,
+                    "status": "failed",
+                    "error_code": "exception",
+                    "error_message": str(exc)[:200],
+                    "elapsed_ms": int((datetime.now(timezone.utc) - started).total_seconds() * 1000),
+                }
+            )
+        except Exception:
+            pass
     finally:
         db.close()
 
