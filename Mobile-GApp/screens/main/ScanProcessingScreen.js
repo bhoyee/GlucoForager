@@ -291,15 +291,11 @@ export default function ScanProcessingScreen() {
           // Ignore.
         }
 
-        // Move straight into recipe generation to match the expected UX:
-        // scan -> detect -> generate recipes (no extra "Generate" tap).
-        // The backend-selected `result.detected` is the safe, deduped list used for recipes.
-        navigation.replace('RecipeResults', {
+        navigation.replace('ScanResults', {
           images,
           userIsPremium,
-          source: 'vision',
           detectedIngredients: result.detected_all || result.detected || [],
-          selectedIngredients: result.detected || [],
+          detectedIngredientsSelected: result.detected || [],
           recipes: result.results || [],
           warning: result.warning || null,
         });

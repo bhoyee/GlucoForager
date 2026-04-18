@@ -181,6 +181,13 @@ export default function RecipeResultsScreen() {
           setIsLoading(false);
           return;
         }
+        if (!normalizedSelected.length) {
+          setIsLoading(false);
+          Alert.alert('No ingredients selected', 'Please select at least one ingredient to generate recipes.', [
+            { text: 'OK', onPress: () => navigation.goBack() },
+          ]);
+          return;
+        }
         const deviceId = await getDeviceId();
         const ingredients = normalizedSelected;
         const response = await apiFetch(
@@ -200,6 +207,18 @@ export default function RecipeResultsScreen() {
         const data = await response.json();
         if (!response.ok || !data?.job_id) {
           setIsLoading(false);
+          if (!errorShownRef.current) {
+            errorShownRef.current = true;
+            const detail = data?.detail;
+            const message =
+              detail?.message ||
+              (typeof detail === 'string' ? detail : null) ||
+              data?.message ||
+              'Unable to start recipe generation. Please try again.';
+            Alert.alert('Recipe generation failed', message, [
+              { text: 'OK', onPress: () => navigation.goBack() },
+            ]);
+          }
           return;
         }
         await pollJob(data.job_id);
@@ -208,6 +227,12 @@ export default function RecipeResultsScreen() {
         }, 3000);
       } catch {
         setIsLoading(false);
+        if (!errorShownRef.current) {
+          errorShownRef.current = true;
+          Alert.alert('Recipe generation failed', 'Network error. Please try again.', [
+            { text: 'OK', onPress: () => navigation.goBack() },
+          ]);
+        }
       }
     };
 
