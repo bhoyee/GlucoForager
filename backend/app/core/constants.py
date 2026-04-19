@@ -25,11 +25,12 @@ TIER_CONFIG = {
         "max_daily_scans": None,  # unlimited
         "vision_model": "gpt-4o-2024-11-20",  # vision-capable
         "recipe_models": [
+            "gpt-4o-2024-11-20",
+            "gpt-4o-mini-2024-07-18",
+            # Slower but higher-capability fallbacks (only used if fast models fail).
             "gpt-5.2-2025-12-11",
             "gpt-5.1-2025-11-13",
             "gpt-5-2025-08-07",
-            "gpt-4o-2024-11-20",
-            "gpt-4o-mini-2024-07-18",
             "deepseek-chat",
         ],
         # "Surprise me" / "Quick meal" should be fast and cheap even for premium.

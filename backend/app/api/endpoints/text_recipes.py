@@ -284,9 +284,9 @@ def _run_text_job(job_id: str) -> None:
                 recipes=recipes or [],
                 ingredients=ingredients,
                 base_url=base_url,
-                # Auto-generate thumbnails for all 3 recipes (parallelized in the attach service).
-                # Daily limits and per-recipe caps still apply via App Settings.
-                max_generate=3,
+                # Speed: don't auto-generate images inline; the mobile client will request images
+                # after recipes render (so the user sees results quickly).
+                max_generate=0,
             )
         except Exception:
             # Image generation is best-effort; never fail the recipe result.

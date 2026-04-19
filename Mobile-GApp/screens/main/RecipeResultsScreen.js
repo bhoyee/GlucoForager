@@ -52,6 +52,8 @@ export default function RecipeResultsScreen() {
   const [statusLine, setStatusLine] = useState('Starting recipe generation...');
   const errorShownRef = useRef(false);
   const lastJobStatusRef = useRef(null);
+  const autoImageStartedRef = useRef(false);
+  const imageInFlightRef = useRef(new Set());
 
   useEffect(() => {
     const ingredientSource = source === 'text' ? 'Input' : 'Detected';
@@ -109,6 +111,139 @@ export default function RecipeResultsScreen() {
       setIsLoading(false);
     };
 
+    const isPlaceholderUrl = (url) => {
+      if (!url || typeof url !== 'string') return false;
+      const u = url.toLowerCase();
+      return u.includes('placeholder') || u.includes('/uploads/placeholders/') || u.includes('placeholders');
+    };
+
+    const extractIngredientNames = (recipe) => {
+      const raw = recipe?.ingredients;
+      if (!Array.isArray(raw)) return [];
+      const names = [];
+      for (const item of raw) {
+        if (typeof item === 'string') {
+          const n = item.trim();
+          if (n) names.push(n);
+          continue;
+        }
+        if (item && typeof item === 'object') {
+          const n = String(item.name || item.title || '').trim();
+          if (n) names.push(n);
+        }
+      }
+      return names.slice(0, 24);
+    };
+
+    const autoGenerateMissingImages = async (incomingRecipes) => {
+      // UX: show recipes immediately, then generate images in the background.
+      // Avoid running twice for the same screen instance.
+      if (autoImageStartedRef.current) return;
+      autoImageStartedRef.current = true;
+
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) return;
+
+      const candidates = (incomingRecipes || [])
+        .map((r, idx) => ({ recipe: r, idx }))
+        .filter(({ recipe }) => {
+          const src = String(recipe?.image_source || '').toLowerCase();
+          const url = recipe?.image_url || recipe?.image || '';
+          return !url || src === 'placeholder' || isPlaceholderUrl(url);
+        })
+        .slice(0, 3);
+
+      if (!candidates.length) return;
+
+      addDebugLog({
+        source: 'AI',
+        level: 'info',
+        message: 'Auto image generation started',
+        details: JSON.stringify({ count: candidates.length }),
+      });
+
+      const runOne = async ({ recipe, idx }) => {
+        const title = String(recipe?.title || recipe?.name || '').trim();
+        const key = `${idx}:${title || 'recipe'}`;
+        if (imageInFlightRef.current.has(key)) return;
+        imageInFlightRef.current.add(key);
+        try {
+          const response = await apiFetch(
+            `${API_URL}${API_ENDPOINTS.AI_RECIPES_IMAGE}`,
+            {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                title: title || 'Diabetes-friendly meal',
+                description: String(recipe?.description || ''),
+                ingredients: extractIngredientNames(recipe),
+              }),
+            },
+            { onUnauthorized: signOut, timeoutMs: 25000 }
+          );
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok || !data?.image_url) {
+            addDebugLog({
+              source: 'AI',
+              level: 'warn',
+              message: 'Auto image generation failed',
+              details: JSON.stringify({
+                status: response.status,
+                detail: data?.detail || null,
+                title: title.slice(0, 60),
+              }),
+            });
+            return;
+          }
+
+          const imageUrl = String(data.image_url || '').trim();
+          if (!imageUrl) return;
+
+          setRecipes((prev) => {
+            const next = [...(prev || [])];
+            const current = next[idx];
+            if (!current) return prev;
+            const updated = { ...current, image_url: imageUrl, image: imageUrl, image_source: 'ai' };
+            next[idx] = updated;
+            // Cache for future sessions.
+            void setCachedRecipeImageUrl(updated, imageUrl);
+            return next;
+          });
+
+          addDebugLog({
+            source: 'AI',
+            level: 'info',
+            message: 'Auto image generation succeeded',
+            details: JSON.stringify({ title: title.slice(0, 60) }),
+          });
+        } catch (error) {
+          addDebugLog({
+            source: 'AI',
+            level: 'warn',
+            message: 'Auto image generation network error',
+            details: `${error?.message || error}`,
+          });
+        } finally {
+          imageInFlightRef.current.delete(key);
+        }
+      };
+
+      // Concurrency=2 to avoid spiking the network/device.
+      const queue = [...candidates];
+      const workers = new Array(Math.min(2, queue.length)).fill(0).map(async () => {
+        while (queue.length) {
+          const item = queue.shift();
+          if (!item) return;
+          // eslint-disable-next-line no-await-in-loop
+          await runOne(item);
+        }
+      });
+      await Promise.all(workers);
+    };
+
     const pollJob = async (jobId) => {
       setStatusLine('Generating recipes...');
       const token = await AsyncStorage.getItem('userToken');
@@ -147,6 +282,7 @@ export default function RecipeResultsScreen() {
           details: JSON.stringify({ job_id: jobId, recipes_count: nextRecipes.length }),
         });
         await hydrateImages(nextRecipes);
+        void autoGenerateMissingImages(nextRecipes);
       } else if (data.status === 'failed') {
         if (pollingRef.current) clearInterval(pollingRef.current);
         pollingRef.current = null;
@@ -174,6 +310,7 @@ export default function RecipeResultsScreen() {
     const generateIfMissing = async () => {
       if (baseRecipes.length > 0) {
         await hydrateImages(baseRecipes);
+        void autoGenerateMissingImages(baseRecipes);
         return;
       }
 
