@@ -48,7 +48,7 @@ class AIRecipeGenerator:
         self.gemini_api_key = settings.gemini_api_key
         self.gemini_image_model = settings.gemini_image_model
         self.gemini_text_model = (settings.gemini_text_model or "").strip() or None
-        self.recipe_image_provider = (settings.recipe_image_provider or "").strip().lower() or "openai"
+        self.recipe_image_provider = (settings.recipe_image_provider or "").strip().lower() or "runware"
         self.runware_api_key = settings.runware_api_key
         self.runware_api_url = (settings.runware_api_url or "").strip().rstrip("/")
         self.runware_image_model = (settings.runware_image_model or "").strip() or "runware:100@1"
@@ -259,11 +259,7 @@ class AIRecipeGenerator:
         prompt = self._build_image_prompt(recipe, ingredients or [])
 
         provider = (self.recipe_image_provider or "").strip().lower()
-        if provider == "openai":
-            if not self.primary_client:
-                return {"image_url": self._placeholder_image(recipe), "image_source": "placeholder"}
-            image_bytes = self._generate_image_openai(prompt, size=size)
-        elif provider == "runware":
+        if provider == "runware":
             if not self.runware_api_key:
                 return {"image_url": self._placeholder_image(recipe), "image_source": "placeholder"}
             image_bytes = self._generate_image_runware(prompt, size=size)
@@ -271,14 +267,18 @@ class AIRecipeGenerator:
             if not self.gemini_api_key:
                 return {"image_url": self._placeholder_image(recipe), "image_source": "placeholder"}
             image_bytes = self._generate_image_gemini(prompt, size=size)
+        elif provider == "openai":
+            if not self.primary_client:
+                return {"image_url": self._placeholder_image(recipe), "image_source": "placeholder"}
+            image_bytes = self._generate_image_openai(prompt, size=size)
         else:
-            # Best-effort fallback: prefer OpenAI if configured, otherwise Runware, otherwise Gemini, otherwise placeholder.
-            if self.primary_client:
-                image_bytes = self._generate_image_openai(prompt, size=size)
-            elif self.runware_api_key:
+            # Best-effort fallback: prefer Runware, otherwise Gemini, otherwise OpenAI, otherwise placeholder.
+            if self.runware_api_key:
                 image_bytes = self._generate_image_runware(prompt, size=size)
             elif self.gemini_api_key:
                 image_bytes = self._generate_image_gemini(prompt, size=size)
+            elif self.primary_client:
+                image_bytes = self._generate_image_openai(prompt, size=size)
             else:
                 return {"image_url": self._placeholder_image(recipe), "image_source": "placeholder"}
 
