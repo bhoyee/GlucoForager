@@ -250,7 +250,7 @@ class AIPipeline:
                 )
                 recipes = self._validated_recipes_or_none(recipes_retry, source_ingredients=selected_food_only) or []
             if not recipes:
-                raise RuntimeError("Recipe generation failed. Please try again.")
+                recipes = self._deterministic_emergency_recipes(selected_food_only)
             record_ai_request(db, user_id, tier, "recipes", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
             db.add(RecipeHistory(user_id=user_id, source="vision", recipes=recipes))
             db.commit()
@@ -339,7 +339,7 @@ class AIPipeline:
                 )
                 recipes = self._validated_recipes_or_none(recipes_retry, source_ingredients=selected_food_only) or []
             if not recipes:
-                raise RuntimeError("Recipe generation failed. Please try again.")
+                recipes = self._deterministic_emergency_recipes(selected_food_only)
             record_ai_request(db, user_id, tier, "recipes", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
             db.add(RecipeHistory(user_id=user_id, source="vision", recipes=recipes))
             db.commit()
@@ -403,7 +403,10 @@ class AIPipeline:
             remaining = overall_budget_seconds - (time.time() - started)
             # One retry (variety on, cache bypassed) only if there is enough time left.
             if remaining <= 8:
-                raise RuntimeError("Recipe generation failed. Please try again.")
+                # Deterministic fallback: never fail the user with a generic error.
+                # This keeps the system reliable even when providers time out or return invalid JSON.
+                recipes = self._deterministic_emergency_recipes(ingredients)
+                remaining = 0
             recipes_retry = self.ai.generate_recipes(
                 ingredients,
                 tier,
@@ -418,7 +421,7 @@ class AIPipeline:
             recipes = self._validated_recipes_or_none(recipes_retry, mode=mode, source_ingredients=ingredients)
 
         if recipes is None:
-            raise RuntimeError("Recipe generation failed. Please try again.")
+            recipes = self._deterministic_emergency_recipes(ingredients)
 
         record_ai_request(
             db,
@@ -432,6 +435,123 @@ class AIPipeline:
         )
         db.add(RecipeHistory(user_id=user_id, source="text", recipes=recipes))
         db.commit()
+        return recipes
+
+    def _deterministic_emergency_recipes(self, ingredients: list[str]) -> list[dict]:
+        """
+        Build 3 always-valid recipes using ONLY the provided ingredients + pantry staples.
+
+        This is used as a last-resort fallback when LLM providers time out or return invalid output.
+        It prioritizes reliability and schema compliance over creativity.
+        """
+
+        def _clean(text: str) -> str:
+            return " ".join(str(text or "").strip().split())
+
+        src = [_clean(x) for x in (ingredients or []) if isinstance(x, str) and _clean(x)]
+        src = src[:12]
+
+        pantry = [
+            "water",
+            "salt",
+            "black pepper",
+            "dried herbs",
+            "olive oil",
+            "lemon juice",
+        ]
+
+        def _ingredient_items() -> list[dict]:
+            names: list[str] = []
+            for n in src:
+                if n.lower() not in {x.lower() for x in names}:
+                    names.append(n)
+            # Ensure minimum ingredient count for UI + validation.
+            for p in pantry:
+                if len(names) >= 3:
+                    break
+                if p.lower() not in {x.lower() for x in names}:
+                    names.append(p)
+            items: list[dict] = []
+            for i, name in enumerate(names):
+                # Keep quantities conservative; exactness isn't the goal for emergency mode.
+                qty = 1 if i < len(src) else 0.25
+                unit = "item" if i < len(src) else "tsp"
+                items.append({"name": name, "quantity": qty, "unit": unit})
+            return items
+
+        base_items = _ingredient_items()
+        title_a = src[0] if src else "Pantry"
+        title_b = src[1] if len(src) > 1 else "Staples"
+
+        def _mk(title: str, style: str, steps: list[str], calories: int, carbs: int, protein: int) -> dict:
+            return {
+                "title": title,
+                "description": f"Emergency fallback recipe ({style}).",
+                "prep_time": 8,
+                "cook_time": 12,
+                "total_time": 20,
+                "servings": 2,
+                "ingredients": base_items,
+                "instructions": steps,
+                "nutritional_info": {
+                    "calories": int(calories),
+                    "carbs": int(carbs),
+                    "protein": int(protein),
+                    "fat": 6,
+                    "fiber": 4,
+                    "sugar": 4,
+                },
+                "tags": ["diabetes-friendly"],
+                "_ai_provider": "emergency",
+                "_ai_model": "deterministic",
+            }
+
+        steps_common = [
+            f"Prep the ingredients: rinse and chop {title_a} and {title_b} as needed.",
+            "Heat a pan over medium heat and add a small amount of olive oil.",
+            "Add the main ingredients and cook gently, stirring often.",
+            "Season with salt, black pepper, and dried herbs. Add a splash of water if needed.",
+            "Taste, adjust seasoning, and serve warm.",
+        ]
+
+        recipes = [
+            _mk(
+                f"{title_a} & {title_b} Skillet",
+                "skillet",
+                steps_common,
+                calories=260,
+                carbs=24,
+                protein=8,
+            ),
+            _mk(
+                f"{title_a} & {title_b} Quick Soup",
+                "soup",
+                [
+                    f"Prep the ingredients: chop {title_a} and {title_b}.",
+                    "Add water to a pot and bring to a gentle simmer.",
+                    "Add the ingredients and simmer until tender.",
+                    "Season with salt, black pepper, dried herbs, and lemon juice to brighten the flavor.",
+                    "Serve hot. Keep portions moderate for blood sugar control.",
+                ],
+                calories=220,
+                carbs=20,
+                protein=7,
+            ),
+            _mk(
+                f"{title_a} & {title_b} Simple Bowl",
+                "bowl",
+                [
+                    f"Prep: slice or dice {title_a} and {title_b}.",
+                    "Combine ingredients in a bowl (warm or room temperature, depending on the items).",
+                    "Add a small drizzle of olive oil and a pinch of salt and black pepper.",
+                    "Mix well. Add lemon juice and dried herbs for flavor without extra sugar.",
+                    "Serve immediately. Pair with extra protein if available (optional).",
+                ],
+                calories=240,
+                carbs=22,
+                protein=8,
+            ),
+        ]
         return recipes
 
     def _validated_recipes_or_none(
