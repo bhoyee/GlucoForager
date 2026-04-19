@@ -560,6 +560,13 @@ class AIRecipeGenerator:
             other_models = [m for m in model_chain if "deepseek" not in m.lower()]
             if other_models and deepseek_models:
                 model_chain = [*other_models, *deepseek_models]
+        else:
+            # For ingredient-driven generation with tight time budgets (mobile UX),
+            # prefer the fast chain first to reduce timeouts and invalid/truncated JSON.
+            if timeout_seconds is not None and float(timeout_seconds) <= 60.0:
+                fast_chain = tier_cfg.get("recipe_models_fast") or []
+                if isinstance(fast_chain, list) and fast_chain:
+                    model_chain = [str(m) for m in fast_chain if str(m).strip()]
 
         if mode_norm in ("surprise", "quick"):
             preferred_cuisines: list[str] = []
