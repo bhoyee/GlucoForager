@@ -48,7 +48,7 @@ class AIRecipeGenerator:
         self.gemini_api_key = settings.gemini_api_key
         self.gemini_image_model = settings.gemini_image_model
         self.gemini_text_model = (settings.gemini_text_model or "").strip() or None
-        self.recipe_image_provider = (settings.recipe_image_provider or "").strip().lower() or "gemini"
+        self.recipe_image_provider = (settings.recipe_image_provider or "").strip().lower() or "openai"
         self.runware_api_key = settings.runware_api_key
         self.runware_api_url = (settings.runware_api_url or "").strip().rstrip("/")
         self.runware_image_model = (settings.runware_image_model or "").strip() or "runware:100@1"
@@ -259,7 +259,11 @@ class AIRecipeGenerator:
         prompt = self._build_image_prompt(recipe, ingredients or [])
 
         provider = (self.recipe_image_provider or "").strip().lower()
-        if provider == "runware":
+        if provider == "openai":
+            if not self.primary_client:
+                return {"image_url": self._placeholder_image(recipe), "image_source": "placeholder"}
+            image_bytes = self._generate_image_openai(prompt, size=size)
+        elif provider == "runware":
             if not self.runware_api_key:
                 return {"image_url": self._placeholder_image(recipe), "image_source": "placeholder"}
             image_bytes = self._generate_image_runware(prompt, size=size)
@@ -268,8 +272,10 @@ class AIRecipeGenerator:
                 return {"image_url": self._placeholder_image(recipe), "image_source": "placeholder"}
             image_bytes = self._generate_image_gemini(prompt, size=size)
         else:
-            # Best-effort fallback: prefer Runware if configured, otherwise Gemini, otherwise placeholder.
-            if self.runware_api_key:
+            # Best-effort fallback: prefer OpenAI if configured, otherwise Runware, otherwise Gemini, otherwise placeholder.
+            if self.primary_client:
+                image_bytes = self._generate_image_openai(prompt, size=size)
+            elif self.runware_api_key:
                 image_bytes = self._generate_image_runware(prompt, size=size)
             elif self.gemini_api_key:
                 image_bytes = self._generate_image_gemini(prompt, size=size)
@@ -325,6 +331,58 @@ class AIRecipeGenerator:
             ]
         )
         return " ".join([*parts, cooked_guidance])
+
+    def _generate_image_openai(self, prompt: str, *, size: int) -> bytes:
+        """
+        Generate an image using OpenAI Images API.
+
+        Returns raw bytes (JPEG/PNG depending on provider output); we store/rescale downstream.
+        """
+        if not self.primary_client:
+            raise RuntimeError("OPENAI_API_KEY is not set")
+
+        # DALL-E 3 supports 1024x1024 or 1792x1024. We always generate square and downscale if needed.
+        request_size = "1024x1024"
+        try:
+            resp = self.primary_client.images.generate(
+                model=self.image_model or "dall-e-3",
+                prompt=prompt,
+                size=request_size,
+                quality="standard",
+                style="natural",
+                n=1,
+                response_format="b64_json",
+                timeout=25.0,
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError("OpenAI image generation failed") from exc
+
+        data = getattr(resp, "data", None) or []
+        if not data:
+            raise RuntimeError("OpenAI image response missing data")
+        item = data[0]
+        b64 = getattr(item, "b64_json", None) or getattr(item, "b64", None) or None
+        url = getattr(item, "url", None) or None
+
+        if isinstance(b64, str) and b64.strip():
+            try:
+                decoded = base64.b64decode(b64, validate=False)
+            except Exception as exc:  # noqa: BLE001
+                raise RuntimeError("OpenAI returned invalid base64 image") from exc
+            if not decoded:
+                raise RuntimeError("OpenAI returned empty image bytes")
+            return bytes(decoded)
+
+        if isinstance(url, str) and url.strip():
+            try:
+                img_resp = httpx.get(url, timeout=25.0)
+            except Exception as exc:  # noqa: BLE001
+                raise RuntimeError("Failed to download OpenAI image") from exc
+            if img_resp.status_code >= 400 or not img_resp.content:
+                raise RuntimeError("Failed to download OpenAI image")
+            return bytes(img_resp.content)
+
+        raise RuntimeError("OpenAI image response missing url/base64 data")
 
     def _generate_image_gemini(self, prompt: str, *, size: int) -> bytes:
         """
@@ -535,6 +593,10 @@ class AIRecipeGenerator:
         from ..core.constants import TIER_CONFIG  # local import to avoid cycle
         tier_cfg = TIER_CONFIG.get(tier, {})
         model_chain: List[str] = tier_cfg.get("recipe_models") or [self.primary_model]
+
+        # Optional hard switch: keep only OpenAI to avoid spending UX budget on fallbacks.
+        if settings.ai_openai_only:
+            model_chain = [m for m in model_chain if "deepseek" not in str(m).lower()]
 
         banned_titles_norm = {self._normalize_title(t) for t in exclude_titles if t}
 
@@ -1112,6 +1174,9 @@ class AIRecipeGenerator:
         used_deterministic_schedule = False
         gemini_model = self.gemini_text_model
         has_gemini = bool(self.gemini_api_key and gemini_model)
+        if settings.ai_openai_only:
+            gemini_model = None
+            has_gemini = False
 
         def _try_models(
             models: list[str],
@@ -1242,6 +1307,10 @@ class AIRecipeGenerator:
             deepseek_models = [m for m in model_chain if "deepseek" in m.lower()]
             gemini_model = self.gemini_text_model
             has_gemini = bool(self.gemini_api_key and gemini_model)
+            if settings.ai_openai_only:
+                gemini_model = None
+                has_gemini = False
+                deepseek_models = []
             if self.primary_client and (has_gemini or self.fallback_client) and openai_models and (gemini_model or deepseek_models):
                 used_deterministic_schedule = True
                 # Give the primary provider enough time to actually return (otherwise we burn time on fallbacks).

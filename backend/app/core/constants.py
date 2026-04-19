@@ -12,12 +12,10 @@ TIER_CONFIG = {
         "vision_model": "gpt-4o-2024-11-20",
         "recipe_models": [
             "gpt-4o-mini-2024-07-18",
-            "deepseek-chat",
         ],
         # "Surprise me" / "Quick meal" should be fast and cheap.
         "recipe_models_fast": [
             "gpt-4o-mini-2024-07-18",
-            "deepseek-chat",
         ],
         "cache_priority": "high",
     },
@@ -37,7 +35,6 @@ TIER_CONFIG = {
         "recipe_models_fast": [
             "gpt-4o-2024-11-20",
             "gpt-4o-mini-2024-07-18",
-            "deepseek-chat",
         ],
         "cache_priority": "low",
     },
