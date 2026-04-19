@@ -216,13 +216,16 @@ def attach_recipe_images(
                     try:
                         provider = (core_settings.recipe_image_provider or "").strip().lower() or "gemini"
                         model_used = str(
-                            core_settings.runware_image_model
+                            "dall-e-3"
+                            if provider == "openai"
+                            else core_settings.runware_image_model
                             if provider == "runware"
                             else core_settings.gemini_image_model
                             if provider == "gemini"
                             else (
                                 core_settings.runware_image_model
                                 or core_settings.gemini_image_model
+                                or ("dall-e-3" if core_settings.openai_api_key else None)
                                 or provider
                                 or "unknown"
                             )

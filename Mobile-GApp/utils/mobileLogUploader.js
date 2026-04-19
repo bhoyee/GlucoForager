@@ -2,7 +2,7 @@ import Constants from 'expo-constants';
 import { API_URL } from '../config/api';
 import { apiFetch } from './api';
 import { addDebugLog, getDebugLogs, subscribeDebugLogs } from './debugLogger';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import Storage from '@react-native-async-storage/async-storage';
 
 let uploadTimer = null;
 let isUploading = false;
@@ -41,7 +41,7 @@ const sendLogs = async () => {
 
   isUploading = true;
   try {
-    const token = await AsyncStorage.getItem('userToken');
+    const token = await Storage.getItem('userToken');
     const ordered = [...pending].sort((a, b) => {
       const aTime = Date.parse(a.timestamp || '');
       const bTime = Date.parse(b.timestamp || '');

@@ -278,16 +278,35 @@ def _run_text_job(job_id: str) -> None:
             return
 
         try:
+            img_started = time.time()
             attach_recipe_images(
                 db,
                 user=user,
                 recipes=recipes or [],
                 ingredients=ingredients,
                 base_url=base_url,
-                # Speed: don't auto-generate images inline; the mobile client will request images
-                # after recipes render (so the user sees results quickly).
-                max_generate=0,
+                # UX: generate images alongside the recipe result so the client doesn't show placeholders.
+                # This runs inside the async job, so it won't block API request threads.
+                max_generate=3,
             )
+            try:
+                generated = 0
+                for r in (recipes or []):
+                    if isinstance(r, dict) and (r.get("image_source") or "").strip().lower() == "ai":
+                        generated += 1
+                log_system_event(
+                    {
+                        "ts": time.time(),
+                        "level": "info",
+                        "type": "ai.text.images",
+                        "job_id": job_id,
+                        "user_id": job.user_id,
+                        "generated": generated,
+                        "elapsed_ms": int((time.time() - img_started) * 1000),
+                    }
+                )
+            except Exception:
+                pass
         except Exception:
             # Image generation is best-effort; never fail the recipe result.
             pass

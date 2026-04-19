@@ -189,15 +189,34 @@ def _run_vision_job(job_id: str) -> None:
             return
 
         try:
+            img_started = datetime.now(timezone.utc)
             attach_recipe_images(
                 db,
                 user=user,
                 recipes=result.get("recipes", []) or [],
                 ingredients=result.get("detected", []) or [],
                 base_url=base_url,
-                # Speed: don't auto-generate images inline; let clients request images after recipes render.
-                max_generate=0,
+                # UX: generate images alongside the recipe result so the client doesn't show placeholders.
+                max_generate=3,
             )
+            try:
+                generated = 0
+                for r in (result.get("recipes", []) or []):
+                    if isinstance(r, dict) and (r.get("image_source") or "").strip().lower() == "ai":
+                        generated += 1
+                log_system_event(
+                    {
+                        "ts": datetime.now(timezone.utc).isoformat(),
+                        "level": "info",
+                        "type": "ai.vision.images",
+                        "job_id": job_id,
+                        "user_id": job.user_id,
+                        "generated": generated,
+                        "elapsed_ms": int((datetime.now(timezone.utc) - img_started).total_seconds() * 1000),
+                    }
+                )
+            except Exception:
+                pass
         except Exception:
             pass
 
@@ -689,13 +708,15 @@ def generate_recipe_image(
 
     provider = (core_settings.recipe_image_provider or "").strip().lower() or "gemini"
     provider_ready = False
-    if provider == "runware":
+    if provider == "openai":
+        provider_ready = bool(core_settings.openai_api_key)
+    elif provider == "runware":
         provider_ready = bool(core_settings.runware_api_key)
     elif provider == "gemini":
         provider_ready = bool(core_settings.gemini_api_key)
     else:
         # Backward/robust behavior: accept any configured provider, even if env is mis-set.
-        provider_ready = bool(core_settings.runware_api_key or core_settings.gemini_api_key)
+        provider_ready = bool(core_settings.openai_api_key or core_settings.runware_api_key or core_settings.gemini_api_key)
 
     if not provider_ready:
         raise HTTPException(
@@ -823,11 +844,19 @@ def generate_recipe_image(
             tier,
             "recipe_image",
             model_used=str(
-                core_settings.runware_image_model
+                "dall-e-3"
+                if provider == "openai"
+                else core_settings.runware_image_model
                 if provider == "runware"
                 else core_settings.gemini_image_model
                 if provider == "gemini"
-                else (core_settings.runware_image_model or core_settings.gemini_image_model or provider or "unknown")
+                else (
+                    core_settings.runware_image_model
+                    or core_settings.gemini_image_model
+                    or ("dall-e-3" if core_settings.openai_api_key else None)
+                    or provider
+                    or "unknown"
+                )
             ),
             tokens_used=0,
             cost_estimate=float(settings.cost_usd or 0.0),
