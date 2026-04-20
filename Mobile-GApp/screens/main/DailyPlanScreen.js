@@ -149,18 +149,11 @@ export default function DailyPlanScreen() {
   const [generating, setGenerating] = useState(false);
   const [refreshingImages, setRefreshingImages] = useState(false);
 
-  const allImagesReady = useMemo(() => {
-    const meals = Array.isArray(plan?.meals) ? plan.meals : [];
-    if (!meals.length) return true;
-    // Consider images "ready" once every meal has a non-placeholder image.
-    return meals.every((m) => !isPlaceholderImage(m));
-  }, [plan]);
-
   const loadToday = useCallback(async () => {
     const token = await AsyncStorage.getItem('userToken');
     if (!token) {
       setPlan(null);
-      return;
+      return null;
     }
     setLoading(true);
     try {
@@ -171,11 +164,13 @@ export default function DailyPlanScreen() {
       );
       if (response.status === 403) {
         setPlan(null);
-        return;
+        return null;
       }
-      if (!response.ok) return;
-      const data = await response.json();
-      setPlan(data?.plan || null);
+      if (!response.ok) return null;
+      const data = await response.json().catch(() => null);
+      const nextPlan = data?.plan || null;
+      setPlan(nextPlan);
+      return nextPlan;
     } finally {
       setLoading(false);
     }
@@ -223,9 +218,11 @@ export default function DailyPlanScreen() {
       let active = true;
       const run = async () => {
         if (!active) return;
-        await loadToday();
-        // If the plan exists but images are still placeholders, try a short background refresh.
-        if (active && plan?.meals && !allImagesReady) {
+        const nextPlan = await loadToday();
+        if (!active || !nextPlan) return;
+
+        const meals = Array.isArray(nextPlan?.meals) ? nextPlan.meals : [];
+        if (meals.length && meals.some((m) => isPlaceholderImage(m))) {
           void refreshImagesUntilReady();
         }
       };
@@ -233,7 +230,7 @@ export default function DailyPlanScreen() {
       return () => {
         active = false;
       };
-    }, [loadToday, allImagesReady, plan, refreshImagesUntilReady])
+    }, [loadToday, refreshImagesUntilReady])
   );
 
   const generateToday = async ({ force } = {}) => {
