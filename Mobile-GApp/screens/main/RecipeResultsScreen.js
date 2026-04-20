@@ -45,6 +45,7 @@ export default function RecipeResultsScreen() {
   const [detectedIngredients, setDetectedIngredients] = useState([]);
   const [recipes, setRecipes] = useState([]);
   const [failedRecipeImages, setFailedRecipeImages] = useState({});
+  const [generatingRecipeImages, setGeneratingRecipeImages] = useState({});
   const pollingRef = useRef(null);
   const elapsedRef = useRef(null);
   const phaseRef = useRef(null);
@@ -167,6 +168,7 @@ export default function RecipeResultsScreen() {
         const key = `${idx}:${title || 'recipe'}`;
         if (imageInFlightRef.current.has(key)) return;
         imageInFlightRef.current.add(key);
+        setGeneratingRecipeImages((prev) => ({ ...(prev || {}), [key]: true }));
         try {
           const response = await apiFetch(
             `${API_URL}${API_ENDPOINTS.AI_RECIPES_IMAGE}`,
@@ -228,6 +230,11 @@ export default function RecipeResultsScreen() {
           });
         } finally {
           imageInFlightRef.current.delete(key);
+          setGeneratingRecipeImages((prev) => {
+            const next = { ...(prev || {}) };
+            delete next[key];
+            return next;
+          });
         }
       };
 
@@ -662,7 +669,8 @@ export default function RecipeResultsScreen() {
                     />
                   ) : (
                     <View style={styles.recipeThumbPlaceholder}>
-                      <Ionicons name="restaurant-outline" size={26} color={Colors.textMuted} />
+                      <ActivityIndicator size="small" color={Colors.textMuted} />
+                      <Text style={styles.recipeThumbPlaceholderText}>Generating image...</Text>
                     </View>
                   )}
                 </View>
@@ -978,6 +986,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#F2F4F7',
+    gap: 6,
+  },
+  recipeThumbPlaceholderText: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    textAlign: 'center',
   },
   recipeInfo: {
     flex: 1,
