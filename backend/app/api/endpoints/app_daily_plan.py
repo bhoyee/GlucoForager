@@ -54,6 +54,7 @@ def _refresh_plan_images(plan_id: int, *, base_url: str) -> None:
                 max_generate=6,
             )
         except Exception:
+            logger.exception("Daily plan image refresh failed plan_id=%s user_id=%s", int(plan_id), getattr(user, "id", None))
             return
 
         # Persist back to DB so future /today calls return images immediately.
@@ -63,6 +64,7 @@ def _refresh_plan_images(plan_id: int, *, base_url: str) -> None:
         db.add(plan)
         db.commit()
     except Exception:
+        logger.exception("Daily plan image refresh crashed plan_id=%s", int(plan_id))
         try:
             db.rollback()
         except Exception:
