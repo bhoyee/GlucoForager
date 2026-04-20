@@ -138,9 +138,9 @@ def get_today_plan(
 def generate_today_plan(
     request: Request,
     background_tasks: BackgroundTasks,
-    force: bool = Query(False),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    force: bool = Query(False),
 ):
     tier = get_effective_subscription_tier(db, current_user) or "free"
     today = datetime.utcnow().date()
