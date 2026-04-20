@@ -137,8 +137,8 @@ def get_today_plan(
 @router.post("/generate")
 def generate_today_plan(
     request: Request,
-    force: bool = Query(False),
     background_tasks: BackgroundTasks,
+    force: bool = Query(False),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
