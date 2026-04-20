@@ -8,6 +8,14 @@ import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
 import { Colors } from '../../constants/Colors';
 
+const isPlaceholderImage = (item) => {
+  const src = String(item?.image_source || '').toLowerCase();
+  if (src === 'placeholder') return true;
+  const url = typeof item?.image_url === 'string' ? item.image_url.trim().toLowerCase() : '';
+  if (!url) return true;
+  return url.includes('placeholder') || url.includes('/uploads/placeholders/') || url.includes('placeholders');
+};
+
 function mealIcon(meal) {
   const key = String(meal || '').toLowerCase();
   if (key === 'breakfast') return 'sunny-outline';
@@ -33,12 +41,18 @@ function MealCard({ meal, item }) {
   const protein = typeof nutrition?.protein_g === 'string' ? nutrition.protein_g.trim() : '';
   const fiber = typeof nutrition?.fiber_g === 'string' ? nutrition.fiber_g.trim() : '';
   const imageUrl = typeof item?.image_url === 'string' ? item.image_url.trim() : '';
+  const showPlaceholder = isPlaceholderImage(item);
 
   return (
     <View style={styles.mealCard}>
-      {imageUrl ? (
+      {imageUrl && !showPlaceholder ? (
         <View style={styles.mealImageWrap}>
           <Image source={{ uri: imageUrl }} style={styles.mealImage} resizeMode="cover" />
+        </View>
+      ) : imageUrl ? (
+        <View style={[styles.mealImageWrap, styles.mealImagePlaceholder]}>
+          <ActivityIndicator size="small" color={Colors.textMuted} />
+          <Text style={styles.mealImagePlaceholderText}>Generating image…</Text>
         </View>
       ) : null}
       <View style={styles.mealTopRow}>
@@ -133,6 +147,14 @@ export default function DailyPlanScreen() {
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [refreshingImages, setRefreshingImages] = useState(false);
+
+  const allImagesReady = useMemo(() => {
+    const meals = Array.isArray(plan?.meals) ? plan.meals : [];
+    if (!meals.length) return true;
+    // Consider images "ready" once every meal has a non-placeholder image.
+    return meals.every((m) => !isPlaceholderImage(m));
+  }, [plan]);
 
   const loadToday = useCallback(async () => {
     const token = await AsyncStorage.getItem('userToken');
@@ -159,18 +181,59 @@ export default function DailyPlanScreen() {
     }
   }, []);
 
+  const refreshImagesUntilReady = useCallback(async () => {
+    if (refreshingImages) return;
+    const token = await AsyncStorage.getItem('userToken');
+    if (!token) return;
+    setRefreshingImages(true);
+    try {
+      const started = Date.now();
+      const maxMs = 25000;
+      // Poll a few times while the backend background task attaches images.
+      // Stop early once all images are real.
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise((r) => setTimeout(r, 3500));
+        // eslint-disable-next-line no-await-in-loop
+        const response = await apiFetch(
+          `${API_URL}${API_ENDPOINTS.DAILY_PLAN_TODAY}`,
+          { method: 'GET', headers: { Authorization: `Bearer ${token}` } },
+          { timeoutMs: 8000 }
+        );
+        if (response.ok) {
+          // eslint-disable-next-line no-await-in-loop
+          const data = await response.json().catch(() => null);
+          const nextPlan = data?.plan || null;
+          if (nextPlan) setPlan(nextPlan);
+          const meals = Array.isArray(nextPlan?.meals) ? nextPlan.meals : [];
+          if (meals.length && meals.every((m) => !isPlaceholderImage(m))) {
+            break;
+          }
+        }
+        if (Date.now() - started >= maxMs) break;
+      }
+    } finally {
+      setRefreshingImages(false);
+    }
+  }, [refreshingImages]);
+
   useFocusEffect(
     useCallback(() => {
       let active = true;
       const run = async () => {
         if (!active) return;
         await loadToday();
+        // If the plan exists but images are still placeholders, try a short background refresh.
+        if (active && plan?.meals && !allImagesReady) {
+          void refreshImagesUntilReady();
+        }
       };
       run();
       return () => {
         active = false;
       };
-    }, [loadToday])
+    }, [loadToday, allImagesReady, plan, refreshImagesUntilReady])
   );
 
   const generateToday = async ({ force } = {}) => {
@@ -215,6 +278,8 @@ export default function DailyPlanScreen() {
         return;
       }
       setPlan(data?.plan || null);
+      // Backend generates daily-plan images in a background task; poll briefly to pick up the saved images.
+      void refreshImagesUntilReady();
     } finally {
       setGenerating(false);
     }
@@ -549,6 +614,17 @@ const styles = StyleSheet.create({
   mealImage: {
     width: '100%',
     height: 160,
+  },
+  mealImagePlaceholder: {
+    height: 160,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  mealImagePlaceholderText: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    fontWeight: '700',
   },
   mealTopRow: {
     flexDirection: 'row',
