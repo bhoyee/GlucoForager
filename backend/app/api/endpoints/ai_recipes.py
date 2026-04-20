@@ -708,15 +708,13 @@ def generate_recipe_image(
 
     provider = (core_settings.recipe_image_provider or "").strip().lower() or "gemini"
     provider_ready = False
-    if provider == "openai":
-        provider_ready = bool(core_settings.openai_api_key)
-    elif provider == "runware":
+    if provider == "runware":
         provider_ready = bool(core_settings.runware_api_key)
     elif provider == "gemini":
         provider_ready = bool(core_settings.gemini_api_key)
     else:
         # Backward/robust behavior: accept any configured provider, even if env is mis-set.
-        provider_ready = bool(core_settings.openai_api_key or core_settings.runware_api_key or core_settings.gemini_api_key)
+        provider_ready = bool(core_settings.runware_api_key or core_settings.gemini_api_key)
 
     if not provider_ready:
         raise HTTPException(
@@ -844,16 +842,13 @@ def generate_recipe_image(
             tier,
             "recipe_image",
             model_used=str(
-                "dall-e-3"
-                if provider == "openai"
-                else core_settings.runware_image_model
+                core_settings.runware_image_model
                 if provider == "runware"
                 else core_settings.gemini_image_model
                 if provider == "gemini"
                 else (
                     core_settings.runware_image_model
                     or core_settings.gemini_image_model
-                    or ("dall-e-3" if core_settings.openai_api_key else None)
                     or provider
                     or "unknown"
                 )
