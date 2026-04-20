@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     gemini_image_model: str = Field("imagen-4.0-generate-001", env="GEMINI_IMAGE_MODEL")
     # Optional Gemini text model for recipe generation fallback (e.g. "gemini-2.5-flash").
     gemini_text_model: str | None = Field(None, env="GEMINI_TEXT_MODEL")
-    # Recipe image generation provider ("runware", "gemini", or "openai").
+    # Recipe image generation provider ("runware" or "gemini").
     # Defaults to Runware (fast/cheap) for image generation; text recipes can still be OpenAI-only.
     recipe_image_provider: str = Field("runware", env="RECIPE_IMAGE_PROVIDER")
     # Runware (https://runware.ai) image generation (e.g. FLUX Schnell).
