@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
 import { Colors } from '../../constants/Colors';
+import RecipePlaceholder from '../../assets/images/recipe-placeholder.jpeg';
 
 const isPlaceholderImage = (item) => {
   const src = String(item?.image_source || '').toLowerCase();
@@ -31,7 +32,7 @@ function titleCase(value) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-function MealCard({ meal, item }) {
+function MealCard({ meal, item, showImageLoading }) {
   const ingredients = Array.isArray(item?.ingredients) ? item.ingredients : [];
   const steps = Array.isArray(item?.steps) ? item.steps : [];
   const minutes = Number.isFinite(Number(item?.time_minutes)) ? Number(item.time_minutes) : null;
@@ -45,16 +46,19 @@ function MealCard({ meal, item }) {
 
   return (
     <View style={styles.mealCard}>
-      {imageUrl && !showPlaceholder ? (
-        <View style={styles.mealImageWrap}>
+      <View style={styles.mealImageWrap}>
+        {imageUrl && !showPlaceholder ? (
           <Image source={{ uri: imageUrl }} style={styles.mealImage} resizeMode="cover" />
-        </View>
-      ) : imageUrl ? (
-        <View style={[styles.mealImageWrap, styles.mealImagePlaceholder]}>
-          <ActivityIndicator size="small" color={Colors.textMuted} />
-          <Text style={styles.mealImagePlaceholderText}>Generating image…</Text>
-        </View>
-      ) : null}
+        ) : (
+          <Image source={RecipePlaceholder} style={styles.mealImage} resizeMode="cover" />
+        )}
+        {showPlaceholder && showImageLoading ? (
+          <View style={styles.mealImageOverlay}>
+            <ActivityIndicator size="small" color="white" />
+            <Text style={styles.mealImageOverlayText}>Generating image…</Text>
+          </View>
+        ) : null}
+      </View>
       <View style={styles.mealTopRow}>
         <View style={styles.mealTag}>
           <Ionicons name={mealIcon(meal)} size={16} color={Colors.primaryDark} />
@@ -213,6 +217,12 @@ export default function DailyPlanScreen() {
     }
   }, [refreshingImages]);
 
+  const hasAnyPlaceholderImages = useMemo(() => {
+    const meals = Array.isArray(plan?.meals) ? plan.meals : [];
+    if (!meals.length) return false;
+    return meals.some((m) => isPlaceholderImage(m));
+  }, [plan]);
+
   useFocusEffect(
     useCallback(() => {
       let active = true;
@@ -361,8 +371,24 @@ export default function DailyPlanScreen() {
               {null}
             </View>
 
+            {hasAnyPlaceholderImages ? (
+              <View style={styles.imagesHintRow}>
+                <Text style={styles.imagesHintText}>
+                  {refreshingImages ? 'Generating meal images…' : 'Meal images may take a moment. Tap Refresh to update.'}
+                </Text>
+                <Pressable onPress={refreshImagesUntilReady} disabled={refreshingImages} style={styles.imagesHintButton}>
+                  <Text style={styles.imagesHintButtonText}>{refreshingImages ? 'Working…' : 'Refresh'}</Text>
+                </Pressable>
+              </View>
+            ) : null}
+
             {meals.map((item, idx) => (
-              <MealCard key={String(item?.meal || idx)} meal={item?.meal} item={item} />
+              <MealCard
+                key={String(item?.meal || idx)}
+                meal={item?.meal}
+                item={item}
+                showImageLoading={refreshingImages}
+              />
             ))}
           </>
         ) : (
@@ -607,21 +633,53 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#F2F4F7',
     marginBottom: 12,
+    position: 'relative',
   },
   mealImage: {
     width: '100%',
     height: 160,
   },
-  mealImagePlaceholder: {
-    height: 160,
+  mealImageOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
   },
-  mealImagePlaceholderText: {
+  mealImageOverlayText: {
+    fontSize: 12,
+    color: 'white',
+    fontWeight: '700',
+  },
+  imagesHintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 10,
+    paddingHorizontal: 6,
+  },
+  imagesHintText: {
+    flex: 1,
     fontSize: 12,
     color: Colors.textMuted,
-    fontWeight: '700',
+  },
+  imagesHintButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  imagesHintButtonText: {
+    fontSize: 12,
+    color: Colors.text,
+    fontWeight: '600',
   },
   mealTopRow: {
     flexDirection: 'row',
