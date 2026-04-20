@@ -1,11 +1,11 @@
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 import logging
 
 from ...api.dependencies import get_current_user
-from ...database import get_db
+from ...database import SessionLocal, get_db
 from ...models.ai_request import AIRequest
 from ...models.meal_plan import MealPlan
 from ...models.user import User
@@ -18,6 +18,60 @@ from ...services.recipe_image_attach_service import attach_recipe_images
 
 router = APIRouter(prefix="/app/daily-plan", tags=["daily-plan"])
 logger = logging.getLogger(__name__)
+
+
+def _refresh_plan_images(plan_id: int, *, base_url: str) -> None:
+    """
+    Background: attach real images to a stored daily plan without blocking the /generate response.
+
+    This updates the `meal_plans.recipes.meals[*].image_url` fields in-place and relies on the same
+    per-user daily limits as on-demand image generation.
+    """
+
+    db = SessionLocal()
+    try:
+        plan = db.query(MealPlan).filter(MealPlan.id == int(plan_id)).first()
+        if not plan:
+            return
+        user = db.query(User).filter(User.id == plan.user_id).first()
+        if not user:
+            return
+
+        decoded = _decode_plan_payload(plan.recipes)
+        meals = decoded.get("meals") or []
+        if not isinstance(meals, list) or not meals:
+            return
+
+        # Only generate for items that are missing a real image.
+        try:
+            attach_recipe_images(
+                db,
+                user=user,
+                recipes=[m for m in meals if isinstance(m, dict)],
+                ingredients=[],
+                base_url=base_url,
+                # Daily plan can contain multiple meals; generate a few per refresh.
+                max_generate=6,
+            )
+        except Exception:
+            return
+
+        # Persist back to DB so future /today calls return images immediately.
+        payload = dict(plan.recipes or {})
+        payload["meals"] = meals
+        plan.recipes = payload
+        db.add(plan)
+        db.commit()
+    except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
 
 
 def _require_premium(db: Session, user: User) -> None:
@@ -57,6 +111,18 @@ def get_today_plan(
         return {"plan": None}
 
     decoded = _decode_plan_payload(plan.recipes)
+    # Best-effort: attach any cached images without triggering new generations.
+    try:
+        attach_recipe_images(
+            db,
+            user=current_user,
+            recipes=[m for m in (decoded.get("meals") or []) if isinstance(m, dict)],
+            ingredients=[],
+            base_url=None,
+            max_generate=0,
+        )
+    except Exception:
+        pass
     return {
         "plan": {
             "id": plan.id,
@@ -72,6 +138,7 @@ def get_today_plan(
 def generate_today_plan(
     request: Request,
     force: bool = Query(False),
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -86,6 +153,18 @@ def generate_today_plan(
     )
     if existing and (not force):
         decoded = _decode_plan_payload(existing.recipes)
+        # Best-effort: attach cached images (no blocking generation).
+        try:
+            attach_recipe_images(
+                db,
+                user=current_user,
+                recipes=[m for m in (decoded.get("meals") or []) if isinstance(m, dict)],
+                ingredients=[],
+                base_url=str(request.base_url).rstrip("/"),
+                max_generate=0,
+            )
+        except Exception:
+            pass
         return {
             "plan": {
                 "id": existing.id,
@@ -274,6 +353,14 @@ def generate_today_plan(
         db.add(existing)
         db.commit()
         db.refresh(existing)
+        try:
+            background_tasks.add_task(
+                _refresh_plan_images,
+                int(existing.id),
+                base_url=str(request.base_url).rstrip("/"),
+            )
+        except Exception:
+            pass
         return {
             "plan": {
                 "id": existing.id,
@@ -288,6 +375,14 @@ def generate_today_plan(
     db.add(plan)
     db.commit()
     db.refresh(plan)
+    try:
+        background_tasks.add_task(
+            _refresh_plan_images,
+            int(plan.id),
+            base_url=str(request.base_url).rstrip("/"),
+        )
+    except Exception:
+        pass
     return {
         "plan": {
             "id": plan.id,
