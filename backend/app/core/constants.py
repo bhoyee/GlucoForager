@@ -33,8 +33,8 @@ TIER_CONFIG = {
         ],
         # "Surprise me" / "Quick meal" should be fast and cheap even for premium.
         "recipe_models_fast": [
-            "gpt-4o-2024-11-20",
             "gpt-4o-mini-2024-07-18",
+            "gpt-4o-2024-11-20",
         ],
         "cache_priority": "low",
     },

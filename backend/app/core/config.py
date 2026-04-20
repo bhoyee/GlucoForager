@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     ai_eat_now_budget_seconds: float = Field(60.0, env="AI_EAT_NOW_BUDGET_SECONDS")
     # When enabled, do not attempt non-OpenAI providers (DeepSeek/Gemini) for recipe generation.
     # This avoids wasting latency budget on fallbacks when you only want OpenAI.
-    ai_openai_only: bool = Field(False, env="AI_OPENAI_ONLY")
+    ai_openai_only: bool = Field(True, env="AI_OPENAI_ONLY")
 
     # AI job runner (lightweight server-side queue) - protects the API under bursts.
     ai_job_runner_enabled: bool = Field(True, env="AI_JOB_RUNNER_ENABLED")

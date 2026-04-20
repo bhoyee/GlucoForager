@@ -87,6 +87,23 @@ def _run_vision_job(job_id: str) -> None:
             return
         if job.status not in {"pending", "queued"}:
             return
+        try:
+            queue_wait_ms = None
+            if getattr(job, "created_at", None):
+                queue_wait_ms = int((datetime.now(timezone.utc) - job.created_at.replace(tzinfo=timezone.utc)).total_seconds() * 1000)
+            log_system_event(
+                {
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                    "level": "info",
+                    "type": "ai.vision.job.start",
+                    "job_id": job_id,
+                    "user_id": job.user_id,
+                    "prev_status": job.status,
+                    "queue_wait_ms": queue_wait_ms,
+                }
+            )
+        except Exception:
+            pass
         job.status = "running"
         db.commit()
 
@@ -189,34 +206,15 @@ def _run_vision_job(job_id: str) -> None:
             return
 
         try:
-            img_started = datetime.now(timezone.utc)
             attach_recipe_images(
                 db,
                 user=user,
                 recipes=result.get("recipes", []) or [],
                 ingredients=result.get("detected", []) or [],
                 base_url=base_url,
-                # UX: generate images alongside the recipe result so the client doesn't show placeholders.
-                max_generate=3,
+                # Speed: don't auto-generate images inline; clients can request images after recipes render.
+                max_generate=0,
             )
-            try:
-                generated = 0
-                for r in (result.get("recipes", []) or []):
-                    if isinstance(r, dict) and (r.get("image_source") or "").strip().lower() == "ai":
-                        generated += 1
-                log_system_event(
-                    {
-                        "ts": datetime.now(timezone.utc).isoformat(),
-                        "level": "info",
-                        "type": "ai.vision.images",
-                        "job_id": job_id,
-                        "user_id": job.user_id,
-                        "generated": generated,
-                        "elapsed_ms": int((datetime.now(timezone.utc) - img_started).total_seconds() * 1000),
-                    }
-                )
-            except Exception:
-                pass
         except Exception:
             pass
 
