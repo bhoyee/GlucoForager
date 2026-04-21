@@ -83,6 +83,18 @@ def attach_recipe_images(
     helper = AIRecipeGenerator()
     cache = CacheService()
 
+    if core_settings.ai_debug_logging:
+        provider = (core_settings.recipe_image_provider or "").strip().lower() or "runware"
+        logger.info(
+            "attach_recipe_images start user_id=%s enabled=%s provider=%s size=%s max_generate=%s recipes=%s",
+            getattr(user, "id", None),
+            bool(settings.enabled),
+            provider,
+            int(settings.size),
+            str(max_generate),
+            int(len(recipes)),
+        )
+
     if not settings.enabled:
         helper._attach_placeholders(recipes)
         return recipes
@@ -272,6 +284,21 @@ def attach_recipe_images(
 
                     if generated_this_response >= max_generate:
                         break
+
+    if core_settings.ai_debug_logging:
+        try:
+            placeholders = 0
+            for r in recipes:
+                if isinstance(r, dict) and str(r.get("image_source") or "") == "placeholder":
+                    placeholders += 1
+            logger.info(
+                "attach_recipe_images done user_id=%s generated=%s placeholders=%s",
+                getattr(user, "id", None),
+                int(generated_this_response),
+                int(placeholders),
+            )
+        except Exception:
+            pass
 
     # Make sure every recipe has at least a placeholder.
     helper._attach_placeholders(recipes)
