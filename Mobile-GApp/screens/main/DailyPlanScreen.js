@@ -228,19 +228,13 @@ export default function DailyPlanScreen() {
       let active = true;
       const run = async () => {
         if (!active) return;
-        const nextPlan = await loadToday();
-        if (!active || !nextPlan) return;
-
-        const meals = Array.isArray(nextPlan?.meals) ? nextPlan.meals : [];
-        if (meals.length && meals.some((m) => isPlaceholderImage(m))) {
-          void refreshImagesUntilReady();
-        }
+        await loadToday();
       };
       run();
       return () => {
         active = false;
       };
-    }, [loadToday, refreshImagesUntilReady])
+    }, [loadToday])
   );
 
   const generateToday = async ({ force } = {}) => {
