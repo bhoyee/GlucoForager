@@ -184,7 +184,9 @@ def attach_recipe_images(
                     size=settings.size,
                 )
 
-            max_workers = min(3, len(selected))
+            # Daily Meal Planner can include 4+ meals. Allow a bit more parallelism so
+            # images can be attached within typical mobile/API timeouts.
+            max_workers = min(4, len(selected))
             futures = {}
             with ThreadPoolExecutor(max_workers=max_workers) as pool:
                 for item in selected:
