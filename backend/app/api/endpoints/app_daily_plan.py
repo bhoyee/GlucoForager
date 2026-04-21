@@ -99,6 +99,7 @@ def _decode_plan_payload(recipes_value):
 
 @router.get("/today")
 def get_today_plan(
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -113,15 +114,17 @@ def get_today_plan(
         return {"plan": None}
 
     decoded = _decode_plan_payload(plan.recipes)
-    # Best-effort: attach any cached images without triggering new generations.
+    # Attach images for missing meals so the Daily Meal Planner shows real images by default.
+    # This respects admin settings/daily limits and uses cache/fingerprints to avoid repeat spend.
     try:
+        meals = [m for m in (decoded.get("meals") or []) if isinstance(m, dict)]
         attach_recipe_images(
             db,
             user=current_user,
-            recipes=[m for m in (decoded.get("meals") or []) if isinstance(m, dict)],
+            recipes=meals,
             ingredients=[],
-            base_url=None,
-            max_generate=0,
+            base_url=str(request.base_url).rstrip("/"),
+            max_generate=len(meals),
         )
     except Exception:
         pass
@@ -154,15 +157,16 @@ def generate_today_plan(
     )
     if existing and (not force):
         decoded = _decode_plan_payload(existing.recipes)
-        # Best-effort: attach cached images (no blocking generation).
+        # Ensure images are attached when returning an existing plan (premium UX).
         try:
+            meals = [m for m in (decoded.get("meals") or []) if isinstance(m, dict)]
             attach_recipe_images(
                 db,
                 user=current_user,
-                recipes=[m for m in (decoded.get("meals") or []) if isinstance(m, dict)],
+                recipes=meals,
                 ingredients=[],
                 base_url=str(request.base_url).rstrip("/"),
-                max_generate=0,
+                max_generate=len(meals),
             )
         except Exception:
             pass
