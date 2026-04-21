@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#061626"/>
+      <stop offset="1" stop-color="#071A2A"/>
+    </linearGradient>
+
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#000000" flood-opacity="0.45"/>
+    </filter>
+
+    <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="0" stdDeviation="10" flood-color="#21C1A5" flood-opacity="0.25"/>
+    </filter>
+
+    <style>
+      .title { font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; fill: #EAF2FF; font-weight: 700; }
+      .subtitle { font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; fill: #9BB1CC; font-weight: 500; }
+      .label { font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; fill: #EAF2FF; font-weight: 700; }
+      .muted { font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; fill: #B9C7DD; font-weight: 500; }
+      .note { font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; fill: #D5E6FF; font-weight: 500; }
+      .pill { font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; fill: #D5E6FF; font-weight: 600; }
+
+      .card { fill: rgba(11,39,64,0.96); stroke: #1B3B5A; stroke-width: 2; filter: url(#shadow); }
+      .card-accent { stroke-width: 0; opacity: 0.95; }
+      .badge { fill: rgba(7,26,42,0.9); stroke: #1B3B5A; stroke-width: 1.5; }
+
+      .arrow { stroke: #7FD6C8; stroke-width: 3.2; fill: none; }
+      .arrow-muted { stroke: #9AD0FF; stroke-width: 3.2; fill: none; }
+      .arrow-purple { stroke: #C7B6FF; stroke-width: 3.2; fill: none; }
+      .arrow-yellow { stroke: #FFD58A; stroke-width: 3.2; fill: none; }
+      .dashed { stroke-dasharray: 10 8; }
+    </style>
+
+    <marker id="arrowHead" viewBox="0 0 10 10" refX="9.5" refY="5" markerWidth="10" markerHeight="10" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#7FD6C8"/>
+    </marker>
+    <marker id="arrowHeadMuted" viewBox="0 0 10 10" refX="9.5" refY="5" markerWidth="10" markerHeight="10" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#9AD0FF"/>
+    </marker>
+    <marker id="arrowHeadPurple" viewBox="0 0 10 10" refX="9.5" refY="5" markerWidth="10" markerHeight="10" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#C7B6FF"/>
+    </marker>
+    <marker id="arrowHeadYellow" viewBox="0 0 10 10" refX="9.5" refY="5" markerWidth="10" markerHeight="10" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#FFD58A"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect x="0" y="0" width="1920" height="1080" fill="url(#bg)"/>
+
+  <!-- Title -->
+  <text x="960" y="96" text-anchor="middle" class="title" font-size="52">GlucoForager — System Architecture</text>
+  <text x="960" y="140" text-anchor="middle" class="subtitle" font-size="28">(Modular Monolith + Async AI Workers)</text>
+
+  <!-- Cards -->
+  <!-- Clients -->
+  <g>
+    <!-- Mobile -->
+    <rect x="110" y="240" rx="26" ry="26" width="520" height="160" class="card"/>
+    <rect x="110" y="240" rx="26" ry="26" width="520" height="14" class="card-accent" fill="#1F9D8A"/>
+    <text x="160" y="318" class="label" font-size="34">Mobile App</text>
+    <text x="365" y="318" class="muted" font-size="22">(Expo RN)</text>
+    <rect x="160" y="338" rx="18" ry="18" width="92" height="34" class="badge"/>
+    <text x="206" y="362" text-anchor="middle" class="pill" font-size="18">REST</text>
+
+    <!-- Admin/Staff -->
+    <rect x="110" y="450" rx="26" ry="26" width="520" height="160" class="card"/>
+    <rect x="110" y="450" rx="26" ry="26" width="520" height="14" class="card-accent" fill="#1F9D8A"/>
+    <text x="160" y="518" class="label" font-size="32">Admin/Staff Console</text>
+    <text x="480" y="518" class="muted" font-size="22">(Next.js)</text>
+
+    <!-- Marketing -->
+    <rect x="110" y="660" rx="26" ry="26" width="520" height="160" class="card"/>
+    <rect x="110" y="660" rx="26" ry="26" width="520" height="14" class="card-accent" fill="#1F9D8A"/>
+    <text x="160" y="728" class="label" font-size="32">Marketing Site</text>
+    <text x="390" y="728" class="muted" font-size="22">(Next.js)</text>
+  </g>
+
+  <!-- FastAPI API -->
+  <g filter="url(#softGlow)">
+    <rect x="760" y="420" rx="30" ry="30" width="520" height="240" class="card"/>
+    <rect x="760" y="420" rx="30" ry="30" width="520" height="16" class="card-accent" fill="#21C1A5"/>
+    <text x="820" y="520" class="label" font-size="44">FastAPI API</text>
+    <text x="820" y="565" class="muted" font-size="26">(Modular Monolith)</text>
+    <rect x="820" y="590" rx="18" ry="18" width="96" height="38" class="badge"/>
+    <text x="868" y="617" text-anchor="middle" class="pill" font-size="19">REST</text>
+  </g>
+
+  <!-- Right side infra -->
+  <g>
+    <!-- Postgres -->
+    <rect x="1420" y="210" rx="26" ry="26" width="400" height="150" class="card"/>
+    <rect x="1420" y="210" rx="26" ry="26" width="400" height="14" class="card-accent" fill="#2D72D9"/>
+    <text x="1465" y="275" class="label" font-size="34">Postgres</text>
+    <text x="1465" y="315" class="muted" font-size="22">(System of Record)</text>
+
+    <!-- Redis -->
+    <rect x="1420" y="390" rx="26" ry="26" width="400" height="160" class="card"/>
+    <rect x="1420" y="390" rx="26" ry="26" width="400" height="14" class="card-accent" fill="#D64D4D"/>
+    <text x="1465" y="455" class="label" font-size="34">Redis</text>
+    <text x="1465" y="495" class="muted" font-size="22">(Cache + Queue / Streams)</text>
+
+    <!-- Uploads -->
+    <rect x="1420" y="580" rx="26" ry="26" width="400" height="150" class="card"/>
+    <rect x="1420" y="580" rx="26" ry="26" width="400" height="14" class="card-accent" fill="#7C5CFF"/>
+    <text x="1465" y="645" class="label" font-size="34">Uploads</text>
+    <text x="1465" y="685" class="muted" font-size="22">(Local Disk or FTP)</text>
+
+    <!-- Email -->
+    <rect x="1420" y="760" rx="26" ry="26" width="400" height="150" class="card"/>
+    <rect x="1420" y="760" rx="26" ry="26" width="400" height="14" class="card-accent" fill="#F2B94B"/>
+    <text x="1465" y="825" class="label" font-size="34">Email</text>
+    <text x="1465" y="865" class="muted" font-size="22">(SMTP / Resend)</text>
+  </g>
+
+  <!-- Worker & Providers -->
+  <g>
+    <!-- AI Worker -->
+    <rect x="980" y="740" rx="26" ry="26" width="360" height="170" class="card"/>
+    <rect x="980" y="740" rx="26" ry="26" width="360" height="14" class="card-accent" fill="#21C1A5"/>
+    <text x="1030" y="810" class="label" font-size="32">AI Worker</text>
+    <text x="1030" y="850" class="muted" font-size="21">(Redis Streams Consumers)</text>
+
+    <!-- AI Providers -->
+    <rect x="1420" y="940" rx="26" ry="26" width="400" height="120" class="card"/>
+    <rect x="1420" y="940" rx="26" ry="26" width="400" height="14" class="card-accent" fill="#21C1A5"/>
+    <text x="1465" y="1010" class="label" font-size="32">AI Providers</text>
+    <text x="1465" y="1046" class="muted" font-size="21">(LLM / Image)</text>
+  </g>
+
+  <!-- Arrows: Clients -> API -->
+  <path d="M 630 320 C 700 320 720 330 760 350" class="arrow dashed" marker-end="url(#arrowHead)"/>
+  <path d="M 630 530 C 700 530 720 530 760 540" class="arrow dashed" marker-end="url(#arrowHead)"/>
+  <path d="M 630 740 C 700 740 720 720 760 680" class="arrow dashed" marker-end="url(#arrowHead)"/>
+
+  <!-- API -> Postgres -->
+  <path d="M 1280 485 C 1350 430 1365 360 1420 310" class="arrow" marker-end="url(#arrowHead)"/>
+
+  <!-- API <-> Redis (cache) -->
+  <path d="M 1280 540 C 1340 540 1360 500 1420 470" class="arrow-muted dashed" marker-end="url(#arrowHeadMuted)"/>
+  <path d="M 1420 490 C 1360 520 1340 560 1280 570" class="arrow-muted dashed" marker-end="url(#arrowHeadMuted)"/>
+
+  <!-- API -> Uploads -->
+  <path d="M 1280 600 C 1340 620 1360 640 1420 655" class="arrow-purple dashed" marker-end="url(#arrowHeadPurple)"/>
+
+  <!-- API -> Email -->
+  <path d="M 1280 635 C 1340 700 1360 780 1420 835" class="arrow-yellow dashed" marker-end="url(#arrowHeadYellow)"/>
+
+  <!-- API -> Redis enqueue -->
+  <path d="M 1080 660 C 1180 700 1280 650 1420 520" class="arrow dashed" marker-end="url(#arrowHead)"/>
+  <g>
+    <rect x="1140" y="700" rx="16" ry="16" width="270" height="44" class="badge"/>
+    <text x="1275" y="729" text-anchor="middle" class="pill" font-size="18">enqueue AI jobs (streams)</text>
+  </g>
+
+  <!-- Redis -> Worker consume -->
+  <path d="M 1620 550 C 1540 640 1420 740 1340 825" class="arrow" marker-end="url(#arrowHead)"/>
+  <g>
+    <rect x="1380" y="650" rx="16" ry="16" width="170" height="42" class="badge"/>
+    <text x="1465" y="678" text-anchor="middle" class="pill" font-size="18">consume jobs</text>
+  </g>
+
+  <!-- Worker -> Providers -->
+  <path d="M 1340 850 C 1380 900 1400 940 1420 990" class="arrow" marker-end="url(#arrowHead)"/>
+
+  <!-- Worker -> Postgres -->
+  <path d="M 1160 740 C 1230 640 1320 500 1420 300" class="arrow dashed" marker-end="url(#arrowHead)"/>
+  <g>
+    <rect x="1210" y="560" rx="16" ry="16" width="220" height="42" class="badge"/>
+    <text x="1320" y="588" text-anchor="middle" class="pill" font-size="18">persist results + status</text>
+  </g>
+
+  <!-- Notes -->
+  <g>
+    <rect x="110" y="880" rx="26" ry="26" width="820" height="170" class="card"/>
+    <rect x="110" y="880" rx="26" ry="26" width="820" height="14" class="card-accent" fill="#1B3B5A"/>
+    <text x="150" y="950" class="note" font-size="24">Architecture: modular monolith + async workers (not microservices).</text>
+    <text x="150" y="1000" class="note" font-size="24">Why: keep API fast; isolate long-running AI calls; scale workers independently.</text>
+    <text x="150" y="1050" class="note" font-size="24">Backpressure: bounded concurrency (text vs vision workers).</text>
+  </g>
+</svg>
+
