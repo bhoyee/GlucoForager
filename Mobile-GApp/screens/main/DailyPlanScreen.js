@@ -287,8 +287,6 @@ export default function DailyPlanScreen() {
         return;
       }
       setPlan(data?.plan || null);
-      // Backend generates daily-plan images in a background task; poll briefly to pick up the saved images.
-      void refreshImagesUntilReady();
     } finally {
       setGenerating(false);
     }
@@ -375,11 +373,9 @@ export default function DailyPlanScreen() {
 
             {hasAnyPlaceholderImages ? (
               <View style={styles.imagesHintRow}>
-                <Text style={styles.imagesHintText}>
-                  {refreshingImages ? 'Generating meal images…' : 'Meal images may take a moment. Tap Refresh to update.'}
-                </Text>
+                <Text style={styles.imagesHintText}>Some images are missing. Tap Refresh to try again.</Text>
                 <Pressable onPress={refreshImagesUntilReady} disabled={refreshingImages} style={styles.imagesHintButton}>
-                  <Text style={styles.imagesHintButtonText}>{refreshingImages ? 'Working…' : 'Refresh'}</Text>
+                  <Text style={styles.imagesHintButtonText}>{refreshingImages ? 'Refreshing…' : 'Refresh'}</Text>
                 </Pressable>
               </View>
             ) : null}
@@ -389,7 +385,7 @@ export default function DailyPlanScreen() {
                 key={String(item?.meal || idx)}
                 meal={item?.meal}
                 item={item}
-                showImageLoading={refreshingImages}
+                showImageLoading={refreshingImages || generating}
               />
             ))}
           </>

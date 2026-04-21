@@ -133,7 +133,11 @@ def attach_recipe_images(
             recipe["image_source"] = "placeholder"
 
         fingerprint = _recipe_fingerprint(recipe)
-        cached_url = cache.get(f"recipeimg:{fingerprint}:url")
+        cached_url = None
+        try:
+            cached_url = cache.get(f"recipeimg:{fingerprint}:url")
+        except Exception:  # noqa: BLE001
+            cached_url = None
         if cached_url and isinstance(cached_url, str):
             recipe["image_url"] = _normalize_image_url(cached_url, base_url=base_url)
             recipe["image_source"] = "ai"
@@ -246,14 +250,25 @@ def attach_recipe_images(
                     fingerprint = str(item["fingerprint"])
                     per_recipe_count = int(item.get("per_recipe_count") or 0)
 
-                    cache.set(per_recipe_key, str(per_recipe_count + 1), ttl_seconds=24 * 60 * 60)
-                    cache.set(f"{per_recipe_key}:url", str(image_url), ttl_seconds=24 * 60 * 60)
-                    cache.set(f"recipeimg:{fingerprint}:url", str(image_url), ttl_seconds=60 * 24 * 60 * 60)
+                    try:
+                        cache.set(per_recipe_key, str(per_recipe_count + 1), ttl_seconds=24 * 60 * 60)
+                        cache.set(f"{per_recipe_key}:url", str(image_url), ttl_seconds=24 * 60 * 60)
+                        cache.set(
+                            f"recipeimg:{fingerprint}:url",
+                            str(image_url),
+                            ttl_seconds=60 * 24 * 60 * 60,
+                        )
+                    except Exception:  # noqa: BLE001
+                        # Don't fail the whole response if Redis is down; we still return the image_url.
+                        pass
 
                     generated_this_response += 1
                     if daily_limit != -1:
                         daily_count += 1
-                        cache.set(daily_key, str(daily_count), ttl_seconds=24 * 60 * 60)
+                        try:
+                            cache.set(daily_key, str(daily_count), ttl_seconds=24 * 60 * 60)
+                        except Exception:  # noqa: BLE001
+                            pass
 
                     if generated_this_response >= max_generate:
                         break
