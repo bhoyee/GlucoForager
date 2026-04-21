@@ -252,7 +252,9 @@ export default function DailyPlanScreen() {
       const response = await apiFetch(
         `${API_URL}${API_ENDPOINTS.DAILY_PLAN_GENERATE}${shouldForce ? '?force=1' : ''}`,
         { method: 'POST', headers: { Authorization: `Bearer ${token}` } },
-        { timeoutMs: 45000 }
+        // Daily plan now generates meal images before responding (premium UX).
+        // Allow a bit more time so slower networks don't abort prematurely.
+        { timeoutMs: 65000 }
       );
       if (response.status === 403) {
         Alert.alert('Premium required', 'Daily Meal Planner is available for Premium users.');
