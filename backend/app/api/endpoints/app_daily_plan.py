@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 import logging
 
@@ -139,7 +139,6 @@ def get_today_plan(
 @router.post("/generate")
 def generate_today_plan(
     request: Request,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     force: bool = Query(False),
@@ -312,18 +311,21 @@ def generate_today_plan(
     if not isinstance(meals, list) or not meals:
         raise HTTPException(status_code=500, detail="Invalid plan output. Please try again.")
 
+    # IMPORTANT: Daily Meal Planner should return images with the plan (premium UX).
+    # We still respect admin settings/daily limits, but for Premium this should usually
+    # generate for every meal in the plan.
     try:
+        image_candidates = [m for m in meals if isinstance(m, dict)]
         attach_recipe_images(
             db,
             user=current_user,
-            recipes=[m for m in meals if isinstance(m, dict)],
+            recipes=image_candidates,
             ingredients=[],
             base_url=str(request.base_url).rstrip("/"),
-            # Daily plan generation endpoint is synchronous; don't block on image generation.
-            max_generate=0,
+            max_generate=len(image_candidates),
         )
     except Exception:
-        pass
+        logger.exception("Daily plan: failed to attach images during generate user_id=%s", getattr(current_user, "id", None))
 
     payload_to_store = {
         "meals": meals,
@@ -355,14 +357,6 @@ def generate_today_plan(
         db.add(existing)
         db.commit()
         db.refresh(existing)
-        try:
-            background_tasks.add_task(
-                _refresh_plan_images,
-                int(existing.id),
-                base_url=str(request.base_url).rstrip("/"),
-            )
-        except Exception:
-            pass
         return {
             "plan": {
                 "id": existing.id,
@@ -377,14 +371,6 @@ def generate_today_plan(
     db.add(plan)
     db.commit()
     db.refresh(plan)
-    try:
-        background_tasks.add_task(
-            _refresh_plan_images,
-            int(plan.id),
-            base_url=str(request.base_url).rstrip("/"),
-        )
-    except Exception:
-        pass
     return {
         "plan": {
             "id": plan.id,
