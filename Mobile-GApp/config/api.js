@@ -1,7 +1,12 @@
 // config/api.js
 import { Platform } from 'react-native';
 
-const DEV_DEFAULT_URL = 'https://api.glucoforager.com';
+// Local dev tip:
+// - Android emulator: http://10.0.2.2:8010
+// - iOS simulator: http://localhost:8010
+// - Physical device: use your machine LAN IP, e.g. http://192.168.x.x:8010
+const DEV_DEFAULT_URL =
+  Platform.OS === 'android' ? 'http://10.0.2.2:8010' : 'http://localhost:8010';
 const PROD_DEFAULT_URL = 'https://api.glucoforager.com';
 
 export const API_URL =
