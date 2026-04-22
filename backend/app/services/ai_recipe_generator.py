@@ -261,7 +261,12 @@ class AIRecipeGenerator:
         if provider == "runware":
             if not self.runware_api_key:
                 return {"image_url": self._placeholder_image(recipe), "image_source": "placeholder"}
-            image_bytes = self._generate_image_runware(prompt, size=size)
+            # For speed/reliability: prefer returning the provider URL directly rather than
+            # downloading + re-encoding + storing on disk (which can fail under shared hosting).
+            image_url = self._generate_image_runware_url(prompt, size=size)
+            if not image_url:
+                return {"image_url": self._placeholder_image(recipe), "image_source": "placeholder"}
+            return {"image_url": image_url, "image_source": "ai"}
         elif provider == "gemini":
             if not self.gemini_api_key:
                 return {"image_url": self._placeholder_image(recipe), "image_source": "placeholder"}
@@ -269,7 +274,10 @@ class AIRecipeGenerator:
         else:
             # Best-effort fallback: prefer Runware, otherwise Gemini, otherwise placeholder.
             if self.runware_api_key:
-                image_bytes = self._generate_image_runware(prompt, size=size)
+                image_url = self._generate_image_runware_url(prompt, size=size)
+                if image_url:
+                    return {"image_url": image_url, "image_source": "ai"}
+                return {"image_url": self._placeholder_image(recipe), "image_source": "placeholder"}
             elif self.gemini_api_key:
                 image_bytes = self._generate_image_gemini(prompt, size=size)
             else:
@@ -503,6 +511,79 @@ class AIRecipeGenerator:
         if img_resp.status_code >= 400 or not img_resp.content:
             raise RuntimeError("Failed to download Runware image")
         return bytes(img_resp.content)
+
+    def _generate_image_runware_url(self, prompt: str, *, size: int) -> str | None:
+        """
+        Generate an image using Runware API but return the provider URL directly.
+
+        This avoids server-side download + disk storage issues and lets the mobile client
+        fetch the image from Runware's CDN immediately.
+        """
+        if not self.runware_api_key:
+            return None
+        if not self.runware_api_url:
+            raise RuntimeError("RUNWARE_API_URL is not set")
+
+        target = 512 if int(size) not in (512, 768, 1024) else int(size)
+        task_uuid = str(uuid.uuid4())
+
+        payload = [
+            {
+                "taskType": "imageInference",
+                "taskUUID": task_uuid,
+                "model": self.runware_image_model,
+                "positivePrompt": prompt,
+                "negativePrompt": (
+                    "text, words, letters, numbers, watermark, logo, caption, recipe card, menu, UI, border, frame, "
+                    "cartoon, illustration, anime, CGI, 3d, render, plastic, glossy, fake, lowres, blurry, "
+                    "raw ingredients, ingredient pile, cutting board, prep scene, uncooked"
+                ),
+                "width": target,
+                "height": target,
+                "numberResults": 1,
+                "outputType": "URL",
+                "outputFormat": "JPG",
+            }
+        ]
+
+        headers = {
+            "Authorization": f"Bearer {self.runware_api_key}",
+            "Content-Type": "application/json",
+        }
+
+        try:
+            resp = httpx.post(self.runware_api_url, json=payload, headers=headers, timeout=45.0)
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError("Runware request failed") from exc
+
+        if resp.status_code >= 400:
+            body_preview = ""
+            try:
+                body_preview = (resp.text or "")[:400]
+            except Exception:
+                body_preview = ""
+            suffix = f": {body_preview}" if body_preview else ""
+            raise RuntimeError(f"Runware returned {resp.status_code}{suffix}")
+
+        try:
+            data = resp.json()
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError("Runware returned invalid JSON") from exc
+
+        items = data.get("data") if isinstance(data, dict) else None
+        if not isinstance(items, list) or not items:
+            raise RuntimeError("Runware response missing data")
+
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            if item.get("taskType") != "imageInference":
+                continue
+            image_url = item.get("imageURL") or item.get("imageUrl") or item.get("url")
+            if isinstance(image_url, str) and image_url.strip():
+                return image_url.strip()
+
+        raise RuntimeError("Runware response missing image URL")
 
     def _store_generated_image(self, image_bytes: bytes, recipe: Dict[str, Any], *, size: int) -> str:
         digest = self._image_cache_key(recipe).replace("img:", "")
