@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
+import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
 import { Colors } from '../../constants/Colors';
 import RecipePlaceholder from '../../assets/images/recipe-placeholder.jpeg';
@@ -148,6 +149,7 @@ function MealCard({ meal, item, showImageLoading }) {
 
 export default function DailyPlanScreen() {
   const insets = useSafeAreaInsets();
+  const { signOut } = useAuth();
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -164,7 +166,7 @@ export default function DailyPlanScreen() {
       const response = await apiFetch(
         `${API_URL}${API_ENDPOINTS.DAILY_PLAN_TODAY}`,
         { method: 'GET', headers: { Authorization: `Bearer ${token}` } },
-        { timeoutMs: 8000 }
+        { onUnauthorized: signOut, timeoutMs: 8000 }
       );
       if (response.status === 403) {
         setPlan(null);
@@ -198,7 +200,7 @@ export default function DailyPlanScreen() {
         const response = await apiFetch(
           `${API_URL}${API_ENDPOINTS.DAILY_PLAN_TODAY}`,
           { method: 'GET', headers: { Authorization: `Bearer ${token}` } },
-          { timeoutMs: 8000 }
+          { onUnauthorized: signOut, timeoutMs: 8000 }
         );
         if (response.ok) {
           // eslint-disable-next-line no-await-in-loop
@@ -248,7 +250,7 @@ export default function DailyPlanScreen() {
         { method: 'POST', headers: { Authorization: `Bearer ${token}` } },
         // Daily plan now generates meal images before responding (premium UX).
         // Allow a bit more time so slower networks don't abort prematurely.
-        { timeoutMs: 65000 }
+        { onUnauthorized: signOut, timeoutMs: 65000 }
       );
       if (response.status === 403) {
         Alert.alert('Premium required', 'Daily Meal Planner is available for Premium users.');
