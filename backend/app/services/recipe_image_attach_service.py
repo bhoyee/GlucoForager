@@ -15,6 +15,7 @@ from ..services.settings_service import get_recipe_image_settings
 from ..services.subscription_service import get_effective_subscription_tier
 from ..core.config import settings as core_settings
 from ..services.recipe_fingerprint import recipe_fingerprint as stable_recipe_fingerprint
+from ..services.system_log_service import log_system_event
 
 logger = logging.getLogger(__name__)
 
@@ -219,6 +220,20 @@ def attach_recipe_images(
                             str(item.get("fingerprint") or "")[:10],
                             str(exc)[:200],
                         )
+                        try:
+                            log_system_event(
+                                {
+                                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                                    "level": "warn",
+                                    "source": "ai",
+                                    "type": "recipe_image.auto.failed",
+                                    "user_id": getattr(user, "id", None),
+                                    "fingerprint": str(item.get("fingerprint") or "")[:16],
+                                    "error": str(exc)[:220],
+                                }
+                            )
+                        except Exception:
+                            pass
                         continue
 
                     image_url = str((image_payload or {}).get("image_url") or "")
