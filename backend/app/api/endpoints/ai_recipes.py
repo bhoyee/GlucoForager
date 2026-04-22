@@ -751,22 +751,22 @@ def generate_recipe_image(
         if cached_url and isinstance(cached_url, str):
             base_url = str(request.base_url).rstrip("/")
             path = urlsplit(cached_url).path if cached_url.startswith("http") else cached_url
-            if path.startswith("/uploads/"):
-                # Best-effort: persist to recipe history so lists/details reflect the image.
-                _persist_image_to_history(
-                    db,
-                    user_id=current_user.id,
-                    fingerprint=fingerprint,
-                    image_url=f"{base_url}{path}",
-                    title_norm=title_norm,
-                )
-                return {
-                    "image_url": f"{base_url}{path}",
-                    "image_source": "ai",
-                    "cached": True,
-                    "size": settings.size,
-                    "daily_limit": daily_limit,
-                }
+            image_url = f"{base_url}{path}" if isinstance(path, str) and path.startswith("/uploads/") else cached_url
+            # Best-effort: persist to recipe history so lists/details reflect the image.
+            _persist_image_to_history(
+                db,
+                user_id=current_user.id,
+                fingerprint=fingerprint,
+                image_url=str(image_url),
+                title_norm=title_norm,
+            )
+            return {
+                "image_url": str(image_url),
+                "image_source": "ai",
+                "cached": True,
+                "size": settings.size,
+                "daily_limit": daily_limit,
+            }
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Image already generated for this recipe.",
