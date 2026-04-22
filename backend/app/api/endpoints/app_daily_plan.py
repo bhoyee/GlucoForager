@@ -15,6 +15,7 @@ from ...services.daily_plan_service import DailyPlanService
 from ...services.food_profile_service import extract_food_profile, build_food_profile_instructions
 from ...services.subscription_service import get_effective_subscription_tier
 from ...services.recipe_image_attach_service import attach_recipe_images
+from ...services.system_log_service import log_system_event
 
 router = APIRouter(prefix="/app/daily-plan", tags=["daily-plan"])
 logger = logging.getLogger(__name__)
@@ -328,6 +329,23 @@ def generate_today_plan(
             base_url=str(request.base_url).rstrip("/"),
             max_generate=len(image_candidates),
         )
+        try:
+            placeholders = sum(
+                1 for r in image_candidates if isinstance(r, dict) and str(r.get("image_source") or "") == "placeholder"
+            )
+            log_system_event(
+                {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "level": "info",
+                    "source": "ai",
+                    "type": "daily_plan.images",
+                    "user_id": current_user.id,
+                    "meals": len(image_candidates),
+                    "placeholders": int(placeholders),
+                }
+            )
+        except Exception:
+            pass
     except Exception:
         logger.exception("Daily plan: failed to attach images during generate user_id=%s", getattr(current_user, "id", None))
 

@@ -448,12 +448,18 @@ class AIRecipeGenerator:
         }
 
         try:
-            resp = httpx.post(self.runware_api_url, json=payload, headers=headers, timeout=25.0)
+            resp = httpx.post(self.runware_api_url, json=payload, headers=headers, timeout=45.0)
         except Exception as exc:  # noqa: BLE001
             raise RuntimeError("Runware request failed") from exc
 
         if resp.status_code >= 400:
-            raise RuntimeError(f"Runware returned {resp.status_code}")
+            body_preview = ""
+            try:
+                body_preview = (resp.text or "")[:400]
+            except Exception:
+                body_preview = ""
+            suffix = f": {body_preview}" if body_preview else ""
+            raise RuntimeError(f"Runware returned {resp.status_code}{suffix}")
 
         try:
             data = resp.json()
@@ -491,7 +497,7 @@ class AIRecipeGenerator:
             raise RuntimeError("Runware response missing image URL")
 
         try:
-            img_resp = httpx.get(image_url, timeout=25.0)
+            img_resp = httpx.get(image_url, timeout=45.0)
         except Exception as exc:  # noqa: BLE001
             raise RuntimeError("Failed to download Runware image") from exc
         if img_resp.status_code >= 400 or not img_resp.content:
@@ -512,9 +518,8 @@ class AIRecipeGenerator:
             img = img.resize((target, target), Image.Resampling.LANCZOS)
         img.save(path, format="JPEG", quality=82, optimize=True, progressive=True)
 
-        base = (settings.site_url or "").rstrip("/")
-        if base:
-            return f"{base}/uploads/recipe-images/{filename}"
+        # Always return a path under `/uploads/...` so callers can normalize it to the
+        # correct host (API base URL) via `attach_recipe_images(base_url=...)`.
         return f"/uploads/recipe-images/{filename}"
 
     def generate(
