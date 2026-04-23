@@ -25,6 +25,7 @@ from ...services.settings_service import get_recipe_image_settings
 from ...services.subscription_service import get_effective_subscription_tier
 from ...models.recipe_history import RecipeHistory
 from ...services.redis_ai_queue import RedisAIQueue
+from ...services.system_log_service import log_system_event
 
 router = APIRouter(prefix="/ai/recipes", tags=["ai"])
 pipeline = AIPipeline()
@@ -79,12 +80,30 @@ def _ensure_images(recipes: list[dict], tier: str, ingredients: list[str]) -> li
 
 def _run_vision_job(job_id: str) -> None:
     db = SessionLocal()
+    started = datetime.now(timezone.utc)
     try:
         job = db.query(AIJob).filter(AIJob.id == job_id).first()
         if not job:
             return
         if job.status not in {"pending", "queued"}:
             return
+        try:
+            queue_wait_ms = None
+            if getattr(job, "created_at", None):
+                queue_wait_ms = int((datetime.now(timezone.utc) - job.created_at.replace(tzinfo=timezone.utc)).total_seconds() * 1000)
+            log_system_event(
+                {
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                    "level": "info",
+                    "type": "ai.vision.job.start",
+                    "job_id": job_id,
+                    "user_id": job.user_id,
+                    "prev_status": job.status,
+                    "queue_wait_ms": queue_wait_ms,
+                }
+            )
+        except Exception:
+            pass
         job.status = "running"
         db.commit()
 
@@ -96,11 +115,43 @@ def _run_vision_job(job_id: str) -> None:
         mode = payload.get("mode") or "single"
         base_url = payload.get("base_url")
 
+        try:
+            log_system_event(
+                {
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                    "level": "info",
+                    "type": "ai.vision.job.start",
+                    "job_id": job_id,
+                    "user_id": job.user_id,
+                    "mode": mode,
+                    "images_count": len(images_base64) if isinstance(images_base64, list) else None,
+                    "include_recipes": include_recipes,
+                    "filters_count": len(filters) if isinstance(filters, list) else None,
+                }
+            )
+        except Exception:
+            pass
+
         user = db.query(User).filter(User.id == job.user_id).first()
         if not user:
             job.status = "failed"
             job.error = "User not found."
             db.commit()
+            try:
+                log_system_event(
+                    {
+                        "ts": datetime.now(timezone.utc).isoformat(),
+                        "level": "error",
+                        "type": "ai.vision.job.done",
+                        "job_id": job_id,
+                        "user_id": job.user_id,
+                        "status": "failed",
+                        "error_code": "user_not_found",
+                        "elapsed_ms": int((datetime.now(timezone.utc) - started).total_seconds() * 1000),
+                    }
+                )
+            except Exception:
+                pass
             return
 
         tier = get_effective_subscription_tier(db, user) or "free"
@@ -137,6 +188,21 @@ def _run_vision_job(job_id: str) -> None:
                 }
             }
             db.commit()
+            try:
+                log_system_event(
+                    {
+                        "ts": datetime.now(timezone.utc).isoformat(),
+                        "level": "warn",
+                        "type": "ai.vision.job.done",
+                        "job_id": job_id,
+                        "user_id": job.user_id,
+                        "status": "failed",
+                        "error_code": exc.code,
+                        "elapsed_ms": int((datetime.now(timezone.utc) - started).total_seconds() * 1000),
+                    }
+                )
+            except Exception:
+                pass
             return
 
         try:
@@ -146,9 +212,8 @@ def _run_vision_job(job_id: str) -> None:
                 recipes=result.get("recipes", []) or [],
                 ingredients=result.get("detected", []) or [],
                 base_url=base_url,
-                # Generate up to 3 thumbnails so the results screen looks premium.
-                # Daily limits and per-recipe caps still apply via App Settings.
-                max_generate=3,
+                # Speed: don't auto-generate images inline; clients can request images after recipes render.
+                max_generate=0,
             )
         except Exception:
             pass
@@ -166,6 +231,22 @@ def _run_vision_job(job_id: str) -> None:
         job.status = "completed"
         job.error = None
         db.commit()
+        try:
+            log_system_event(
+                {
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                    "level": "info",
+                    "type": "ai.vision.job.done",
+                    "job_id": job_id,
+                    "user_id": job.user_id,
+                    "status": "completed",
+                    "elapsed_ms": int((datetime.now(timezone.utc) - started).total_seconds() * 1000),
+                    "detected_count": len((result or {}).get("detected") or []),
+                    "recipes_count": len((result or {}).get("recipes") or []),
+                }
+            )
+        except Exception:
+            pass
     except Exception as exc:  # noqa: BLE001
         if "job" in locals() and job:
             job.status = "failed"
@@ -178,6 +259,22 @@ def _run_vision_job(job_id: str) -> None:
                 }
             }
             db.commit()
+        try:
+            log_system_event(
+                {
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                    "level": "error",
+                    "type": "ai.vision.job.done",
+                    "job_id": job_id,
+                    "user_id": job.user_id if "job" in locals() and job else None,
+                    "status": "failed",
+                    "error_code": "exception",
+                    "error_message": str(exc)[:200],
+                    "elapsed_ms": int((datetime.now(timezone.utc) - started).total_seconds() * 1000),
+                }
+            )
+        except Exception:
+            pass
     finally:
         db.close()
 
@@ -227,6 +324,28 @@ def generate_from_vision(
             cached_result = json.loads(cached) if isinstance(cached, str) else cached
         except json.JSONDecodeError:
             cached_result = None
+        if cached_result:
+            # Cache can outlive prompt/validation changes; re-validate on read to avoid returning stale/hallucinated content.
+            try:
+                detected_cached = cached_result.get("detected", []) if isinstance(cached_result, dict) else []
+                pipeline._ensure_diabetes_friendly_or_raise(detected_cached or [], mode="ingredients")
+                validated = pipeline._validated_recipes_or_none(
+                    cached_result.get("recipes", []) if isinstance(cached_result, dict) else None,
+                    source_ingredients=detected_cached if isinstance(detected_cached, list) else [],
+                )
+                if not validated:
+                    cache.delete(cache_key)
+                    cached_result = None
+                else:
+                    cached_result["recipes"] = validated
+            except IngredientValidationError:
+                cache.delete(cache_key)
+                cached_result = None
+            except Exception:
+                # If validation itself errors, don't trust the cache.
+                cache.delete(cache_key)
+                cached_result = None
+
         if cached_result:
             cached_recipes = _ensure_images(
                 cached_result.get("recipes", []),
@@ -323,6 +442,27 @@ def generate_from_vision_batch(
             cached_result = json.loads(cached) if isinstance(cached, str) else cached
         except json.JSONDecodeError:
             cached_result = None
+        if cached_result:
+            # Cache can outlive prompt/validation changes; re-validate on read to avoid returning stale/hallucinated content.
+            try:
+                detected_cached = cached_result.get("detected", []) if isinstance(cached_result, dict) else []
+                pipeline._ensure_diabetes_friendly_or_raise(detected_cached or [], mode="ingredients")
+                validated = pipeline._validated_recipes_or_none(
+                    cached_result.get("recipes", []) if isinstance(cached_result, dict) else None,
+                    source_ingredients=detected_cached if isinstance(detected_cached, list) else [],
+                )
+                if not validated:
+                    cache.delete(cache_key)
+                    cached_result = None
+                else:
+                    cached_result["recipes"] = validated
+            except IngredientValidationError:
+                cache.delete(cache_key)
+                cached_result = None
+            except Exception:
+                cache.delete(cache_key)
+                cached_result = None
+
         if cached_result:
             cached_recipes = _ensure_images(
                 cached_result.get("recipes", []),
@@ -451,8 +591,9 @@ def generate_from_vision_async(
         if not queued:
             background_tasks.add_task(_run_vision_job, job_id)
     else:
-        if not core_settings.ai_job_runner_enabled:
-            background_tasks.add_task(_run_vision_job, job_id)
+        # DB queue mode: always run a background task as a safety net.
+        # Otherwise jobs can remain "pending" forever in local/dev if an external poller isn't running.
+        background_tasks.add_task(_run_vision_job, job_id)
     return {"job_id": job_id, "status": job.status, "access": access}
 
 
@@ -515,8 +656,9 @@ def generate_from_vision_batch_async(
         if not queued:
             background_tasks.add_task(_run_vision_job, job_id)
     else:
-        if not core_settings.ai_job_runner_enabled:
-            background_tasks.add_task(_run_vision_job, job_id)
+        # DB queue mode: always run a background task as a safety net.
+        # Otherwise jobs can remain "pending" forever in local/dev if an external poller isn't running.
+        background_tasks.add_task(_run_vision_job, job_id)
     return {"job_id": job_id, "status": job.status, "access": access}
 
 
@@ -609,22 +751,22 @@ def generate_recipe_image(
         if cached_url and isinstance(cached_url, str):
             base_url = str(request.base_url).rstrip("/")
             path = urlsplit(cached_url).path if cached_url.startswith("http") else cached_url
-            if path.startswith("/uploads/"):
-                # Best-effort: persist to recipe history so lists/details reflect the image.
-                _persist_image_to_history(
-                    db,
-                    user_id=current_user.id,
-                    fingerprint=fingerprint,
-                    image_url=f"{base_url}{path}",
-                    title_norm=title_norm,
-                )
-                return {
-                    "image_url": f"{base_url}{path}",
-                    "image_source": "ai",
-                    "cached": True,
-                    "size": settings.size,
-                    "daily_limit": daily_limit,
-                }
+            image_url = f"{base_url}{path}" if isinstance(path, str) and path.startswith("/uploads/") else cached_url
+            # Best-effort: persist to recipe history so lists/details reflect the image.
+            _persist_image_to_history(
+                db,
+                user_id=current_user.id,
+                fingerprint=fingerprint,
+                image_url=str(image_url),
+                title_norm=title_norm,
+            )
+            return {
+                "image_url": str(image_url),
+                "image_source": "ai",
+                "cached": True,
+                "size": settings.size,
+                "daily_limit": daily_limit,
+            }
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Image already generated for this recipe.",
@@ -702,7 +844,12 @@ def generate_recipe_image(
                 if provider == "runware"
                 else core_settings.gemini_image_model
                 if provider == "gemini"
-                else (core_settings.runware_image_model or core_settings.gemini_image_model or provider or "unknown")
+                else (
+                    core_settings.runware_image_model
+                    or core_settings.gemini_image_model
+                    or provider
+                    or "unknown"
+                )
             ),
             tokens_used=0,
             cost_estimate=float(settings.cost_usd or 0.0),

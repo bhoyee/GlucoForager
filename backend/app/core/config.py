@@ -41,8 +41,9 @@ class Settings(BaseSettings):
     gemini_image_model: str = Field("imagen-4.0-generate-001", env="GEMINI_IMAGE_MODEL")
     # Optional Gemini text model for recipe generation fallback (e.g. "gemini-2.5-flash").
     gemini_text_model: str | None = Field(None, env="GEMINI_TEXT_MODEL")
-    # Recipe image generation provider ("gemini" or "runware"). Defaults to Gemini for backward-compat.
-    recipe_image_provider: str = Field("gemini", env="RECIPE_IMAGE_PROVIDER")
+    # Recipe image generation provider ("runware" or "gemini").
+    # Defaults to Runware (fast/cheap) for image generation; text recipes can still be OpenAI-only.
+    recipe_image_provider: str = Field("runware", env="RECIPE_IMAGE_PROVIDER")
     # Runware (https://runware.ai) image generation (e.g. FLUX Schnell).
     runware_api_key: str | None = Field(None, env="RUNWARE_API_KEY")
     runware_api_url: str = Field("https://api.runware.ai/v1", env="RUNWARE_API_URL")
@@ -53,6 +54,9 @@ class Settings(BaseSettings):
     ai_log_raw_output: bool = Field(False, env="AI_LOG_RAW_OUTPUT")
     # Mobile polls for ~60s; keep "Eat now" flows within that by default, but allow override for debugging.
     ai_eat_now_budget_seconds: float = Field(60.0, env="AI_EAT_NOW_BUDGET_SECONDS")
+    # When enabled, do not attempt non-OpenAI providers (DeepSeek/Gemini) for recipe generation.
+    # This avoids wasting latency budget on fallbacks when you only want OpenAI.
+    ai_openai_only: bool = Field(True, env="AI_OPENAI_ONLY")
 
     # AI job runner (lightweight server-side queue) - protects the API under bursts.
     ai_job_runner_enabled: bool = Field(True, env="AI_JOB_RUNNER_ENABLED")

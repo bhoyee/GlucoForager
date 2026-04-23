@@ -267,7 +267,7 @@ export default function SignUpScreen() {
             disabled={isLoading}
           >
             <LinearGradient
-              colors={isLoading ? [Colors.textMuted, Colors.textMuted] : ["#2E8B57", "#48BB78"]}
+              colors={isLoading ? [Colors.textMuted, Colors.textMuted] : [Colors.primary, Colors.primaryLight]}
               style={styles.signUpButtonGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}

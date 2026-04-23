@@ -35,7 +35,6 @@ class AIRecipeGenerator:
             else None
         )
         self.primary_model = settings.openai_model
-        self.image_model = "dall-e-3"
         # DeepSeek fallback for text (vision not supported)
         self.fallback_client = (
             OpenAI(api_key=settings.deepseek_api_key, base_url=settings.deepseek_base_url, max_retries=0)
@@ -48,7 +47,7 @@ class AIRecipeGenerator:
         self.gemini_api_key = settings.gemini_api_key
         self.gemini_image_model = settings.gemini_image_model
         self.gemini_text_model = (settings.gemini_text_model or "").strip() or None
-        self.recipe_image_provider = (settings.recipe_image_provider or "").strip().lower() or "gemini"
+        self.recipe_image_provider = (settings.recipe_image_provider or "").strip().lower() or "runware"
         self.runware_api_key = settings.runware_api_key
         self.runware_api_url = (settings.runware_api_url or "").strip().rstrip("/")
         self.runware_image_model = (settings.runware_image_model or "").strip() or "runware:100@1"
@@ -262,15 +261,23 @@ class AIRecipeGenerator:
         if provider == "runware":
             if not self.runware_api_key:
                 return {"image_url": self._placeholder_image(recipe), "image_source": "placeholder"}
-            image_bytes = self._generate_image_runware(prompt, size=size)
+            # For speed/reliability: prefer returning the provider URL directly rather than
+            # downloading + re-encoding + storing on disk (which can fail under shared hosting).
+            image_url = self._generate_image_runware_url(prompt, size=size)
+            if not image_url:
+                return {"image_url": self._placeholder_image(recipe), "image_source": "placeholder"}
+            return {"image_url": image_url, "image_source": "ai"}
         elif provider == "gemini":
             if not self.gemini_api_key:
                 return {"image_url": self._placeholder_image(recipe), "image_source": "placeholder"}
             image_bytes = self._generate_image_gemini(prompt, size=size)
         else:
-            # Best-effort fallback: prefer Runware if configured, otherwise Gemini, otherwise placeholder.
+            # Best-effort fallback: prefer Runware, otherwise Gemini, otherwise placeholder.
             if self.runware_api_key:
-                image_bytes = self._generate_image_runware(prompt, size=size)
+                image_url = self._generate_image_runware_url(prompt, size=size)
+                if image_url:
+                    return {"image_url": image_url, "image_source": "ai"}
+                return {"image_url": self._placeholder_image(recipe), "image_source": "placeholder"}
             elif self.gemini_api_key:
                 image_bytes = self._generate_image_gemini(prompt, size=size)
             else:
@@ -295,13 +302,14 @@ class AIRecipeGenerator:
         ingredient_text = ", ".join(normalized[:16]) if normalized else ""
 
         parts = [
-            "Create a real-looking food photograph of the finished dish (not an illustration, not CGI, not 3D).",
-            "Look like a real photo taken with a modern smartphone or DSLR in natural lighting.",
-            "Square 1:1 composition, centered plating, clean simple background, high detail, realistic textures.",
-            "Include subtle, natural imperfections (not overly polished) so it does not look AI-generated.",
-            "Avoid common AI artifacts: plastic/glossy textures, over-saturated colors, unnatural bokeh, warped cutlery, smeared details.",
+            "Photorealistic food photography of the finished dish (NOT an illustration, NOT a cartoon, NOT anime, NOT CGI, NOT 3D render).",
+            "Looks like a real photo shot by a professional food photographer using a modern smartphone or DSLR, natural window light, soft shadows.",
+            "The dish must look fully cooked and ready-to-eat (restaurant plating), not an ingredient pile.",
+            "Square 1:1 composition, centered plating, natural shallow depth-of-field (no weird AI bokeh).",
+            "High-end editorial style with realistic textures and believable colors (avoid glossy/plastic look). Serve the dish on a clean ceramic plate/bowl on a simple table surface; minimal realistic props only if they look correct (not warped).",
             "IMPORTANT: Absolutely no text of any kind (no letters, numbers, titles, captions, labels, watermarks, logos, UI).",
-            "Do not generate menus, recipe cards, app screens, packaging, or any overlay text.",
+            "Avoid AI artifacts: smeared details, warped cutlery, floating garnish, melting edges, unreadable shapes, over-saturated colors.",
+            "Do not generate recipe cards, menus, app screens, packaging, or any overlay text.",
             "No borders, no frames, no top banners, no UI elements — the image must be an edge-to-edge food photo only.",
         ]
         # Avoid including structured labels like "Recipe name:" / "Ingredients:" which increases the chance
@@ -316,6 +324,8 @@ class AIRecipeGenerator:
             [
                 "The subject must look like a finished, plated, ready-to-eat meal (served dish, not prep).",
                 "Main proteins must look clearly cooked (golden-brown sear, grill marks, roasted surface, crisp edges, flaky cooked fish as appropriate).",
+                "Vegetables and sides must look cooked/seasoned (sauteed, roasted, steamed) — not raw or straight from packaging.",
+                "Do not show raw ingredient piles, cutting boards, prep scenes, or supermarket-style raw displays.",
                 "Absolutely no raw meat, no raw fish, no uncooked chicken, no sashimi, no ingredient pile, no cutting board, no prep scene.",
                 "Add subtle steam/heat cues when it makes sense for the dish.",
                 "If the recipe is a drink/smoothie, show a finished ready-to-drink beverage instead (still no prep scene).",
@@ -426,6 +436,11 @@ class AIRecipeGenerator:
                 "taskUUID": task_uuid,
                 "model": self.runware_image_model,
                 "positivePrompt": prompt,
+                "negativePrompt": (
+                    "text, words, letters, numbers, watermark, logo, caption, recipe card, menu, UI, border, frame, "
+                    "cartoon, illustration, anime, CGI, 3d, render, plastic, glossy, fake, lowres, blurry, "
+                    "raw ingredients, ingredient pile, cutting board, prep scene, uncooked"
+                ),
                 "width": target,
                 "height": target,
                 "numberResults": 1,
@@ -441,12 +456,18 @@ class AIRecipeGenerator:
         }
 
         try:
-            resp = httpx.post(self.runware_api_url, json=payload, headers=headers, timeout=60.0)
+            resp = httpx.post(self.runware_api_url, json=payload, headers=headers, timeout=45.0)
         except Exception as exc:  # noqa: BLE001
             raise RuntimeError("Runware request failed") from exc
 
         if resp.status_code >= 400:
-            raise RuntimeError(f"Runware returned {resp.status_code}")
+            body_preview = ""
+            try:
+                body_preview = (resp.text or "")[:400]
+            except Exception:
+                body_preview = ""
+            suffix = f": {body_preview}" if body_preview else ""
+            raise RuntimeError(f"Runware returned {resp.status_code}{suffix}")
 
         try:
             data = resp.json()
@@ -484,12 +505,85 @@ class AIRecipeGenerator:
             raise RuntimeError("Runware response missing image URL")
 
         try:
-            img_resp = httpx.get(image_url, timeout=60.0)
+            img_resp = httpx.get(image_url, timeout=45.0)
         except Exception as exc:  # noqa: BLE001
             raise RuntimeError("Failed to download Runware image") from exc
         if img_resp.status_code >= 400 or not img_resp.content:
             raise RuntimeError("Failed to download Runware image")
         return bytes(img_resp.content)
+
+    def _generate_image_runware_url(self, prompt: str, *, size: int) -> str | None:
+        """
+        Generate an image using Runware API but return the provider URL directly.
+
+        This avoids server-side download + disk storage issues and lets the mobile client
+        fetch the image from Runware's CDN immediately.
+        """
+        if not self.runware_api_key:
+            return None
+        if not self.runware_api_url:
+            raise RuntimeError("RUNWARE_API_URL is not set")
+
+        target = 512 if int(size) not in (512, 768, 1024) else int(size)
+        task_uuid = str(uuid.uuid4())
+
+        payload = [
+            {
+                "taskType": "imageInference",
+                "taskUUID": task_uuid,
+                "model": self.runware_image_model,
+                "positivePrompt": prompt,
+                "negativePrompt": (
+                    "text, words, letters, numbers, watermark, logo, caption, recipe card, menu, UI, border, frame, "
+                    "cartoon, illustration, anime, CGI, 3d, render, plastic, glossy, fake, lowres, blurry, "
+                    "raw ingredients, ingredient pile, cutting board, prep scene, uncooked"
+                ),
+                "width": target,
+                "height": target,
+                "numberResults": 1,
+                "outputType": "URL",
+                "outputFormat": "JPG",
+            }
+        ]
+
+        headers = {
+            "Authorization": f"Bearer {self.runware_api_key}",
+            "Content-Type": "application/json",
+        }
+
+        try:
+            resp = httpx.post(self.runware_api_url, json=payload, headers=headers, timeout=45.0)
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError("Runware request failed") from exc
+
+        if resp.status_code >= 400:
+            body_preview = ""
+            try:
+                body_preview = (resp.text or "")[:400]
+            except Exception:
+                body_preview = ""
+            suffix = f": {body_preview}" if body_preview else ""
+            raise RuntimeError(f"Runware returned {resp.status_code}{suffix}")
+
+        try:
+            data = resp.json()
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError("Runware returned invalid JSON") from exc
+
+        items = data.get("data") if isinstance(data, dict) else None
+        if not isinstance(items, list) or not items:
+            raise RuntimeError("Runware response missing data")
+
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            if item.get("taskType") != "imageInference":
+                continue
+            image_url = item.get("imageURL") or item.get("imageUrl") or item.get("url")
+            if isinstance(image_url, str) and image_url.strip():
+                return image_url.strip()
+
+        raise RuntimeError("Runware response missing image URL")
 
     def _store_generated_image(self, image_bytes: bytes, recipe: Dict[str, Any], *, size: int) -> str:
         digest = self._image_cache_key(recipe).replace("img:", "")
@@ -505,9 +599,8 @@ class AIRecipeGenerator:
             img = img.resize((target, target), Image.Resampling.LANCZOS)
         img.save(path, format="JPEG", quality=82, optimize=True, progressive=True)
 
-        base = (settings.site_url or "").rstrip("/")
-        if base:
-            return f"{base}/uploads/recipe-images/{filename}"
+        # Always return a path under `/uploads/...` so callers can normalize it to the
+        # correct host (API base URL) via `attach_recipe_images(base_url=...)`.
         return f"/uploads/recipe-images/{filename}"
 
     def generate(
@@ -528,7 +621,12 @@ class AIRecipeGenerator:
         tier_cfg = TIER_CONFIG.get(tier, {})
         model_chain: List[str] = tier_cfg.get("recipe_models") or [self.primary_model]
 
+        # Optional hard switch: keep only OpenAI to avoid spending UX budget on fallbacks.
+        if settings.ai_openai_only:
+            model_chain = [m for m in model_chain if "deepseek" not in str(m).lower()]
+
         banned_titles_norm = {self._normalize_title(t) for t in exclude_titles if t}
+
         extra_instructions = None
         if exclude_titles or variety_mode:
             parts = [
@@ -551,6 +649,13 @@ class AIRecipeGenerator:
             other_models = [m for m in model_chain if "deepseek" not in m.lower()]
             if other_models and deepseek_models:
                 model_chain = [*other_models, *deepseek_models]
+        else:
+            # For ingredient-driven generation with tight time budgets (mobile UX),
+            # prefer the fast chain first to reduce timeouts and invalid/truncated JSON.
+            if timeout_seconds is not None and float(timeout_seconds) <= 60.0:
+                fast_chain = tier_cfg.get("recipe_models_fast") or []
+                if isinstance(fast_chain, list) and fast_chain:
+                    model_chain = [str(m) for m in fast_chain if str(m).strip()]
 
         if mode_norm in ("surprise", "quick"):
             preferred_cuisines: list[str] = []
@@ -981,22 +1086,22 @@ class AIRecipeGenerator:
                 base_ingredients = [protein, *vegs, "olive oil", *flavors]
 
             ingredient_text = ", ".join(base_ingredients) if base_ingredients else "common ingredients"
-            main = (base_ingredients[0] if base_ingredients else "protein").strip()
+            main = (base_ingredients[0] if base_ingredients else "main ingredient").strip()
             t1 = 18 if is_quick else 25
             t2 = 19 if is_quick else 26
             t3 = 20 if is_quick else 30
             base = [
                 {
-                    "title": f"{main.title()} Bowl with Greens",
-                    "description": f"Diabetes-friendly bowl using {ingredient_text}.",
+                    "title": f"{main.title()} Bowl",
+                    "description": f"Simple, portion-controlled recipe using {ingredient_text}.",
                     "ingredients": [{"name": ing, "quantity": 1, "unit": "portion"} for ing in base_ingredients],
                     "instructions": [
-                        "Prep: pat protein dry; season with salt/pepper (and lemon zest if available).",
+                        "Prep: wash/peel/chop the main ingredient(s) and any other ingredients as needed.",
                         "Heat a skillet over medium-high heat for 1 minute; add a small drizzle of olive oil.",
-                        "Cook protein 4-6 minutes total, flipping once, until browned and cooked through.",
-                        "In the same pan, add garlic and greens; saute 2-3 minutes until wilted.",
-                        "Add broccoli (fresh or steamed) and toss 1 minute to warm through.",
-                        "Plate and finish with lemon juice and a light olive-oil drizzle.",
+                        "Cook the main ingredient until tender and safe to eat (boil/simmer for starchy foods; saute for others).",
+                        "If you have seasonings, add salt/pepper/spices to taste (avoid added sugar).",
+                        "Combine with the remaining ingredients to build a balanced bowl (keep sauces minimal).",
+                        "Plate and serve. Keep the starchy portion modest if managing blood sugar.",
                     ],
                     "prep_time": 10,
                     "cook_time": max(0, t1 - 10),
@@ -1004,70 +1109,69 @@ class AIRecipeGenerator:
                     "difficulty": "Easy",
                     "nutritional_info": {
                         "calories": 350,
-                        "carbs": 15,
-                        "protein": 35,
-                        "fat": 12,
-                        "fiber": 6,
-                        "sugar": 3,
-                        "glycemic_index": "Low",
+                        "carbs": 35,
+                        "protein": 12,
+                        "fat": 10,
+                        "fiber": 5,
+                        "sugar": 6,
+                        "glycemic_index": "Medium",
                     },
-                    "tags": ["diabetes-friendly", "high-protein", "low-carb"],
+                    "tags": ["diabetes-friendly", "portion-control"],
                     "servings": 2,
                 },
                 {
-                    "title": f"Herb {main.title()} & Greens",
-                    "description": f"Light fish entrée featuring {ingredient_text}.",
+                    "title": f"{main.title()} Plate",
+                    "description": f"Straightforward recipe using {ingredient_text} with realistic portions.",
                     "ingredients": [{"name": ing, "quantity": 1, "unit": "portion"} for ing in base_ingredients],
                     "instructions": [
-                        "Prep: season the protein with salt/pepper, lemon, and herbs/spices.",
-                        "Cook protein 8-12 minutes until done (or pan-sear 3-4 minutes per side, depending on thickness).",
-                        "Meanwhile, heat a skillet over medium heat; add olive oil and garlic for 30 seconds.",
-                        "Add spinach; saute 2-3 minutes until just wilted.",
-                        "Plate protein over spinach; squeeze lemon on top and taste for salt.",
-                        "Serve with steamed broccoli for extra fiber.",
+                        "Prep: wash/peel/chop the main ingredient(s) and any other ingredients as needed.",
+                        "Cook the main ingredient using a simple method (boil/bake/saute) and avoid burning.",
+                        "Warm or lightly cook the remaining ingredients so flavors combine.",
+                        "Taste and adjust seasoning (keep added sugar low).",
+                        "Serve and consider pairing with a protein/fiber side if available.",
                     ],
                     "prep_time": 8,
                     "cook_time": max(0, t2 - 8),
                     "total_time": t2,
                     "difficulty": "Easy",
                     "nutritional_info": {
-                        "calories": 280,
-                        "carbs": 10,
-                        "protein": 32,
+                        "calories": 300,
+                        "carbs": 32,
+                        "protein": 11,
                         "fat": 9,
                         "fiber": 5,
-                        "sugar": 2,
-                        "glycemic_index": "Low",
+                        "sugar": 6,
+                        "glycemic_index": "Medium",
                     },
-                    "tags": ["diabetes-friendly", "low-carb", "omega-3"],
+                    "tags": ["diabetes-friendly", "simple"],
                     "servings": 2,
                 },
                 {
-                    "title": f"{main.title()} & Veg Skillet",
+                    "title": f"{main.title()} Skillet",
                     "description": f"One-pan meal with {ingredient_text}.",
                     "ingredients": [{"name": ing, "quantity": 1, "unit": "portion"} for ing in base_ingredients],
                     "instructions": [
-                        "Prep: cut the protein into bite-size pieces (if needed) and season well.",
-                        "Heat skillet over medium-high heat; add olive oil.",
-                        "Sear protein 5-7 minutes, stirring occasionally, until browned and cooked through.",
-                        "Add vegetables; saute 6-8 minutes until tender-crisp.",
-                        "Add garlic and cook 30 seconds until fragrant.",
-                        "Finish with lemon and serve immediately.",
+                        "Prep: wash/peel/chop the main ingredient(s) and any other ingredients as needed.",
+                        "Heat a skillet over medium heat; add a small drizzle of oil if available.",
+                        "Cook the main ingredient, stirring, until cooked through and lightly browned where possible.",
+                        "Add the remaining ingredients and cook 2-3 minutes to combine flavors.",
+                        "Finish with seasonings; avoid making the dish sweet.",
+                        "Serve immediately. Keep the starchy portion smaller if needed.",
                     ],
                     "prep_time": 12,
                     "cook_time": max(0, t3 - 12),
                     "total_time": t3,
                     "difficulty": "Easy",
                     "nutritional_info": {
-                        "calories": 360,
-                        "carbs": 18,
-                        "protein": 34,
-                        "fat": 14,
-                        "fiber": 7,
-                        "sugar": 3,
+                        "calories": 340,
+                        "carbs": 36,
+                        "protein": 12,
+                        "fat": 11,
+                        "fiber": 5,
+                        "sugar": 6,
                         "glycemic_index": "Medium",
                     },
-                    "tags": ["diabetes-friendly", "balanced", "high-protein"],
+                    "tags": ["diabetes-friendly", "quick"],
                     "servings": 2,
                 },
             ]
@@ -1097,6 +1201,9 @@ class AIRecipeGenerator:
         used_deterministic_schedule = False
         gemini_model = self.gemini_text_model
         has_gemini = bool(self.gemini_api_key and gemini_model)
+        if settings.ai_openai_only:
+            gemini_model = None
+            has_gemini = False
 
         def _try_models(
             models: list[str],
@@ -1126,7 +1233,9 @@ class AIRecipeGenerator:
                             # Eat-now flows are async but UX-sensitive; allow a bit more time to avoid unnecessary fallbacks.
                             cap = 45.0 if budget <= 60.0 else 60.0
                         else:
-                            cap = 25.0
+                            # Non "Eat now" flows run async (job queue) so we can afford a longer per-request timeout.
+                            # This significantly reduces false failures on slower networks / provider latency spikes.
+                            cap = 30.0 if remaining_total <= 60.0 else 45.0
                         per_request_timeout = max(5.0, min(cap, remaining_total))
                         if phase_timeout is not None:
                             remaining_phase = phase_timeout - (time.time() - phase_started)
@@ -1154,7 +1263,7 @@ class AIRecipeGenerator:
                         timeout_seconds=per_request_timeout,
                         # Give enough room to finish valid JSON (truncation => invalid JSON => slow fallback chain).
                         # The prompt already enforces concision, so a higher cap doesn't mean longer outputs.
-                        max_output_tokens=2200 if mode_norm in ("surprise", "quick") else 2000,
+                        max_output_tokens=2200 if mode_norm in ("surprise", "quick") else 1400,
                     )
                     parsed = parse_content(content)
                     recipes = self._filter_recipes(parsed, banned_titles_norm)
@@ -1225,6 +1334,10 @@ class AIRecipeGenerator:
             deepseek_models = [m for m in model_chain if "deepseek" in m.lower()]
             gemini_model = self.gemini_text_model
             has_gemini = bool(self.gemini_api_key and gemini_model)
+            if settings.ai_openai_only:
+                gemini_model = None
+                has_gemini = False
+                deepseek_models = []
             if self.primary_client and (has_gemini or self.fallback_client) and openai_models and (gemini_model or deepseek_models):
                 used_deterministic_schedule = True
                 # Give the primary provider enough time to actually return (otherwise we burn time on fallbacks).

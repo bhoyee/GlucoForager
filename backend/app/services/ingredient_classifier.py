@@ -16,11 +16,20 @@ class IngredientClassifier:
 
     def __init__(self) -> None:
         if settings.openai_api_key:
-            self.client = OpenAI(api_key=settings.openai_api_key, organization=settings.openai_organization)
+            # Avoid compounding delays from internal retries; keep this fast.
+            self.client = OpenAI(
+                api_key=settings.openai_api_key,
+                organization=settings.openai_organization,
+                max_retries=0,
+            )
             self.model = settings.openai_model
             self.base_url = str(getattr(self.client, "base_url", ""))
         elif settings.deepseek_api_key:
-            self.client = OpenAI(api_key=settings.deepseek_api_key, base_url=settings.deepseek_base_url)
+            self.client = OpenAI(
+                api_key=settings.deepseek_api_key,
+                base_url=settings.deepseek_base_url,
+                max_retries=0,
+            )
             self.model = settings.deepseek_model
             self.base_url = settings.deepseek_base_url
         else:
@@ -145,7 +154,8 @@ class IngredientClassifier:
                 }
                 if "openai" in self.base_url or self.base_url in ("", "None"):
                     params["response_format"] = {"type": "json_object"}
-                resp = self.client.chat.completions.create(**params)
+                # Keep classification fast so it doesn't dominate the overall recipe generation time.
+                resp = self.client.chat.completions.create(**params, timeout=6.0)
                 content = resp.choices[0].message.content or ""
                 payload = json.loads(content)
                 items = payload.get("items", [])

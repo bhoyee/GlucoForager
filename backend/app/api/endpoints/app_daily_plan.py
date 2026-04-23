@@ -1,11 +1,11 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 import logging
 
 from ...api.dependencies import get_current_user
-from ...database import get_db
+from ...database import SessionLocal, get_db
 from ...models.ai_request import AIRequest
 from ...models.meal_plan import MealPlan
 from ...models.user import User
@@ -15,9 +15,66 @@ from ...services.daily_plan_service import DailyPlanService
 from ...services.food_profile_service import extract_food_profile, build_food_profile_instructions
 from ...services.subscription_service import get_effective_subscription_tier
 from ...services.recipe_image_attach_service import attach_recipe_images
+from ...services.system_log_service import log_system_event
 
 router = APIRouter(prefix="/app/daily-plan", tags=["daily-plan"])
 logger = logging.getLogger(__name__)
+
+
+def _refresh_plan_images(plan_id: int, *, base_url: str) -> None:
+    """
+    Background: attach real images to a stored daily plan without blocking the /generate response.
+
+    This updates the `meal_plans.recipes.meals[*].image_url` fields in-place and relies on the same
+    per-user daily limits as on-demand image generation.
+    """
+
+    db = SessionLocal()
+    try:
+        plan = db.query(MealPlan).filter(MealPlan.id == int(plan_id)).first()
+        if not plan:
+            return
+        user = db.query(User).filter(User.id == plan.user_id).first()
+        if not user:
+            return
+
+        decoded = _decode_plan_payload(plan.recipes)
+        meals = decoded.get("meals") or []
+        if not isinstance(meals, list) or not meals:
+            return
+
+        # Only generate for items that are missing a real image.
+        try:
+            attach_recipe_images(
+                db,
+                user=user,
+                recipes=[m for m in meals if isinstance(m, dict)],
+                ingredients=[],
+                base_url=base_url,
+                # Daily plan can contain multiple meals; generate a few per refresh.
+                max_generate=6,
+            )
+        except Exception:
+            logger.exception("Daily plan image refresh failed plan_id=%s user_id=%s", int(plan_id), getattr(user, "id", None))
+            return
+
+        # Persist back to DB so future /today calls return images immediately.
+        payload = dict(plan.recipes or {})
+        payload["meals"] = meals
+        plan.recipes = payload
+        db.add(plan)
+        db.commit()
+    except Exception:
+        logger.exception("Daily plan image refresh crashed plan_id=%s", int(plan_id))
+        try:
+            db.rollback()
+        except Exception:
+            pass
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
 
 
 def _require_premium(db: Session, user: User) -> None:
@@ -43,6 +100,7 @@ def _decode_plan_payload(recipes_value):
 
 @router.get("/today")
 def get_today_plan(
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -57,6 +115,20 @@ def get_today_plan(
         return {"plan": None}
 
     decoded = _decode_plan_payload(plan.recipes)
+    # Attach images for missing meals so the Daily Meal Planner shows real images by default.
+    # This respects admin settings/daily limits and uses cache/fingerprints to avoid repeat spend.
+    try:
+        meals = [m for m in (decoded.get("meals") or []) if isinstance(m, dict)]
+        attach_recipe_images(
+            db,
+            user=current_user,
+            recipes=meals,
+            ingredients=[],
+            base_url=str(request.base_url).rstrip("/"),
+            max_generate=len(meals),
+        )
+    except Exception:
+        pass
     return {
         "plan": {
             "id": plan.id,
@@ -71,9 +143,9 @@ def get_today_plan(
 @router.post("/generate")
 def generate_today_plan(
     request: Request,
-    force: bool = Query(False),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    force: bool = Query(False),
 ):
     tier = get_effective_subscription_tier(db, current_user) or "free"
     today = datetime.utcnow().date()
@@ -86,6 +158,19 @@ def generate_today_plan(
     )
     if existing and (not force):
         decoded = _decode_plan_payload(existing.recipes)
+        # Ensure images are attached when returning an existing plan (premium UX).
+        try:
+            meals = [m for m in (decoded.get("meals") or []) if isinstance(m, dict)]
+            attach_recipe_images(
+                db,
+                user=current_user,
+                recipes=meals,
+                ingredients=[],
+                base_url=str(request.base_url).rstrip("/"),
+                max_generate=len(meals),
+            )
+        except Exception:
+            pass
         return {
             "plan": {
                 "id": existing.id,
@@ -231,18 +316,38 @@ def generate_today_plan(
     if not isinstance(meals, list) or not meals:
         raise HTTPException(status_code=500, detail="Invalid plan output. Please try again.")
 
+    # IMPORTANT: Daily Meal Planner should return images with the plan (premium UX).
+    # We still respect admin settings/daily limits, but for Premium this should usually
+    # generate for every meal in the plan.
     try:
+        image_candidates = [m for m in meals if isinstance(m, dict)]
         attach_recipe_images(
             db,
             user=current_user,
-            recipes=[m for m in meals if isinstance(m, dict)],
+            recipes=image_candidates,
             ingredients=[],
             base_url=str(request.base_url).rstrip("/"),
-            # Daily plan generation endpoint is synchronous; don't block on image generation.
-            max_generate=0,
+            max_generate=len(image_candidates),
         )
+        try:
+            placeholders = sum(
+                1 for r in image_candidates if isinstance(r, dict) and str(r.get("image_source") or "") == "placeholder"
+            )
+            log_system_event(
+                {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "level": "info",
+                    "source": "ai",
+                    "type": "daily_plan.images",
+                    "user_id": current_user.id,
+                    "meals": len(image_candidates),
+                    "placeholders": int(placeholders),
+                }
+            )
+        except Exception:
+            pass
     except Exception:
-        pass
+        logger.exception("Daily plan: failed to attach images during generate user_id=%s", getattr(current_user, "id", None))
 
     payload_to_store = {
         "meals": meals,

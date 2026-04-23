@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
+import { Colors } from '../../constants/Colors';
 
 const { width, height } = Dimensions.get('window');
 
@@ -229,7 +230,7 @@ const StartCookingScreen = ({ navigation, route }) => {
       
       <View style={styles.timeContainer}>
         <View style={styles.timeBadge}>
-          <Ionicons name="time-outline" size={16} color="#4CAF50" />
+          <Ionicons name="time-outline" size={16} color={Colors.primary} />
           <Text style={styles.timeText}>{currentStepData.duration}mins</Text>
         </View>
         
@@ -238,7 +239,7 @@ const StartCookingScreen = ({ navigation, route }) => {
             style={styles.timerButton}
             onPress={() => startTimer(currentStepData.duration)}
           >
-            <Ionicons name="timer-outline" size={20} color="#4CAF50" />
+            <Ionicons name="timer-outline" size={20} color={Colors.primary} />
             <Text style={styles.timerButtonText}>Set Timer</Text>
           </TouchableOpacity>
         )}
@@ -267,7 +268,7 @@ const StartCookingScreen = ({ navigation, route }) => {
     >
       <View style={styles.infoCardHeader}>
         <View style={styles.infoIcon}>
-          <Ionicons name="restaurant-outline" size={20} color="#4CAF50" />
+          <Ionicons name="restaurant-outline" size={20} color={Colors.primary} />
         </View>
         <Text style={styles.infoCardTitle}>Ingredients Needed</Text>
         <Ionicons name="chevron-forward" size={20} color="#999" />
@@ -295,7 +296,7 @@ const StartCookingScreen = ({ navigation, route }) => {
     >
       <View style={styles.infoCardHeader}>
         <View style={styles.infoIcon}>
-          <MaterialIcons name="kitchen" size={20} color="#4CAF50" />
+          <MaterialIcons name="kitchen" size={20} color={Colors.primary} />
         </View>
         <Text style={styles.infoCardTitle}>Equipment Required</Text>
         <Ionicons name="chevron-forward" size={20} color="#999" />
@@ -323,7 +324,7 @@ const StartCookingScreen = ({ navigation, route }) => {
           <Ionicons 
             name={showDiabeticTips ? "chevron-up" : "chevron-down"} 
             size={20} 
-            color="#4CAF50" 
+            color={Colors.primary} 
           />
         </TouchableOpacity>
       </View>
@@ -361,7 +362,7 @@ const StartCookingScreen = ({ navigation, route }) => {
         <Ionicons 
           name="arrow-back" 
           size={20} 
-          color={currentStep === 0 ? "#999" : "#4CAF50"} 
+          color={currentStep === 0 ? "#999" : Colors.primary} 
         />
         <Text style={[
           styles.navButtonText,
@@ -458,7 +459,7 @@ const StartCookingScreen = ({ navigation, route }) => {
             {currentStepData.equipment.map((item, index) => (
               <View key={index} style={styles.modalEquipmentItem}>
                 <View style={styles.modalEquipmentIcon}>
-                  <MaterialIcons name="check" size={20} color="#4CAF50" />
+                  <MaterialIcons name="check" size={20} color={Colors.primary} />
                 </View>
                 <Text style={styles.modalEquipmentText}>{item}</Text>
               </View>
@@ -564,7 +565,7 @@ const styles = StyleSheet.create({
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#4CAF50',
+    backgroundColor: Colors.primary,
     borderRadius: 3,
   },
   timerIcon: {
@@ -622,7 +623,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#4CAF50',
+    backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -672,12 +673,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#4CAF50',
+    borderColor: Colors.primary,
   },
   timerButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#4CAF50',
+    color: Colors.primary,
     marginLeft: 6,
   },
   activeTimerContainer: {
@@ -753,7 +754,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#4CAF50',
+    backgroundColor: Colors.primary,
     marginRight: 12,
   },
   ingredientText: {
@@ -772,7 +773,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#4CAF50',
+    backgroundColor: Colors.primary,
     marginRight: 12,
   },
   equipmentText: {
@@ -781,7 +782,7 @@ const styles = StyleSheet.create({
   },
   moreText: {
     fontSize: 14,
-    color: '#4CAF50',
+    color: Colors.primary,
     fontWeight: '500',
     marginTop: 4,
   },
@@ -792,7 +793,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     borderWidth: 2,
-    borderColor: '#4CAF50',
+    borderColor: Colors.primary,
   },
   tipHeader: {
     flexDirection: 'row',
@@ -803,7 +804,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#4CAF50',
+    backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -891,7 +892,7 @@ const styles = StyleSheet.create({
   prevButton: {
     backgroundColor: '#FFF',
     borderWidth: 1,
-    borderColor: '#4CAF50',
+    borderColor: Colors.primary,
   },
   disabledButton: {
     borderColor: '#E0E0E0',
@@ -902,7 +903,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   prevButtonText: {
-    color: '#4CAF50',
+    color: Colors.primary,
   },
   disabledText: {
     color: '#999',
@@ -912,7 +913,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#4CAF50',
+    backgroundColor: Colors.primary,
     paddingVertical: 14,
     borderRadius: 12,
     marginHorizontal: 4,
@@ -979,7 +980,7 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#4CAF50',
+    backgroundColor: Colors.primary,
     marginRight: 16,
   },
   modalIngredientText: {
@@ -1009,7 +1010,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modalButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: Colors.primary,
     marginHorizontal: 20,
     marginVertical: 16,
     paddingVertical: 14,

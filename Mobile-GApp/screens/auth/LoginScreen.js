@@ -196,7 +196,7 @@ export default function LoginScreen() {
             activeOpacity={0.8}
           >
             <LinearGradient
-              colors={isLoading ? [Colors.textMuted, Colors.textMuted] : ['#2E8B57', '#48BB78']}
+              colors={isLoading ? [Colors.textMuted, Colors.textMuted] : [Colors.primary, Colors.primaryLight]}
               style={styles.loginButtonGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
