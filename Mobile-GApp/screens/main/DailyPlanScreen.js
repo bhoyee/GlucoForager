@@ -5,8 +5,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
+import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
 import { Colors } from '../../constants/Colors';
+import RecipePlaceholder from '../../assets/images/recipe-placeholder.jpeg';
+
+const isPlaceholderImage = (item) => {
+  const src = String(item?.image_source || '').toLowerCase();
+  if (src === 'placeholder') return true;
+  const url = typeof item?.image_url === 'string' ? item.image_url.trim().toLowerCase() : '';
+  if (!url) return true;
+  return url.includes('placeholder') || url.includes('/uploads/placeholders/') || url.includes('placeholders');
+};
 
 function mealIcon(meal) {
   const key = String(meal || '').toLowerCase();
@@ -23,7 +33,7 @@ function titleCase(value) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-function MealCard({ meal, item }) {
+function MealCard({ meal, item, showImageLoading }) {
   const ingredients = Array.isArray(item?.ingredients) ? item.ingredients : [];
   const steps = Array.isArray(item?.steps) ? item.steps : [];
   const minutes = Number.isFinite(Number(item?.time_minutes)) ? Number(item.time_minutes) : null;
@@ -33,14 +43,23 @@ function MealCard({ meal, item }) {
   const protein = typeof nutrition?.protein_g === 'string' ? nutrition.protein_g.trim() : '';
   const fiber = typeof nutrition?.fiber_g === 'string' ? nutrition.fiber_g.trim() : '';
   const imageUrl = typeof item?.image_url === 'string' ? item.image_url.trim() : '';
+  const showPlaceholder = isPlaceholderImage(item);
 
   return (
     <View style={styles.mealCard}>
-      {imageUrl ? (
-        <View style={styles.mealImageWrap}>
+      <View style={styles.mealImageWrap}>
+        {imageUrl && !showPlaceholder ? (
           <Image source={{ uri: imageUrl }} style={styles.mealImage} resizeMode="cover" />
-        </View>
-      ) : null}
+        ) : (
+          <Image source={RecipePlaceholder} style={styles.mealImage} resizeMode="cover" />
+        )}
+        {showPlaceholder && showImageLoading ? (
+          <View style={styles.mealImageOverlay}>
+            <ActivityIndicator size="small" color="white" />
+            <Text style={styles.mealImageOverlayText}>Generating image…</Text>
+          </View>
+        ) : null}
+      </View>
       <View style={styles.mealTopRow}>
         <View style={styles.mealTag}>
           <Ionicons name={mealIcon(meal)} size={16} color={Colors.primaryDark} />
@@ -130,34 +149,81 @@ function MealCard({ meal, item }) {
 
 export default function DailyPlanScreen() {
   const insets = useSafeAreaInsets();
+  const { signOut } = useAuth();
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [refreshingImages, setRefreshingImages] = useState(false);
 
   const loadToday = useCallback(async () => {
     const token = await AsyncStorage.getItem('userToken');
     if (!token) {
       setPlan(null);
-      return;
+      return null;
     }
     setLoading(true);
     try {
       const response = await apiFetch(
         `${API_URL}${API_ENDPOINTS.DAILY_PLAN_TODAY}`,
         { method: 'GET', headers: { Authorization: `Bearer ${token}` } },
-        { timeoutMs: 8000 }
+        { onUnauthorized: signOut, timeoutMs: 8000 }
       );
       if (response.status === 403) {
         setPlan(null);
-        return;
+        return null;
       }
-      if (!response.ok) return;
-      const data = await response.json();
-      setPlan(data?.plan || null);
+      if (!response.ok) return null;
+      const data = await response.json().catch(() => null);
+      const nextPlan = data?.plan || null;
+      setPlan(nextPlan);
+      return nextPlan;
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const refreshImagesUntilReady = useCallback(async () => {
+    if (refreshingImages) return;
+    const token = await AsyncStorage.getItem('userToken');
+    if (!token) return;
+    setRefreshingImages(true);
+    try {
+      const started = Date.now();
+      const maxMs = 25000;
+      // Poll a few times while the backend background task attaches images.
+      // Stop early once all images are real.
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise((r) => setTimeout(r, 3500));
+        // eslint-disable-next-line no-await-in-loop
+        const response = await apiFetch(
+          `${API_URL}${API_ENDPOINTS.DAILY_PLAN_TODAY}`,
+          { method: 'GET', headers: { Authorization: `Bearer ${token}` } },
+          { onUnauthorized: signOut, timeoutMs: 8000 }
+        );
+        if (response.ok) {
+          // eslint-disable-next-line no-await-in-loop
+          const data = await response.json().catch(() => null);
+          const nextPlan = data?.plan || null;
+          if (nextPlan) setPlan(nextPlan);
+          const meals = Array.isArray(nextPlan?.meals) ? nextPlan.meals : [];
+          if (meals.length && meals.every((m) => !isPlaceholderImage(m))) {
+            break;
+          }
+        }
+        if (Date.now() - started >= maxMs) break;
+      }
+    } finally {
+      setRefreshingImages(false);
+    }
+  }, [refreshingImages]);
+
+  const hasAnyPlaceholderImages = useMemo(() => {
+    const meals = Array.isArray(plan?.meals) ? plan.meals : [];
+    if (!meals.length) return false;
+    return meals.some((m) => isPlaceholderImage(m));
+  }, [plan]);
 
   useFocusEffect(
     useCallback(() => {
@@ -182,7 +248,9 @@ export default function DailyPlanScreen() {
       const response = await apiFetch(
         `${API_URL}${API_ENDPOINTS.DAILY_PLAN_GENERATE}${shouldForce ? '?force=1' : ''}`,
         { method: 'POST', headers: { Authorization: `Bearer ${token}` } },
-        { timeoutMs: 45000 }
+        // Daily plan now generates meal images before responding (premium UX).
+        // Allow a bit more time so slower networks don't abort prematurely.
+        { onUnauthorized: signOut, timeoutMs: 65000 }
       );
       if (response.status === 403) {
         Alert.alert('Premium required', 'Daily Meal Planner is available for Premium users.');
@@ -257,7 +325,7 @@ export default function DailyPlanScreen() {
               {generating ? (
                 <ActivityIndicator size="small" color="white" />
               ) : (
-                <Ionicons name="sparkles-outline" size={16} color="white" />
+                <Ionicons name="refresh-outline" size={16} color="white" />
               )}
               <Text style={styles.headerPrimaryButtonText}>Regenerate</Text>
             </Pressable>
@@ -299,15 +367,29 @@ export default function DailyPlanScreen() {
               {null}
             </View>
 
+            {hasAnyPlaceholderImages ? (
+              <View style={styles.imagesHintRow}>
+                <Text style={styles.imagesHintText}>Some images are missing. Tap Refresh to try again.</Text>
+                <Pressable onPress={refreshImagesUntilReady} disabled={refreshingImages} style={styles.imagesHintButton}>
+                  <Text style={styles.imagesHintButtonText}>{refreshingImages ? 'Refreshing…' : 'Refresh'}</Text>
+                </Pressable>
+              </View>
+            ) : null}
+
             {meals.map((item, idx) => (
-              <MealCard key={String(item?.meal || idx)} meal={item?.meal} item={item} />
+              <MealCard
+                key={String(item?.meal || idx)}
+                meal={item?.meal}
+                item={item}
+                showImageLoading={refreshingImages || generating}
+              />
             ))}
           </>
         ) : (
           <View style={styles.emptyWrap}>
             <View style={styles.heroCard}>
               <View style={styles.heroIcon}>
-                <Ionicons name="sparkles-outline" size={20} color="white" />
+                <Ionicons name="calendar-clear-outline" size={20} color="white" />
               </View>
               <Text style={styles.emptyTitle}>Your plan for today</Text>
               <Text style={styles.emptyText}>
@@ -318,8 +400,8 @@ export default function DailyPlanScreen() {
                 onPress={generateToday}
                 style={[styles.primaryButton, generating ? { opacity: 0.65 } : null]}
               >
-                {generating ? <ActivityIndicator size="small" color="white" /> : <Ionicons name="sparkles" size={16} color="white" />}
-                <Text style={styles.primaryButtonText}>{generating ? 'Generating...' : 'Generate today’s plan'}</Text>
+                {generating ? <ActivityIndicator size="small" color="white" /> : <Ionicons name="calendar-outline" size={16} color="white" />}
+                <Text style={styles.primaryButtonText}>{generating ? 'Generating...' : "Generate today's plan"}</Text>
               </Pressable>
               <Text style={styles.hintText}>
                 You can generate a new plan anytime.
@@ -545,10 +627,53 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#F2F4F7',
     marginBottom: 12,
+    position: 'relative',
   },
   mealImage: {
     width: '100%',
     height: 160,
+  },
+  mealImageOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+  },
+  mealImageOverlayText: {
+    fontSize: 12,
+    color: 'white',
+    fontWeight: '700',
+  },
+  imagesHintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 10,
+    paddingHorizontal: 6,
+  },
+  imagesHintText: {
+    flex: 1,
+    fontSize: 12,
+    color: Colors.textMuted,
+  },
+  imagesHintButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  imagesHintButtonText: {
+    fontSize: 12,
+    color: Colors.text,
+    fontWeight: '600',
   },
   mealTopRow: {
     flexDirection: 'row',

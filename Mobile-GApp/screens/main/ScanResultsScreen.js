@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { addDebugLog } from '../../utils/debugLogger';
 
 const LAST_INGREDIENTS_KEY = 'last_used_ingredients_v1';
 
@@ -190,6 +191,16 @@ export default function ScanResultsScreen() {
     const selectedItems = detectedIngredients
       .filter(item => selectedIngredients.includes(item.id))
       .map(item => item.name);
+
+    addDebugLog({
+      source: 'AI',
+      level: 'info',
+      message: 'ScanResults: generate recipes tapped',
+      details: JSON.stringify({
+        selected_count: selectedItems.length,
+        selected_preview: selectedItems.slice(0, 10),
+      }),
+    });
 
     // Persist for "Use ingredients I have" (Eat now) re-use.
     // Keep it small + de-duped so it remains fast and predictable.

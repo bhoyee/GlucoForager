@@ -446,7 +446,7 @@ export default function ScanScreen() {
             onPress={() => navigation.navigate('ProfileTab')}
           >
             <View style={styles.upgradeContent}>
-              <Ionicons name="sparkles" size={16} color={Colors.primary} />
+              <Ionicons name="diamond-outline" size={16} color={Colors.primary} />
               <Text style={styles.upgradeText}>
                 Upgrade to Premium for unlimited scans
               </Text>

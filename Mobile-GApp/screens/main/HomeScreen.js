@@ -631,7 +631,7 @@ export default function HomeScreen() {
             android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
             onPress={handleOpenEatNow}
           >
-            <Ionicons name="sparkles-outline" size={18} color="white" />
+            <Ionicons name="fast-food-outline" size={18} color="white" />
             <Text style={[styles.quickActionText, styles.quickActionTextOnDark]}>Eat now</Text>
           </Pressable>
           <Pressable
@@ -640,7 +640,7 @@ export default function HomeScreen() {
             onPress={handleOpenSwaps}
           >
             <Ionicons name="swap-horizontal-outline" size={18} color="white" />
-            <Text style={[styles.quickActionText, styles.quickActionTextOnDark]}>Swaps</Text>
+            <Text style={[styles.quickActionText, styles.quickActionTextOnDark]}>Food swaps</Text>
           </Pressable>
         </ScrollView>
 
@@ -838,7 +838,7 @@ export default function HomeScreen() {
           <TouchableOpacity style={styles.eatNowCard} activeOpacity={0.9} onPress={handleOpenEatNow}>
             <View style={styles.eatNowLeft}>
               <View style={styles.eatNowIcon}>
-                <Ionicons name="sparkles-outline" size={22} color="white" />
+                <Ionicons name="fast-food-outline" size={22} color="white" />
               </View>
               <View style={styles.eatNowText}>
                 <Text style={styles.eatNowTitle}>Eat now</Text>

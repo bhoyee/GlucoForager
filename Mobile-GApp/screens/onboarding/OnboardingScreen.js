@@ -23,7 +23,7 @@ const onboardingData = [
     title: 'Scan Ingredients',
     description: 'Take a photo of your fridge or pantry',
     subDescription: 'AI automatically detects ingredients from your photo',
-    color: '#2E8B57',
+    color: Colors.primary,
   },
   {
     id: '2',
@@ -39,7 +39,7 @@ const onboardingData = [
     title: 'Diabetes-Safe Recipes',
     description: 'Get AI-matched low-glycemic recipes',
     subDescription: 'Filtered for diabetes-friendly ingredients and nutrition',
-    color: '#38A169',
+    color: Colors.primary,
   },
   {
     id: '4',
@@ -345,7 +345,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
     borderRadius: 12,
     minWidth: 150,
-    shadowColor: '#2E8B57',
+    shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,

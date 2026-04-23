@@ -18,6 +18,7 @@ import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
+import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { useAuth } from '../../context/authContext';
@@ -40,12 +41,14 @@ export default function ManualInputScreen() {
   const [ingredients, setIngredients] = useState(['']);
   const [isLoading, setIsLoading] = useState(false);
   const [longWait, setLongWait] = useState(false);
-  const [countdownSeconds, setCountdownSeconds] = useState(null);
-  const countdownDeadlineRef = useRef(null);
   const requestControllerRef = useRef(null);
   const pollingRef = useRef(null);
   const timeoutRef = useRef(null);
+  const elapsedRef = useRef(null);
+  const phaseRef = useRef(null);
   const [activeJobId, setActiveJobId] = useState(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [statusLine, setStatusLine] = useState('');
   const [scanStatus, setScanStatus] = useState({
     remaining: null,
     isPremium: false,
@@ -189,9 +192,17 @@ export default function ManualInputScreen() {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
+    if (elapsedRef.current) {
+      clearInterval(elapsedRef.current);
+      elapsedRef.current = null;
+    }
+    if (phaseRef.current) {
+      clearInterval(phaseRef.current);
+      phaseRef.current = null;
+    }
     setLongWait(false);
-    setCountdownSeconds(null);
-    countdownDeadlineRef.current = null;
+    setElapsedSeconds(0);
+    setStatusLine('');
   };
 
   const scheduleLongWaitNotice = () => {
@@ -205,23 +216,51 @@ export default function ManualInputScreen() {
 
   useEffect(() => {
     if (!isLoading) {
-      setCountdownSeconds(null);
-      countdownDeadlineRef.current = null;
+      if (elapsedRef.current) clearInterval(elapsedRef.current);
+      elapsedRef.current = null;
+      if (phaseRef.current) clearInterval(phaseRef.current);
+      phaseRef.current = null;
+      setElapsedSeconds(0);
+      setStatusLine('');
       return;
     }
-    // Always show a 60s countdown for the loading modal (UX expectation for "Eat now" flows).
-    const deadline = Date.now() + 60_000;
-    countdownDeadlineRef.current = deadline;
-    setCountdownSeconds(60);
-    const id = setInterval(() => {
-      const currentDeadline = countdownDeadlineRef.current;
-      if (!currentDeadline) return;
-      const remainingMs = currentDeadline - Date.now();
-      const remaining = Math.max(0, Math.ceil(remainingMs / 1000));
-      setCountdownSeconds(remaining);
-    }, 250);
-    return () => clearInterval(id);
-  }, [isLoading]);
+
+    setElapsedSeconds(0);
+    setStatusLine(isEatNow ? 'Preparing meal ideas...' : 'Starting recipe generation...');
+
+    if (elapsedRef.current) clearInterval(elapsedRef.current);
+    elapsedRef.current = setInterval(() => {
+      setElapsedSeconds((prev) => prev + 1);
+    }, 1000);
+
+    const phases = isEatNow
+      ? [
+          'Checking your preferences...',
+          'Creating meal ideas...',
+          'Writing cooking steps...',
+          'Finalizing options...',
+        ]
+      : [
+          'Sending ingredients...',
+          'Checking diabetes-friendly choices...',
+          'Creating recipe ideas...',
+          'Writing cooking steps...',
+          'Finalizing results...',
+        ];
+    let idx = 0;
+    if (phaseRef.current) clearInterval(phaseRef.current);
+    phaseRef.current = setInterval(() => {
+      idx = (idx + 1) % phases.length;
+      setStatusLine(phases[idx]);
+    }, 6500);
+
+    return () => {
+      if (elapsedRef.current) clearInterval(elapsedRef.current);
+      elapsedRef.current = null;
+      if (phaseRef.current) clearInterval(phaseRef.current);
+      phaseRef.current = null;
+    };
+  }, [isLoading, isEatNow]);
 
   const handleJobResult = (result, normalized) => {
     const recipes = result?.results || [];
@@ -265,6 +304,10 @@ export default function ManualInputScreen() {
         setIsLoading(false);
         setActiveJobId(null);
         Alert.alert('Request failed', data.error || 'Unable to generate recipes.');
+      } else if (data.status === 'pending' || data.status === 'queued') {
+        setStatusLine('Waiting to start...');
+      } else if (data.status === 'running') {
+        setStatusLine('Generating recipes...');
       }
     } catch (error) {
       // Ignore intermittent polling errors.
@@ -444,6 +487,17 @@ export default function ManualInputScreen() {
   const modeParam = route.params?.mode;
   const isEatNow = modeParam === 'surprise' || modeParam === 'quick';
 
+  const formatElapsed = (seconds) => {
+    const s = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
+    const mm = String(Math.floor(s / 60)).padStart(2, '0');
+    const ss = String(s % 60).padStart(2, '0');
+    return `${mm}:${ss}`;
+  };
+
+  const ingredientCount = Array.isArray(ingredients)
+    ? ingredients.map((x) => `${x || ''}`.trim()).filter(Boolean).length
+    : 0;
+
   return (
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
@@ -492,7 +546,7 @@ export default function ManualInputScreen() {
         )}
         {scanStatus.isPremium && (
           <View style={styles.scanBadge}>
-            <Ionicons name="sparkles" size={16} color={Colors.primary} />
+            <Ionicons name="infinite-outline" size={16} color={Colors.primary} />
             <Text style={styles.scanBadgeText}>Unlimited scans</Text>
           </View>
         )}
@@ -607,39 +661,47 @@ export default function ManualInputScreen() {
       <Modal transparent visible={isLoading} animationType="fade">
         <View style={styles.loadingOverlay}>
           <View style={styles.loadingCard}>
-            <ActivityIndicator size="large" color={Colors.primary} />
-            <Text style={styles.loadingTitle}>
-              {isEatNow ? 'Generating meals...' : 'Generating recipes...'}
-            </Text>
-            <Text style={styles.loadingSubtitle}>
-              {isEatNow
-                ? 'Please wait while we prepare 3 diabetes-friendly meal options.'
-                : 'Please wait while we prepare your diabetes-safe options.'}
-            </Text>
-            {typeof countdownSeconds === 'number' ? (
-              <View style={styles.countdownBox}>
-                <Text style={styles.countdownLabel}>
-                  {countdownSeconds > 0 ? 'Time remaining' : 'Still working...'}
-                </Text>
-                {countdownSeconds > 0 ? (
-                  <Text style={styles.countdownValue}>{countdownSeconds}s</Text>
-                ) : null}
-              </View>
-            ) : null}
-            {longWait ? (
-              <View style={styles.longWaitBox}>
-                <Text style={styles.longWaitTitle}>Taking longer than usual</Text>
-                <Text style={styles.longWaitText}>
-                  Still working in the background. You can keep waiting, or cancel and try again.
-                </Text>
-              </View>
-            ) : null}
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={handleCancelRequest}
+            <LinearGradient
+              colors={[Colors.primary, Colors.primaryLight]}
+              style={styles.loadingGradient}
             >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
+              <Ionicons name="restaurant-outline" size={56} color="white" />
+              <Text style={styles.loadingTitle}>
+                {isEatNow ? 'Meal ideas' : 'Recipes'}
+              </Text>
+              <Text style={styles.loadingSubtitle}>
+                {statusLine || (isEatNow ? 'Preparing meal ideas...' : 'Generating recipes...')}
+              </Text>
+
+              <View style={styles.loadingMetaRow}>
+                <View style={styles.loadingPill}>
+                  <Ionicons name="time-outline" size={14} color="rgba(255,255,255,0.9)" style={styles.loadingPillIcon} />
+                  <Text style={styles.loadingPillText}>
+                    Elapsed {formatElapsed(elapsedSeconds)}
+                  </Text>
+                </View>
+                <View style={styles.loadingPill}>
+                  <Ionicons name="leaf-outline" size={14} color="rgba(255,255,255,0.9)" style={styles.loadingPillIcon} />
+                  <Text style={styles.loadingPillText}>
+                    {ingredientCount ? `${ingredientCount} ingredient${ingredientCount !== 1 ? 's' : ''}` : 'Your selection'}
+                  </Text>
+                </View>
+              </View>
+
+              {longWait ? (
+                <View style={styles.longWaitBoxOnGradient}>
+                  <Text style={styles.longWaitTitleOnGradient}>Taking longer than usual</Text>
+                  <Text style={styles.longWaitTextOnGradient}>
+                    Still working in the background. You can keep waiting, or cancel and try again.
+                  </Text>
+                </View>
+              ) : null}
+
+              <ActivityIndicator size="large" color="white" style={styles.loadingSpinner} />
+              <TouchableOpacity style={styles.cancelButton} onPress={handleCancelRequest}>
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </LinearGradient>
           </View>
         </View>
       </Modal>
@@ -675,71 +737,87 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   loadingCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: 'transparent',
     borderRadius: 16,
-    paddingVertical: 24,
-    paddingHorizontal: 20,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
     alignItems: 'center',
     width: '100%',
     maxWidth: 320,
+    overflow: 'hidden',
+  },
+  loadingGradient: {
+    width: '100%',
+    paddingVertical: 26,
+    paddingHorizontal: 18,
+    alignItems: 'center',
   },
   loadingTitle: {
-    marginTop: 16,
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text,
+    marginTop: 14,
+    fontSize: 18,
+    fontWeight: '700',
+    color: 'white',
   },
   loadingSubtitle: {
     marginTop: 8,
     fontSize: 13,
-    color: Colors.textLight,
+    color: 'rgba(255,255,255,0.92)',
     textAlign: 'center',
   },
-  countdownBox: {
-    marginTop: 12,
-    alignItems: 'center',
-  },
-  countdownLabel: {
-    fontSize: 13,
-    color: Colors.textMuted,
-    textAlign: 'center',
-  },
-  countdownValue: {
-    marginTop: 4,
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.text,
-    textAlign: 'center',
-  },
-  longWaitBox: {
+  loadingMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
     marginTop: 14,
+  },
+  loadingPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    marginHorizontal: 5,
+  },
+  loadingPillIcon: {
+    marginRight: 6,
+  },
+  loadingPillText: {
+    color: 'rgba(255,255,255,0.95)',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  longWaitBoxOnGradient: {
+    marginTop: 16,
     padding: 12,
     borderRadius: 12,
-    backgroundColor: '#F6F7FB',
+    backgroundColor: 'rgba(255,255,255,0.15)',
     width: '100%',
   },
-  longWaitTitle: {
-    fontSize: 14,
+  longWaitTitleOnGradient: {
+    fontSize: 13,
     fontWeight: '700',
-    color: Colors.text,
+    color: 'rgba(255,255,255,0.95)',
     marginBottom: 4,
     textAlign: 'center',
   },
-  longWaitText: {
-    fontSize: 13,
-    color: Colors.textLight,
+  longWaitTextOnGradient: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.92)',
     lineHeight: 18,
     textAlign: 'center',
   },
+  loadingSpinner: {
+    marginTop: 24,
+  },
   cancelButton: {
     marginTop: 16,
-    backgroundColor: Colors.primary,
+    backgroundColor: 'rgba(255,255,255,0.18)',
     paddingVertical: 10,
     paddingHorizontal: 24,
     borderRadius: 20,
   },
   cancelButtonText: {
-    color: 'white',
+    color: 'rgba(255,255,255,0.95)',
     fontWeight: '600',
     fontSize: 14,
   },

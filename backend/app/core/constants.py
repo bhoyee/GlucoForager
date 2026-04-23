@@ -12,12 +12,10 @@ TIER_CONFIG = {
         "vision_model": "gpt-4o-2024-11-20",
         "recipe_models": [
             "gpt-4o-mini-2024-07-18",
-            "deepseek-chat",
         ],
         # "Surprise me" / "Quick meal" should be fast and cheap.
         "recipe_models_fast": [
             "gpt-4o-mini-2024-07-18",
-            "deepseek-chat",
         ],
         "cache_priority": "high",
     },
@@ -25,42 +23,53 @@ TIER_CONFIG = {
         "max_daily_scans": None,  # unlimited
         "vision_model": "gpt-4o-2024-11-20",  # vision-capable
         "recipe_models": [
+            "gpt-4o-2024-11-20",
+            "gpt-4o-mini-2024-07-18",
+            # Slower but higher-capability fallbacks (only used if fast models fail).
             "gpt-5.2-2025-12-11",
             "gpt-5.1-2025-11-13",
             "gpt-5-2025-08-07",
-            "gpt-4o-2024-11-20",
-            "gpt-4o-mini-2024-07-18",
             "deepseek-chat",
         ],
         # "Surprise me" / "Quick meal" should be fast and cheap even for premium.
         "recipe_models_fast": [
-            "gpt-4o-2024-11-20",
             "gpt-4o-mini-2024-07-18",
-            "deepseek-chat",
+            "gpt-4o-2024-11-20",
         ],
         "cache_priority": "low",
     },
 }
 
-OPENAI_PROMPT = """You are a certified diabetes nutritionist. Create 3 diabetic-friendly recipes using ONLY: {ingredients}.
+OPENAI_PROMPT = """You are a certified diabetes nutritionist.
+
+Create 3 diabetes-friendly recipes based on these detected ingredients: {ingredients}.
+
+You may use *basic pantry staples* in small amounts (e.g., water, salt, pepper, dried herbs/spices, lemon/lime, vinegar, garlic, onion, a small amount of olive oil).
+
+CRITICAL CONSTRAINTS:
+- Do NOT add any non-pantry ingredients that were not detected (no “greens”, no “veggies”, no “protein” items) unless they are explicitly listed in the detected ingredients.
+- Do NOT mention cooking steps for ingredients that are not listed. Never write placeholders like "prep protein" or "cook protein" unless a protein ingredient is actually in the ingredients list.
+
+If the detected ingredients are mostly starchy/sugary and cannot be made strongly diabetes-friendly on their own, still return recipes but:
+- keep portions realistic,
+- be honest in the diabetes analysis (e.g., "moderate/high glycemic impact"),
+- include practical tips to reduce glucose spikes (pair with protein/fiber, add non-starchy veg, smaller portion, etc.).
 
 REQUIREMENTS FOR EACH RECIPE:
 1. Name the recipe specifically
 2. Include prep_time, cook_time (minutes)
 3. List ingredients with quantities and units
-4. Step-by-step cooking instructions (at least 5 steps). Start with prep (e.g., washing, chopping), end with plating/serving.
+4. Step-by-step cooking instructions (at least 5 steps). Start with prep (e.g., washing, chopping), end with plating/serving. Do not use generic placeholders like "cook protein" unless that protein is explicitly listed in ingredients.
 5. Nutritional info PER SERVING: calories, carbs, protein, fat, fiber, sugar, sodium
 6. Short description (1-2 sentences) describing why it is diabetes-friendly
 7. Diabetes analysis: glycemic impact, carb type, safety rating
 8. Diabetes management tips: 3-5 concise tips (array of strings)
 9. Tags: diabetes-friendly, low-carb, etc.
 
-NUTRITIONAL CONSTRAINTS:
-- Calories: 250-400 per serving
-- Carbs: MAX 30g per serving
-- Protein: MIN 25g per serving
-- Fiber: MIN 5g per serving
-- No added sugars
+NUTRITION GUIDANCE (REALISM FIRST):
+- Provide realistic estimates based on the listed ingredients and portions.
+- Do NOT force high protein or high fiber numbers if the ingredients do not support it.
+- If sugar is present in detected ingredients (e.g., ketchup), reflect that in the estimate and call it out in tips.
 
 FORMAT: Return VALID JSON with this EXACT structure:
 {

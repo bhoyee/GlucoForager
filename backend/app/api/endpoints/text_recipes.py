@@ -14,7 +14,7 @@ from ...database import get_db
 from ...database import SessionLocal
 from ...models.ai_job import AIJob
 from ...models.user import User
-from ...services.ai_pipeline import AIPipeline
+from ...services.ai_pipeline import AIPipeline, IngredientValidationError
 from ...services.ai_recipe_generator import AIRecipeGenerator
 from ...services.cache_service import CacheService
 from ...services.cost_tracker import record_ai_request
@@ -24,6 +24,7 @@ from ...services.rate_limit_service import check_ai_rate_limit
 from ...services.subscription_service import get_effective_subscription_tier
 from ...core.config import settings
 from ...services.redis_ai_queue import RedisAIQueue
+from ...services.system_log_service import log_system_event
 from .ai_recipes import _safe_job_error
 
 router = APIRouter(prefix="/ai/text", tags=["ai"])
@@ -114,12 +115,30 @@ def _filters_for_mode(mode: str) -> list[str]:
 
 def _run_text_job(job_id: str) -> None:
     db = SessionLocal()
+    started = time.time()
     try:
         job = db.query(AIJob).filter(AIJob.id == job_id).first()
         if not job:
             return
         if job.status not in {"pending", "queued"}:
             return
+        try:
+            queue_wait_ms = None
+            if getattr(job, "created_at", None):
+                queue_wait_ms = int((time.time() - job.created_at.timestamp()) * 1000)
+            log_system_event(
+                {
+                    "ts": time.time(),
+                    "level": "info",
+                    "type": "ai.text.job.start",
+                    "job_id": job_id,
+                    "user_id": job.user_id,
+                    "prev_status": job.status,
+                    "queue_wait_ms": queue_wait_ms,
+                }
+            )
+        except Exception:
+            pass
         job.status = "running"
         db.commit()
 
@@ -132,11 +151,42 @@ def _run_text_job(job_id: str) -> None:
         device_id = payload.get("device_id")
         base_url = payload.get("base_url")
 
+        try:
+            log_system_event(
+                {
+                    "ts": time.time(),
+                    "level": "info",
+                    "type": "ai.text.job.start",
+                    "job_id": job_id,
+                    "user_id": job.user_id,
+                    "mode": mode,
+                    "ingredients_count": len(ingredients) if isinstance(ingredients, list) else None,
+                    "filters_count": len(filters) if isinstance(filters, list) else None,
+                }
+            )
+        except Exception:
+            pass
+
         user = db.query(User).filter(User.id == job.user_id).first()
         if not user:
             job.status = "failed"
             job.error = "User not found."
             db.commit()
+            try:
+                log_system_event(
+                    {
+                        "ts": time.time(),
+                        "level": "error",
+                        "type": "ai.text.job.done",
+                        "job_id": job_id,
+                        "user_id": job.user_id,
+                        "status": "failed",
+                        "error_code": "user_not_found",
+                        "elapsed_ms": int((time.time() - started) * 1000),
+                    }
+                )
+            except Exception:
+                pass
             return
 
         if mode not in ("surprise", "quick"):
@@ -152,25 +202,97 @@ def _run_text_job(job_id: str) -> None:
                     }
                 }
                 db.commit()
+                try:
+                    log_system_event(
+                        {
+                            "ts": time.time(),
+                            "level": "warn",
+                            "type": "ai.text.job.done",
+                            "job_id": job_id,
+                            "user_id": job.user_id,
+                            "status": "failed",
+                            "error_code": "not_food",
+                            "elapsed_ms": int((time.time() - started) * 1000),
+                        }
+                    )
+                except Exception:
+                    pass
                 return
             ingredients = classified["food"]
+            try:
+                pipeline._ensure_diabetes_friendly_or_raise(ingredients, mode=mode)
+            except IngredientValidationError as exc:
+                job.status = "failed"
+                job.error = exc.message
+                job.result = {
+                    "error": {
+                        "type": "invalid_input",
+                        "code": exc.code,
+                        "message": exc.message,
+                    }
+                }
+                db.commit()
+                try:
+                    log_system_event(
+                        {
+                            "ts": time.time(),
+                            "level": "warn",
+                            "type": "ai.text.job.done",
+                            "job_id": job_id,
+                            "user_id": job.user_id,
+                            "status": "failed",
+                            "error_code": exc.code,
+                            "elapsed_ms": int((time.time() - started) * 1000),
+                        }
+                    )
+                except Exception:
+                    pass
+                return
         else:
             classified = {"food": [], "non_food": [], "source": "mode"}
             ingredients = []
             filters = [*(_filters_for_mode(mode)), *filters]
             variety_mode = True
 
-        recipes = pipeline.text_to_recipes(
-            db,
-            user.id,
-            get_effective_subscription_tier(db, user) or "free",
-            ingredients,
-            filters=filters,
-            exclude_titles=exclude_titles,
-            variety_mode=variety_mode,
-            mode=mode,
-            device_id=device_id,
-        )
+        try:
+            recipes = pipeline.text_to_recipes(
+                db,
+                user.id,
+                get_effective_subscription_tier(db, user) or "free",
+                ingredients,
+                filters=filters,
+                exclude_titles=exclude_titles,
+                variety_mode=variety_mode,
+                mode=mode,
+                device_id=device_id,
+            )
+        except IngredientValidationError as exc:
+            job.status = "failed"
+            job.error = exc.message
+            job.result = {
+                "error": {
+                    "type": "invalid_input",
+                    "code": exc.code,
+                    "message": exc.message,
+                }
+            }
+            db.commit()
+            try:
+                log_system_event(
+                    {
+                        "ts": time.time(),
+                        "level": "warn",
+                        "type": "ai.text.job.done",
+                        "job_id": job_id,
+                        "user_id": job.user_id,
+                        "status": "failed",
+                        "error_code": exc.code,
+                        "elapsed_ms": int((time.time() - started) * 1000),
+                    }
+                )
+            except Exception:
+                pass
+            return
 
         try:
             attach_recipe_images(
@@ -179,9 +301,8 @@ def _run_text_job(job_id: str) -> None:
                 recipes=recipes or [],
                 ingredients=ingredients,
                 base_url=base_url,
-                # Generate up to 3 thumbnails so the results screen looks premium.
-                # Daily limits and per-recipe caps still apply via App Settings.
-                max_generate=3,
+                # Speed: don't auto-generate images inline; clients can request images after recipes render.
+                max_generate=0,
             )
         except Exception:
             # Image generation is best-effort; never fail the recipe result.
@@ -224,6 +345,21 @@ def _run_text_job(job_id: str) -> None:
         job.status = "completed"
         job.error = None
         db.commit()
+        try:
+            log_system_event(
+                {
+                    "ts": time.time(),
+                    "level": "info",
+                    "type": "ai.text.job.done",
+                    "job_id": job_id,
+                    "user_id": job.user_id,
+                    "status": "completed",
+                    "recipes_count": len(recipes) if isinstance(recipes, list) else None,
+                    "elapsed_ms": int((time.time() - started) * 1000),
+                }
+            )
+        except Exception:
+            pass
     except Exception as exc:  # noqa: BLE001
         if "job" in locals() and job:
             job.status = "failed"
@@ -236,6 +372,22 @@ def _run_text_job(job_id: str) -> None:
                 }
             }
             db.commit()
+        try:
+            log_system_event(
+                {
+                    "ts": time.time(),
+                    "level": "error",
+                    "type": "ai.text.job.done",
+                    "job_id": job_id,
+                    "user_id": job.user_id if "job" in locals() and job else None,
+                    "status": "failed",
+                    "error_code": "exception",
+                    "error_message": str(exc)[:200],
+                    "elapsed_ms": int((time.time() - started) * 1000),
+                }
+            )
+        except Exception:
+            pass
     finally:
         db.close()
 
@@ -294,6 +446,13 @@ def generate_from_text(
                 detail="Content not related to food. Please enter real ingredients.",
             )
         ingredients = classified["food"]
+        try:
+            pipeline._ensure_diabetes_friendly_or_raise(ingredients, mode=mode)
+        except IngredientValidationError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"code": exc.code, "message": exc.message},
+            ) from exc
         filters = payload.filters or []
         warning = None
         if classified["non_food"]:
@@ -318,26 +477,44 @@ def generate_from_text(
             except json.JSONDecodeError:
                 cached_recipes = None
             if cached_recipes:
-                cached_recipes = _ensure_images(cached_recipes, tier, ingredients)
-                cache.set(cache_key, json.dumps(cached_recipes), ttl_seconds=TEXT_CACHE_TTL_SECONDS)
-                record_ai_request(
-                    db,
-                    current_user.id,
-                    tier,
-                    "text",
-                    model_used="cache",
-                    tokens_used=0,
-                    cost_estimate=0,
-                    device_id=device_id,
+                # Cache can outlive prompt/validation changes; re-validate on read to avoid returning stale/hallucinated content.
+                try:
+                    pipeline._ensure_diabetes_friendly_or_raise(ingredients, mode=mode)
+                except IngredientValidationError as exc:
+                    cache.delete(cache_key)
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail={"code": exc.code, "message": exc.message},
+                    ) from exc
+
+                validated = pipeline._validated_recipes_or_none(
+                    cached_recipes if isinstance(cached_recipes, list) else None,
+                    mode=mode,
+                    source_ingredients=ingredients,
                 )
-                return {
-                    "results": cached_recipes,
-                    "access": access,
-                    "detected": classified.get("food") or [],
-                    "filtered_out": classified.get("non_food") or [],
-                    "classification_source": classified["source"],
-                    "warning": warning,
-                }
+                if not validated:
+                    cache.delete(cache_key)
+                else:
+                    cached_recipes = _ensure_images(validated, tier, ingredients)
+                    cache.set(cache_key, json.dumps(cached_recipes), ttl_seconds=TEXT_CACHE_TTL_SECONDS)
+                    record_ai_request(
+                        db,
+                        current_user.id,
+                        tier,
+                        "text",
+                        model_used="cache",
+                        tokens_used=0,
+                        cost_estimate=0,
+                        device_id=device_id,
+                    )
+                    return {
+                        "results": cached_recipes,
+                        "access": access,
+                        "detected": classified.get("food") or [],
+                        "filtered_out": classified.get("non_food") or [],
+                        "classification_source": classified["source"],
+                        "warning": warning,
+                    }
     try:
         recipes = pipeline.text_to_recipes(
             db,
@@ -350,6 +527,11 @@ def generate_from_text(
             mode=mode,
             device_id=device_id,
         )
+    except IngredientValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
     except RuntimeError as exc:
         # AI not configured (missing keys) or other pipeline errors
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
