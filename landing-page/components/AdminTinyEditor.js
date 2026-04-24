@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 
 const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
@@ -37,6 +37,32 @@ export default function AdminTinyEditor({
   }, [compact, toolbarId]);
 
   const getQuill = () => quillRef.current?.getEditor?.() || null;
+
+  const uploadImageFile = useCallback(
+    async (file) => {
+      if (!file || !adminToken) return null;
+      setUploadBusy(true);
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch(`${API_URL}/api/admin/blog/upload`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${adminToken}` },
+          body: formData,
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) return null;
+        if (!data?.url) return null;
+
+        const rawUrl = String(data.url || '').trim();
+        return rawUrl.startsWith('/') ? `${API_BASE}${rawUrl}` : rawUrl;
+      } finally {
+        setUploadBusy(false);
+      }
+    },
+    [adminToken]
+  );
 
   const withSelectedImage = (fn) => {
     const quill = getQuill();
@@ -83,10 +109,11 @@ export default function AdminTinyEditor({
     node.style.margin = '12px auto';
   };
 
-  const handleInsertImage = async () => {
+  const handleInsertImage = useCallback(async () => {
     const quill = getQuill();
     if (!quill) return;
     if (!adminToken) return;
+    if (uploadBusy) return;
 
     const input = document.createElement('input');
     input.type = 'file';
@@ -105,22 +132,9 @@ export default function AdminTinyEditor({
       }
       if (!file) return;
 
-      setUploadBusy(true);
       try {
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const response = await fetch(`${API_URL}/api/admin/blog/upload`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${adminToken}` },
-          body: formData,
-        });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) return;
-        if (!data?.url) return;
-
-        const rawUrl = String(data.url || '').trim();
-        const imageUrl = rawUrl.startsWith('/') ? `${API_BASE}${rawUrl}` : rawUrl;
+        const imageUrl = await uploadImageFile(file);
+        if (!imageUrl) return;
 
         const range = quill.getSelection(true) || { index: quill.getLength(), length: 0 };
         quill.insertEmbed(range.index, 'image', imageUrl, 'user');
@@ -131,14 +145,56 @@ export default function AdminTinyEditor({
           applyImageSize(node, 100);
           applyImageAlign(node, 'center');
         });
-      } finally {
-        setUploadBusy(false);
+      } catch {
+        // ignore
       }
     };
 
     // Must be called after we attach onchange (some browsers can behave oddly otherwise).
     input.click();
-  };
+  }, [adminToken, uploadBusy, uploadImageFile]);
+
+  // Support pasting images directly into the editor (clipboard image -> upload -> embed).
+  useEffect(() => {
+    if (readOnly) return;
+    if (!adminToken) return;
+    const quill = getQuill();
+    if (!quill) return;
+
+    const handler = async (event) => {
+      try {
+        const items = event?.clipboardData?.items ? Array.from(event.clipboardData.items) : [];
+        const imgItem = items.find((it) => it && it.kind === 'file' && String(it.type || '').startsWith('image/'));
+        const file = imgItem?.getAsFile?.() || null;
+        if (!file) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        const imageUrl = await uploadImageFile(file);
+        if (!imageUrl) return;
+
+        const range = quill.getSelection(true) || { index: quill.getLength(), length: 0 };
+        quill.insertEmbed(range.index, 'image', imageUrl, 'user');
+        quill.setSelection(range.index + 1, 0, 'silent');
+        withSelectedImage((node) => {
+          applyImageSize(node, 100);
+          applyImageAlign(node, 'center');
+        });
+      } catch {
+        // ignore
+      }
+    };
+
+    quill.root?.addEventListener?.('paste', handler);
+    return () => {
+      try {
+        quill.root?.removeEventListener?.('paste', handler);
+      } catch {
+        // ignore
+      }
+    };
+  }, [adminToken, readOnly, uploadImageFile]);
 
   const modules = useMemo(() => {
     if (readOnly) {
@@ -158,7 +214,7 @@ export default function AdminTinyEditor({
         },
       },
     };
-  }, [compact, toolbarConfig, adminToken, uploadBusy]);
+  }, [compact, toolbarConfig, handleInsertImage, readOnly]);
 
   return (
     <div
@@ -189,7 +245,16 @@ export default function AdminTinyEditor({
           </select>
 
           <button className="ql-link" />
-          <button className="ql-image" disabled={uploadBusy} />
+          <button
+            type="button"
+            className="ql-image"
+            disabled={uploadBusy || !adminToken}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              void handleInsertImage();
+            }}
+          />
           <button className="ql-clean" />
 
           <span className="ml-2 text-xs font-semibold text-gray-500">Image:</span>
