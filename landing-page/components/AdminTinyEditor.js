@@ -25,6 +25,7 @@ export default function AdminTinyEditor({
     return `gf-quill-${safe || 'toolbar'}`;
   }, [rawToolbarId]);
   const quillRef = useRef(null);
+  const fileInputRef = useRef(null);
   const [uploadBusy, setUploadBusy] = useState(false);
   const [pendingImageUrl, setPendingImageUrl] = useState(null);
 
@@ -119,38 +120,21 @@ export default function AdminTinyEditor({
     node.style.margin = '12px auto';
   };
 
-  const handleInsertImage = useCallback(async () => {
-    if (!adminToken) return;
-    if (uploadBusy) return;
-
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.style.position = 'fixed';
-    input.style.left = '-9999px';
-    input.style.top = '-9999px';
-    document.body.appendChild(input);
-
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      try {
-        input.remove();
-      } catch {
-        // ignore
-      }
+  const handleFileChosen = useCallback(
+    async (file) => {
       if (!file) return;
+      if (!adminToken) return;
+      if (uploadBusy) return;
 
       try {
         const imageUrl = await uploadImageFile(file);
         if (!imageUrl) return;
 
-        // If the editor isn't ready yet, store it and insert once it becomes available.
         if (!insertImageAtCursor(imageUrl)) {
           setPendingImageUrl(imageUrl);
           return;
         }
 
-        // Apply a sane default style so images don't come in huge.
         withSelectedImage((node) => {
           applyImageSize(node, 100);
           applyImageAlign(node, 'center');
@@ -158,11 +142,24 @@ export default function AdminTinyEditor({
       } catch {
         // ignore
       }
-    };
+    },
+    [adminToken, uploadBusy, uploadImageFile, insertImageAtCursor]
+  );
 
-    // Must be called after we attach onchange (some browsers can behave oddly otherwise).
-    input.click();
-  }, [adminToken, uploadBusy, uploadImageFile]);
+  const handleInsertImage = useCallback(async () => {
+    if (!adminToken) return;
+    if (uploadBusy) return;
+
+    const el = fileInputRef.current;
+    if (!el) return;
+    // Reset so selecting the same file twice still triggers onChange.
+    try {
+      el.value = '';
+    } catch {
+      // ignore
+    }
+    el.click();
+  }, [adminToken, uploadBusy]);
 
   // If an upload completed before Quill finished mounting, insert once it becomes available.
   useEffect(() => {
@@ -204,22 +201,33 @@ export default function AdminTinyEditor({
         const items = event?.clipboardData?.items ? Array.from(event.clipboardData.items) : [];
         const imgItem = items.find((it) => it && it.kind === 'file' && String(it.type || '').startsWith('image/'));
         const file = imgItem?.getAsFile?.() || null;
-        if (!file) return;
+        if (!file) {
+          // Fallback: some browsers provide HTML with an <img src="..."> rather than a file item.
+          const html = event?.clipboardData?.getData?.('text/html') || '';
+          if (typeof html === 'string' && html.includes('<img')) {
+            const match = html.match(/<img[^>]+src=['"]([^'"]+)['"]/i);
+            const src = match?.[1] ? String(match[1]).trim() : '';
+            if (src) {
+              // Allow external images to be embedded by URL (best-effort).
+              event.preventDefault();
+              event.stopPropagation();
+              if (!insertImageAtCursor(src)) {
+                setPendingImageUrl(src);
+                return;
+              }
+              withSelectedImage((node) => {
+                applyImageSize(node, 100);
+                applyImageAlign(node, 'center');
+              });
+            }
+          }
+          return;
+        }
 
         event.preventDefault();
         event.stopPropagation();
 
-        const imageUrl = await uploadImageFile(file);
-        if (!imageUrl) return;
-
-        if (!insertImageAtCursor(imageUrl)) {
-          setPendingImageUrl(imageUrl);
-          return;
-        }
-        withSelectedImage((node) => {
-          applyImageSize(node, 100);
-          applyImageAlign(node, 'center');
-        });
+        await handleFileChosen(file);
       } catch {
         // ignore
       }
@@ -228,7 +236,7 @@ export default function AdminTinyEditor({
     // Attach to the document so it still works even if the Quill instance mounts after this effect runs.
     document.addEventListener('paste', handler);
     return () => document.removeEventListener('paste', handler);
-  }, [adminToken, readOnly, uploadImageFile]);
+  }, [adminToken, readOnly, handleFileChosen, insertImageAtCursor]);
 
   const modules = useMemo(() => {
     if (readOnly) {
@@ -255,6 +263,16 @@ export default function AdminTinyEditor({
       className="admin-quill rounded-xl border border-gray-200 bg-white overflow-hidden"
       style={{ '--editor-height': `${height}px` }}
     >
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          void handleFileChosen(file);
+        }}
+      />
       {!compact ? (
         <div id={toolbarId} className="border-b border-gray-200 bg-white px-3 py-2 flex flex-wrap items-center gap-2">
           <select className="ql-header" defaultValue="">
