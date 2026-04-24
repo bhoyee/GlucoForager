@@ -26,6 +26,7 @@ export default function AdminTinyEditor({
   }, [rawToolbarId]);
   const quillRef = useRef(null);
   const [uploadBusy, setUploadBusy] = useState(false);
+  const [pendingImageUrl, setPendingImageUrl] = useState(null);
 
   const toolbarConfig = useMemo(() => {
     if (compact) {
@@ -37,6 +38,15 @@ export default function AdminTinyEditor({
   }, [compact, toolbarId]);
 
   const getQuill = () => quillRef.current?.getEditor?.() || null;
+
+  const insertImageAtCursor = useCallback((imageUrl) => {
+    const quill = getQuill();
+    if (!quill) return false;
+    const range = quill.getSelection(true) || { index: quill.getLength(), length: 0 };
+    quill.insertEmbed(range.index, 'image', imageUrl, 'user');
+    quill.setSelection(range.index + 1, 0, 'silent');
+    return true;
+  }, []);
 
   const uploadImageFile = useCallback(
     async (file) => {
@@ -110,8 +120,6 @@ export default function AdminTinyEditor({
   };
 
   const handleInsertImage = useCallback(async () => {
-    const quill = getQuill();
-    if (!quill) return;
     if (!adminToken) return;
     if (uploadBusy) return;
 
@@ -136,9 +144,11 @@ export default function AdminTinyEditor({
         const imageUrl = await uploadImageFile(file);
         if (!imageUrl) return;
 
-        const range = quill.getSelection(true) || { index: quill.getLength(), length: 0 };
-        quill.insertEmbed(range.index, 'image', imageUrl, 'user');
-        quill.setSelection(range.index + 1, 0, 'silent');
+        // If the editor isn't ready yet, store it and insert once it becomes available.
+        if (!insertImageAtCursor(imageUrl)) {
+          setPendingImageUrl(imageUrl);
+          return;
+        }
 
         // Apply a sane default style so images don't come in huge.
         withSelectedImage((node) => {
@@ -154,12 +164,40 @@ export default function AdminTinyEditor({
     input.click();
   }, [adminToken, uploadBusy, uploadImageFile]);
 
+  // If an upload completed before Quill finished mounting, insert once it becomes available.
+  useEffect(() => {
+    if (!pendingImageUrl) return;
+    const imageUrl = String(pendingImageUrl || '').trim();
+    if (!imageUrl) {
+      setPendingImageUrl(null);
+      return;
+    }
+
+    let cancelled = false;
+    const started = Date.now();
+    const tick = () => {
+      if (cancelled) return;
+      if (insertImageAtCursor(imageUrl)) {
+        setPendingImageUrl(null);
+        withSelectedImage((node) => {
+          applyImageSize(node, 100);
+          applyImageAlign(node, 'center');
+        });
+        return;
+      }
+      if (Date.now() - started > 3000) return; // give up quietly
+      setTimeout(tick, 120);
+    };
+    tick();
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingImageUrl, insertImageAtCursor]);
+
   // Support pasting images directly into the editor (clipboard image -> upload -> embed).
   useEffect(() => {
     if (readOnly) return;
     if (!adminToken) return;
-    const quill = getQuill();
-    if (!quill) return;
 
     const handler = async (event) => {
       try {
@@ -174,9 +212,10 @@ export default function AdminTinyEditor({
         const imageUrl = await uploadImageFile(file);
         if (!imageUrl) return;
 
-        const range = quill.getSelection(true) || { index: quill.getLength(), length: 0 };
-        quill.insertEmbed(range.index, 'image', imageUrl, 'user');
-        quill.setSelection(range.index + 1, 0, 'silent');
+        if (!insertImageAtCursor(imageUrl)) {
+          setPendingImageUrl(imageUrl);
+          return;
+        }
         withSelectedImage((node) => {
           applyImageSize(node, 100);
           applyImageAlign(node, 'center');
@@ -186,14 +225,9 @@ export default function AdminTinyEditor({
       }
     };
 
-    quill.root?.addEventListener?.('paste', handler);
-    return () => {
-      try {
-        quill.root?.removeEventListener?.('paste', handler);
-      } catch {
-        // ignore
-      }
-    };
+    // Attach to the document so it still works even if the Quill instance mounts after this effect runs.
+    document.addEventListener('paste', handler);
+    return () => document.removeEventListener('paste', handler);
   }, [adminToken, readOnly, uploadImageFile]);
 
   const modules = useMemo(() => {
@@ -249,7 +283,7 @@ export default function AdminTinyEditor({
             type="button"
             className="ql-image"
             disabled={uploadBusy || !adminToken}
-            onClick={(event) => {
+            onMouseDown={(event) => {
               event.preventDefault();
               event.stopPropagation();
               void handleInsertImage();
