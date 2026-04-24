@@ -217,7 +217,17 @@ export default function MilestonesPage() {
         return;
       }
       if (!res.ok) throw new Error(data.detail || 'Failed to update milestone.');
-      await loadProgress();
+      // Optimistic UI update so admin sees "Done" immediately (no manual refresh).
+      const completedAt = isCompleted ? new Date().toISOString() : null;
+      setItems((prev) =>
+        (Array.isArray(prev) ? prev : []).map((m) =>
+          m && m.id === milestoneId
+            ? { ...m, is_completed: Boolean(isCompleted), completed_at: completedAt }
+            : m
+        )
+      );
+      // Then re-fetch to ensure server state is reflected accurately.
+      await loadMilestones();
       await loadMonthSummary();
     } catch (e) {
       setMessage(e?.message || 'Failed to update milestone.');
