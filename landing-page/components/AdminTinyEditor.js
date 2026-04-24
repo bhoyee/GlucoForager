@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
+const API_BASE = API_URL.replace(/\/+$/, '');
 
 export default function AdminTinyEditor({
   value,
@@ -90,10 +91,18 @@ export default function AdminTinyEditor({
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
-    input.click();
+    input.style.position = 'fixed';
+    input.style.left = '-9999px';
+    input.style.top = '-9999px';
+    document.body.appendChild(input);
 
     input.onchange = async () => {
       const file = input.files?.[0];
+      try {
+        input.remove();
+      } catch {
+        // ignore
+      }
       if (!file) return;
 
       setUploadBusy(true);
@@ -110,8 +119,11 @@ export default function AdminTinyEditor({
         if (!response.ok) return;
         if (!data?.url) return;
 
+        const rawUrl = String(data.url || '').trim();
+        const imageUrl = rawUrl.startsWith('/') ? `${API_BASE}${rawUrl}` : rawUrl;
+
         const range = quill.getSelection(true) || { index: quill.getLength(), length: 0 };
-        quill.insertEmbed(range.index, 'image', data.url, 'user');
+        quill.insertEmbed(range.index, 'image', imageUrl, 'user');
         quill.setSelection(range.index + 1, 0, 'silent');
 
         // Apply a sane default style so images don't come in huge.
@@ -123,6 +135,9 @@ export default function AdminTinyEditor({
         setUploadBusy(false);
       }
     };
+
+    // Must be called after we attach onchange (some browsers can behave oddly otherwise).
+    input.click();
   };
 
   const modules = useMemo(() => {
