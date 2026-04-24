@@ -51,6 +51,10 @@ export default function MilestonesPage() {
   const [items, setItems] = useState([]);
   const [totalStaff, setTotalStaff] = useState(0);
 
+  const [createTitle, setCreateTitle] = useState('');
+  const [createDescription, setCreateDescription] = useState('');
+  const [createLoading, setCreateLoading] = useState(false);
+
   const [editId, setEditId] = useState(null);
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
@@ -197,6 +201,43 @@ export default function MilestonesPage() {
       loadMonthSummary();
     } catch (e) {
       setMessage(e?.message || 'Failed to delete milestone.');
+    }
+  };
+
+  const createMilestone = async () => {
+    if (!token || !canManage || !roleKey || !periodStart) return;
+    const title = String(createTitle || '').trim();
+    if (!title) return;
+    setCreateLoading(true);
+    setMessage('');
+    try {
+      const res = await fetch(`${API_URL}/api/admin/work-plans/milestones`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          role_key: roleKey,
+          cadence,
+          period_start: periodStart,
+          title,
+          description: String(createDescription || '').trim() || null,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      if (!res.ok) throw new Error(data.detail || 'Failed to create milestone.');
+      setCreateTitle('');
+      setCreateDescription('');
+      setMessage('Milestone created.');
+      await loadMilestones();
+      await loadMonthSummary();
+    } catch (e) {
+      setMessage(e?.message || 'Failed to create milestone.');
+    } finally {
+      setCreateLoading(false);
     }
   };
 
@@ -372,6 +413,42 @@ export default function MilestonesPage() {
 
       <div className="admin-card" style={{ marginTop: 16 }}>
         <h3 style={{ marginTop: 0 }}>Milestones</h3>
+        <div className="admin-card" style={{ marginTop: 12, padding: 12 }}>
+          <h4 style={{ marginTop: 0 }}>Create milestone</h4>
+          <div className="admin-field">
+            <label>Title</label>
+            <input
+              value={createTitle}
+              onChange={(e) => setCreateTitle(e.target.value)}
+              placeholder="e.g. Deliver 5 premium recipe images"
+              disabled={createLoading || loading}
+            />
+          </div>
+          <div className="admin-field">
+            <label>Description (optional)</label>
+            <textarea
+              value={createDescription}
+              onChange={(e) => setCreateDescription(e.target.value)}
+              rows={3}
+              placeholder="Extra details for the role"
+              disabled={createLoading || loading}
+            />
+          </div>
+          <div className="admin-actions">
+            <button
+              className="admin-button"
+              type="button"
+              onClick={createMilestone}
+              disabled={createLoading || loading || !roleKey || !String(createTitle || '').trim()}
+            >
+              {createLoading ? 'Creating...' : 'Create milestone'}
+            </button>
+          </div>
+          <p className="admin-subtitle" style={{ marginTop: 8 }}>
+            Milestone will be created for <strong>{roleKey || '--'}</strong> ({cadence}) starting{' '}
+            <strong>{periodStart || '--'}</strong>.
+          </p>
+        </div>
         {loading ? (
           <LoadingState label="Loading milestones..." />
         ) : items.length === 0 ? (
