@@ -28,6 +28,16 @@ export default function AdminTinyEditor({
   const fileInputRef = useRef(null);
   const [uploadBusy, setUploadBusy] = useState(false);
   const [pendingImageUrl, setPendingImageUrl] = useState(null);
+  const busyRef = useRef(false);
+  const tokenRef = useRef(adminToken || null);
+
+  useEffect(() => {
+    busyRef.current = !!uploadBusy;
+  }, [uploadBusy]);
+
+  useEffect(() => {
+    tokenRef.current = adminToken || null;
+  }, [adminToken]);
 
   const toolbarConfig = useMemo(() => {
     if (compact) {
@@ -46,12 +56,22 @@ export default function AdminTinyEditor({
     const range = quill.getSelection(true) || { index: quill.getLength(), length: 0 };
     quill.insertEmbed(range.index, 'image', imageUrl, 'user');
     quill.setSelection(range.index + 1, 0, 'silent');
+    // ReactQuill doesn't always fire onChange for programmatic embeds in controlled mode,
+    // so force-sync the HTML back to the parent.
+    try {
+      const html = quill.root?.innerHTML || '';
+      onChange?.(html);
+    } catch {
+      // ignore
+    }
     return true;
-  }, []);
+  }, [onChange]);
 
   const uploadImageFile = useCallback(
     async (file) => {
-      if (!file || !adminToken) return null;
+      if (!file || !tokenRef.current) return null;
+      if (busyRef.current) return null;
+
       setUploadBusy(true);
       try {
         const formData = new FormData();
@@ -59,7 +79,7 @@ export default function AdminTinyEditor({
 
         const response = await fetch(`${API_URL}/api/admin/blog/upload`, {
           method: 'POST',
-          headers: { Authorization: `Bearer ${adminToken}` },
+          headers: { Authorization: `Bearer ${tokenRef.current}` },
           body: formData,
         });
         const data = await response.json().catch(() => ({}));
@@ -72,7 +92,7 @@ export default function AdminTinyEditor({
         setUploadBusy(false);
       }
     },
-    [adminToken]
+    []
   );
 
   const withSelectedImage = (fn) => {
@@ -123,8 +143,8 @@ export default function AdminTinyEditor({
   const handleFileChosen = useCallback(
     async (file) => {
       if (!file) return;
-      if (!adminToken) return;
-      if (uploadBusy) return;
+      if (!tokenRef.current) return;
+      if (busyRef.current) return;
 
       try {
         const imageUrl = await uploadImageFile(file);
@@ -143,12 +163,12 @@ export default function AdminTinyEditor({
         // ignore
       }
     },
-    [adminToken, uploadBusy, uploadImageFile, insertImageAtCursor]
+    [uploadImageFile, insertImageAtCursor]
   );
 
   const handleInsertImage = useCallback(async () => {
-    if (!adminToken) return;
-    if (uploadBusy) return;
+    if (!tokenRef.current) return;
+    if (busyRef.current) return;
 
     const el = fileInputRef.current;
     if (!el) return;
@@ -159,7 +179,7 @@ export default function AdminTinyEditor({
       // ignore
     }
     el.click();
-  }, [adminToken, uploadBusy]);
+  }, []);
 
   // If an upload completed before Quill finished mounting, insert once it becomes available.
   useEffect(() => {
@@ -250,13 +270,15 @@ export default function AdminTinyEditor({
       toolbar: {
         container: toolbarConfig,
         handlers: {
-          image: handleInsertImage,
+          // We trigger the picker from our toolbar button directly. Keep Quill's handler inert
+          // so it doesn't double-trigger and cause editor state glitches.
+          image: () => {},
           imageSize: (value) => withSelectedImage((node) => applyImageSize(node, value)),
           imageAlign: (value) => withSelectedImage((node) => applyImageAlign(node, value)),
         },
       },
     };
-  }, [compact, toolbarConfig, handleInsertImage, readOnly]);
+  }, [compact, toolbarConfig, readOnly]);
 
   return (
     <div
