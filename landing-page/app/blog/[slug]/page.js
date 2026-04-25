@@ -47,9 +47,36 @@ function rewriteContentHtml(html) {
     return API_BASE;
   })();
 
-  return source
-    .replace(/(<img[^>]+src=['"])(\/[^'"]+)(['"][^>]*>)/gi, (_m, p1, src, p3) => `${p1}${upgradedApiBase}${src}${p3}`)
-    .replace(/(<img[^>]+src=['"])http:\/\/([^'"]+)(['"][^>]*>)/gi, (_m, p1, rest, p3) => `${p1}https://${rest}${p3}`);
+  const rewriteUploadsHost = (value) => {
+    const url = String(value || '').trim();
+    if (!url) return url;
+
+    // Only rewrite our own uploads paths; leave external images untouched.
+    // - /uploads/... (relative)
+    // - http(s)://<anything>/uploads/... (absolute)
+    const relMatch = url.match(/^(\/uploads\/.+)$/i);
+    if (relMatch) return `${upgradedApiBase}${relMatch[1]}`;
+
+    const absUploadsMatch = url.match(/^https?:\/\/[^/]+(\/uploads\/.+)$/i);
+    if (absUploadsMatch) return `${upgradedApiBase}${absUploadsMatch[1]}`;
+
+    // Upgrade explicit localhost dev URLs (seen when authoring locally then viewing elsewhere).
+    const localhostMatch = url.match(/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?(\/.+)$/i);
+    if (localhostMatch && localhostMatch[1].startsWith('/uploads/')) {
+      return `${upgradedApiBase}${localhostMatch[1]}`;
+    }
+
+    // Mixed content fix (only for URLs we already know are ours).
+    if (SITE_URL.startsWith('https://') && url.startsWith('http://') && url.includes('/uploads/')) {
+      return `https://${url.slice('http://'.length)}`;
+    }
+
+    return url;
+  };
+
+  return source.replace(/(<img[^>]+src=['"])([^'"]+)(['"][^>]*>)/gi, (_m, p1, src, p3) => {
+    return `${p1}${rewriteUploadsHost(src)}${p3}`;
+  });
 }
 
 function renderContent(content) {
