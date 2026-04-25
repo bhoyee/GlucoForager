@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import AdminTinyEditor from '../../../components/AdminTinyEditor';
+import AdminRichEditor from '../../../components/AdminRichEditor';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 const API_BASE = API_URL.replace(/\/+$/, '');
@@ -374,7 +375,7 @@ export default function BlogPostForm({
 
       <div className="admin-field">
         <label>Content</label>
-        <AdminTinyEditor
+        <AdminRichEditor
           height={520}
           value={form.content}
           onChange={(next) => setForm((prev) => ({ ...prev, content: next }))}
