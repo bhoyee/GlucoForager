@@ -36,14 +36,31 @@ const escapeHtml = (value) =>
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
 
+function rewriteContentHtml(html) {
+  const source = String(html || '');
+  if (!source) return '';
+
+  const upgradedApiBase = (() => {
+    if (API_BASE.startsWith('http://') && SITE_URL.startsWith('https://')) {
+      return `https://${API_BASE.slice('http://'.length)}`;
+    }
+    return API_BASE;
+  })();
+
+  return source
+    .replace(/(<img[^>]+src=['"])(\/[^'"]+)(['"][^>]*>)/gi, (_m, p1, src, p3) => `${p1}${upgradedApiBase}${src}${p3}`)
+    .replace(/(<img[^>]+src=['"])http:\/\/([^'"]+)(['"][^>]*>)/gi, (_m, p1, rest, p3) => `${p1}https://${rest}${p3}`);
+}
+
 function renderContent(content) {
   const looksLikeHtml = /<\/?[a-z][\s\S]*>/i.test(String(content || ''));
   if (looksLikeHtml) {
+    const safeHtml = rewriteContentHtml(content);
     return (
       <div
         className="text-gray-800 leading-7 [&_p]:mt-4 [&_h1]:text-3xl [&_h1]:font-extrabold [&_h1]:text-gray-900 [&_h2]:mt-8 [&_h2]:text-2xl [&_h2]:font-bold [&_h2]:text-gray-900 [&_h3]:mt-6 [&_h3]:text-xl [&_h3]:font-bold [&_h3]:text-gray-900 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:mt-4 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:mt-4 [&_li]:mt-1 [&_a]:text-teal-700 [&_a]:font-semibold hover:[&_a]:text-teal-900"
         // eslint-disable-next-line react/no-danger
-        dangerouslySetInnerHTML={{ __html: String(content || '') }}
+        dangerouslySetInnerHTML={{ __html: safeHtml }}
       />
     );
   }

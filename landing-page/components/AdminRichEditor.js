@@ -14,7 +14,21 @@ const API_BASE = API_URL.replace(/\/+$/, '');
 const normalizeUploadUrl = (rawUrl) => {
   const value = String(rawUrl || '').trim();
   if (!value) return '';
-  return value.startsWith('/') ? `${API_BASE}${value}` : value;
+  if (!value.startsWith('/')) return value;
+
+  // If the site is served over HTTPS but NEXT_PUBLIC_API_URL is accidentally HTTP,
+  // browsers will block images as mixed content. In production our API should be HTTPS,
+  // so we "upgrade" here for rendering + persistence.
+  let base = API_BASE;
+  try {
+    if (typeof window !== 'undefined' && window.location?.protocol === 'https:' && base.startsWith('http://')) {
+      base = `https://${base.slice('http://'.length)}`;
+    }
+  } catch {
+    // ignore
+  }
+
+  return `${base}${value}`;
 };
 
 export default function AdminRichEditor({
@@ -330,4 +344,3 @@ export default function AdminRichEditor({
     </div>
   );
 }
-
