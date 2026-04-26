@@ -15,6 +15,7 @@ export default function AdminUserDetail() {
   }, []);
 
   const [user, setUser] = useState(null);
+  const [activeTab, setActiveTab] = useState('profile');
   const [form, setForm] = useState({
     email: '',
     full_name: '',
@@ -74,6 +75,10 @@ export default function AdminUserDetail() {
     if (userId) {
       loadUser();
     }
+  }, [userId]);
+
+  useEffect(() => {
+    setActiveTab('profile');
   }, [userId]);
 
   const handleSave = async () => {
@@ -407,296 +412,477 @@ export default function AdminUserDetail() {
     return String(value);
   };
 
+  const formatDate = (value) => (value ? new Date(value).toLocaleDateString() : '--');
+  const formatDateTime = (value) => (value ? new Date(value).toLocaleString() : '--');
+  const displayPlatform =
+    user.registered_platform === 'ios'
+      ? 'iOS'
+      : user.registered_platform === 'android'
+        ? 'Android'
+        : user.registered_platform || '--';
+
+  const displayTier = String(user.subscription_tier || user.subscription || 'free');
+  const tierLabel = displayTier.toLowerCase() === 'premium' ? 'Premium' : displayTier;
+  const isPremium = displayTier.toLowerCase() === 'premium';
+  const isSuspended = Boolean(user.suspended_at);
+  const isPremiumBlocked = Boolean(user.premium_access_blocked);
+
+  const initials = (() => {
+    const raw = (user.full_name || user.email || 'U').trim();
+    const parts = raw.split(/\s+/).filter(Boolean);
+    if (!parts.length) return 'U';
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  })();
+
+  const userTitle = user.full_name?.trim() ? user.full_name.trim() : user.email;
+  const userSubtitleParts = [
+    user.id ? `User #${user.id}` : null,
+    displayPlatform !== '--' ? displayPlatform : null,
+    user.registered_app_version ? `v${user.registered_app_version}` : null,
+  ].filter(Boolean);
+
+  const Badge = ({ tone = 'neutral', children, title }) => (
+    <span className={`admin-badge admin-badge--${tone}`} title={title}>
+      {children}
+    </span>
+  );
+
+  const TabButton = ({ id, children }) => (
+    <button
+      type="button"
+      className={`admin-tab${activeTab === id ? ' is-active' : ''}`}
+      onClick={() => setActiveTab(id)}
+    >
+      {children}
+    </button>
+  );
+
   return (
-    <div className="admin-card">
-      <div className="admin-actions">
-        <button className="admin-button secondary" type="button" onClick={() => router.push('/admin/users')}>
-          Back to Users
-        </button>
-        <button className="admin-button" type="button" onClick={() => requestAction('grant_premium')}>
-          Grant Premium
-        </button>
-        {adminComp?.status === 'active' ? (
-          <button className="admin-button danger" type="button" onClick={() => requestAction('revoke_comp')}>
-            Revoke comp
+    <div className="admin-user-detail">
+      <div className="admin-card admin-user-hero">
+        <div className="admin-user-hero-top">
+          <button className="admin-button secondary" type="button" onClick={() => router.push('/admin/users')}>
+            Back
           </button>
-        ) : null}
-        {user.premium_access_blocked ? (
-          <button className="admin-button secondary" type="button" onClick={() => requestAction('unblock_premium')}>
-            Unblock Premium
-          </button>
-        ) : (
-          <button className="admin-button danger" type="button" onClick={() => requestAction('block_premium')}>
-            Block Premium
-          </button>
-        )}
-        {user.suspended_at ? (
-          <button className="admin-button secondary" type="button" onClick={() => requestAction('unsuspend')}>
-            Unsuspend
-          </button>
-        ) : (
-          <button className="admin-button danger" type="button" onClick={() => requestAction('suspend')}>
-            Suspend
-          </button>
-        )}
-        <button className="admin-button danger" type="button" onClick={() => requestAction('delete')}>
-          Delete
-        </button>
+
+          <div className="admin-user-hero-actions">
+            <button className="admin-button" type="button" onClick={() => requestAction('grant_premium')}>
+              Grant Premium
+            </button>
+
+            <details className="admin-action-menu">
+              <summary className="admin-button secondary">More actions</summary>
+              <div className="admin-action-menu-panel">
+                {adminComp?.status === 'active' ? (
+                  <button
+                    className="admin-action-menu-item danger"
+                    type="button"
+                    onClick={() => requestAction('revoke_comp')}
+                  >
+                    Revoke comp
+                  </button>
+                ) : null}
+                {isPremiumBlocked ? (
+                  <button
+                    className="admin-action-menu-item"
+                    type="button"
+                    onClick={() => requestAction('unblock_premium')}
+                  >
+                    Unblock Premium
+                  </button>
+                ) : (
+                  <button
+                    className="admin-action-menu-item danger"
+                    type="button"
+                    onClick={() => requestAction('block_premium')}
+                  >
+                    Block Premium
+                  </button>
+                )}
+                {isSuspended ? (
+                  <button className="admin-action-menu-item" type="button" onClick={() => requestAction('unsuspend')}>
+                    Unsuspend
+                  </button>
+                ) : (
+                  <button
+                    className="admin-action-menu-item danger"
+                    type="button"
+                    onClick={() => requestAction('suspend')}
+                  >
+                    Suspend
+                  </button>
+                )}
+                <button className="admin-action-menu-item danger" type="button" onClick={() => requestAction('delete')}>
+                  Delete user
+                </button>
+              </div>
+            </details>
+          </div>
+        </div>
+
+        <div className="admin-user-hero-main">
+          <div className="admin-user-avatar" aria-hidden="true">
+            {initials}
+          </div>
+          <div className="admin-user-identity">
+            <h2 className="admin-user-name">{userTitle}</h2>
+            <p className="admin-user-email">{user.email}</p>
+            {userSubtitleParts.length ? <p className="admin-user-subline">{userSubtitleParts.join(' | ')}</p> : null}
+          </div>
+          <div className="admin-user-badges">
+            <Badge tone={isPremium ? 'success' : 'neutral'} title="Subscription tier">
+              {tierLabel}
+            </Badge>
+            <Badge tone={String(user.status).toLowerCase() === 'active' ? 'success' : 'neutral'} title="Account status">
+              {user.status || '--'}
+            </Badge>
+            {isSuspended ? <Badge tone="warning">Suspended</Badge> : null}
+            {isPremiumBlocked ? (
+              <Badge
+                tone="danger"
+                title={
+                  user.premium_access_blocked_until
+                    ? `Blocked until ${formatDateTime(user.premium_access_blocked_until)}`
+                    : 'Premium blocked'
+                }
+              >
+                Premium blocked
+              </Badge>
+            ) : null}
+          </div>
+        </div>
+
+        {message ? <div className="admin-user-toast">{message}</div> : null}
+
+        <div className="admin-tabs" role="tablist" aria-label="User detail sections">
+          <TabButton id="profile">Profile</TabButton>
+          <TabButton id="access">Access & Billing</TabButton>
+          <TabButton id="preferences">Preferences</TabButton>
+          <TabButton id="transactions">Transactions</TabButton>
+        </div>
       </div>
 
-      <h2 className="admin-title">User Details</h2>
-      <p className="admin-subtitle">Manage profile and subscription status.</p>
-      {message && <p className="admin-subtitle">{message}</p>}
+      {activeTab === 'profile' ? (
+        <div className="admin-grid" style={{ marginTop: 18 }}>
+          <div className="admin-card">
+            <div className="admin-card-header">
+              <div>
+                <h3 className="admin-title admin-title--sm">Profile</h3>
+                <p className="admin-subtitle admin-subtitle--sm">Support and identity fields.</p>
+              </div>
+              <button className="admin-button" type="button" onClick={handleSave}>
+                Save changes
+              </button>
+            </div>
 
-      <div className="admin-grid">
-        <div>
-          <div className="admin-field">
-            <label>Email</label>
-            <input
-              type="email"
-              value={form.email}
-              onChange={(event) => setForm({ ...form, email: event.target.value })}
-            />
+            <div className="admin-field">
+              <label>Email</label>
+              <input
+                type="email"
+                value={form.email}
+                onChange={(event) => setForm({ ...form, email: event.target.value })}
+              />
+            </div>
+            <div className="admin-field">
+              <label>Full name</label>
+              <input
+                type="text"
+                value={form.full_name}
+                onChange={(event) => setForm({ ...form, full_name: event.target.value })}
+              />
+            </div>
+            <div className="admin-inline">
+              <div className="admin-field">
+                <label>Gender</label>
+                <input
+                  type="text"
+                  value={form.gender}
+                  onChange={(event) => setForm({ ...form, gender: event.target.value })}
+                />
+              </div>
+              <div className="admin-field">
+                <label>Country</label>
+                <input
+                  type="text"
+                  value={form.country}
+                  onChange={(event) => setForm({ ...form, country: event.target.value })}
+                />
+              </div>
+            </div>
           </div>
-          <div className="admin-field">
-            <label>Full name</label>
+
+          <div className="admin-stack">
+            <div className="admin-card admin-card--subtle">
+              <h3 className="admin-title admin-title--sm">Account</h3>
+              <div className="admin-kv">
+                <div className="admin-kv-row">
+                  <div className="admin-kv-label">Status</div>
+                  <div className="admin-kv-value">{user.status || '--'}</div>
+                </div>
+                <div className="admin-kv-row">
+                  <div className="admin-kv-label">Suspended</div>
+                  <div className="admin-kv-value">{isSuspended ? formatDateTime(user.suspended_at) : 'No'}</div>
+                </div>
+                <div className="admin-kv-row">
+                  <div className="admin-kv-label">Premium blocked</div>
+                  <div className="admin-kv-value">
+                    {isPremiumBlocked
+                      ? user.premium_access_blocked_until
+                        ? `Yes (until ${formatDateTime(user.premium_access_blocked_until)})`
+                        : 'Yes'
+                      : 'No'}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="admin-card">
+              <h3 className="admin-title admin-title--sm">App & Device</h3>
+              <div className="admin-kv">
+                <div className="admin-kv-row">
+                  <div className="admin-kv-label">Platform</div>
+                  <div className="admin-kv-value">{displayPlatform}</div>
+                </div>
+                <div className="admin-kv-row">
+                  <div className="admin-kv-label">App version</div>
+                  <div className="admin-kv-value">{user.registered_app_version || '--'}</div>
+                </div>
+                <div className="admin-kv-row">
+                  <div className="admin-kv-label">Build</div>
+                  <div className="admin-kv-value">{user.registered_build_number || '--'}</div>
+                </div>
+                <div className="admin-kv-row">
+                  <div className="admin-kv-label">OS</div>
+                  <div className="admin-kv-value">{user.registered_os_version || '--'}</div>
+                </div>
+                <div className="admin-kv-row">
+                  <div className="admin-kv-label">Device</div>
+                  <div className="admin-kv-value">{user.registered_device_model || '--'}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {activeTab === 'access' ? (
+        <div className="admin-grid" style={{ marginTop: 18 }}>
+          <div className="admin-card">
+            <h3 className="admin-title admin-title--sm">Subscription & Access</h3>
+            <p className="admin-subtitle admin-subtitle--sm">What tier the user is on, and why.</p>
+            <div className="admin-kv">
+              <div className="admin-kv-row">
+                <div className="admin-kv-label">Plan</div>
+                <div className="admin-kv-value">{user.subscription_tier || '--'}</div>
+              </div>
+              <div className="admin-kv-row">
+                <div className="admin-kv-label">Tier source</div>
+                <div className="admin-kv-value">{user.tier_source || '--'}</div>
+              </div>
+              <div className="admin-kv-row">
+                <div className="admin-kv-label">Status</div>
+                <div className="admin-kv-value">{user.status || '--'}</div>
+              </div>
+              <div className="admin-kv-row">
+                <div className="admin-kv-label">Expires</div>
+                <div className="admin-kv-value">{formatDate(user.expires_at)}</div>
+              </div>
+              <div className="admin-kv-row">
+                <div className="admin-kv-label">Admin comp expires</div>
+                <div className="admin-kv-value">{formatDateTime(adminComp?.expires_at)}</div>
+              </div>
+              <div className="admin-kv-row">
+                <div className="admin-kv-label">Premium blocked</div>
+                <div className="admin-kv-value">
+                  {isPremiumBlocked
+                    ? user.premium_access_blocked_until
+                      ? `Yes (until ${formatDateTime(user.premium_access_blocked_until)})`
+                      : 'Yes'
+                    : 'No'}
+                </div>
+              </div>
+              {user.premium_access_blocked_reason ? (
+                <div className="admin-kv-row">
+                  <div className="admin-kv-label">Block reason</div>
+                  <div className="admin-kv-value">{user.premium_access_blocked_reason}</div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="admin-card">
+            <h3 className="admin-title admin-title--sm">Billing (Latest)</h3>
+            <p className="admin-subtitle admin-subtitle--sm">Most recent billing payload received.</p>
+            <div className="admin-kv">
+              <div className="admin-kv-row">
+                <div className="admin-kv-label">Store</div>
+                <div className="admin-kv-value">{billing?.store || '--'}</div>
+              </div>
+              <div className="admin-kv-row">
+                <div className="admin-kv-label">Status</div>
+                <div className="admin-kv-value">{billing?.status || '--'}</div>
+              </div>
+              <div className="admin-kv-row">
+                <div className="admin-kv-label">Started</div>
+                <div className="admin-kv-value">{formatDateTime(billing?.started_at)}</div>
+              </div>
+              <div className="admin-kv-row">
+                <div className="admin-kv-label">Expires</div>
+                <div className="admin-kv-value">{formatDateTime(billing?.expires_at)}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {activeTab === 'preferences' ? (
+        <div className="admin-card" style={{ marginTop: 18 }}>
+          <h3 className="admin-title admin-title--sm">Food Preferences (Onboarding)</h3>
+          <p className="admin-subtitle admin-subtitle--sm">What the user selected during onboarding.</p>
+          <div className="admin-kv admin-kv--grid">
+            <div className="admin-kv-row">
+              <div className="admin-kv-label">Profile completed</div>
+              <div className="admin-kv-value">{renderValue(user.profile_completed)}</div>
+            </div>
+            <div className="admin-kv-row">
+              <div className="admin-kv-label">Blood sugar profile</div>
+              <div className="admin-kv-value">{renderValue(user.blood_sugar_profile)}</div>
+            </div>
+            <div className="admin-kv-row">
+              <div className="admin-kv-label">Dietary pattern</div>
+              <div className="admin-kv-value">{renderValue(user.dietary_pattern)}</div>
+            </div>
+            <div className="admin-kv-row">
+              <div className="admin-kv-label">Cook time preference</div>
+              <div className="admin-kv-value">{renderValue(user.cook_time_preference)}</div>
+            </div>
+            <div className="admin-kv-row">
+              <div className="admin-kv-label">Country code</div>
+              <div className="admin-kv-value">{renderValue(user.country_code)}</div>
+            </div>
+            <div className="admin-kv-row">
+              <div className="admin-kv-label">Preferred cuisines</div>
+              <div className="admin-kv-value">{renderValue(user.preferred_cuisines)}</div>
+            </div>
+            <div className="admin-kv-row">
+              <div className="admin-kv-label">Meal goals</div>
+              <div className="admin-kv-value">{renderValue(user.meal_goals)}</div>
+            </div>
+            <div className="admin-kv-row">
+              <div className="admin-kv-label">Allergens</div>
+              <div className="admin-kv-value">{renderValue(user.allergens)}</div>
+            </div>
+            <div className="admin-kv-row">
+              <div className="admin-kv-label">Food exclusions</div>
+              <div className="admin-kv-value">{renderValue(user.food_exclusions)}</div>
+            </div>
+            <div className="admin-kv-row">
+              <div className="admin-kv-label">Available equipment</div>
+              <div className="admin-kv-value">{renderValue(user.available_equipment)}</div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {activeTab === 'transactions' ? (
+        <div className="admin-card" style={{ marginTop: 18 }}>
+          <h3 className="admin-title admin-title--sm">Transactions</h3>
+          <p className="admin-subtitle admin-subtitle--sm">Search, filter, and inspect subscription events.</p>
+          <div className="admin-toolbar">
             <input
+              className="admin-search-input"
               type="text"
-              value={form.full_name}
-              onChange={(event) => setForm({ ...form, full_name: event.target.value })}
+              placeholder="Search plan, status, product, transaction..."
+              value={txSearch}
+              onChange={(event) => {
+                setTxSearch(event.target.value);
+                setTxPage(1);
+              }}
             />
+            <select
+              value={txStatusFilter}
+              onChange={(event) => {
+                setTxStatusFilter(event.target.value);
+                setTxPage(1);
+              }}
+            >
+              <option value="all">All status</option>
+              <option value="active">Active</option>
+              <option value="expired">Expired</option>
+              <option value="trialing">Trialing</option>
+              <option value="canceled">Canceled</option>
+            </select>
+            <select
+              value={`${txSortKey}:${txSortOrder}`}
+              onChange={(event) => {
+                const [nextKey, nextOrder] = event.target.value.split(':');
+                setTxSortKey(nextKey);
+                setTxSortOrder(nextOrder);
+                setTxPage(1);
+              }}
+            >
+              <option value="started_at:desc">Newest first</option>
+              <option value="started_at:asc">Oldest first</option>
+              <option value="expires_at:desc">Expires latest</option>
+              <option value="expires_at:asc">Expires soon</option>
+              <option value="status:asc">Status (A-Z)</option>
+              <option value="plan:asc">Plan (A-Z)</option>
+            </select>
           </div>
-          <div className="admin-inline">
-            <div className="admin-field">
-              <label>Gender</label>
-              <input
-                type="text"
-                value={form.gender}
-                onChange={(event) => setForm({ ...form, gender: event.target.value })}
-              />
-            </div>
-            <div className="admin-field">
-              <label>Country</label>
-              <input
-                type="text"
-                value={form.country}
-                onChange={(event) => setForm({ ...form, country: event.target.value })}
-              />
-            </div>
+
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th>Plan</th>
+                  <th>Started</th>
+                  <th>Expires</th>
+                  <th>Product</th>
+                  <th>Transaction</th>
+                  <th>Store</th>
+                </tr>
+              </thead>
+              <tbody>
+                {txPageItems.length ? (
+                  txPageItems.map((sub) => (
+                    <tr key={sub.id}>
+                      <td>{sub.status}</td>
+                      <td>{sub.plan}</td>
+                      <td>{formatDate(sub.started_at)}</td>
+                      <td>{formatDate(sub.expires_at)}</td>
+                      <td>{sub.product_id || '--'}</td>
+                      <td>{sub.transaction_id || '--'}</td>
+                      <td>{sub.store || '--'}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={7}>No subscription history.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
-          <div className="admin-actions">
-            <button className="admin-button" type="button" onClick={handleSave}>
-              Save changes
+
+          <div className="admin-pagination">
+            <button type="button" onClick={() => setTxPage(Math.max(1, txPage - 1))} disabled={txPage === 1}>
+              Prev
+            </button>
+            <span>
+              Page {txPage} of {txTotalPages} ({filteredTransactions.length} transactions)
+            </span>
+            <button
+              type="button"
+              onClick={() => setTxPage(Math.min(txTotalPages, txPage + 1))}
+              disabled={txPage === txTotalPages}
+            >
+              Next
             </button>
           </div>
         </div>
-
-        <div>
-          <div className="admin-card">
-            <h3 className="admin-title">Subscription</h3>
-            <p className="admin-subtitle">
-              Plan: <strong>{user.subscription_tier}</strong>
-            </p>
-            <p className="admin-subtitle">
-              Source: <strong>{user.tier_source || '--'}</strong>
-            </p>
-            <p className="admin-subtitle">
-              Status: <strong>{user.status}</strong>
-            </p>
-            <p className="admin-subtitle">
-              Expires: <strong>{user.expires_at ? new Date(user.expires_at).toLocaleDateString() : '--'}</strong>
-            </p>
-            <p className="admin-subtitle">
-              Billing store:{' '}
-              <strong>{billing?.store || '--'}</strong>
-            </p>
-            <p className="admin-subtitle">
-              Billing status:{' '}
-              <strong>{billing?.status || '--'}</strong>
-            </p>
-            <p className="admin-subtitle">
-              Billing last event:{' '}
-              <strong>{billing?.started_at ? new Date(billing.started_at).toLocaleString() : '--'}</strong>
-            </p>
-            <p className="admin-subtitle">
-              Billing expires:{' '}
-              <strong>{billing?.expires_at ? new Date(billing.expires_at).toLocaleString() : '--'}</strong>
-            </p>
-            <p className="admin-subtitle">
-              Admin comp expires:{' '}
-              <strong>{adminComp?.expires_at ? new Date(adminComp.expires_at).toLocaleString() : '--'}</strong>
-            </p>
-            <p className="admin-subtitle">
-              Premium blocked:{' '}
-              <strong>
-                {user.premium_access_blocked
-                  ? user.premium_access_blocked_until
-                    ? `Yes (until ${new Date(user.premium_access_blocked_until).toLocaleString()})`
-                    : 'Yes'
-                  : 'No'}
-              </strong>
-            </p>
-            {user.premium_access_blocked_reason ? (
-              <p className="admin-subtitle">
-                Block reason: <strong>{user.premium_access_blocked_reason}</strong>
-              </p>
-            ) : null}
-            <p className="admin-subtitle">
-              Suspended: <strong>{user.suspended_at ? new Date(user.suspended_at).toLocaleString() : "No"}</strong>
-            </p>
-          </div>
-
-          <div className="admin-card" style={{ marginTop: '16px' }}>
-            <h3 className="admin-title">App & Device</h3>
-            <p className="admin-subtitle">
-              Platform:{' '}
-              <strong>
-                {user.registered_platform === 'ios'
-                  ? 'iOS'
-                  : user.registered_platform === 'android'
-                    ? 'Android'
-                    : user.registered_platform || '--'}
-              </strong>
-            </p>
-            <p className="admin-subtitle">
-              App version: <strong>{user.registered_app_version || '--'}</strong>
-            </p>
-            <p className="admin-subtitle">
-              Build: <strong>{user.registered_build_number || '--'}</strong>
-            </p>
-            <p className="admin-subtitle">
-              OS: <strong>{user.registered_os_version || '--'}</strong>
-            </p>
-            <p className="admin-subtitle">
-              Device: <strong>{user.registered_device_model || '--'}</strong>
-            </p>
-          </div>
-
-          <div className="admin-card" style={{ marginTop: '16px' }}>
-            <h3 className="admin-title">Food Preferences (Onboarding)</h3>
-            <p className="admin-subtitle">
-              Profile completed: <strong>{renderValue(user.profile_completed)}</strong>
-            </p>
-            <p className="admin-subtitle">
-              Blood sugar profile: <strong>{renderValue(user.blood_sugar_profile)}</strong>
-            </p>
-            <p className="admin-subtitle">
-              Dietary pattern: <strong>{renderValue(user.dietary_pattern)}</strong>
-            </p>
-            <p className="admin-subtitle">
-              Cook time preference: <strong>{renderValue(user.cook_time_preference)}</strong>
-            </p>
-            <p className="admin-subtitle">
-              Country code: <strong>{renderValue(user.country_code)}</strong>
-            </p>
-            <p className="admin-subtitle">
-              Preferred cuisines: <strong>{renderValue(user.preferred_cuisines)}</strong>
-            </p>
-            <p className="admin-subtitle">
-              Meal goals: <strong>{renderValue(user.meal_goals)}</strong>
-            </p>
-            <p className="admin-subtitle">
-              Allergens: <strong>{renderValue(user.allergens)}</strong>
-            </p>
-            <p className="admin-subtitle">
-              Food exclusions: <strong>{renderValue(user.food_exclusions)}</strong>
-            </p>
-            <p className="admin-subtitle">
-              Available equipment: <strong>{renderValue(user.available_equipment)}</strong>
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="admin-card" style={{ marginTop: '24px' }}>
-        <h3 className="admin-title">Transactions</h3>
-        <div className="admin-toolbar">
-          <input
-            type="text"
-            placeholder="Search transactions..."
-            value={txSearch}
-            onChange={(event) => {
-              setTxSearch(event.target.value);
-              setTxPage(1);
-            }}
-          />
-          <select
-            value={txStatusFilter}
-            onChange={(event) => {
-              setTxStatusFilter(event.target.value);
-              setTxPage(1);
-            }}
-          >
-            <option value="all">All status</option>
-            <option value="active">Active</option>
-            <option value="expired">Expired</option>
-            <option value="canceled">Canceled</option>
-          </select>
-          <select
-            value={`${txSortKey}:${txSortOrder}`}
-            onChange={(event) => {
-              const [nextKey, nextOrder] = event.target.value.split(':');
-              setTxSortKey(nextKey);
-              setTxSortOrder(nextOrder);
-              setTxPage(1);
-            }}
-          >
-            <option value="started_at:desc">Newest first</option>
-            <option value="started_at:asc">Oldest first</option>
-            <option value="expires_at:desc">Expires latest</option>
-            <option value="expires_at:asc">Expires soon</option>
-            <option value="status:asc">Status (A-Z)</option>
-            <option value="plan:asc">Plan (A-Z)</option>
-          </select>
-        </div>
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th>Status</th>
-              <th>Plan</th>
-              <th>Started</th>
-              <th>Expires</th>
-              <th>Product</th>
-              <th>Transaction</th>
-              <th>Store</th>
-            </tr>
-          </thead>
-          <tbody>
-            {txPageItems.length ? (
-              txPageItems.map((sub) => (
-                <tr key={sub.id}>
-                  <td>{sub.status}</td>
-                  <td>{sub.plan}</td>
-                  <td>{sub.started_at ? new Date(sub.started_at).toLocaleDateString() : '--'}</td>
-                  <td>{sub.expires_at ? new Date(sub.expires_at).toLocaleDateString() : '--'}</td>
-                  <td>{sub.product_id || '--'}</td>
-                  <td>{sub.transaction_id || '--'}</td>
-                  <td>{sub.store || '--'}</td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={7}>No subscription history.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-        <div className="admin-pagination">
-          <button type="button" onClick={() => setTxPage(Math.max(1, txPage - 1))} disabled={txPage === 1}>
-            Prev
-          </button>
-          <span>
-            Page {txPage} of {txTotalPages} ({filteredTransactions.length} transactions)
-          </span>
-          <button
-            type="button"
-            onClick={() => setTxPage(Math.min(txTotalPages, txPage + 1))}
-            disabled={txPage === txTotalPages}
-          >
-            Next
-          </button>
-        </div>
-      </div>
+      ) : null}
 
       {pendingAction && confirmContent && (
         <div className="admin-modal-backdrop" role="presentation">
