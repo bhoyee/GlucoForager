@@ -12,6 +12,22 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 const API_BASE = API_URL.replace(/\/+$/, '');
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.glucoforager.com').replace(/\/+$/, '');
 
+const isLocalhostApi = (value) => /\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/i.test(String(value || '').trim());
+
+const apiBaseForRendering = (() => {
+  // Only "upgrade" http -> https in real production deployments. For local dev, upgrading breaks
+  // images because uvicorn isn't serving TLS (it logs "Invalid HTTP request received").
+  if (
+    process.env.NODE_ENV === 'production' &&
+    SITE_URL.startsWith('https://') &&
+    API_BASE.startsWith('http://') &&
+    !isLocalhostApi(API_BASE)
+  ) {
+    return `https://${API_BASE.slice('http://'.length)}`;
+  }
+  return API_BASE;
+})();
+
 const stripHtml = (value) =>
   String(value || '')
     .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, ' ')
@@ -25,8 +41,8 @@ const resolveImageUrl = (value) => {
   const url = typeof value === 'string' ? value.trim() : '';
   if (!url) return '';
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
-  if (url.startsWith('/')) return `${API_BASE}${url}`;
-  return `${API_BASE}/${url.replace(/^\/+/, '')}`;
+  if (url.startsWith('/')) return `${apiBaseForRendering}${url}`;
+  return `${apiBaseForRendering}/${url.replace(/^\/+/, '')}`;
 };
 
 const escapeHtml = (value) =>
@@ -40,13 +56,6 @@ const escapeHtml = (value) =>
 function rewriteContentHtml(html) {
   const source = String(html || '');
   if (!source) return '';
-
-  const upgradedApiBase = (() => {
-    if (API_BASE.startsWith('http://') && SITE_URL.startsWith('https://')) {
-      return `https://${API_BASE.slice('http://'.length)}`;
-    }
-    return API_BASE;
-  })();
 
   const escapeAttr = (value) => String(value || '').replaceAll('"', '&quot;');
 
@@ -80,7 +89,7 @@ function rewriteContentHtml(html) {
     // - /uploads/... (relative)
     // - http(s)://<anything>/uploads/... (absolute)
     const info = toUploadsPaths(url);
-    if (info) return `${upgradedApiBase}${info.path}`;
+    if (info) return `${apiBaseForRendering}${info.path}`;
 
     return url;
   };
@@ -96,7 +105,7 @@ function rewriteContentHtml(html) {
     const fallbackPath = info.path.startsWith('/api/uploads/')
       ? info.path.replace('/api/uploads/', '/uploads/')
       : info.path.replace('/uploads/', '/api/uploads/');
-    const fallback = `${upgradedApiBase}${fallbackPath}`;
+    const fallback = `${apiBaseForRendering}${fallbackPath}`;
     const withFallback = p3.replace(/>$/, ` data-gf-fallback-src="${escapeAttr(fallback)}">`);
 
     return `${p1}${primary}${withFallback}`;
