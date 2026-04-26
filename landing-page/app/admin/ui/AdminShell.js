@@ -13,6 +13,7 @@ export default function AdminShell({ children }) {
     pathname === '/admin/' ||
     pathname === '/admin/forgot-password' ||
     pathname === '/admin/reset-password';
+  const accessToken = !isPublicRoute ? getAdminAccessToken() : null;
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -606,6 +607,59 @@ export default function AdminShell({ children }) {
 
   if (isPublicRoute) {
     return <div className="admin-shell">{children}</div>;
+  }
+
+  // Hard guard: if there's no token, don't render any admin UI (prevents exposing sidebar/menu briefly).
+  if (!accessToken) {
+    // Next.js renders this as a client component; do a client-side redirect.
+    if (typeof window !== 'undefined') {
+      router.replace('/admin');
+    }
+    return <div className="admin-shell" />;
+  }
+
+  // While loading the session, render a minimal shell without navigation to avoid content flashes.
+  if (sessionLoading) {
+    return (
+      <div className="admin-shell">
+        <div className="admin-container admin-layout">
+          <main className="admin-main w-full">
+            <div className="admin-card">
+              <h2 className="admin-title">Loading…</h2>
+              <p className="admin-subtitle">Checking your session.</p>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  // Token exists but session couldn't load (expired token / network / backend down).
+  if (!session) {
+    return (
+      <div className="admin-shell">
+        <div className="admin-container admin-layout">
+          <main className="admin-main w-full">
+            <div className="admin-card">
+              <h2 className="admin-title">Session required</h2>
+              <p className="admin-subtitle">Please sign in again to access the admin portal.</p>
+              <div className="admin-actions">
+                <button
+                  type="button"
+                  className="admin-button"
+                  onClick={() => {
+                    clearAdminTokens();
+                    router.replace('/admin');
+                  }}
+                >
+                  Go to login
+                </button>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
   }
 
   return (
