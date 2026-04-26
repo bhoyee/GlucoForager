@@ -28,7 +28,9 @@ const normalizeUploadUrl = (rawUrl) => {
     // ignore
   }
 
-  return `${base}${value}`;
+  // Normalize legacy `/uploads/...` to `/api/uploads/...` so it works behind proxies that only expose `/api/*`.
+  const normalizedPath = value.startsWith('/uploads/') ? `/api${value}` : value;
+  return `${base}${normalizedPath}`;
 };
 
 export default function AdminRichEditor({

@@ -141,6 +141,9 @@ app = FastAPI(title=settings.project_name)
 
 os.makedirs(settings.uploads_dir, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=settings.uploads_dir), name="uploads")
+# Some deployments only proxy `/api/*` to this service. Mount uploads under `/api/uploads/*` too
+# so blog/editor images still load even when `/uploads/*` isn't exposed by the reverse proxy.
+app.mount("/api/uploads", StaticFiles(directory=settings.uploads_dir), name="api_uploads")
 
 app.add_middleware(
     CORSMiddleware,

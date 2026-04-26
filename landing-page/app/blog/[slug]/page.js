@@ -55,15 +55,15 @@ function rewriteContentHtml(html) {
     // - /uploads/... (relative)
     // - http(s)://<anything>/uploads/... (absolute)
     const relMatch = url.match(/^(\/uploads\/.+)$/i);
-    if (relMatch) return `${upgradedApiBase}${relMatch[1]}`;
+    if (relMatch) return `${upgradedApiBase}/api${relMatch[1]}`;
 
     const absUploadsMatch = url.match(/^https?:\/\/[^/]+(\/uploads\/.+)$/i);
-    if (absUploadsMatch) return `${upgradedApiBase}${absUploadsMatch[1]}`;
+    if (absUploadsMatch) return `${upgradedApiBase}/api${absUploadsMatch[1]}`;
 
     // Upgrade explicit localhost dev URLs (seen when authoring locally then viewing elsewhere).
     const localhostMatch = url.match(/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?(\/.+)$/i);
     if (localhostMatch && localhostMatch[1].startsWith('/uploads/')) {
-      return `${upgradedApiBase}${localhostMatch[1]}`;
+      return `${upgradedApiBase}/api${localhostMatch[1]}`;
     }
 
     // Mixed content fix (only for URLs we already know are ours).

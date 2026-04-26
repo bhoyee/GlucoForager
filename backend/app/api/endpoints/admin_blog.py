@@ -214,7 +214,8 @@ async def upload_blog_image(
     path = folder / name
     path.write_bytes(data)
 
-    return {"ok": True, "url": f"/uploads/blog/{name}"}
+    # Return an `/api/uploads/...` URL so it works even if the reverse proxy only exposes `/api/*`.
+    return {"ok": True, "url": f"/api/uploads/blog/{name}"}
 
 
 @router.get("/posts", response_model=BlogPostsAdminResponse)
