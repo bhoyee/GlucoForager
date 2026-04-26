@@ -331,7 +331,7 @@ export default function AdminUsersPage() {
                           <div className="admin-mobile-user-email">{user.email}</div>
                         </div>
                         <div className="admin-mobile-user-badges">
-                          <span className={`admin-badge ${user.subscription_tier === 'premium' ? '' : 'secondary'}`}>
+                          <span className={`admin-badge ${user.subscription_tier === 'premium' ? 'plan-premium' : 'plan-free'}`}>
                             <span title={user.tier_source ? `Source: ${user.tier_source}` : ''}>
                               {user.subscription_tier}
                             </span>
@@ -429,7 +429,7 @@ export default function AdminUsersPage() {
                           <td>{user.email}</td>
                           <td>{platformLabel}</td>
                           <td>
-                            <span className={`admin-badge ${user.subscription_tier === 'premium' ? '' : 'secondary'}`}>
+                            <span className={`admin-badge ${user.subscription_tier === 'premium' ? 'plan-premium' : 'plan-free'}`}>
                               <span title={user.tier_source ? `Source: ${user.tier_source}` : ''}>
                                 {user.subscription_tier}
                               </span>

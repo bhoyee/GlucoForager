@@ -973,6 +973,16 @@
   color: #4a4a4a;
 }
 
+.admin-badge.plan-premium {
+  background: rgba(245, 158, 11, 0.16);
+  color: #92400e;
+}
+
+.admin-badge.plan-free {
+  background: rgba(100, 116, 139, 0.14);
+  color: #334155;
+}
+
 .admin-badge.success {
   background: rgba(76, 175, 80, 0.18);
   color: #1b5e20;
