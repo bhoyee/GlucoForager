@@ -13,13 +13,14 @@ export default function AdminShell({ children }) {
     pathname === '/admin/' ||
     pathname === '/admin/forgot-password' ||
     pathname === '/admin/reset-password';
-  const accessToken = !isPublicRoute ? getAdminAccessToken() : null;
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarCollapsedInitialized, setSidebarCollapsedInitialized] = useState(false);
   const [session, setSession] = useState(null);
   const [sessionLoading, setSessionLoading] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  const [accessToken, setAccessToken] = useState(null);
   const [navSectionOpen, setNavSectionOpen] = useState({});
   const [navSectionOpenInitialized, setNavSectionOpenInitialized] = useState(false);
   const [helpUnreadCount, setHelpUnreadCount] = useState(0);
@@ -32,11 +33,8 @@ export default function AdminShell({ children }) {
   const loadSession = useCallback(async () => {
     if (isPublicRoute) return;
 
-    const token = getAdminAccessToken();
-    if (!token) {
-      router.push('/admin');
-      return;
-    }
+    const token = accessToken;
+    if (!token) return;
 
     setSessionLoading(true);
     try {
@@ -53,7 +51,20 @@ export default function AdminShell({ children }) {
     } finally {
       setSessionLoading(false);
     }
-  }, [API_URL, isPublicRoute, router]);
+  }, [API_URL, accessToken, isPublicRoute, router]);
+
+  useEffect(() => {
+    setHydrated(true);
+    if (isPublicRoute) return;
+    setAccessToken(getAdminAccessToken());
+  }, [isPublicRoute]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    if (isPublicRoute) return;
+    if (accessToken) return;
+    router.replace('/admin');
+  }, [accessToken, hydrated, isPublicRoute, router]);
 
   const loadHelpUnreadCount = useCallback(async () => {
     if (isPublicRoute) return;
@@ -609,14 +620,12 @@ export default function AdminShell({ children }) {
     return <div className="admin-shell">{children}</div>;
   }
 
-  // Hard guard: if there's no token, don't render any admin UI (prevents exposing sidebar/menu briefly).
-  if (!accessToken) {
-    // Next.js renders this as a client component; do a client-side redirect.
-    if (typeof window !== 'undefined') {
-      router.replace('/admin');
-    }
-    return <div className="admin-shell" />;
-  }
+  // Important: keep the first render identical between server + client to avoid hydration errors.
+  // We only read localStorage (token) after hydration.
+  if (!hydrated) return <div className="admin-shell" />;
+
+  // If there's no token, redirect (handled in effect) and don't render any admin UI.
+  if (!accessToken) return <div className="admin-shell" />;
 
   // While loading the session, render a minimal shell without navigation to avoid content flashes.
   if (sessionLoading) {
