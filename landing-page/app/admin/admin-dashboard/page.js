@@ -13,6 +13,9 @@ export default function AdminDashboardPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState(null);
+  const roles = Array.isArray(session?.roles) ? session.roles : [];
+  const perms = Array.isArray(session?.permissions) ? session.permissions : [];
+  const isAdmin = perms.includes('*') || perms.includes('admin.manage') || roles.includes('admin');
 
   useEffect(() => {
     let cancelled = false;
@@ -39,18 +42,6 @@ export default function AdminDashboardPage() {
     };
   }, [router]);
 
-  if (loading) {
-    return (
-      <div className="admin-card">
-        <LoadingState label="Loading dashboard…" />
-      </div>
-    );
-  }
-
-  const roles = Array.isArray(session?.roles) ? session.roles : [];
-  const perms = Array.isArray(session?.permissions) ? session.permissions : [];
-  const isAdmin = perms.includes('*') || perms.includes('admin.manage') || roles.includes('admin');
-
   useEffect(() => {
     if (loading) return;
     if (!session) return;
@@ -58,6 +49,13 @@ export default function AdminDashboardPage() {
     router.replace('/admin/dashboard');
   }, [isAdmin, loading, router, session]);
 
+  if (loading) {
+    return (
+      <div className="admin-card">
+        <LoadingState label="Loading dashboard…" />
+      </div>
+    );
+  }
   if (!isAdmin) {
     return (
       <div className="admin-card">
