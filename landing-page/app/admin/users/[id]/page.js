@@ -399,6 +399,14 @@ export default function AdminUserDetail() {
   const billing = user.billing || null;
   const adminComp = user.admin_comp || null;
 
+  const renderValue = (value) => {
+    if (value === null || value === undefined) return '--';
+    if (Array.isArray(value)) return value.length ? value.join(', ') : '--';
+    if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+    if (typeof value === 'string') return value.trim() ? value : '--';
+    return String(value);
+  };
+
   return (
     <div className="admin-card">
       <div className="admin-actions">
@@ -561,6 +569,40 @@ export default function AdminUserDetail() {
             </p>
             <p className="admin-subtitle">
               Device: <strong>{user.registered_device_model || '--'}</strong>
+            </p>
+          </div>
+
+          <div className="admin-card" style={{ marginTop: '16px' }}>
+            <h3 className="admin-title">Food Preferences (Onboarding)</h3>
+            <p className="admin-subtitle">
+              Profile completed: <strong>{renderValue(user.profile_completed)}</strong>
+            </p>
+            <p className="admin-subtitle">
+              Blood sugar profile: <strong>{renderValue(user.blood_sugar_profile)}</strong>
+            </p>
+            <p className="admin-subtitle">
+              Dietary pattern: <strong>{renderValue(user.dietary_pattern)}</strong>
+            </p>
+            <p className="admin-subtitle">
+              Cook time preference: <strong>{renderValue(user.cook_time_preference)}</strong>
+            </p>
+            <p className="admin-subtitle">
+              Country code: <strong>{renderValue(user.country_code)}</strong>
+            </p>
+            <p className="admin-subtitle">
+              Preferred cuisines: <strong>{renderValue(user.preferred_cuisines)}</strong>
+            </p>
+            <p className="admin-subtitle">
+              Meal goals: <strong>{renderValue(user.meal_goals)}</strong>
+            </p>
+            <p className="admin-subtitle">
+              Allergens: <strong>{renderValue(user.allergens)}</strong>
+            </p>
+            <p className="admin-subtitle">
+              Food exclusions: <strong>{renderValue(user.food_exclusions)}</strong>
+            </p>
+            <p className="admin-subtitle">
+              Available equipment: <strong>{renderValue(user.available_equipment)}</strong>
             </p>
           </div>
         </div>

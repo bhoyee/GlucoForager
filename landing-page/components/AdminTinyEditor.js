@@ -1,11 +1,12 @@
 'use client';
 
-import { useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 
 const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
+const API_BASE = API_URL.replace(/\/+$/, '');
 
 export default function AdminTinyEditor({
   value,
@@ -24,7 +25,21 @@ export default function AdminTinyEditor({
     return `gf-quill-${safe || 'toolbar'}`;
   }, [rawToolbarId]);
   const quillRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const lastSelectionRef = useRef(null);
   const [uploadBusy, setUploadBusy] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const [pendingImageUrl, setPendingImageUrl] = useState(null);
+  const busyRef = useRef(false);
+  const tokenRef = useRef(adminToken || null);
+
+  useEffect(() => {
+    busyRef.current = !!uploadBusy;
+  }, [uploadBusy]);
+
+  useEffect(() => {
+    tokenRef.current = adminToken || null;
+  }, [adminToken]);
 
   const toolbarConfig = useMemo(() => {
     if (compact) {
@@ -36,6 +51,122 @@ export default function AdminTinyEditor({
   }, [compact, toolbarId]);
 
   const getQuill = () => quillRef.current?.getEditor?.() || null;
+
+  useEffect(() => {
+    let quill = null;
+    let cancelled = false;
+    let detach = null;
+
+    const attach = () => {
+      if (cancelled) return;
+      quill = getQuill();
+      if (!quill) return false;
+
+      const handler = (range) => {
+        if (range) lastSelectionRef.current = range;
+      };
+
+      quill.on('selection-change', handler);
+      detach = () => {
+        try {
+          quill.off('selection-change', handler);
+        } catch {
+          // ignore
+        }
+      };
+      return true;
+    };
+
+    const started = Date.now();
+    const tick = () => {
+      if (cancelled) return;
+      if (attach()) return;
+      if (Date.now() - started > 2500) return;
+      setTimeout(tick, 120);
+    };
+    tick();
+
+    return () => {
+      cancelled = true;
+      detach?.();
+    };
+  }, []);
+
+  const applyImageDefaultsAtIndex = (quill, index) => {
+    if (!quill) return;
+    try {
+      const [leaf] = quill.getLeaf(index) || [];
+      const node = leaf?.domNode;
+      if (!node || String(node.tagName || '').toUpperCase() !== 'IMG') return;
+      applyImageSize(node, 100);
+      applyImageAlign(node, 'center');
+    } catch {
+      // ignore
+    }
+  };
+
+  const insertImageAtCursor = useCallback((imageUrl) => {
+    const quill = getQuill();
+    if (!quill) return false;
+    const range =
+      quill.getSelection(true) ||
+      lastSelectionRef.current ||
+      { index: quill.getLength(), length: 0 };
+    const insertAt = range.index;
+    quill.insertEmbed(insertAt, 'image', imageUrl, 'user');
+    applyImageDefaultsAtIndex(quill, insertAt);
+    quill.setSelection(insertAt + 1, 0, 'silent');
+    try {
+      quill.focus?.();
+    } catch {
+      // ignore
+    }
+    // ReactQuill doesn't always fire onChange for programmatic embeds in controlled mode,
+    // so force-sync the HTML back to the parent.
+    try {
+      const html = quill.root?.innerHTML || '';
+      onChange?.(html);
+    } catch {
+      // ignore
+    }
+    return true;
+  }, [onChange]);
+
+  const uploadImageFile = useCallback(
+    async (file) => {
+      if (!file || !tokenRef.current) return null;
+      if (busyRef.current) return null;
+
+      setUploadBusy(true);
+      setUploadError('');
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch(`${API_URL}/api/admin/blog/upload`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${tokenRef.current}` },
+          body: formData,
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const detail = typeof data?.detail === 'string' ? data.detail : '';
+          setUploadError(detail || `Upload failed (${response.status}).`);
+          return null;
+        }
+        if (!data?.url) return null;
+
+        const rawUrl = String(data.url || '').trim();
+        return rawUrl.startsWith('/') ? `${API_BASE}${rawUrl}` : rawUrl;
+      } catch (e) {
+        setUploadError(e?.message || 'Upload failed.');
+        return null;
+      } finally {
+        setUploadBusy(false);
+      }
+    },
+    []
+  );
 
   const withSelectedImage = (fn) => {
     const quill = getQuill();
@@ -82,48 +213,153 @@ export default function AdminTinyEditor({
     node.style.margin = '12px auto';
   };
 
-  const handleInsertImage = async () => {
-    const quill = getQuill();
-    if (!quill) return;
-    if (!adminToken) return;
-
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.click();
-
-    input.onchange = async () => {
-      const file = input.files?.[0];
+  const handleFileChosen = useCallback(
+    async (file) => {
       if (!file) return;
+      if (!tokenRef.current) return;
+      if (busyRef.current) return;
 
-      setUploadBusy(true);
       try {
-        const formData = new FormData();
-        formData.append('file', file);
+        const imageUrl = await uploadImageFile(file);
+        if (!imageUrl) return;
 
-        const response = await fetch(`${API_URL}/api/admin/blog/upload`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${adminToken}` },
-          body: formData,
+        const quill = getQuill();
+        if (!quill) {
+          setPendingImageUrl(imageUrl);
+          return;
+        }
+
+        // Prefer embed; fallback to paste HTML if the editor doesn't reflect it immediately.
+        const range =
+          quill.getSelection(true) ||
+          lastSelectionRef.current ||
+          { index: quill.getLength(), length: 0 };
+        const insertAt = range.index;
+        try {
+          quill.insertEmbed(insertAt, 'image', imageUrl, 'user');
+          applyImageDefaultsAtIndex(quill, insertAt);
+          quill.setSelection(insertAt + 1, 0, 'silent');
+        } catch {
+          try {
+            quill.clipboard?.dangerouslyPasteHTML?.(insertAt, `<p><img src="${imageUrl}" /></p>`, 'user');
+          } catch {
+            // ignore
+          }
+        }
+
+        // If controlled ReactQuill doesn't emit onChange for programmatic edits, force-sync after the DOM updates.
+        requestAnimationFrame(() => {
+          try {
+            const html = quill.root?.innerHTML || '';
+            onChange?.(html);
+          } catch {
+            // ignore
+          }
         });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) return;
-        if (!data?.url) return;
 
-        const range = quill.getSelection(true) || { index: quill.getLength(), length: 0 };
-        quill.insertEmbed(range.index, 'image', data.url, 'user');
-        quill.setSelection(range.index + 1, 0, 'silent');
+        try {
+          quill.focus?.();
+        } catch {
+          // ignore
+        }
+      } catch {
+        // ignore
+      }
+    },
+    [uploadImageFile, onChange]
+  );
 
-        // Apply a sane default style so images don't come in huge.
+  const handleInsertImage = useCallback(async () => {
+    if (!tokenRef.current) return;
+    if (busyRef.current) return;
+
+    const el = fileInputRef.current;
+    if (!el) return;
+    // Reset so selecting the same file twice still triggers onChange.
+    try {
+      el.value = '';
+    } catch {
+      // ignore
+    }
+    el.click();
+  }, []);
+
+  // If an upload completed before Quill finished mounting, insert once it becomes available.
+  useEffect(() => {
+    if (!pendingImageUrl) return;
+    const imageUrl = String(pendingImageUrl || '').trim();
+    if (!imageUrl) {
+      setPendingImageUrl(null);
+      return;
+    }
+
+    let cancelled = false;
+    const started = Date.now();
+    const tick = () => {
+      if (cancelled) return;
+      if (insertImageAtCursor(imageUrl)) {
+        setPendingImageUrl(null);
         withSelectedImage((node) => {
           applyImageSize(node, 100);
           applyImageAlign(node, 'center');
         });
-      } finally {
-        setUploadBusy(false);
+        return;
+      }
+      if (Date.now() - started > 3000) return; // give up quietly
+      setTimeout(tick, 120);
+    };
+    tick();
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingImageUrl, insertImageAtCursor]);
+
+  // Support pasting images directly into the editor (clipboard image -> upload -> embed).
+  useEffect(() => {
+    if (readOnly) return;
+    if (!adminToken) return;
+
+    const handler = async (event) => {
+      try {
+        const items = event?.clipboardData?.items ? Array.from(event.clipboardData.items) : [];
+        const imgItem = items.find((it) => it && it.kind === 'file' && String(it.type || '').startsWith('image/'));
+        const file = imgItem?.getAsFile?.() || null;
+        if (!file) {
+          // Fallback: some browsers provide HTML with an <img src="..."> rather than a file item.
+          const html = event?.clipboardData?.getData?.('text/html') || '';
+          if (typeof html === 'string' && html.includes('<img')) {
+            const match = html.match(/<img[^>]+src=['"]([^'"]+)['"]/i);
+            const src = match?.[1] ? String(match[1]).trim() : '';
+            if (src) {
+              // Allow external images to be embedded by URL (best-effort).
+              event.preventDefault();
+              event.stopPropagation();
+              if (!insertImageAtCursor(src)) {
+                setPendingImageUrl(src);
+                return;
+              }
+              withSelectedImage((node) => {
+                applyImageSize(node, 100);
+                applyImageAlign(node, 'center');
+              });
+            }
+          }
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        await handleFileChosen(file);
+      } catch {
+        // ignore
       }
     };
-  };
+
+    // Attach to the document so it still works even if the Quill instance mounts after this effect runs.
+    document.addEventListener('paste', handler);
+    return () => document.removeEventListener('paste', handler);
+  }, [adminToken, readOnly, handleFileChosen, insertImageAtCursor]);
 
   const modules = useMemo(() => {
     if (readOnly) {
@@ -137,19 +373,31 @@ export default function AdminTinyEditor({
       toolbar: {
         container: toolbarConfig,
         handlers: {
-          image: handleInsertImage,
+          // We trigger the picker from our toolbar button directly. Keep Quill's handler inert
+          // so it doesn't double-trigger and cause editor state glitches.
+          image: () => {},
           imageSize: (value) => withSelectedImage((node) => applyImageSize(node, value)),
           imageAlign: (value) => withSelectedImage((node) => applyImageAlign(node, value)),
         },
       },
     };
-  }, [compact, toolbarConfig, adminToken, uploadBusy]);
+  }, [compact, toolbarConfig, readOnly]);
 
   return (
     <div
       className="admin-quill rounded-xl border border-gray-200 bg-white overflow-hidden"
       style={{ '--editor-height': `${height}px` }}
     >
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          void handleFileChosen(file);
+        }}
+      />
       {!compact ? (
         <div id={toolbarId} className="border-b border-gray-200 bg-white px-3 py-2 flex flex-wrap items-center gap-2">
           <select className="ql-header" defaultValue="">
@@ -159,12 +407,12 @@ export default function AdminTinyEditor({
             <option value="">Normal</option>
           </select>
 
-          <button className="ql-bold" />
-          <button className="ql-italic" />
-          <button className="ql-underline" />
+          <button type="button" className="ql-bold" />
+          <button type="button" className="ql-italic" />
+          <button type="button" className="ql-underline" />
 
-          <button className="ql-list" value="ordered" />
-          <button className="ql-list" value="bullet" />
+          <button type="button" className="ql-list" value="ordered" />
+          <button type="button" className="ql-list" value="bullet" />
 
           <select className="ql-align" defaultValue="">
             <option value="" />
@@ -173,9 +421,23 @@ export default function AdminTinyEditor({
             <option value="justify" />
           </select>
 
-          <button className="ql-link" />
-          <button className="ql-image" disabled={uploadBusy} />
-          <button className="ql-clean" />
+          <button type="button" className="ql-link" />
+          <button
+            type="button"
+            className="ql-image"
+            disabled={uploadBusy || !adminToken}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              void handleInsertImage();
+            }}
+          />
+          <button type="button" className="ql-clean" />
+
+          {uploadBusy ? <span className="ml-2 text-xs font-semibold text-gray-500">Uploading image…</span> : null}
+          {!uploadBusy && uploadError ? (
+            <span className="ml-2 text-xs font-semibold text-rose-600">{uploadError}</span>
+          ) : null}
 
           <span className="ml-2 text-xs font-semibold text-gray-500">Image:</span>
           <select className="ql-imageSize" defaultValue="100">
