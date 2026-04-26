@@ -33,6 +33,14 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+def _to_utc_naive(value: datetime | None) -> datetime | None:
+    if not value:
+        return None
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
 def _slugify(value: str) -> str:
     cleaned = re.sub(r"[^a-zA-Z0-9\\s-]", "", value or "").strip().lower()
     cleaned = re.sub(r"\\s+", "-", cleaned)
@@ -206,7 +214,8 @@ async def upload_blog_image(
     path = folder / name
     path.write_bytes(data)
 
-    return {"ok": True, "url": f"/uploads/blog/{name}"}
+    # Return an `/api/uploads/...` URL so it works even if the reverse proxy only exposes `/api/*`.
+    return {"ok": True, "url": f"/api/uploads/blog/{name}"}
 
 
 @router.get("/posts", response_model=BlogPostsAdminResponse)
@@ -279,7 +288,7 @@ def admin_create_post(
     if exists:
         raise HTTPException(status_code=409, detail="Slug already exists")
 
-    published_at = payload.published_at
+    published_at = _to_utc_naive(payload.published_at)
     if normalized_status == "published" and not published_at:
         published_at = _utcnow()
     if normalized_status == "scheduled" and not published_at:
@@ -385,9 +394,9 @@ def admin_update_post(
     if normalized_status == "scheduled" and not payload.published_at:
         raise HTTPException(status_code=400, detail="scheduled posts require published_at")
 
-    published_at = payload.published_at
+    published_at = _to_utc_naive(payload.published_at)
     if normalized_status == "published" and not post.published_at:
-        published_at = payload.published_at or _utcnow()
+        published_at = published_at or _utcnow()
 
     if normalized_status == "published" and published_at and published_at > _utcnow():
         normalized_status = "scheduled"
@@ -417,7 +426,7 @@ def admin_update_post(
     if normalized_status in {"published", "scheduled"}:
         post.published_at = published_at
     elif normalized_status == "draft":
-        post.published_at = payload.published_at
+        post.published_at = _to_utc_naive(payload.published_at)
     post.updated_at = _utcnow()
 
     db.commit()

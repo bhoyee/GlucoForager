@@ -5,11 +5,28 @@ import BlogTopBar from '../../../components/BlogTopBar';
 import BlogCoverImage from '../../../components/BlogCoverImage';
 import WhatsAppCtaCard from '../../../components/WhatsAppCtaCard';
 import AppDownloadCard from '../../../components/AppDownloadCard';
+import BlogImageFallback from '../../../components/BlogImageFallback';
 import { formatDMY } from '../../../lib/formatDate';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 const API_BASE = API_URL.replace(/\/+$/, '');
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.glucoforager.com').replace(/\/+$/, '');
+
+const isLocalhostApi = (value) => /\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/i.test(String(value || '').trim());
+
+const apiBaseForRendering = (() => {
+  // Only "upgrade" http -> https in real production deployments. For local dev, upgrading breaks
+  // images because uvicorn isn't serving TLS (it logs "Invalid HTTP request received").
+  if (
+    process.env.NODE_ENV === 'production' &&
+    SITE_URL.startsWith('https://') &&
+    API_BASE.startsWith('http://') &&
+    !isLocalhostApi(API_BASE)
+  ) {
+    return `https://${API_BASE.slice('http://'.length)}`;
+  }
+  return API_BASE;
+})();
 
 const stripHtml = (value) =>
   String(value || '')
@@ -24,8 +41,8 @@ const resolveImageUrl = (value) => {
   const url = typeof value === 'string' ? value.trim() : '';
   if (!url) return '';
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
-  if (url.startsWith('/')) return `${API_BASE}${url}`;
-  return `${API_BASE}/${url.replace(/^\/+/, '')}`;
+  if (url.startsWith('/')) return `${apiBaseForRendering}${url}`;
+  return `${apiBaseForRendering}/${url.replace(/^\/+/, '')}`;
 };
 
 const escapeHtml = (value) =>
@@ -36,14 +53,74 @@ const escapeHtml = (value) =>
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
 
+function rewriteContentHtml(html) {
+  const source = String(html || '');
+  if (!source) return '';
+
+  const escapeAttr = (value) => String(value || '').replaceAll('"', '&quot;');
+
+  const toUploadsPaths = (src) => {
+    const url = String(src || '').trim();
+    if (!url) return null;
+
+    const relApiUploads = url.match(/^(\/api\/uploads\/.+)$/i);
+    if (relApiUploads) return { path: relApiUploads[1], kind: 'api' };
+
+    const relUploads = url.match(/^(\/uploads\/.+)$/i);
+    if (relUploads) return { path: relUploads[1], kind: 'root' };
+
+    const absApiUploads = url.match(/^https?:\/\/[^/]+(\/api\/uploads\/.+)$/i);
+    if (absApiUploads) return { path: absApiUploads[1], kind: 'api' };
+
+    const absUploads = url.match(/^https?:\/\/[^/]+(\/uploads\/.+)$/i);
+    if (absUploads) return { path: absUploads[1], kind: 'root' };
+
+    const localhostMatch = url.match(/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?(\/uploads\/.+)$/i);
+    if (localhostMatch) return { path: localhostMatch[1], kind: 'root' };
+
+    return null;
+  };
+
+  const rewriteUploadsHost = (value) => {
+    const url = String(value || '').trim();
+    if (!url) return url;
+
+    // Only rewrite our own uploads paths; leave external images untouched.
+    // - /uploads/... (relative)
+    // - http(s)://<anything>/uploads/... (absolute)
+    const info = toUploadsPaths(url);
+    if (info) return `${apiBaseForRendering}${info.path}`;
+
+    return url;
+  };
+
+  return source.replace(/(<img[^>]+src=['"])([^'"]+)(['"][^>]*>)/gi, (_m, p1, src, p3) => {
+    const primary = rewriteUploadsHost(src);
+
+    const info = toUploadsPaths(src);
+    if (!info) return `${p1}${primary}${p3}`;
+
+    // Provide a fallback URL so the client can swap if the primary path isn't exposed
+    // (some proxies only expose `/api/*`, others expose `/uploads/*`).
+    const fallbackPath = info.path.startsWith('/api/uploads/')
+      ? info.path.replace('/api/uploads/', '/uploads/')
+      : info.path.replace('/uploads/', '/api/uploads/');
+    const fallback = `${apiBaseForRendering}${fallbackPath}`;
+    const withFallback = p3.replace(/>$/, ` data-gf-fallback-src="${escapeAttr(fallback)}">`);
+
+    return `${p1}${primary}${withFallback}`;
+  });
+}
+
 function renderContent(content) {
   const looksLikeHtml = /<\/?[a-z][\s\S]*>/i.test(String(content || ''));
   if (looksLikeHtml) {
+    const safeHtml = rewriteContentHtml(content);
     return (
       <div
         className="text-gray-800 leading-7 [&_p]:mt-4 [&_h1]:text-3xl [&_h1]:font-extrabold [&_h1]:text-gray-900 [&_h2]:mt-8 [&_h2]:text-2xl [&_h2]:font-bold [&_h2]:text-gray-900 [&_h3]:mt-6 [&_h3]:text-xl [&_h3]:font-bold [&_h3]:text-gray-900 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:mt-4 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:mt-4 [&_li]:mt-1 [&_a]:text-teal-700 [&_a]:font-semibold hover:[&_a]:text-teal-900"
         // eslint-disable-next-line react/no-danger
-        dangerouslySetInnerHTML={{ __html: String(content || '') }}
+        dangerouslySetInnerHTML={{ __html: safeHtml }}
       />
     );
   }
@@ -177,10 +254,11 @@ export default async function BlogPostPage({ params }) {
                 {post.author_name ? <span>By {post.author_name}</span> : null}
                 {post.published_at ? <span>{formatDMY(post.published_at)}</span> : null}
               </div>
-              {post.excerpt ? <p className="text-lg text-gray-700">{post.excerpt}</p> : null}
+              {post.excerpt ? <p className="text-lg text-gray-700">{stripHtml(post.excerpt)}</p> : null}
             </header>
 
             <article className="space-y-4 rounded-2xl border border-gray-200 bg-white p-6">
+              <BlogImageFallback />
               {renderContent(post.content)}
             </article>
 
