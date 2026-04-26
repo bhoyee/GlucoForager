@@ -11,14 +11,7 @@ import Placeholder from '@tiptap/extension-placeholder';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 const API_BASE = API_URL.replace(/\/+$/, '');
 
-const normalizeUploadUrl = (rawUrl) => {
-  const value = String(rawUrl || '').trim();
-  if (!value) return '';
-  if (!value.startsWith('/')) return value;
-
-  // If the site is served over HTTPS but NEXT_PUBLIC_API_URL is accidentally HTTP,
-  // browsers will block images as mixed content. In production our API should be HTTPS,
-  // so we "upgrade" here for rendering + persistence.
+const getUpgradedApiBase = () => {
   let base = API_BASE;
   try {
     if (typeof window !== 'undefined' && window.location?.protocol === 'https:' && base.startsWith('http://')) {
@@ -27,6 +20,51 @@ const normalizeUploadUrl = (rawUrl) => {
   } catch {
     // ignore
   }
+  return base;
+};
+
+const rewriteUploadsInHtml = (html) => {
+  const source = String(html || '');
+  if (!source) return '';
+
+  const apiBase = getUpgradedApiBase();
+
+  const rewrite = (src) => {
+    const url = String(src || '').trim();
+    if (!url) return url;
+    if (url.startsWith('data:')) return url;
+
+    // Accept existing absolute `/api/uploads/...` and `/uploads/...` (any host) and normalize to our API base.
+    const relApiUploads = url.match(/^(\/api\/uploads\/.+)$/i);
+    if (relApiUploads) return `${apiBase}${relApiUploads[1]}`;
+
+    const relUploads = url.match(/^(\/uploads\/.+)$/i);
+    if (relUploads) return `${apiBase}/api${relUploads[1]}`;
+
+    const absApiUploads = url.match(/^https?:\/\/[^/]+(\/api\/uploads\/.+)$/i);
+    if (absApiUploads) return `${apiBase}${absApiUploads[1]}`;
+
+    const absUploads = url.match(/^https?:\/\/[^/]+(\/uploads\/.+)$/i);
+    if (absUploads) return `${apiBase}/api${absUploads[1]}`;
+
+    // Keep external images unchanged.
+    return url;
+  };
+
+  return source.replace(/(<img[^>]+src=['"])([^'"]+)(['"][^>]*>)/gi, (_m, p1, src, p3) => {
+    return `${p1}${rewrite(src)}${p3}`;
+  });
+};
+
+const normalizeUploadUrl = (rawUrl) => {
+  const value = String(rawUrl || '').trim();
+  if (!value) return '';
+  if (!value.startsWith('/')) return value;
+
+  // If the site is served over HTTPS but NEXT_PUBLIC_API_URL is accidentally HTTP,
+  // browsers will block images as mixed content. In production our API should be HTTPS,
+  // so we "upgrade" here for rendering + persistence.
+  const base = getUpgradedApiBase();
 
   // Normalize legacy `/uploads/...` to `/api/uploads/...` so it works behind proxies that only expose `/api/*`.
   const normalizedPath = value.startsWith('/uploads/') ? `/api${value}` : value;
@@ -72,7 +110,7 @@ export default function AdminRichEditor({
   const editor = useEditor({
     editable: !readOnly,
     extensions,
-    content: String(value || ''),
+    content: rewriteUploadsInHtml(value),
     onUpdate: ({ editor }) => {
       const html = editor.getHTML();
       lastValueRef.current = html;
@@ -105,7 +143,7 @@ export default function AdminRichEditor({
   // Keep editor in sync when loading an existing post (value changes from outside).
   useEffect(() => {
     if (!editor) return;
-    const next = String(value || '');
+    const next = rewriteUploadsInHtml(value);
     if (next === lastValueRef.current) return;
     lastValueRef.current = next;
     try {
