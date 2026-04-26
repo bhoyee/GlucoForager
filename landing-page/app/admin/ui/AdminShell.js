@@ -19,6 +19,8 @@ export default function AdminShell({ children }) {
   const [sidebarCollapsedInitialized, setSidebarCollapsedInitialized] = useState(false);
   const [session, setSession] = useState(null);
   const [sessionLoading, setSessionLoading] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  const [accessToken, setAccessToken] = useState(null);
   const [navSectionOpen, setNavSectionOpen] = useState({});
   const [navSectionOpenInitialized, setNavSectionOpenInitialized] = useState(false);
   const [helpUnreadCount, setHelpUnreadCount] = useState(0);
@@ -31,11 +33,8 @@ export default function AdminShell({ children }) {
   const loadSession = useCallback(async () => {
     if (isPublicRoute) return;
 
-    const token = getAdminAccessToken();
-    if (!token) {
-      router.push('/admin');
-      return;
-    }
+    const token = accessToken;
+    if (!token) return;
 
     setSessionLoading(true);
     try {
@@ -52,7 +51,20 @@ export default function AdminShell({ children }) {
     } finally {
       setSessionLoading(false);
     }
-  }, [API_URL, isPublicRoute, router]);
+  }, [API_URL, accessToken, isPublicRoute, router]);
+
+  useEffect(() => {
+    setHydrated(true);
+    if (isPublicRoute) return;
+    setAccessToken(getAdminAccessToken());
+  }, [isPublicRoute]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    if (isPublicRoute) return;
+    if (accessToken) return;
+    router.replace('/admin');
+  }, [accessToken, hydrated, isPublicRoute, router]);
 
   const loadHelpUnreadCount = useCallback(async () => {
     if (isPublicRoute) return;
@@ -422,6 +434,18 @@ export default function AdminShell({ children }) {
 
   useEffect(() => {
     if (isPublicRoute) return;
+    if (!hydrated) return;
+    if (sessionLoading) return;
+    if (!session?.email) return;
+
+    // Guard admin-only routes from non-admin staff to avoid exposing partial admin screens.
+    if (!isAdmin && pathname === '/admin/admin-dashboard') {
+      router.replace('/admin/dashboard');
+    }
+  }, [hydrated, isAdmin, isPublicRoute, pathname, router, session?.email, sessionLoading]);
+
+  useEffect(() => {
+    if (isPublicRoute) return;
     if (sessionLoading) return;
     if (!session?.email) return;
     if (sidebarCollapsedInitialized) return;
@@ -606,6 +630,57 @@ export default function AdminShell({ children }) {
 
   if (isPublicRoute) {
     return <div className="admin-shell">{children}</div>;
+  }
+
+  // Important: keep the first render identical between server + client to avoid hydration errors.
+  // We only read localStorage (token) after hydration.
+  if (!hydrated) return <div className="admin-shell" />;
+
+  // If there's no token, redirect (handled in effect) and don't render any admin UI.
+  if (!accessToken) return <div className="admin-shell" />;
+
+  // While loading the session, render a minimal shell without navigation to avoid content flashes.
+  if (sessionLoading) {
+    return (
+      <div className="admin-shell">
+        <div className="admin-container admin-layout">
+          <main className="admin-main w-full">
+            <div className="admin-card">
+              <h2 className="admin-title">Loading…</h2>
+              <p className="admin-subtitle">Checking your session.</p>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  // Token exists but session couldn't load (expired token / network / backend down).
+  if (!session) {
+    return (
+      <div className="admin-shell">
+        <div className="admin-container admin-layout">
+          <main className="admin-main w-full">
+            <div className="admin-card">
+              <h2 className="admin-title">Session required</h2>
+              <p className="admin-subtitle">Please sign in again to access the admin portal.</p>
+              <div className="admin-actions">
+                <button
+                  type="button"
+                  className="admin-button"
+                  onClick={() => {
+                    clearAdminTokens();
+                    router.replace('/admin');
+                  }}
+                >
+                  Go to login
+                </button>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
   }
 
   return (
