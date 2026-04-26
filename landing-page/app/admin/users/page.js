@@ -16,7 +16,6 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState('');
   const [tierFilter, setTierFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
   const [sortKey, setSortKey] = useState('created_at');
   const [sortOrder, setSortOrder] = useState('desc');
   const [page, setPage] = useState(1);
@@ -48,7 +47,6 @@ export default function AdminUsersPage() {
     params.set('order', sortOrder);
     if (search.trim()) params.set('q', search.trim());
     if (tierFilter !== 'all') params.set('tier', tierFilter);
-    if (statusFilter !== 'all') params.set('status_filter', statusFilter);
     return params.toString();
   };
 
@@ -85,7 +83,7 @@ export default function AdminUsersPage() {
         setIsLoading(false);
       }
     }
-  }, [token, page, sortKey, sortOrder, search, tierFilter, statusFilter, router]);
+  }, [token, page, sortKey, sortOrder, search, tierFilter, router]);
 
   useEffect(() => {
     if (!token) {
@@ -220,6 +218,42 @@ export default function AdminUsersPage() {
     return value || '--';
   };
 
+  const IconEye = (props) => (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false" {...props}>
+      <path
+        fill="currentColor"
+        d="M12 5c5.5 0 9.7 4.4 10.9 6.3a1.3 1.3 0 0 1 0 1.4C21.7 14.6 17.5 19 12 19S2.3 14.6 1.1 12.7a1.3 1.3 0 0 1 0-1.4C2.3 9.4 6.5 5 12 5Zm0 2C7.7 7 4.3 10.4 3.2 12c1.1 1.6 4.5 5 8.8 5s7.7-3.4 8.8-5C19.7 10.4 16.3 7 12 7Zm0 1.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Zm0 2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z"
+      />
+    </svg>
+  );
+
+  const IconLock = (props) => (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false" {...props}>
+      <path
+        fill="currentColor"
+        d="M17 9V7a5 5 0 0 0-10 0v2H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2h-1Zm-8 0V7a3 3 0 0 1 6 0v2H9Z"
+      />
+    </svg>
+  );
+
+  const IconUnlock = (props) => (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false" {...props}>
+      <path
+        fill="currentColor"
+        d="M17 9H9V7a3 3 0 0 1 5.6-1.4 1 1 0 0 0 1.7-1A5 5 0 0 0 7 7v2H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2Z"
+      />
+    </svg>
+  );
+
+  const IconTrash = (props) => (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false" {...props}>
+      <path
+        fill="currentColor"
+        d="M9 3h6a1 1 0 0 1 1 1v1h4a1 1 0 1 1 0 2h-1l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 7H4a1 1 0 1 1 0-2h4V4a1 1 0 0 1 1-1Zm1 2h4V5h-4ZM8 7l1 14h6l1-14H8Zm2 3a1 1 0 0 1 1 1v7a1 1 0 1 1-2 0v-7a1 1 0 0 1 1-1Zm4 0a1 1 0 0 1 1 1v7a1 1 0 1 1-2 0v-7a1 1 0 0 1 1-1Z"
+      />
+    </svg>
+  );
+
   return (
     <div className="admin-card">
       <h2 className="admin-title">Users</h2>
@@ -258,19 +292,6 @@ export default function AdminUsersPage() {
           <option value="all">All plans</option>
           <option value="free">Free</option>
           <option value="premium">Premium</option>
-        </select>
-        <select
-          value={statusFilter}
-          onChange={(event) => {
-            setStatusFilter(event.target.value);
-            setPage(1);
-          }}
-          className="admin-filter-select"
-          aria-label="Filter by status"
-        >
-          <option value="all">All status</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
         </select>
         <select
           value={`${sortKey}:${sortOrder}`}
@@ -320,17 +341,15 @@ export default function AdminUsersPage() {
                               blocked
                             </span>
                           ) : null}
-                          <span
-                            className={`admin-badge ${
-                              isSuspended ? 'danger' : user.status === 'active' ? 'success' : 'warning'
-                            }`}
-                          >
-                            {isSuspended ? 'suspended' : user.status}
-                          </span>
+                          {isSuspended ? <span className="admin-badge danger">suspended</span> : null}
                         </div>
                       </div>
                       
                       <div className="admin-mobile-user-details">
+                        <div className="admin-mobile-user-detail">
+                          <span className="admin-mobile-detail-label">User ID:</span>
+                          <span>{user.id}</span>
+                        </div>
                         <div className="admin-mobile-user-detail">
                           <span className="admin-mobile-detail-label">Joined:</span>
                           <span>{user.created_at ? new Date(user.created_at).toLocaleDateString() : '--'}</span>
@@ -388,11 +407,11 @@ export default function AdminUsersPage() {
                 <table className="admin-table">
                   <thead>
                     <tr>
+                      <th>ID</th>
                       <th>User</th>
                       <th>Email</th>
                       <th>Platform</th>
                       <th>Subscription</th>
-                      <th>Status</th>
                       <th>Expires</th>
                       <th>Joined</th>
                       <th>Actions</th>
@@ -405,6 +424,7 @@ export default function AdminUsersPage() {
 
                       return (
                         <tr key={user.id} className={isSuspended ? 'admin-row-suspended' : undefined}>
+                          <td>{user.id}</td>
                           <td>{user.full_name || '--'}</td>
                           <td>{user.email}</td>
                           <td>{platformLabel}</td>
@@ -419,15 +439,7 @@ export default function AdminUsersPage() {
                                 blocked
                               </span>
                             ) : null}
-                          </td>
-                          <td>
-                            <span
-                              className={`admin-badge ${
-                                isSuspended ? 'danger' : user.status === 'active' ? 'success' : 'warning'
-                              }`}
-                            >
-                              {isSuspended ? 'suspended' : user.status}
-                            </span>
+                            {isSuspended ? <span className="admin-badge danger" style={{ marginLeft: 8 }}>suspended</span> : null}
                           </td>
                           <td>{user.expires_at ? new Date(user.expires_at).toLocaleDateString() : '--'}</td>
                           <td>{user.created_at ? new Date(user.created_at).toLocaleDateString() : '--'}</td>
@@ -435,30 +447,42 @@ export default function AdminUsersPage() {
                             <div className="admin-action-buttons">
                               <button
                                 type="button"
-                                className="admin-button secondary"
+                                className="admin-icon-button"
                                 onClick={() => router.push(`/admin/users/${user.id}`)}
+                                title="Details"
+                                aria-label="View user details"
                               >
-                                Details
+                                <IconEye />
                               </button>
                               {isSuspended ? (
                                 <button
                                   type="button"
-                                  className="admin-button secondary"
+                                  className="admin-icon-button"
                                   onClick={() => requestAction('unsuspend', user)}
+                                  title="Unsuspend"
+                                  aria-label="Unsuspend user"
                                 >
-                                  Unsuspend
+                                  <IconUnlock />
                                 </button>
                               ) : (
                                 <button
                                   type="button"
-                                  className="admin-button danger"
+                                  className="admin-icon-button danger"
                                   onClick={() => requestAction('suspend', user)}
+                                  title="Suspend"
+                                  aria-label="Suspend user"
                                 >
-                                  Suspend
+                                  <IconLock />
                                 </button>
                               )}
-                              <button type="button" className="admin-button danger" onClick={() => requestAction('delete', user)}>
-                                Delete
+                              <button
+                                type="button"
+                                className="admin-icon-button danger"
+                                onClick={() => requestAction('delete', user)}
+                                title="Delete"
+                                aria-label="Delete user"
+                              >
+                                <IconTrash />
                               </button>
                             </div>
                           </td>
