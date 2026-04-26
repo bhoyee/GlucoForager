@@ -434,6 +434,18 @@ export default function AdminShell({ children }) {
 
   useEffect(() => {
     if (isPublicRoute) return;
+    if (!hydrated) return;
+    if (sessionLoading) return;
+    if (!session?.email) return;
+
+    // Guard admin-only routes from non-admin staff to avoid exposing partial admin screens.
+    if (!isAdmin && pathname === '/admin/admin-dashboard') {
+      router.replace('/admin/dashboard');
+    }
+  }, [hydrated, isAdmin, isPublicRoute, pathname, router, session?.email, sessionLoading]);
+
+  useEffect(() => {
+    if (isPublicRoute) return;
     if (sessionLoading) return;
     if (!session?.email) return;
     if (sidebarCollapsedInitialized) return;

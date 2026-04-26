@@ -51,6 +51,13 @@ export default function AdminDashboardPage() {
   const perms = Array.isArray(session?.permissions) ? session.permissions : [];
   const isAdmin = perms.includes('*') || perms.includes('admin.manage') || roles.includes('admin');
 
+  useEffect(() => {
+    if (loading) return;
+    if (!session) return;
+    if (isAdmin) return;
+    router.replace('/admin/dashboard');
+  }, [isAdmin, loading, router, session]);
+
   if (!isAdmin) {
     return (
       <div className="admin-card">
