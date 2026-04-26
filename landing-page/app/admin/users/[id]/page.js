@@ -426,6 +426,7 @@ export default function AdminUserDetail() {
   const isPremium = displayTier.toLowerCase() === 'premium';
   const isSuspended = Boolean(user.suspended_at);
   const isPremiumBlocked = Boolean(user.premium_access_blocked);
+  const premiumAccessBadgeLabel = user.status === 'active' ? 'Premium: Active' : 'Premium: Inactive';
 
   const initials = (() => {
     const raw = (user.full_name || user.email || 'U').trim();
@@ -534,8 +535,11 @@ export default function AdminUserDetail() {
             <Badge tone={isPremium ? 'success' : 'neutral'} title="Subscription tier">
               {tierLabel}
             </Badge>
-            <Badge tone={String(user.status).toLowerCase() === 'active' ? 'success' : 'neutral'} title="Account status">
-              {user.status || '--'}
+            <Badge
+              tone={String(user.status).toLowerCase() === 'active' ? 'success' : 'neutral'}
+              title="Premium entitlement status (active = user currently has Premium access)"
+            >
+              {premiumAccessBadgeLabel}
             </Badge>
             {isSuspended ? <Badge tone="warning">Suspended</Badge> : null}
             {isPremiumBlocked ? (
@@ -615,15 +619,15 @@ export default function AdminUserDetail() {
           <div className="admin-stack">
             <div className="admin-card admin-card--subtle">
               <h3 className="admin-title admin-title--sm">Account</h3>
-              <div className="admin-kv">
-                <div className="admin-kv-row">
-                  <div className="admin-kv-label">Status</div>
-                  <div className="admin-kv-value">{user.status || '--'}</div>
-                </div>
-                <div className="admin-kv-row">
-                  <div className="admin-kv-label">Suspended</div>
-                  <div className="admin-kv-value">{isSuspended ? formatDateTime(user.suspended_at) : 'No'}</div>
-                </div>
+            <div className="admin-kv">
+              <div className="admin-kv-row">
+                <div className="admin-kv-label">Premium entitlement</div>
+                <div className="admin-kv-value">{user.status || '--'}</div>
+              </div>
+              <div className="admin-kv-row">
+                <div className="admin-kv-label">Suspended</div>
+                <div className="admin-kv-value">{isSuspended ? formatDateTime(user.suspended_at) : 'No'}</div>
+              </div>
                 <div className="admin-kv-row">
                   <div className="admin-kv-label">Premium blocked</div>
                   <div className="admin-kv-value">
