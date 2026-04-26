@@ -254,7 +254,7 @@ export default async function BlogPostPage({ params }) {
                 {post.author_name ? <span>By {post.author_name}</span> : null}
                 {post.published_at ? <span>{formatDMY(post.published_at)}</span> : null}
               </div>
-              {post.excerpt ? <p className="text-lg text-gray-700">{post.excerpt}</p> : null}
+              {post.excerpt ? <p className="text-lg text-gray-700">{stripHtml(post.excerpt)}</p> : null}
             </header>
 
             <article className="space-y-4 rounded-2xl border border-gray-200 bg-white p-6">
