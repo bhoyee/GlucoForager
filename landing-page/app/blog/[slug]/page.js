@@ -5,6 +5,7 @@ import BlogTopBar from '../../../components/BlogTopBar';
 import BlogCoverImage from '../../../components/BlogCoverImage';
 import WhatsAppCtaCard from '../../../components/WhatsAppCtaCard';
 import AppDownloadCard from '../../../components/AppDownloadCard';
+import BlogImageFallback from '../../../components/BlogImageFallback';
 import { formatDMY } from '../../../lib/formatDate';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
@@ -47,6 +48,30 @@ function rewriteContentHtml(html) {
     return API_BASE;
   })();
 
+  const escapeAttr = (value) => String(value || '').replaceAll('"', '&quot;');
+
+  const toUploadsPaths = (src) => {
+    const url = String(src || '').trim();
+    if (!url) return null;
+
+    const relApiUploads = url.match(/^(\/api\/uploads\/.+)$/i);
+    if (relApiUploads) return { path: relApiUploads[1], kind: 'api' };
+
+    const relUploads = url.match(/^(\/uploads\/.+)$/i);
+    if (relUploads) return { path: relUploads[1], kind: 'root' };
+
+    const absApiUploads = url.match(/^https?:\/\/[^/]+(\/api\/uploads\/.+)$/i);
+    if (absApiUploads) return { path: absApiUploads[1], kind: 'api' };
+
+    const absUploads = url.match(/^https?:\/\/[^/]+(\/uploads\/.+)$/i);
+    if (absUploads) return { path: absUploads[1], kind: 'root' };
+
+    const localhostMatch = url.match(/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?(\/uploads\/.+)$/i);
+    if (localhostMatch) return { path: localhostMatch[1], kind: 'root' };
+
+    return null;
+  };
+
   const rewriteUploadsHost = (value) => {
     const url = String(value || '').trim();
     if (!url) return url;
@@ -54,28 +79,27 @@ function rewriteContentHtml(html) {
     // Only rewrite our own uploads paths; leave external images untouched.
     // - /uploads/... (relative)
     // - http(s)://<anything>/uploads/... (absolute)
-    const relMatch = url.match(/^(\/uploads\/.+)$/i);
-    if (relMatch) return `${upgradedApiBase}/api${relMatch[1]}`;
-
-    const absUploadsMatch = url.match(/^https?:\/\/[^/]+(\/uploads\/.+)$/i);
-    if (absUploadsMatch) return `${upgradedApiBase}/api${absUploadsMatch[1]}`;
-
-    // Upgrade explicit localhost dev URLs (seen when authoring locally then viewing elsewhere).
-    const localhostMatch = url.match(/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?(\/.+)$/i);
-    if (localhostMatch && localhostMatch[1].startsWith('/uploads/')) {
-      return `${upgradedApiBase}/api${localhostMatch[1]}`;
-    }
-
-    // Mixed content fix (only for URLs we already know are ours).
-    if (SITE_URL.startsWith('https://') && url.startsWith('http://') && url.includes('/uploads/')) {
-      return `https://${url.slice('http://'.length)}`;
-    }
+    const info = toUploadsPaths(url);
+    if (info) return `${upgradedApiBase}${info.path}`;
 
     return url;
   };
 
   return source.replace(/(<img[^>]+src=['"])([^'"]+)(['"][^>]*>)/gi, (_m, p1, src, p3) => {
-    return `${p1}${rewriteUploadsHost(src)}${p3}`;
+    const primary = rewriteUploadsHost(src);
+
+    const info = toUploadsPaths(src);
+    if (!info) return `${p1}${primary}${p3}`;
+
+    // Provide a fallback URL so the client can swap if the primary path isn't exposed
+    // (some proxies only expose `/api/*`, others expose `/uploads/*`).
+    const fallbackPath = info.path.startsWith('/api/uploads/')
+      ? info.path.replace('/api/uploads/', '/uploads/')
+      : info.path.replace('/uploads/', '/api/uploads/');
+    const fallback = `${upgradedApiBase}${fallbackPath}`;
+    const withFallback = p3.replace(/>$/, ` data-gf-fallback-src="${escapeAttr(fallback)}">`);
+
+    return `${p1}${primary}${withFallback}`;
   });
 }
 
@@ -225,6 +249,7 @@ export default async function BlogPostPage({ params }) {
             </header>
 
             <article className="space-y-4 rounded-2xl border border-gray-200 bg-white p-6">
+              <BlogImageFallback />
               {renderContent(post.content)}
             </article>
 
