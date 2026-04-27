@@ -82,6 +82,12 @@ export default function AdminUserEmailPage() {
         return;
       }
       const data = await response.json().catch(() => ({}));
+      if (data?.queued) {
+        const total = typeof data?.total === 'number' ? data.total : null;
+        const suffix = typeof total === 'number' ? ` (total ${total})` : '';
+        setMessage(`Broadcast queued${suffix}. Check history for progress.`);
+        return;
+      }
       const sent = data?.sent ?? 0;
       const total = data?.total;
       const suffix = typeof total === 'number' ? ` (total ${total})` : '';
@@ -163,7 +169,8 @@ export default function AdminUserEmailPage() {
             </div>
 
             <p className="admin-help">
-              Note: broadcast is limited to the most recent 2,000 users and is rate-limited to prevent accidental spam.
+              Note: broadcast is limited to the most recent 2,000 users and is rate-limited. Broadcast sends run in the
+              background; check history for progress.
             </p>
           </div>
         </div>

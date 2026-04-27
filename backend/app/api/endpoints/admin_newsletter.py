@@ -1,6 +1,7 @@
 from datetime import datetime
+import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import desc, or_
 from sqlalchemy.exc import IntegrityError
@@ -8,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from ..admin_dependencies import get_current_admin
 from ...core.config import settings
-from ...database import get_db
+from ...database import SessionLocal, get_db
 from ...models.admin_user import AdminUser
 from ...models.newsletter_signup import NewsletterSignup
 from ...models.admin_email_campaign import AdminEmailCampaign
@@ -18,6 +19,7 @@ from ...services.newsletter_tokens import make_unsubscribe_token
 
 router = APIRouter(prefix="/admin/newsletter", tags=["admin-newsletter"])
 cache = CacheService()
+logger = logging.getLogger(__name__)
 
 
 class NewsletterSubscriberItem(BaseModel):
@@ -189,9 +191,65 @@ def _render_newsletter_html(subject: str, body: str, unsubscribe_url: str | None
     """
 
 
+def _send_broadcast_newsletter(
+    *,
+    campaign_id: int | None,
+    subject: str,
+    body: str,
+    body_html: bool,
+    base_unsubscribe_url: str,
+    recipients: list[tuple[int, str]],
+    admin_id: int | None = None,
+) -> None:
+    total = len(recipients)
+    logger.info(
+        "Newsletter broadcast start campaign_id=%s total=%s admin_id=%s",
+        campaign_id,
+        total,
+        admin_id,
+    )
+    sent = 0
+    db: Session | None = None
+    try:
+        if campaign_id is not None:
+            db = SessionLocal()
+
+        for idx, (subscriber_id, email) in enumerate(recipients, start=1):
+            try:
+                token = make_unsubscribe_token(subscriber_id, email)
+                unsubscribe_url = f"{base_unsubscribe_url}?token={token}"
+                html_body = _render_newsletter_html(subject, body, unsubscribe_url=unsubscribe_url, body_html=body_html)
+                send_newsletter_email(email, subject, html_body)
+                sent += 1
+            except Exception:
+                logger.exception("Newsletter send failed email=%s campaign_id=%s", email, campaign_id)
+
+            if db is not None and (idx % 25 == 0 or idx == total):
+                try:
+                    db.query(AdminEmailCampaign).filter(AdminEmailCampaign.id == campaign_id).update(
+                        {"sent_count": sent}
+                    )
+                    db.commit()
+                except Exception:
+                    logger.exception("Newsletter broadcast progress update failed campaign_id=%s", campaign_id)
+                    db.rollback()
+
+        logger.info(
+            "Newsletter broadcast complete campaign_id=%s sent=%s total=%s admin_id=%s",
+            campaign_id,
+            sent,
+            total,
+            admin_id,
+        )
+    finally:
+        if db is not None:
+            db.close()
+
+
 @router.post("/send", status_code=200, response_model=dict)
 def send_broadcast(
     payload: NewsletterSendPayload,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin),
 ):
@@ -235,35 +293,42 @@ def send_broadcast(
         .all()
     )
 
-    sent = 0
-    for recipient in recipients:
-        try:
-            token = make_unsubscribe_token(recipient.id, recipient.email)
-            unsubscribe_url = f"{base_unsubscribe_url}?token={token}"
-            html_body = _render_newsletter_html(
-                payload.subject,
-                payload.body,
-                unsubscribe_url=unsubscribe_url,
-                body_html=bool(payload.body_html),
-            )
-            send_newsletter_email(recipient.email, payload.subject.strip(), html_body)
-            sent += 1
-        except Exception:
-            # Do not fail the whole send because of one address/provider error.
+    recipient_rows: list[tuple[int, str]] = []
+    for row in recipients:
+        email = (row.email or "").strip().lower()
+        if not email:
             continue
+        recipient_rows.append((int(row.id), email))
 
-    db.add(
-        AdminEmailCampaign(
-            kind="newsletter",
-            mode="broadcast",
-            subject=payload.subject.strip(),
-            body=payload.body,
-            body_html=bool(payload.body_html),
-            sent_count=sent,
-            total_count=len(recipients),
-            created_by_admin_id=current_admin.id,
-        )
+    campaign = AdminEmailCampaign(
+        kind="newsletter",
+        mode="broadcast",
+        subject=payload.subject.strip(),
+        body=payload.body,
+        body_html=bool(payload.body_html),
+        sent_count=0,
+        total_count=len(recipient_rows),
+        created_by_admin_id=current_admin.id,
     )
-    db.commit()
+    campaign_id: int | None = None
+    try:
+        db.add(campaign)
+        db.commit()
+        db.refresh(campaign)
+        campaign_id = campaign.id
+    except Exception:
+        logger.exception("Newsletter broadcast: failed to persist campaign record")
+        db.rollback()
 
-    return {"ok": True, "sent": sent, "mode": "broadcast"}
+    background_tasks.add_task(
+        _send_broadcast_newsletter,
+        campaign_id=campaign_id,
+        subject=payload.subject.strip(),
+        body=payload.body,
+        body_html=bool(payload.body_html),
+        base_unsubscribe_url=base_unsubscribe_url,
+        recipients=recipient_rows,
+        admin_id=getattr(current_admin, "id", None),
+    )
+
+    return {"ok": True, "queued": True, "campaign_id": campaign_id, "mode": "broadcast", "sent": 0, "total": len(recipient_rows)}
