@@ -72,6 +72,12 @@ export default function AdminNewsletterSendPage() {
         return;
       }
       const data = await response.json().catch(() => ({}));
+      if (data?.queued) {
+        const total = typeof data?.total === 'number' ? data.total : null;
+        const suffix = typeof total === 'number' ? ` (total ${total})` : '';
+        setMessage(`Broadcast queued${suffix}. Check history for progress.`);
+        return;
+      }
       setMessage(`Sent (${data?.mode || mode}): ${data?.sent ?? 0}`);
     } catch {
       setMessage('Failed to send.');
@@ -137,7 +143,8 @@ export default function AdminNewsletterSendPage() {
         </button>
       </div>
       <p className="admin-help">
-        Note: email sending requires your email provider credentials (Resend or SMTP) configured on the backend.
+        Note: broadcast sends run in the background. Check history for progress. Email sending requires your email
+        provider credentials (Resend or SMTP) configured on the backend.
       </p>
     </div>
   );
