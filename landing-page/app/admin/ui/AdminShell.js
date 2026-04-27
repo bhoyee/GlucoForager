@@ -20,7 +20,6 @@ export default function AdminShell({ children }) {
   const [session, setSession] = useState(null);
   const [sessionLoading, setSessionLoading] = useState(false);
   const [hydrated, setHydrated] = useState(false);
-  const [tokenChecked, setTokenChecked] = useState(false);
   const [accessToken, setAccessToken] = useState(null);
   const [navSectionOpen, setNavSectionOpen] = useState({});
   const [navSectionOpenInitialized, setNavSectionOpenInitialized] = useState(false);
@@ -34,7 +33,7 @@ export default function AdminShell({ children }) {
   const loadSession = useCallback(async () => {
     if (isPublicRoute) return;
 
-    const token = accessToken;
+    const token = accessToken || getAdminAccessToken();
     if (!token) return;
 
     setSessionLoading(true);
@@ -56,21 +55,19 @@ export default function AdminShell({ children }) {
 
   useEffect(() => {
     setHydrated(true);
-    if (isPublicRoute) {
-      setTokenChecked(true);
-      return;
-    }
+    if (isPublicRoute) return;
     setAccessToken(getAdminAccessToken());
-    setTokenChecked(true);
   }, [isPublicRoute]);
 
   useEffect(() => {
     if (!hydrated) return;
     if (isPublicRoute) return;
-    if (!tokenChecked) return;
-    if (accessToken) return;
+    // Avoid redirect race when transitioning from /admin -> protected routes.
+    // localStorage is already updated synchronously on login, but React state may lag by 1 render.
+    const token = accessToken || getAdminAccessToken();
+    if (token) return;
     router.replace('/admin');
-  }, [accessToken, hydrated, isPublicRoute, router, tokenChecked]);
+  }, [accessToken, hydrated, isPublicRoute, router]);
 
   const loadHelpUnreadCount = useCallback(async () => {
     if (isPublicRoute) return;
