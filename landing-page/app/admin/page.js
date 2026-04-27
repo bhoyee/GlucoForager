@@ -37,10 +37,22 @@ export default function AdminLoginPage() {
     const checkStatus = async () => {
       setStatusLoading(true);
       try {
+        if (typeof window !== 'undefined') {
+          const host = window.location.hostname;
+          const isLocalHost = host === 'localhost' || host === '127.0.0.1';
+          if (!isLocalHost && String(API_URL || '').includes('localhost')) {
+            setMessageTone('warning');
+            setMessage(
+              `Admin is misconfigured: NEXT_PUBLIC_API_URL points to ${API_URL}. It must point to your API domain (e.g. https://api.glucoforager.com).`
+            );
+          }
+        }
         const response = await fetch(`${API_URL}/api/admin/status`);
         const data = await response.json();
         setHasAdmin(Boolean(data.has_admin));
       } catch {
+        setMessageTone('danger');
+        setMessage(`Unable to reach Admin API at ${API_URL}. Check NEXT_PUBLIC_API_URL and your API uptime.`);
         setHasAdmin(true);
       } finally {
         setStatusLoading(false);
@@ -220,6 +232,8 @@ export default function AdminLoginPage() {
                   type="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
+                  autoComplete="email"
+                  inputMode="email"
                   placeholder="you@glucoforager.com"
                   required
                   disabled={mfaRequired}
@@ -233,6 +247,7 @@ export default function AdminLoginPage() {
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   placeholder="••••••••"
+                  autoComplete="current-password"
                   required={!mfaRequired}
                   disabled={mfaRequired}
                 />
@@ -241,7 +256,14 @@ export default function AdminLoginPage() {
               {mfaRequired ? (
                 <div className="admin-field">
                   <label>Verification code</label>
-                  <input value={mfaCode} onChange={(event) => setMfaCode(event.target.value)} placeholder="123456" required />
+                  <input
+                    value={mfaCode}
+                    onChange={(event) => setMfaCode(event.target.value)}
+                    placeholder="123456"
+                    autoComplete="one-time-code"
+                    inputMode="numeric"
+                    required
+                  />
                   <p className="admin-help">This code expires in ~10 minutes.</p>
                 </div>
               ) : null}
