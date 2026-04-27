@@ -1,13 +1,14 @@
 from datetime import datetime
+import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import desc, func, or_
 from sqlalchemy.orm import Session
 
 from ..admin_dependencies import get_current_admin
 from ...core.config import settings
-from ...database import get_db
+from ...database import SessionLocal, get_db
 from ...models.admin_email_campaign import AdminEmailCampaign
 from ...models.admin_user import AdminUser
 from ...models.user import User
@@ -16,6 +17,7 @@ from ...services.email_service import send_newsletter_email
 
 router = APIRouter(prefix="/admin/user-email", tags=["admin-user-email"])
 cache = CacheService()
+logger = logging.getLogger(__name__)
 
 
 class AdminUserEmailSendPayload(BaseModel):
@@ -69,9 +71,60 @@ def _render_user_email_html(subject: str, body: str, body_html: bool = False) ->
     """
 
 
+def _send_broadcast_user_email(
+    *,
+    campaign_id: int | None,
+    subject: str,
+    html_body: str,
+    emails: list[str],
+    admin_id: int | None = None,
+) -> None:
+    total = len(emails)
+    logger.info(
+        "User email broadcast start campaign_id=%s total=%s admin_id=%s",
+        campaign_id,
+        total,
+        admin_id,
+    )
+    sent = 0
+    db: Session | None = None
+    try:
+        if campaign_id is not None:
+            db = SessionLocal()
+
+        for idx, email in enumerate(emails, start=1):
+            try:
+                send_newsletter_email(email, subject, html_body)
+                sent += 1
+            except Exception:
+                logger.exception("User email broadcast send failed email=%s campaign_id=%s", email, campaign_id)
+
+            if db is not None and (idx % 25 == 0 or idx == total):
+                try:
+                    db.query(AdminEmailCampaign).filter(AdminEmailCampaign.id == campaign_id).update(
+                        {"sent_count": sent}
+                    )
+                    db.commit()
+                except Exception:
+                    logger.exception("User email broadcast progress update failed campaign_id=%s", campaign_id)
+                    db.rollback()
+
+        logger.info(
+            "User email broadcast complete campaign_id=%s sent=%s total=%s admin_id=%s",
+            campaign_id,
+            sent,
+            total,
+            admin_id,
+        )
+    finally:
+        if db is not None:
+            db.close()
+
+
 @router.post("/send", status_code=200, response_model=dict)
 def send_user_email(
     payload: AdminUserEmailSendPayload,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin),
 ):
@@ -143,26 +196,40 @@ def send_user_email(
     # De-duplicate while preserving order (recent first)
     emails = list(dict.fromkeys(emails))
 
-    sent = 0
-    for email in emails:
-        try:
-            send_newsletter_email(email, payload.subject.strip(), html_body)
-            sent += 1
-        except Exception:
-            continue
-
-    db.add(
-        AdminEmailCampaign(
-            kind="user_email",
-            mode="broadcast",
-            subject=payload.subject.strip(),
-            body=payload.body,
-            body_html=bool(payload.body_html),
-            sent_count=sent,
-            total_count=len(emails),
-            created_by_admin_id=current_admin.id,
-        )
+    campaign = AdminEmailCampaign(
+        kind="user_email",
+        mode="broadcast",
+        subject=payload.subject.strip(),
+        body=payload.body,
+        body_html=bool(payload.body_html),
+        sent_count=0,
+        total_count=len(emails),
+        created_by_admin_id=current_admin.id,
     )
-    db.commit()
+    campaign_id: int | None = None
+    try:
+        db.add(campaign)
+        db.commit()
+        db.refresh(campaign)
+        campaign_id = campaign.id
+    except Exception:
+        logger.exception("User email broadcast: failed to persist campaign record")
+        db.rollback()
 
-    return {"ok": True, "sent": sent, "mode": "broadcast", "total": len(emails)}
+    background_tasks.add_task(
+        _send_broadcast_user_email,
+        campaign_id=campaign_id,
+        subject=payload.subject.strip(),
+        html_body=html_body,
+        emails=emails,
+        admin_id=getattr(current_admin, "id", None),
+    )
+
+    return {
+        "ok": True,
+        "queued": True,
+        "campaign_id": campaign_id,
+        "mode": "broadcast",
+        "sent": 0,
+        "total": len(emails),
+    }
