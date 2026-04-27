@@ -86,18 +86,17 @@ export default function AdminLoginPage() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    if (statusLoading) return;
+    if (statusLoading || hasAdmin === null) {
+      setMessageTone('info');
+      setMessage('Checking access… Please try again in a moment.');
+      return;
+    }
 
     setIsSubmitting(true);
     setMessage('');
     setMessageTone('info');
 
     try {
-      if (hasAdmin === null) {
-        setMessageTone('warning');
-        throw new Error('Checking admin status. Please wait…');
-      }
-
       if (!hasAdmin && !ENABLE_BOOTSTRAP) {
         setMessageTone('danger');
         throw new Error('Admin setup is disabled. Please contact support.');
@@ -278,7 +277,11 @@ export default function AdminLoginPage() {
               ) : null}
 
               <div className="admin-actions" style={{ alignItems: 'center' }}>
-                <button className="admin-button" type="submit" disabled={isSubmitting || statusLoading || (hasAdmin === false && !ENABLE_BOOTSTRAP)}>
+                <button
+                  className="admin-button"
+                  type="submit"
+                  disabled={isSubmitting || statusLoading || hasAdmin === null || (hasAdmin === false && !ENABLE_BOOTSTRAP)}
+                >
                   {isSubmitting ? (
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
                       <span className="admin-spinner" aria-hidden="true" style={{ borderTopColor: 'rgba(255,255,255,0.95)', borderColor: 'rgba(255,255,255,0.35)' }} />
