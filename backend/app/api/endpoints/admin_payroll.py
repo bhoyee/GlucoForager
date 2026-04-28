@@ -717,6 +717,67 @@ def finalize_run(
     return {"ok": True}
 
 
+@router.delete("/compensation/{comp_id}", status_code=200)
+def delete_compensation(
+    request: Request,
+    comp_id: int,
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("payroll.manage")),
+):
+    row = db.query(StaffCompensation).filter(StaffCompensation.id == int(comp_id)).first()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    _audit(
+        request,
+        db,
+        actor_id=int(current_staff.id),
+        action="payroll.compensation.delete",
+        entity="staff_compensation",
+        entity_id=str(row.id),
+        details={"staff_user_id": int(row.staff_user_id)},
+    )
+    db.delete(row)
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/runs/{run_id}/reopen")
+def reopen_run(
+    request: Request,
+    run_id: int,
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("payroll.manage")),
+):
+    run = db.query(PayrollRun).filter(PayrollRun.id == int(run_id)).first()
+    if not run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    status_norm = str(run.status or "").lower()
+    if status_norm == "draft":
+        return {"ok": True}
+    if status_norm == "paid":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Run is paid and cannot be reopened")
+    if status_norm != "finalized":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Run cannot be reopened")
+
+    run.status = "draft"
+    run.finalized_at = None
+    run.updated_at = _now()
+
+    _audit(
+        request,
+        db,
+        actor_id=int(current_staff.id),
+        action="payroll.run.reopen",
+        entity="payroll_runs",
+        entity_id=str(run.id),
+        details={"year": int(run.year), "month": int(run.month), "previous_status": status_norm},
+    )
+    db.commit()
+    return {"ok": True}
+
+
 class SendEmailsPayload(BaseModel):
     resend: bool = False
 
