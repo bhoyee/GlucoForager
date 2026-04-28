@@ -307,7 +307,13 @@ export default function PayrollPage() {
         return;
       }
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || 'Failed to generate items.');
+      if (!res.ok) {
+        const detail = data.detail || 'Failed to generate items.';
+        if (String(detail).toLowerCase().includes('not editable')) {
+          throw new Error('Run is finalized. Click “Reopen run” first, then generate missing items.');
+        }
+        throw new Error(detail);
+      }
       const parts = [];
       if (typeof data.generated === 'number') parts.push(`Generated: ${data.generated}`);
       if (typeof data.skipped_existing === 'number' && data.skipped_existing > 0) parts.push(`Kept existing: ${data.skipped_existing}`);
@@ -342,6 +348,54 @@ export default function PayrollPage() {
       await loadRuns();
     } catch (e) {
       setMessage(e?.message || 'Failed to finalize run.');
+    } finally {
+      setFinalizing(false);
+    }
+  };
+
+  const deleteComp = async (id) => {
+    if (!token) return;
+    if (!confirm('Delete this compensation record? This cannot be undone.')) return;
+    setMessage('');
+    try {
+      const res = await fetch(`${API_URL}/api/admin/payroll/compensation/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || 'Failed to delete.');
+      await load();
+    } catch (e) {
+      setMessage(e?.message || 'Failed to delete.');
+    }
+  };
+
+  const reopenRun = async () => {
+    if (!token || !selectedRunId) return;
+    setFinalizing(true);
+    setMessage('');
+    try {
+      const res = await fetch(`${API_URL}/api/admin/payroll/runs/${selectedRunId}/reopen`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || 'Failed to reopen run.');
+      await loadRuns();
+      await loadRunItems(selectedRunId);
+      setMessage('Run reopened (draft). You can generate missing items now.');
+    } catch (e) {
+      setMessage(e?.message || 'Failed to reopen run.');
     } finally {
       setFinalizing(false);
     }
@@ -543,6 +597,9 @@ export default function PayrollPage() {
                               Disable
                             </button>
                           ) : null}
+                          <button className="admin-button danger" type="button" onClick={() => deleteComp(c.id)} style={{ marginLeft: 10 }}>
+                            Delete
+                          </button>
                         </td>
                       </tr>
                     );
@@ -672,6 +729,15 @@ export default function PayrollPage() {
                 </button>
                 <button className="admin-button" type="button" onClick={finalizeRun} disabled={!selectedRunId || finalizing || !runIsDraft}>
                   {finalizing ? 'Finalizing…' : 'Finalize'}
+                </button>
+                <button
+                  className="admin-button secondary"
+                  type="button"
+                  onClick={reopenRun}
+                  disabled={!selectedRunId || finalizing || runIsDraft}
+                  title="Reopens a finalized run so you can add missing staff items"
+                >
+                  {finalizing ? 'Reopening…' : 'Reopen run'}
                 </button>
                 <button
                   className="admin-button secondary"
