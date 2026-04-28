@@ -520,6 +520,7 @@ def export_run_csv(
 
 class GenerateItemsPayload(BaseModel):
     overwrite: bool = False
+    append_missing: bool = True
 
 
 @router.post("/runs/{run_id}/generate")
@@ -537,8 +538,10 @@ def generate_items(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Run is not editable")
 
     existing_count = db.query(func.count(PayrollItem.id)).filter(PayrollItem.run_id == int(run.id)).scalar() or 0
-    if existing_count and not payload.overwrite:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Items already exist (use overwrite)")
+    # If items already exist, default to appending missing staff items (dynamic payroll),
+    # unless overwrite is explicitly requested.
+    if existing_count and not payload.overwrite and not payload.append_missing:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Items already exist (use overwrite or append_missing)")
 
     if existing_count and payload.overwrite:
         db.query(PayrollItem).filter(PayrollItem.run_id == int(run.id)).delete(synchronize_session=False)
@@ -554,9 +557,22 @@ def generate_items(
     )
 
     generated = 0
+    skipped_existing = 0
     missing: list[int] = []
 
+    existing_staff_ids: set[int] = set()
+    if existing_count and not payload.overwrite:
+        existing_staff_ids = {
+            int(x[0])
+            for x in db.query(PayrollItem.staff_user_id)
+            .filter(PayrollItem.run_id == int(run.id))
+            .all()
+        }
+
     for staff in staff_rows:
+        if existing_staff_ids and int(staff.id) in existing_staff_ids:
+            skipped_existing += 1
+            continue
         comp = (
             db.query(StaffCompensation)
             .filter(StaffCompensation.staff_user_id == int(staff.id), StaffCompensation.effective_from <= cutoff)
@@ -595,10 +611,22 @@ def generate_items(
         action="payroll.run.generate_items",
         entity="payroll_runs",
         entity_id=str(run.id),
-        details={"generated": int(generated), "missing_staff_user_ids": missing, "cutoff": cutoff.isoformat(), "overwrite": bool(payload.overwrite)},
+        details={
+            "generated": int(generated),
+            "skipped_existing": int(skipped_existing),
+            "missing_staff_user_ids": missing,
+            "cutoff": cutoff.isoformat(),
+            "overwrite": bool(payload.overwrite),
+            "append_missing": bool(payload.append_missing),
+        },
     )
     db.commit()
-    return {"ok": True, "generated": int(generated), "missing_staff_user_ids": missing}
+    return {
+        "ok": True,
+        "generated": int(generated),
+        "skipped_existing": int(skipped_existing),
+        "missing_staff_user_ids": missing,
+    }
 
 
 class PayrollItemUpdatePayload(BaseModel):
