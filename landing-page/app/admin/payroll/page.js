@@ -299,7 +299,7 @@ export default function PayrollPage() {
       const res = await fetch(`${API_URL}/api/admin/payroll/runs/${selectedRunId}/generate`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ overwrite: Boolean(overwriteGenerate) }),
+        body: JSON.stringify({ overwrite: Boolean(overwriteGenerate), append_missing: true }),
       });
       if (res.status === 401) {
         localStorage.removeItem('adminToken');
@@ -308,9 +308,13 @@ export default function PayrollPage() {
       }
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || 'Failed to generate items.');
+      const parts = [];
+      if (typeof data.generated === 'number') parts.push(`Generated: ${data.generated}`);
+      if (typeof data.skipped_existing === 'number' && data.skipped_existing > 0) parts.push(`Kept existing: ${data.skipped_existing}`);
       if (Array.isArray(data.missing_staff_user_ids) && data.missing_staff_user_ids.length > 0) {
-        setMessage(`Generated, but missing compensation for staff IDs: ${data.missing_staff_user_ids.join(', ')}`);
+        parts.push(`Missing compensation for staff IDs: ${data.missing_staff_user_ids.join(', ')}`);
       }
+      if (parts.length) setMessage(parts.join(' · '));
       await loadRunItems(selectedRunId);
     } catch (e) {
       setMessage(e?.message || 'Failed to generate items.');
@@ -661,10 +665,10 @@ export default function PayrollPage() {
                 </button>
                 <label style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                   <input type="checkbox" checked={overwriteGenerate} onChange={(e) => setOverwriteGenerate(e.target.checked)} />
-                  Overwrite
+                  Overwrite (rebuild all)
                 </label>
                 <button className="admin-button secondary" type="button" onClick={generateRunItems} disabled={!selectedRunId || generating}>
-                  {generating ? 'Generating…' : 'Generate items'}
+                  {generating ? 'Generating…' : overwriteGenerate ? 'Rebuild items' : 'Generate missing items'}
                 </button>
                 <button className="admin-button" type="button" onClick={finalizeRun} disabled={!selectedRunId || finalizing || !runIsDraft}>
                   {finalizing ? 'Finalizing…' : 'Finalize'}
@@ -693,7 +697,7 @@ export default function PayrollPage() {
             {!selectedRunId ? (
               <EmptyState title="No run selected" body="Pick a payroll run to view and edit items." />
             ) : runItems.length === 0 ? (
-              <EmptyState title="No items" body="Click “Generate items” to build payroll items from compensation." />
+              <EmptyState title="No items" body="Click “Generate missing items” to build payroll items from compensation." />
             ) : (
               <div style={{ overflowX: 'auto', marginTop: 12 }}>
                 {Array.isArray(runTotals) && runTotals.length > 0 ? (
