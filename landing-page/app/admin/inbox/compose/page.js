@@ -24,6 +24,7 @@ export default function ComposeMailPage() {
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
   const [scheduleAtLocal, setScheduleAtLocal] = useState('');
   const [attachment, setAttachment] = useState(null);
+  const attachmentInputId = useMemo(() => `attach-${Math.random().toString(16).slice(2)}`, []);
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState('');
   const [tone, setTone] = useState('warning');
@@ -177,74 +178,113 @@ export default function ComposeMailPage() {
         {message ? <div className={`admin-alert ${tone}`} style={{ marginTop: 12 }}>{message}</div> : null}
 
         {!loading && session ? (
-          <div className="admin-grid" style={{ alignItems: 'start', marginTop: 12 }}>
-            <div className="admin-card admin-card--subtle admin-card--compact">
-              <div className="admin-field">
+          <div style={{ marginTop: 12 }}>
+            <div
+              className="admin-card admin-card--subtle admin-card--compact"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: 14,
+                alignItems: 'start',
+              }}
+            >
+              <div className="admin-field" style={{ marginBottom: 0 }}>
                 <label>To</label>
                 <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="someone@example.com" />
                 <p className="admin-subtitle" style={{ marginTop: 6 }}>
                   Recipient must match an existing staff email in the system.
                 </p>
               </div>
-              <div className="admin-field">
+
+              <div className="admin-field" style={{ marginBottom: 0 }}>
                 <label>Subject</label>
                 <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject" />
               </div>
 
-              {isAdmin ? (
-                <div className="admin-field">
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <input
-                      type="checkbox"
-                      checked={scheduleEnabled}
-                      onChange={(e) => {
-                        const checked = Boolean(e.target.checked);
-                        setScheduleEnabled(checked);
-                        if (checked && !scheduleAtLocal) setScheduleAtLocal(defaultScheduleLocal());
-                      }}
-                    />
-                    Schedule send
-                  </label>
-                  {scheduleEnabled ? (
-                    <>
+              <div className="admin-field" style={{ marginBottom: 0, gridColumn: '1 / -1' }}>
+                {isAdmin ? (
+                  <>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <input
-                        type="datetime-local"
-                        value={scheduleAtLocal}
-                        onChange={(e) => setScheduleAtLocal(e.target.value)}
+                        type="checkbox"
+                        checked={scheduleEnabled}
+                        onChange={(e) => {
+                          const checked = Boolean(e.target.checked);
+                          setScheduleEnabled(checked);
+                          if (checked && !scheduleAtLocal) setScheduleAtLocal(defaultScheduleLocal());
+                        }}
                       />
+                      Schedule send
+                    </label>
+                    {scheduleEnabled ? (
+                      <>
+                        <input type="datetime-local" value={scheduleAtLocal} onChange={(e) => setScheduleAtLocal(e.target.value)} />
+                        <p className="admin-subtitle" style={{ marginTop: 6 }}>
+                          Mail will be delivered automatically at the chosen time (your local time).
+                        </p>
+                      </>
+                    ) : (
                       <p className="admin-subtitle" style={{ marginTop: 6 }}>
-                        Mail will be delivered automatically at the chosen time (your local time).
+                        Optional: schedule this mail to send later.
                       </p>
-                    </>
-                  ) : (
-                    <p className="admin-subtitle" style={{ marginTop: 6 }}>
-                      Optional: schedule this mail to send later.
-                    </p>
-                  )}
-                </div>
-              ) : null}
-
-              <div className="admin-field">
-                <label>Attachment (optional)</label>
-                <input
-                  type="file"
-                  onChange={(e) => setAttachment(e.target.files?.[0] || null)}
-                  accept=".pdf,.jpg,.jpeg,.png,.webp,.mp4,.xls,.xlsx"
-                />
-                <p className="admin-subtitle" style={{ marginTop: 6 }}>
-                  Allowed: images (jpg/png/webp), PDF, MP4 video, Excel (xls/xlsx).
-                </p>
+                    )}
+                  </>
+                ) : null}
               </div>
             </div>
 
-            <div className="admin-card admin-card--subtle admin-card--compact">
-              <div className="admin-field">
+            <div className="admin-card admin-card--subtle admin-card--compact" style={{ marginTop: 14 }}>
+              <div className="admin-field" style={{ marginBottom: 10 }}>
                 <label>Message</label>
-                <RichTextEditor value={bodyHtml} onChange={setBodyHtml} />
+                <RichTextEditor value={bodyHtml} onChange={setBodyHtml} minHeight={280} />
               </div>
-              <div className="admin-actions" style={{ justifyContent: 'flex-end' }}>
+
+              <div
+                className="admin-actions"
+                style={{
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  gap: 10,
+                  flexWrap: 'wrap',
+                }}
+              >
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <input
+                    id={attachmentInputId}
+                    type="file"
+                    style={{ display: 'none' }}
+                    onChange={(e) => setAttachment(e.target.files?.[0] || null)}
+                    accept=".pdf,.jpg,.jpeg,.png,.webp,.mp4,.xls,.xlsx"
+                  />
+                  <label className="admin-button secondary" htmlFor={attachmentInputId} style={{ cursor: 'pointer' }}>
+                    Add attachment
+                  </label>
+                  {attachment ? (
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: '8px 10px',
+                        borderRadius: 12,
+                        border: '1px solid rgba(0,0,0,0.10)',
+                        background: 'rgba(0,0,0,0.02)',
+                      }}
+                    >
+                      <span style={{ maxWidth: 420, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {attachment.name}
+                      </span>
+                      <button className="admin-button secondary" type="button" onClick={() => setAttachment(null)} style={{ padding: '6px 10px' }}>
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="admin-subtitle">Optional: attach PDF/image/video/Excel.</span>
+                  )}
+                </div>
+
                 <button className="admin-button info" type="button" onClick={send} disabled={sending}>
-                  {sending ? (scheduleEnabled ? 'Scheduling...' : 'Sending...') : (scheduleEnabled ? 'Schedule' : 'Send')}
+                  {sending ? (scheduleEnabled ? 'Scheduling...' : 'Sending...') : scheduleEnabled ? 'Schedule' : 'Send'}
                 </button>
               </div>
             </div>
