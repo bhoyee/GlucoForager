@@ -1,3 +1,4 @@
+/* eslint-disable react/no-danger */
 'use client';
 
 import { useEffect, useRef } from 'react';
@@ -6,37 +7,53 @@ const TOOLBAR = [
   { cmd: 'bold', label: 'B' },
   { cmd: 'italic', label: 'I' },
   { cmd: 'underline', label: 'U' },
-  { cmd: 'insertUnorderedList', label: '• List' },
+  { cmd: 'insertUnorderedList', label: '• Bullets' },
+  { cmd: 'insertOrderedList', label: '1. List' },
 ];
 
-export default function RichTextEditor({ value, onChange, placeholder = 'Write your message…', minHeight = 180, readOnly = false }) {
+export default function RichTextEditor({
+  value,
+  onChange,
+  placeholder = 'Write your message…',
+  minHeight = 180,
+  readOnly = false,
+}) {
   const ref = useRef(null);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    // Keep editor content in sync (only when it differs to preserve cursor).
     const next = String(value || '');
+    // Keep editor content in sync (only when it differs to preserve cursor).
     if (el.innerHTML !== next) el.innerHTML = next;
   }, [value]);
 
+  const commit = () => {
+    const el = ref.current;
+    if (!el) return;
+    onChange?.(el.innerHTML);
+  };
+
   const exec = (cmd) => {
     try {
-      document.execCommand(cmd, false, null);
       const el = ref.current;
-      if (el && onChange) onChange(el.innerHTML);
+      if (el) el.focus();
+      document.execCommand(cmd, false, null);
+      commit();
     } catch {
       // ignore
     }
   };
 
   const addLink = () => {
+    if (readOnly) return;
     const url = window.prompt('Enter link URL (https://...)');
     if (!url) return;
     try {
-      document.execCommand('createLink', false, url);
       const el = ref.current;
-      if (el && onChange) onChange(el.innerHTML);
+      if (el) el.focus();
+      document.execCommand('createLink', false, url);
+      commit();
     } catch {
       // ignore
     }
@@ -44,9 +61,7 @@ export default function RichTextEditor({ value, onChange, placeholder = 'Write y
 
   const handleInput = () => {
     if (readOnly) return;
-    const el = ref.current;
-    if (!el) return;
-    onChange?.(el.innerHTML);
+    commit();
   };
 
   return (
@@ -58,14 +73,27 @@ export default function RichTextEditor({ value, onChange, placeholder = 'Write y
               key={t.cmd}
               className="admin-button secondary"
               type="button"
-              onClick={() => exec(t.cmd)}
+              onMouseDown={(e) => {
+                // Prevent button focus from stealing the current editor selection (lists won't apply otherwise).
+                e.preventDefault();
+                exec(t.cmd);
+              }}
               style={{ padding: '8px 12px' }}
               disabled={readOnly}
             >
               {t.label}
             </button>
           ))}
-          <button className="admin-button secondary" type="button" onClick={addLink} style={{ padding: '8px 12px' }} disabled={readOnly}>
+          <button
+            className="admin-button secondary"
+            type="button"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              addLink();
+            }}
+            style={{ padding: '8px 12px' }}
+            disabled={readOnly}
+          >
             Link
           </button>
           <span className="admin-subtitle" style={{ marginLeft: 8 }}>
@@ -73,6 +101,7 @@ export default function RichTextEditor({ value, onChange, placeholder = 'Write y
           </span>
         </div>
       </div>
+
       <div
         ref={ref}
         contentEditable={!readOnly}
@@ -87,12 +116,23 @@ export default function RichTextEditor({ value, onChange, placeholder = 'Write y
           padding: 12,
           outline: 'none',
           background: readOnly ? 'rgba(0,0,0,0.03)' : '#fff',
+          lineHeight: 1.45,
+          whiteSpace: 'pre-wrap',
         }}
       />
+
       <style jsx>{`
         [contenteditable][data-placeholder]:empty:before {
           content: attr(data-placeholder);
           color: rgba(0, 0, 0, 0.45);
+        }
+        [contenteditable] :global(ul),
+        [contenteditable] :global(ol) {
+          padding-left: 1.25rem;
+          margin: 0.5rem 0;
+        }
+        [contenteditable] :global(li) {
+          margin: 0.25rem 0;
         }
       `}</style>
     </div>
