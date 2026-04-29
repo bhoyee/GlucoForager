@@ -178,6 +178,7 @@ function WorkLogsPageInner() {
   const [workDateLoading, setWorkDateLoading] = useState(false);
   const workDateRef = useRef(workDate);
   const workDateTouchedRef = useRef(false);
+  const autoSuggestedWorkDateRef = useRef(false);
   const lastStaffTodayRef = useRef(staffTodayISO);
   const [workDateLog, setWorkDateLog] = useState(null);
   const [submittedModalOpen, setSubmittedModalOpen] = useState(false);
@@ -1108,6 +1109,45 @@ function WorkLogsPageInner() {
 
     lastStaffTodayRef.current = staffTodayISO;
   }, [searchParams, staffTodayISO]);
+
+  useEffect(() => {
+    if (!token) return;
+    if (autoSuggestedWorkDateRef.current) return;
+    if (!isISODate(staffTodayISO)) return;
+    if (workDateTouchedRef.current) return;
+
+    const hasQuery = Boolean(searchParams?.get('date') || searchParams?.get('work_date'));
+    if (hasQuery) return;
+
+    autoSuggestedWorkDateRef.current = true;
+
+    const today = staffTodayISO;
+    const minDate = isoDateAddDays(today, -6);
+    const yesterday = isoDateAddDays(today, -1);
+    if (yesterday < minDate) return;
+
+    (async () => {
+      try {
+        const start = mondayOfWeek(today);
+        const res = await fetch(`${API_URL}/api/admin/work-logs/week?start=${encodeURIComponent(start)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const days = Array.isArray(data?.days) ? data.days : [];
+        const y = days.find((d) => d && String(d.work_date || '') === yesterday);
+        if (!y || !y.missing_log) return;
+
+        // If yesterday is missing, default to yesterday so staff doesn't accidentally submit "today".
+        workDateTouchedRef.current = true;
+        workDateRef.current = yesterday;
+        setWorkDate(yesterday);
+        setMessage(`Work log for ${yesterday} is missing. Showing that date so you can submit it.`);
+      } catch {
+        // ignore
+      }
+    })();
+  }, [searchParams, staffTodayISO, token]);
 
   useEffect(() => {
     if (!token) return;
