@@ -172,26 +172,18 @@ export default function ComposeMailPage() {
         </div>
       </div>
 
-      <div className="admin-card" style={{ marginTop: 16 }}>
+      <div className="admin-card admin-compose-card" style={{ marginTop: 16 }}>
         {loading ? <p className="admin-subtitle">Loading...</p> : null}
         {!loading && !session ? <div className="admin-alert danger">Not signed in.</div> : null}
         {message ? <div className={`admin-alert ${tone}`} style={{ marginTop: 12 }}>{message}</div> : null}
 
         {!loading && session ? (
-          <div style={{ marginTop: 12 }}>
-            <div
-              className="admin-card admin-card--subtle admin-card--compact"
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: 14,
-                alignItems: 'start',
-              }}
-            >
+          <div className="admin-compose-form">
+            <div className="admin-compose-fields">
               <div className="admin-field" style={{ marginBottom: 0 }}>
                 <label>To</label>
                 <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="someone@example.com" />
-                <p className="admin-subtitle" style={{ marginTop: 6 }}>
+                <p className="admin-help">
                   Recipient must match an existing staff email in the system.
                 </p>
               </div>
@@ -201,9 +193,35 @@ export default function ComposeMailPage() {
                 <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject" />
               </div>
 
-              <div className="admin-field" style={{ marginBottom: 0, gridColumn: '1 / -1' }}>
+              <div className="admin-compose-options">
+                <div className="admin-field admin-compose-attachment" style={{ marginBottom: 0 }}>
+                  <label>Attachment</label>
+                  <div className="admin-compose-attachment-row">
+                    <input
+                      id={attachmentInputId}
+                      type="file"
+                      style={{ display: 'none' }}
+                      onChange={(e) => setAttachment(e.target.files?.[0] || null)}
+                      accept=".pdf,.jpg,.jpeg,.png,.webp,.mp4,.xls,.xlsx"
+                    />
+                    <label className="admin-button secondary" htmlFor={attachmentInputId} style={{ cursor: 'pointer' }}>
+                      Add attachment
+                    </label>
+                    {attachment ? (
+                      <div className="admin-compose-attachment-pill">
+                        <span title={attachment.name}>{attachment.name}</span>
+                        <button className="admin-button secondary" type="button" onClick={() => setAttachment(null)} style={{ padding: '6px 10px' }}>
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="admin-help">Optional PDF, image, video, or Excel file.</span>
+                    )}
+                  </div>
+                </div>
+
                 {isAdmin ? (
-                  <>
+                  <div className="admin-field admin-compose-schedule" style={{ marginBottom: 0 }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <input
                         type="checkbox"
@@ -219,24 +237,24 @@ export default function ComposeMailPage() {
                     {scheduleEnabled ? (
                       <>
                         <input type="datetime-local" value={scheduleAtLocal} onChange={(e) => setScheduleAtLocal(e.target.value)} />
-                        <p className="admin-subtitle" style={{ marginTop: 6 }}>
+                        <p className="admin-help">
                           Mail will be delivered automatically at the chosen time (your local time).
                         </p>
                       </>
                     ) : (
-                      <p className="admin-subtitle" style={{ marginTop: 6 }}>
+                      <p className="admin-help">
                         Optional: schedule this mail to send later.
                       </p>
                     )}
-                  </>
+                  </div>
                 ) : null}
               </div>
             </div>
 
-            <div className="admin-card admin-card--subtle admin-card--compact" style={{ marginTop: 14 }}>
+            <div className="admin-compose-message">
               <div className="admin-field" style={{ marginBottom: 10 }}>
                 <label>Message</label>
-                <RichTextEditor value={bodyHtml} onChange={setBodyHtml} minHeight={280} />
+                <RichTextEditor value={bodyHtml} onChange={setBodyHtml} minHeight={420} />
               </div>
 
               <div
@@ -248,40 +266,7 @@ export default function ComposeMailPage() {
                   flexWrap: 'wrap',
                 }}
               >
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <input
-                    id={attachmentInputId}
-                    type="file"
-                    style={{ display: 'none' }}
-                    onChange={(e) => setAttachment(e.target.files?.[0] || null)}
-                    accept=".pdf,.jpg,.jpeg,.png,.webp,.mp4,.xls,.xlsx"
-                  />
-                  <label className="admin-button secondary" htmlFor={attachmentInputId} style={{ cursor: 'pointer' }}>
-                    Add attachment
-                  </label>
-                  {attachment ? (
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        padding: '8px 10px',
-                        borderRadius: 12,
-                        border: '1px solid rgba(0,0,0,0.10)',
-                        background: 'rgba(0,0,0,0.02)',
-                      }}
-                    >
-                      <span style={{ maxWidth: 420, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {attachment.name}
-                      </span>
-                      <button className="admin-button secondary" type="button" onClick={() => setAttachment(null)} style={{ padding: '6px 10px' }}>
-                        Remove
-                      </button>
-                    </div>
-                  ) : (
-                    <span className="admin-subtitle">Optional: attach PDF/image/video/Excel.</span>
-                  )}
-                </div>
+                <span className="admin-help">Rich text formatting is supported for staff mail.</span>
 
                 <button className="admin-button info" type="button" onClick={send} disabled={sending}>
                   {sending ? (scheduleEnabled ? 'Scheduling...' : 'Sending...') : scheduleEnabled ? 'Schedule' : 'Send'}

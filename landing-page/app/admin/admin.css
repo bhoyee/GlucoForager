@@ -1576,6 +1576,89 @@
   background: #fbfdfc;
 }
 
+.admin-compose-card {
+  padding: 22px;
+}
+
+.admin-compose-form {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.admin-compose-fields,
+.admin-compose-message {
+  border: 1px solid #e8f0ec;
+  border-radius: 14px;
+  background: #fbfdfc;
+  padding: 16px;
+}
+
+.admin-compose-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+
+.admin-compose-options {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.7fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.admin-compose-attachment-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.admin-compose-attachment-pill {
+  min-width: 0;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.10);
+  background: #ffffff;
+}
+
+.admin-compose-attachment-pill span {
+  max-width: min(420px, 52vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-compose-message {
+  padding: 18px;
+}
+
+@media (max-width: 860px) {
+  .admin-compose-card,
+  .admin-compose-fields,
+  .admin-compose-message {
+    padding: 14px;
+  }
+
+  .admin-compose-options {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-compose-attachment-pill {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .admin-compose-attachment-pill span {
+    max-width: 100%;
+  }
+}
+
 .admin-alert {
   padding: 12px 14px;
   border-radius: 14px;
