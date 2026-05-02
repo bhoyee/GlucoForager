@@ -1,12 +1,95 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 const PAGE_SIZE = 1;
 const REFRESH_MS = 20000;
+const GROWTH_RANGES = {
+  week: { label: 'Weekly', days: 7, buckets: 7 },
+  month: { label: 'Monthly', days: 30, buckets: 30 },
+  year: { label: 'Yearly', days: 365, buckets: 12 },
+};
+
+function clampPercent(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.max(0, Math.min(100, numeric));
+}
+
+function formatNumber(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return '0';
+  return new Intl.NumberFormat('en-US').format(numeric);
+}
+
+function formatRelativeTime(iso) {
+  if (!iso) return '';
+  try {
+    const diffMs = Date.now() - new Date(iso).getTime();
+    if (!Number.isFinite(diffMs)) return '';
+    const minutes = Math.max(0, Math.floor(diffMs / 60000));
+    if (minutes < 1) return 'just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return `${Math.floor(hours / 24)}d ago`;
+  } catch {
+    return '';
+  }
+}
+
+function KpiTile({ label, value, detail, tone = 'green', href, actionLabel }) {
+  return (
+    <div className={`admin-kpi-tile tone-${tone}`}>
+      <div className="admin-kpi-tile-top">
+        <span>{label}</span>
+        {href ? (
+          <Link className="admin-kpi-tile-link" href={href}>
+            {actionLabel || 'Open'}
+          </Link>
+        ) : null}
+      </div>
+      <div className="admin-kpi-tile-value">{value}</div>
+      {detail ? <div className="admin-kpi-tile-detail">{detail}</div> : null}
+    </div>
+  );
+}
+
+function ProgressBar({ label, value, meta, tone = 'green' }) {
+  return (
+    <div className="admin-kpi-progress-row">
+      <div className="admin-kpi-progress-head">
+        <span>{label}</span>
+        <strong>{meta}</strong>
+      </div>
+      <div className="admin-kpi-progress-track" aria-hidden="true">
+        <div className={`admin-kpi-progress-fill tone-${tone}`} style={{ width: `${clampPercent(value)}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function SectionCard({ title, eyebrow, actionHref, actionLabel, children, className = '' }) {
+  return (
+    <section className={`admin-kpi-panel ${className}`.trim()}>
+      <div className="admin-kpi-panel-head">
+        <div>
+          {eyebrow ? <div className="admin-kpi-eyebrow">{eyebrow}</div> : null}
+          <h3>{title}</h3>
+        </div>
+        {actionHref ? (
+          <Link className="admin-kpi-action" href={actionHref}>
+            {actionLabel || 'View'}
+          </Link>
+        ) : null}
+      </div>
+      {children}
+    </section>
+  );
+}
 
 export default function AdminKPIDashboard() {
   const router = useRouter();
@@ -42,6 +125,20 @@ export default function AdminKPIDashboard() {
       },
     },
   });
+  const [recentUsers, setRecentUsers] = useState([]);
+  const [recentActivity, setRecentActivity] = useState([]);
+  const [actionSummary, setActionSummary] = useState({
+    pendingRequests: 0,
+    pendingComments: 0,
+    unreadNotifications: 0,
+    failedJobs: 0,
+  });
+  const [systemHealth, setSystemHealth] = useState({
+    status: 'unknown',
+    services: {},
+  });
+  const [growthRange, setGrowthRange] = useState('week');
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
   const token = typeof window !== 'undefined' ? localStorage.getItem('adminToken') : null;
 
   const fetchCount = useCallback(
@@ -167,13 +264,33 @@ export default function AdminKPIDashboard() {
           },
           vision: {
             name: typeof visionStream.name === 'string' ? visionStream.name : 'ai:jobs:vision',
-            length: Number.isFinite(Number(textStream.length)) ? Number(textStream.length) : null,
+            length: Number.isFinite(Number(visionStream.length)) ? Number(visionStream.length) : null,
             group: visionStream.group && typeof visionStream.group === 'object' ? visionStream.group : null,
           },
         },
       },
     };
   }, [router, token]);
+
+  const safeDashboardFetch = useCallback(
+    async (path, fallback) => {
+      try {
+        const response = await fetch(`${API_URL}${path}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (response.status === 401) {
+          localStorage.removeItem('adminToken');
+          router.push('/admin');
+          return fallback;
+        }
+        if (!response.ok) return fallback;
+        return await response.json().catch(() => fallback);
+      } catch {
+        return fallback;
+      }
+    },
+    [router, token]
+  );
 
   const loadStats = useCallback(async () => {
     if (!token) {
@@ -192,6 +309,12 @@ export default function AdminKPIDashboard() {
         salesData,
         imageUsageData,
         queueMetricsData,
+        recentUsersData,
+        userActivityData,
+        pendingRequestsData,
+        pendingCommentsData,
+        unreadNotificationsData,
+        healthData,
       ] = await Promise.all([
         fetchCount(),
         fetchCount('free'),
@@ -215,6 +338,12 @@ export default function AdminKPIDashboard() {
         fetchSales(),
         fetchImageUsage(),
         fetchQueueMetrics(),
+        safeDashboardFetch('/api/admin/users?page=1&page_size=100&sort=created_at&order=desc', { items: [] }),
+        safeDashboardFetch('/api/admin/user-activity/recent?limit=8', { items: [] }),
+        safeDashboardFetch('/api/admin/requests/pending-count', { count: 0 }),
+        safeDashboardFetch('/api/admin/blog/comments?page=1&page_size=1&status_filter=pending', { total: 0 }),
+        safeDashboardFetch('/api/admin/staff-notifications?unread_only=1&limit=200', { items: [] }),
+        safeDashboardFetch('/api/admin/health', { status: 'unknown', services: {} }),
       ]);
 
       if (
@@ -243,6 +372,16 @@ export default function AdminKPIDashboard() {
       setSales(salesData);
       setImageUsage(imageUsageData);
       setQueueMetrics(queueMetricsData);
+      setRecentUsers(Array.isArray(recentUsersData?.items) ? recentUsersData.items : []);
+      setRecentActivity(Array.isArray(userActivityData?.items) ? userActivityData.items : []);
+      setActionSummary({
+        pendingRequests: Number(pendingRequestsData?.count || 0) || 0,
+        pendingComments: Number(pendingCommentsData?.total || 0) || 0,
+        unreadNotifications: Array.isArray(unreadNotificationsData?.items) ? unreadNotificationsData.items.length : 0,
+        failedJobs: Number(healthData?.services?.queue?.failed_operational || 0) || 0,
+      });
+      setSystemHealth(healthData && typeof healthData === 'object' ? healthData : { status: 'unknown', services: {} });
+      setLastUpdatedAt(new Date().toISOString());
     } catch (error) {
       setStats({
         totalUsers: 0,
@@ -271,12 +410,16 @@ export default function AdminKPIDashboard() {
           },
         },
       });
+      setRecentUsers([]);
+      setRecentActivity([]);
+      setActionSummary({ pendingRequests: 0, pendingComments: 0, unreadNotifications: 0, failedJobs: 0 });
+      setSystemHealth({ status: 'unknown', services: {} });
     }
-  }, [fetchBlogPostCount, fetchCount, fetchQueueMetrics, fetchSales, fetchImageUsage, router, token]);
+  }, [fetchBlogPostCount, fetchCount, fetchQueueMetrics, fetchSales, fetchImageUsage, router, safeDashboardFetch, token]);
 
   const formatMoney = useCallback((value, currency) => {
     const numeric = typeof value === 'number' ? value : Number(value);
-    if (!Number.isFinite(numeric)) return '—';
+    if (!Number.isFinite(numeric)) return '--';
     try {
       return new Intl.NumberFormat('en-US', {
         style: 'currency',
@@ -301,135 +444,376 @@ export default function AdminKPIDashboard() {
     return () => clearInterval(timer);
   }, [loadStats]);
 
+  const premiumRate = stats.totalUsers ? (stats.premiumUsers / stats.totalUsers) * 100 : 0;
+  const activePremiumRate = stats.premiumUsers ? (stats.activePremiumUsers / stats.premiumUsers) * 100 : 0;
+  const freeRate = stats.totalUsers ? (stats.freeUsers / stats.totalUsers) * 100 : 0;
+  const contentTotal = stats.totalRecipes + stats.totalBlogPosts;
+  const recipeRate = contentTotal ? (stats.totalRecipes / contentTotal) * 100 : 0;
+  const textQueueLength = queueMetrics.redis?.streams?.text?.length ?? 0;
+  const visionQueueLength = queueMetrics.redis?.streams?.vision?.length ?? 0;
+  const queueTotal = Number(textQueueLength || 0) + Number(visionQueueLength || 0);
+  const liveStatus = queueMetrics.backend === 'redis' ? (queueMetrics.redis?.available ? 'Live' : 'Degraded') : 'DB queue';
+  const lastUpdatedLabel = useMemo(() => {
+    if (!lastUpdatedAt) return '';
+    try {
+      return new Date(lastUpdatedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return '';
+    }
+  }, [lastUpdatedAt]);
+
+  const imagePeak = Math.max(
+    1,
+    Number(imageUsage.today?.count || 0),
+    Number(imageUsage.week?.count || 0),
+    Number(imageUsage.month?.count || 0)
+  );
+  const queuePeak = Math.max(1, Number(textQueueLength || 0), Number(visionQueueLength || 0));
+  const actionItems = [
+    {
+      label: 'Pending requests',
+      value: actionSummary.pendingRequests,
+      href: '/admin/requests/manage',
+      tone: actionSummary.pendingRequests > 0 ? 'warning' : 'good',
+    },
+    {
+      label: 'Comments to review',
+      value: actionSummary.pendingComments,
+      href: '/admin/blog/comments',
+      tone: actionSummary.pendingComments > 0 ? 'warning' : 'good',
+    },
+    {
+      label: 'Unread notifications',
+      value: actionSummary.unreadNotifications,
+      href: '/admin/inbox',
+      tone: actionSummary.unreadNotifications > 0 ? 'info' : 'good',
+    },
+    {
+      label: 'Operational AI failures',
+      value: actionSummary.failedJobs,
+      href: '/admin/system-health',
+      tone: actionSummary.failedJobs > 0 ? 'danger' : 'good',
+    },
+  ];
+  const serviceRows = ['application', 'database', 'cache', 'queue', 'mail', 'storage', 'disk', 'cpu'].map((key) => ({
+    key,
+    label: key.charAt(0).toUpperCase() + key.slice(1),
+    status: systemHealth.services?.[key]?.status || 'unknown',
+    detail: systemHealth.services?.[key]?.detail || '',
+  }));
+  const signupSeries = useMemo(() => {
+    const today = new Date();
+    const dayMs = 24 * 60 * 60 * 1000;
+    const range = GROWTH_RANGES[growthRange] || GROWTH_RANGES.week;
+
+    if (growthRange === 'year') {
+      return Array.from({ length: range.buckets }).map((_, index) => {
+        const date = new Date(today.getFullYear(), today.getMonth() - (range.buckets - 1 - index), 1);
+        const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        const count = recentUsers.filter((u) => String(u?.created_at || '').slice(0, 7) === key).length;
+        return {
+          key,
+          label: date.toLocaleDateString(undefined, { month: 'short' }),
+          count,
+        };
+      });
+    }
+
+    return Array.from({ length: range.buckets }).map((_, index) => {
+      const date = new Date(today.getTime() - (range.buckets - 1 - index) * dayMs);
+      const key = date.toISOString().slice(0, 10);
+      const count = recentUsers.filter((u) => String(u?.created_at || '').slice(0, 10) === key).length;
+      return {
+        key,
+        label:
+          growthRange === 'week'
+            ? date.toLocaleDateString(undefined, { weekday: 'short' })
+            : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+        count,
+      };
+    });
+  }, [growthRange, recentUsers]);
+  const signupPeak = Math.max(1, ...signupSeries.map((d) => d.count));
+  const signupTotal = signupSeries.reduce((sum, d) => sum + Number(d.count || 0), 0);
+  const signupAverage = signupSeries.length ? signupTotal / signupSeries.length : 0;
+  const signupChartPoints = signupSeries.map((day, index) => {
+    const x = signupSeries.length <= 1 ? 0 : (index / (signupSeries.length - 1)) * 100;
+    const y = 88 - (Number(day.count || 0) / signupPeak) * 72;
+    return { ...day, x, y };
+  });
+  const signupLinePoints = signupChartPoints.map((p) => `${p.x},${p.y}`).join(' ');
+  const signupAreaPoints = signupChartPoints.length
+    ? `0,92 ${signupChartPoints.map((p) => `${p.x},${p.y}`).join(' ')} 100,92`
+    : '';
+
   return (
-    <div className="admin-card">
-      <h2 className="admin-title">Dashboard</h2>
-      <p className="admin-subtitle">Quick overview of your user base.</p>
-
-      <div className="admin-grid">
-        <div className="admin-card">
-          <h3>Total recipes</h3>
-          <p style={{ fontSize: '32px', fontWeight: 700 }}>{stats.totalRecipes}</p>
-          <Link className="admin-link" href="/admin/recipes">
-            Manage recipes
-          </Link>
-          <p className="admin-subtitle" style={{ marginTop: 10 }}>
-            Blog posts: <strong>{stats.totalBlogPosts}</strong>
+    <div className="admin-kpi-dashboard">
+      <section className="admin-kpi-hero">
+        <div>
+          <div className="admin-kpi-eyebrow">Executive overview</div>
+          <h2 className="admin-kpi-title">Admin Dashboard</h2>
+          <p className="admin-kpi-subtitle">
+            Live operating snapshot across users, content, revenue, AI usage, and queue health.
           </p>
-          <Link className="admin-link" href="/admin/blog">
-            Manage blog
-          </Link>
         </div>
-        <div className="admin-card">
-          <h3>Total users</h3>
-          <p style={{ fontSize: '32px', fontWeight: 700 }}>{stats.totalUsers}</p>
-          <div className="admin-inline admin-subcards">
-            <div className="admin-subcard">
-              <span>Free users</span>
-              <strong>{stats.freeUsers}</strong>
+        <div className="admin-kpi-hero-side">
+          <span className={`admin-kpi-status ${liveStatus === 'Degraded' ? 'danger' : ''}`}>
+            <span aria-hidden="true" />
+            {liveStatus}
+          </span>
+          <div className="admin-kpi-updated" suppressHydrationWarning>
+            {lastUpdatedLabel ? `Updated ${lastUpdatedLabel}` : 'Auto-refreshing'}
+          </div>
+        </div>
+      </section>
+
+      <div className="admin-kpi-tiles">
+        <KpiTile
+          label="Total users"
+          value={formatNumber(stats.totalUsers)}
+          detail={`${formatNumber(stats.premiumUsers)} premium accounts`}
+          href="/admin/users"
+          actionLabel="Users"
+        />
+        <KpiTile
+          label="Premium health"
+          value={`${Math.round(clampPercent(activePremiumRate))}%`}
+          detail={`${formatNumber(stats.activePremiumUsers)} active / ${formatNumber(stats.expiredPremiumUsers)} expired`}
+          tone="blue"
+          href="/admin/users"
+          actionLabel="Review"
+        />
+        <KpiTile
+          label="Revenue window"
+          value={sales.available ? formatMoney(sales.metrics?.revenue, sales.currency) : '--'}
+          detail={sales.available ? 'RevenueCat overview period' : sales.message || 'RevenueCat not configured'}
+          tone="gold"
+        />
+        <KpiTile
+          label="AI queue"
+          value={formatNumber(queueTotal)}
+          detail={`${formatNumber(textQueueLength)} text / ${formatNumber(visionQueueLength)} vision`}
+          tone={queueTotal > 0 ? 'orange' : 'green'}
+          href="/admin/system-health"
+          actionLabel="Health"
+        />
+      </div>
+
+      <div className="admin-kpi-layout">
+        <SectionCard title="User mix" eyebrow="Audience" actionHref="/admin/users" actionLabel="Manage">
+          <div className="admin-kpi-user-mix">
+            <div
+              className="admin-kpi-donut"
+              style={{
+                '--premium': `${clampPercent(premiumRate)}%`,
+                '--free': `${clampPercent(freeRate)}%`,
+              }}
+              aria-label={`Premium users ${Math.round(clampPercent(premiumRate))} percent`}
+            >
+              <div>
+                <strong>{Math.round(clampPercent(premiumRate))}%</strong>
+                <span>Premium</span>
+              </div>
             </div>
-            <div className="admin-subcard">
-              <span>Premium users</span>
-              <strong>{stats.premiumUsers}</strong>
-            </div>
-            <div className="admin-subcard">
-              <span>Active premium</span>
-              <strong>{stats.activePremiumUsers}</strong>
-            </div>
-            <div className="admin-subcard">
-              <span>Expired premium</span>
-              <strong>{stats.expiredPremiumUsers}</strong>
+            <div className="admin-kpi-stack">
+              <ProgressBar label="Free users" value={freeRate} meta={formatNumber(stats.freeUsers)} />
+              <ProgressBar label="Premium users" value={premiumRate} meta={formatNumber(stats.premiumUsers)} tone="blue" />
+              <ProgressBar label="Active premium" value={activePremiumRate} meta={formatNumber(stats.activePremiumUsers)} tone="gold" />
             </div>
           </div>
-          <Link className="admin-link" href="/admin/users">
-            Manage users
-          </Link>
-        </div>
-        <div className="admin-card">
-          <h3>Sales</h3>
-          <p className="admin-subtitle">Live RevenueCat overview metrics.</p>
-          <div className="admin-inline admin-subcards" style={{ marginTop: 0 }}>
-            <div className="admin-subcard">
-              <span>This month</span>
-              <strong suppressHydrationWarning>
-                {sales.available ? formatMoney(sales.metrics?.revenue, sales.currency) : '—'}
-              </strong>
+        </SectionCard>
+
+        <SectionCard title="Content library" eyebrow="Product surface" actionHref="/admin/recipes" actionLabel="Recipes">
+          <div className="admin-kpi-content-grid">
+            <div className="admin-kpi-content-card">
+              <span>Recipes</span>
+              <strong>{formatNumber(stats.totalRecipes)}</strong>
+              <Link href="/admin/recipes">Manage recipes</Link>
             </div>
-            <div className="admin-subcard">
+            <div className="admin-kpi-content-card">
+              <span>Blog posts</span>
+              <strong>{formatNumber(stats.totalBlogPosts)}</strong>
+              <Link href="/admin/blog">Manage blog</Link>
+            </div>
+          </div>
+          <ProgressBar label="Recipe share of content" value={recipeRate} meta={`${Math.round(clampPercent(recipeRate))}%`} tone="green" />
+        </SectionCard>
+
+        <SectionCard title="Revenue" eyebrow="RevenueCat" className="admin-kpi-wide">
+          <div className="admin-kpi-revenue-grid">
+            <div>
+              <span>Overview revenue</span>
+              <strong suppressHydrationWarning>{sales.available ? formatMoney(sales.metrics?.revenue, sales.currency) : '--'}</strong>
+            </div>
+            <div>
               <span>Total sales</span>
-              <strong suppressHydrationWarning>
-                {sales.available ? formatMoney(sales.metrics?.revenue_total, sales.currency) : '—'}
-              </strong>
+              <strong suppressHydrationWarning>{sales.available ? formatMoney(sales.metrics?.revenue_total, sales.currency) : '--'}</strong>
             </div>
           </div>
-          {!sales.available && (
-            <p className="admin-help" style={{ marginTop: 10 }}>
-              {sales.message || 'RevenueCat metrics not configured.'}
-            </p>
-          )}
-          {sales.available && (
-            <p className="admin-help" style={{ marginTop: 10 }}>
-              Note: RevenueCat “overview” revenue is typically the last 28 days (not calendar-month). All-time totals
-              may require data export.
-            </p>
-          )}
-        </div>
-        <div className="admin-card">
-          <h3>Recipe images</h3>
-          <p className="admin-subtitle">AI recipe image generations (estimated spend).</p>
-          <div className="admin-inline admin-subcards" style={{ marginTop: 0 }}>
-            <div className="admin-subcard">
-              <span>Today</span>
-              <strong>
-                {imageUsage.today?.count} /{' '}
-                <span suppressHydrationWarning>{formatMoney(imageUsage.today?.cost_usd, imageUsage.currency)}</span>
-              </strong>
-            </div>
-            <div className="admin-subcard">
-              <span>This week</span>
-              <strong>
-                {imageUsage.week?.count} /{' '}
-                <span suppressHydrationWarning>{formatMoney(imageUsage.week?.cost_usd, imageUsage.currency)}</span>
-              </strong>
-            </div>
-            <div className="admin-subcard">
-              <span>This month</span>
-              <strong>
-                {imageUsage.month?.count} /{' '}
-                <span suppressHydrationWarning>{formatMoney(imageUsage.month?.cost_usd, imageUsage.currency)}</span>
-              </strong>
-            </div>
+          <div className="admin-kpi-note">
+            {sales.available
+              ? 'RevenueCat overview revenue is typically a recent rolling period. Export data for exact all-time reporting.'
+              : sales.message || 'RevenueCat metrics are not configured yet.'}
           </div>
-          <Link className="admin-link" href="/admin/recipes">
-            Manage recipes
-          </Link>
-        </div>
-        <div className="admin-card">
-          <h3>AI queue</h3>
-          <p className="admin-subtitle">Queue backend status and stream size.</p>
+        </SectionCard>
 
-          <p className="admin-help">
-            Backend: <strong>{queueMetrics.backend}</strong>
-          </p>
-          {queueMetrics.backend === 'redis' && (
-            <p className="admin-help">
-              Redis: <strong>{queueMetrics.redis?.available ? 'available' : 'unavailable'}</strong>
-            </p>
-          )}
-          <div className="admin-inline admin-subcards" style={{ marginTop: 10 }}>
-            <div className="admin-subcard">
-              <span>Text stream</span>
-              <strong>{queueMetrics.redis?.streams?.text?.length ?? '—'}</strong>
+        <SectionCard title="Recipe image usage" eyebrow="AI spend" actionHref="/admin/recipes" actionLabel="Recipes">
+          <div className="admin-kpi-bars" aria-label="AI recipe image usage">
+            {[
+              ['Today', imageUsage.today],
+              ['Week', imageUsage.week],
+              ['Month', imageUsage.month],
+            ].map(([label, item], index) => {
+              const count = Number(item?.count || 0);
+              return (
+                <div key={label} className="admin-kpi-bar-item">
+                  <div className="admin-kpi-bar-track">
+                    <div
+                      className={`admin-kpi-bar-fill tone-${index + 1}`}
+                      style={{ height: `${Math.max(8, clampPercent((count / imagePeak) * 100))}%` }}
+                    />
+                  </div>
+                  <strong>{formatNumber(count)}</strong>
+                  <span>{label}</span>
+                  <small suppressHydrationWarning>{formatMoney(item?.cost_usd, imageUsage.currency)}</small>
+                </div>
+              );
+            })}
+          </div>
+        </SectionCard>
+
+        <SectionCard title="AI queue health" eyebrow="Operations" actionHref="/admin/system-health" actionLabel="Open health">
+          <div className="admin-kpi-queue-meta">
+            <div>
+              <span>Backend</span>
+              <strong>{queueMetrics.backend}</strong>
             </div>
-            <div className="admin-subcard">
-              <span>Vision stream</span>
-              <strong>{queueMetrics.redis?.streams?.vision?.length ?? '—'}</strong>
+            <div>
+              <span>Redis</span>
+              <strong>{queueMetrics.backend === 'redis' ? (queueMetrics.redis?.available ? 'Available' : 'Unavailable') : 'Not active'}</strong>
             </div>
           </div>
-          <Link className="admin-link" href="/admin/system-health">
-            View system health
-          </Link>
-        </div>
+          <div className="admin-kpi-queue-bars">
+            <ProgressBar label="Text stream" value={(Number(textQueueLength || 0) / queuePeak) * 100} meta={formatNumber(textQueueLength)} tone="blue" />
+            <ProgressBar
+              label="Vision stream"
+              value={(Number(visionQueueLength || 0) / queuePeak) * 100}
+              meta={formatNumber(visionQueueLength)}
+              tone="gold"
+            />
+          </div>
+        </SectionCard>
+
+        <SectionCard title="Action required" eyebrow="Operations queue" className="admin-kpi-wide">
+          <div className="admin-kpi-action-grid">
+            {actionItems.map((item) => (
+              <Link key={item.label} className={`admin-kpi-action-card tone-${item.tone}`} href={item.href}>
+                <span>{item.label}</span>
+                <strong>{formatNumber(item.value)}</strong>
+              </Link>
+            ))}
+          </div>
+        </SectionCard>
+
+        <SectionCard title="User growth" eyebrow="Recent signups" actionHref="/admin/users" actionLabel="Users" className="admin-kpi-equal-panel">
+          <div className="admin-kpi-chart-toolbar" role="tablist" aria-label="User growth range">
+            {Object.entries(GROWTH_RANGES).map(([key, range]) => (
+              <button
+                key={key}
+                type="button"
+                className={growthRange === key ? 'active' : ''}
+                onClick={() => setGrowthRange(key)}
+                role="tab"
+                aria-selected={growthRange === key}
+              >
+                {range.label}
+              </button>
+            ))}
+          </div>
+          <div className="admin-kpi-growth-summary">
+            <div>
+              <span>Total signups</span>
+              <strong>{formatNumber(signupTotal)}</strong>
+            </div>
+            <div>
+              <span>Average</span>
+              <strong>{signupAverage.toFixed(1)}</strong>
+            </div>
+          </div>
+          <div className="admin-kpi-line-chart" aria-label={`${GROWTH_RANGES[growthRange]?.label || 'Weekly'} user growth chart`}>
+            <div className="admin-kpi-chart-axis">
+              <span>{formatNumber(signupPeak)}</span>
+              <span>{formatNumber(Math.round(signupPeak / 2))}</span>
+              <span>0</span>
+            </div>
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img">
+              <defs>
+                <linearGradient id="signupArea" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stopColor="#2563eb" stopOpacity="0.22" />
+                  <stop offset="100%" stopColor="#2563eb" stopOpacity="0.02" />
+                </linearGradient>
+              </defs>
+              <line x1="0" x2="100" y1="16" y2="16" />
+              <line x1="0" x2="100" y1="52" y2="52" />
+              <line x1="0" x2="100" y1="88" y2="88" />
+              {signupAreaPoints ? <polygon points={signupAreaPoints} fill="url(#signupArea)" /> : null}
+              {signupLinePoints ? <polyline points={signupLinePoints} /> : null}
+              {signupChartPoints.map((point) => (
+                <circle key={point.key} cx={point.x} cy={point.y} r="1.45">
+                  <title>{`${point.key}: ${point.count} signups`}</title>
+                </circle>
+              ))}
+            </svg>
+          </div>
+          <div className="admin-kpi-chart-labels">
+            {signupChartPoints
+              .filter((_, index) => {
+                if (growthRange !== 'month') return true;
+                return index === 0 || index === signupChartPoints.length - 1 || index % 7 === 0;
+              })
+              .map((day) => (
+                <span key={day.key}>{day.label}</span>
+              ))}
+          </div>
+        </SectionCard>
+
+        <SectionCard title="System health" eyebrow="Live services" actionHref="/admin/system-health" actionLabel="Details" className="admin-kpi-equal-panel">
+          <div className="admin-kpi-health-list">
+            {serviceRows.map((service) => (
+              <div key={service.key} className="admin-kpi-health-row">
+                <span className={`admin-kpi-health-dot status-${service.status}`} aria-hidden="true" />
+                <div>
+                  <strong>{service.label}</strong>
+                  {service.detail ? <span>{service.detail}</span> : null}
+                </div>
+                <em>{service.status}</em>
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+
+        <SectionCard title="Recent app activity" eyebrow="Mobile users" actionHref="/admin/users/activity" actionLabel="View all" className="admin-kpi-wide">
+          {recentActivity.length ? (
+            <div className="admin-kpi-activity-list">
+              {recentActivity.slice(0, 8).map((item) => (
+                <div key={item.id} className="admin-kpi-activity-row">
+                  <div className="admin-kpi-activity-mark" aria-hidden="true">
+                    {String(item.user_name || item.user_email || 'U').slice(0, 1).toUpperCase()}
+                  </div>
+                  <div>
+                    <strong>{item.label || String(item.event_type || '').replace(/\./g, ' ') || 'Activity'}</strong>
+                    <span>
+                      {item.user_name || item.user_email || `User #${item.user_id}`} {item.source ? `via ${item.source}` : ''}
+                    </span>
+                  </div>
+                  <time suppressHydrationWarning>{formatRelativeTime(item.created_at)}</time>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="admin-kpi-note">Recent mobile app activity will appear here as users generate recipes, save favorites, and create plans.</div>
+          )}
+        </SectionCard>
       </div>
     </div>
   );
