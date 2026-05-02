@@ -26,6 +26,7 @@ from ...services.subscription_service import get_effective_subscription_tier
 from ...models.recipe_history import RecipeHistory
 from ...services.redis_ai_queue import RedisAIQueue
 from ...services.system_log_service import log_system_event
+from ...services.user_activity_service import add_user_activity
 
 router = APIRouter(prefix="/ai/recipes", tags=["ai"])
 pipeline = AIPipeline()
@@ -153,6 +154,19 @@ def _run_vision_job(job_id: str) -> None:
             except Exception:
                 pass
             return
+        add_user_activity(
+            db,
+            user_id=user.id,
+            event_type="scan_analysis.running",
+            label="Scan analysis started",
+            source="mobile",
+            metadata={
+                "job_id": job_id,
+                "mode": mode,
+                "images_count": len(images_base64) if isinstance(images_base64, list) else None,
+                "include_recipes": include_recipes,
+            },
+        )
 
         tier = get_effective_subscription_tier(db, user) or "free"
         try:
@@ -230,6 +244,19 @@ def _run_vision_job(job_id: str) -> None:
         }
         job.status = "completed"
         job.error = None
+        add_user_activity(
+            db,
+            user_id=user.id,
+            event_type="scan_analysis.completed",
+            label="Completed scan analysis",
+            source="mobile",
+            metadata={
+                "job_id": job_id,
+                "mode": mode,
+                "detected_count": len((result or {}).get("detected") or []),
+                "recipes_count": len((result or {}).get("recipes") or []),
+            },
+        )
         db.commit()
         try:
             log_system_event(
@@ -577,6 +604,19 @@ def generate_from_vision_async(
         },
     )
     db.add(job)
+    add_user_activity(
+        db,
+        user_id=current_user.id,
+        event_type="scan_analysis.started",
+        label="Started scan analysis",
+        source="mobile",
+        metadata={
+            "job_id": job_id,
+            "mode": "single",
+            "images_count": 1,
+            "include_recipes": bool(payload.include_recipes),
+        },
+    )
     db.commit()
     backend = (core_settings.ai_queue_backend or "db").strip().lower()
     if backend == "redis":
@@ -642,6 +682,19 @@ def generate_from_vision_batch_async(
         },
     )
     db.add(job)
+    add_user_activity(
+        db,
+        user_id=current_user.id,
+        event_type="scan_analysis.started",
+        label="Started scan analysis",
+        source="mobile",
+        metadata={
+            "job_id": job_id,
+            "mode": "batch",
+            "images_count": len(payload.images_base64 or []),
+            "include_recipes": bool(payload.include_recipes),
+        },
+    )
     db.commit()
     backend = (core_settings.ai_queue_backend or "db").strip().lower()
     if backend == "redis":

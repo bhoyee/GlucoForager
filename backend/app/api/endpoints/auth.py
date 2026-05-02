@@ -24,6 +24,7 @@ from ...models.user import User
 from ...services.email_service import send_admin_signup_alert, send_password_reset_code, send_welcome_email
 from ...services.login_throttler import LoginThrottler
 from ...services.settings_service import get_signup_notification_settings
+from ...services.user_activity_service import add_user_activity, touch_user_activity
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
@@ -237,6 +238,16 @@ def login(
         )
 
     login_throttler.record_success(identifier)
+    add_user_activity(
+        db,
+        user_id=user.id,
+        event_type="auth.login",
+        label="Signed in",
+        source="app",
+        metadata={"method": "token"},
+        commit=True,
+    )
+    touch_user_activity(db, user, min_interval_seconds=0)
     access_token = create_access_token({"sub": str(user.id)})
     refresh_token = _issue_refresh_token(db, user.id)
     return Token(
@@ -299,6 +310,20 @@ def login_alias(
         db.commit()
 
     login_throttler.record_success(identifier)
+    add_user_activity(
+        db,
+        user_id=user.id,
+        event_type="auth.login",
+        label="Signed in",
+        source="mobile",
+        metadata={
+            "platform": payload.client.platform if payload.client else None,
+            "app_version": payload.client.app_version if payload.client else None,
+            "build_number": payload.client.build_number if payload.client else None,
+        },
+        commit=True,
+    )
+    touch_user_activity(db, user, min_interval_seconds=0)
     access_token = create_access_token({"sub": str(user.id)})
     refresh_token = _issue_refresh_token(db, user.id)
     return Token(
@@ -360,6 +385,13 @@ def logout(payload: RefreshTokenPayload, db: Session = Depends(get_db)):
         .first()
     )
     if token:
+        add_user_activity(
+            db,
+            user_id=token.user_id,
+            event_type="auth.logout",
+            label="Signed out",
+            source="mobile",
+        )
         token.revoked_at = datetime.utcnow()
         db.commit()
     return {"message": "Logged out"}

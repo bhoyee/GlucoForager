@@ -22,6 +22,7 @@ from ...models.push_token import PushToken
 from ...models.admin_push_send import AdminPushSendFailure
 from ...models.user import SearchLog, User
 from ...models.user_daily_challenge import UserDailyChallenge
+from ...models.user_activity_event import UserActivityEvent
 from ..dependencies import check_user_access, get_current_user
 from ...services.subscription_service import get_effective_subscription_tier
 
@@ -390,6 +391,7 @@ def delete_account(
         db.query(MealPlan).filter(MealPlan.user_id == user_id).delete(synchronize_session=False)
         db.query(UserDailyChallenge).filter(UserDailyChallenge.user_id == user_id).delete(synchronize_session=False)
         db.query(ShoppingItem).filter(ShoppingItem.user_id == user_id).delete(synchronize_session=False)
+        db.query(UserActivityEvent).filter(UserActivityEvent.user_id == user_id).delete(synchronize_session=False)
         db.query(PushToken).filter(PushToken.user_id == user_id).delete(synchronize_session=False)
         db.delete(current_user)
         db.commit()

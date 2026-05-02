@@ -1,6 +1,7 @@
 """SQLAlchemy models."""
 
 from .user import User, SearchLog  # noqa: F401
+from .user_activity_event import UserActivityEvent  # noqa: F401
 from .subscription import Subscription  # noqa: F401
 from .ai_request import AIRequest  # noqa: F401
 from .ai_job import AIJob  # noqa: F401

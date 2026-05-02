@@ -27,6 +27,7 @@ class User(Base):
     premium_access_blocked_reason = Column(String, nullable=True)
     suspended_at = Column(DateTime, nullable=True)
     suspended_reason = Column(String, nullable=True)
+    last_active_at = Column(DateTime, nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Food profile (onboarding-driven). All fields are optional so existing users are not forced.

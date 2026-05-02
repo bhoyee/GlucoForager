@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from ...database import get_db
 from ...models.shopping_item import ShoppingItem
 from ...models.user import User
+from ...services.user_activity_service import add_user_activity
 from ..dependencies import get_current_user
 
 router = APIRouter(prefix="/shopping-list", tags=["shopping-list"])
@@ -38,5 +39,13 @@ def create_shopping_list(
 ):
     row = ShoppingItem(user_id=current_user.id, title=payload.title, items=payload.items)
     db.add(row)
+    add_user_activity(
+        db,
+        user_id=current_user.id,
+        event_type="shopping_list.created",
+        label="Created a shopping list",
+        source="mobile",
+        metadata={"title": payload.title, "item_count": len(payload.items or [])},
+    )
     db.commit()
     return {"detail": "Created", "id": row.id}

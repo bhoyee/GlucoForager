@@ -25,6 +25,7 @@ from ...models.shopping_item import ShoppingItem
 from ...models.refresh_token import RefreshToken
 from ...models.subscription import Subscription
 from ...models.user import SearchLog, User
+from ...models.user_activity_event import UserActivityEvent
 from ...services.redis_ai_queue import RedisAIQueue
 from ...services.recipe_upload_storage_service import store_recipe_image_upload
 from ...services.staff_rbac_service import StaffRBACService
@@ -356,6 +357,7 @@ def list_users(
                 "premium_access_blocked_reason": user.premium_access_blocked_reason,
                 "suspended_at": user.suspended_at,
                 "suspended_reason": user.suspended_reason,
+                "last_active_at": user.last_active_at,
                 "created_at": user.created_at,
             }
         )
@@ -449,6 +451,7 @@ def get_user_detail(
         "premium_access_blocked_reason": user.premium_access_blocked_reason,
         "suspended_at": user.suspended_at,
         "suspended_reason": user.suspended_reason,
+        "last_active_at": user.last_active_at,
         "created_at": user.created_at,
         "subscriptions": [
             {
@@ -645,6 +648,7 @@ def delete_user(
     db.query(ShoppingItem).filter(ShoppingItem.user_id == user.id).delete(synchronize_session=False)
     db.query(Subscription).filter(Subscription.user_id == user.id).delete(synchronize_session=False)
     db.query(SearchLog).filter(SearchLog.user_id == user.id).delete(synchronize_session=False)
+    db.query(UserActivityEvent).filter(UserActivityEvent.user_id == user.id).delete(synchronize_session=False)
     db.delete(user)
     db.commit()
     return {"status": "deleted"}

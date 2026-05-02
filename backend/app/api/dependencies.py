@@ -11,6 +11,7 @@ from ..models.ai_request import AIRequest
 from ..models.user import SearchLog, User
 from ..services.settings_service import get_scan_limit_settings
 from ..services.subscription_service import get_effective_subscription_tier
+from ..services.user_activity_service import touch_user_activity
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 
@@ -35,6 +36,7 @@ def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account locked. Contact support: hello@glucoforager.com",
         )
+    touch_user_activity(db, user)
     return user
 
 
