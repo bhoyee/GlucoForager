@@ -119,6 +119,7 @@ export default function LoginScreen() {
           <Text style={styles.kicker}>Welcome back</Text>
           <Text style={styles.title}>GlucoForager</Text>
           <Text style={styles.subtitle}>Sign in to continue.</Text>
+          {__DEV__ ? <Text style={styles.devApiText}>API: {API_URL}</Text> : null}
         </View>
 
         {/* Form */}
@@ -316,6 +317,13 @@ const styles = StyleSheet.create({
     color: Colors.textLight,
     textAlign: 'center',
     fontWeight: '600',
+  },
+  devApiText: {
+    marginTop: 10,
+    fontSize: 11,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    fontWeight: '700',
   },
   form: {
     paddingHorizontal: 20,
