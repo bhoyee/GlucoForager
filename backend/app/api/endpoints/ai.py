@@ -9,6 +9,7 @@ from ...services.ai_recipe_generator import AIRecipeGenerator
 from ...services.ai_vision import AIVisionService
 from ...services.cost_tracker import record_ai_request
 from ...services.subscription_service import get_effective_subscription_tier
+from ...services.user_activity_service import add_user_activity
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 vision_service = AIVisionService()
@@ -68,6 +69,15 @@ def generate_recipes(
         recipes = recipe_service.generate(payload.ingredients, tier=tier, generate_images=False)
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
-    db.add(SearchLog(user_id=current_user.id, device_id=device_id, query=",".join(payload.ingredients)))
+    query = ",".join(payload.ingredients)
+    db.add(SearchLog(user_id=current_user.id, device_id=device_id, query=query))
+    add_user_activity(
+        db,
+        user_id=current_user.id,
+        event_type="recipe.search",
+        label="Generated recipes from ingredients",
+        source="mobile",
+        metadata={"ingredients_count": len(payload.ingredients or []), "query": query[:160]},
+    )
     db.commit()
     return {"results": recipes, "access": access}

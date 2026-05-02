@@ -14,6 +14,7 @@ from ...services.cost_tracker import record_ai_request
 from ...services.daily_plan_service import DailyPlanService
 from ...services.food_profile_service import extract_food_profile, build_food_profile_instructions
 from ...services.subscription_service import get_effective_subscription_tier
+from ...services.user_activity_service import add_user_activity
 from ...services.recipe_image_attach_service import attach_recipe_images
 from ...services.system_log_service import log_system_event
 
@@ -377,6 +378,14 @@ def generate_today_plan(
     if existing:
         existing.recipes = payload_to_store
         db.add(existing)
+        add_user_activity(
+            db,
+            user_id=current_user.id,
+            event_type="daily_plan.updated",
+            label="Updated daily meal plan",
+            source="mobile",
+            metadata={"plan_date": today.isoformat(), "meal_count": len(meals or [])},
+        )
         db.commit()
         db.refresh(existing)
         return {
@@ -391,6 +400,14 @@ def generate_today_plan(
 
     plan = MealPlan(user_id=current_user.id, plan_date=today, recipes=payload_to_store)
     db.add(plan)
+    add_user_activity(
+        db,
+        user_id=current_user.id,
+        event_type="daily_plan.created",
+        label="Created daily meal plan",
+        source="mobile",
+        metadata={"plan_date": today.isoformat(), "meal_count": len(meals or [])},
+    )
     db.commit()
     db.refresh(plan)
     return {

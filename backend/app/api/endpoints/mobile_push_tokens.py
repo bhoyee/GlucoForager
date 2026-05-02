@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from ..dependencies import get_current_user
 from ...database import get_db
 from ...models.push_token import PushToken
+from ...services.user_activity_service import add_user_activity
 
 
 router = APIRouter(prefix="/mobile/push-tokens", tags=["mobile-push-tokens"])
@@ -66,6 +67,14 @@ def upsert_push_token(
         row.updated_at = now
         row.last_seen_at = now
 
+    add_user_activity(
+        db,
+        user_id=user.id,
+        event_type="push_token.updated",
+        label="Updated notification token",
+        source="mobile",
+        metadata={"platform": platform, "enabled": bool(payload.enabled)},
+    )
     db.commit()
     return {"status": "ok", "enabled": row.enabled}
 
