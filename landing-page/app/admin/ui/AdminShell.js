@@ -28,6 +28,8 @@ export default function AdminShell({ children }) {
   const [requestsPendingCount, setRequestsPendingCount] = useState(0);
   const [workLogsOpenCount, setWorkLogsOpenCount] = useState(0);
   const [workLogsSubmittedUnreadCount, setWorkLogsSubmittedUnreadCount] = useState(0);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef(null);
   const prevWorkLogsOpenCountRef = useRef(0);
 
   const loadSession = useCallback(async () => {
@@ -221,7 +223,25 @@ export default function AdminShell({ children }) {
   useEffect(() => {
     // Close the sidebar on navigation.
     setSidebarOpen(false);
+    setProfileMenuOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!profileMenuOpen) return undefined;
+    const handlePointerDown = (event) => {
+      if (profileMenuRef.current?.contains?.(event.target)) return;
+      setProfileMenuOpen(false);
+    };
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setProfileMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [profileMenuOpen]);
 
   useEffect(() => {
     loadSession();
@@ -498,7 +518,6 @@ export default function AdminShell({ children }) {
         defaultOpen: true,
         items: [
           { href: isAdmin ? '/admin/admin-dashboard' : '/admin/dashboard', label: 'Dashboard', icon: 'D' },
-          { href: '/admin/profile', label: 'My Profile', icon: 'ME' },
           ...(session?.email && !isAdmin ? [{ href: '/admin/my-team', label: 'My Team', icon: 'TM' }] : []),
           ...(canSeeUpdatesMenu ? [{ href: '/admin/updates', label: 'Updates', icon: 'UP', perm: 'intranet_updates.read' }] : []),
           ...(canSeeStandupNotesMenu ? [{ href: '/admin/standup-notes', label: 'Standup Notes', icon: 'SN', perm: 'dashboard_notes.manage' }] : []),
@@ -609,6 +628,18 @@ export default function AdminShell({ children }) {
     if (c) return c.slice(0, 32);
     return '';
   }, [session?.employee_code]);
+
+  const profileInitials = useMemo(() => {
+    const source = String(session?.full_name || session?.email || 'GF').trim();
+    const parts = source.split(/[\s@._-]+/).filter(Boolean);
+    return (parts[0]?.[0] || 'G').toUpperCase() + (parts[1]?.[0] || '').toUpperCase();
+  }, [session?.email, session?.full_name]);
+
+  const avatarUrl = useMemo(() => {
+    const raw = String(session?.avatar_url || '').trim();
+    if (!raw) return '';
+    return raw;
+  }, [session?.avatar_url]);
 
   useEffect(() => {
     if (!navSections.length) return;
@@ -813,9 +844,14 @@ export default function AdminShell({ children }) {
               );
             })}
           </nav>
-          <button className="admin-button secondary" type="button" onClick={handleLogout}>
-            Log out
-          </button>
+          <div className="admin-sidebar-footer">
+            <button className="admin-sidebar-logout" type="button" onClick={handleLogout} title="Log out">
+              <span className="admin-nav-icon" aria-hidden="true">
+                LO
+              </span>
+              <span className="admin-nav-label">Log out</span>
+            </button>
+          </div>
         </aside>
 
         <main className="admin-main">
@@ -843,7 +879,47 @@ export default function AdminShell({ children }) {
                 <path d="M4 18h16" />
               </svg>
             </button>
-            <h1>{portalTitle}</h1>
+            <div className="admin-header-topline">
+              <div>
+                <h1>{portalTitle}</h1>
+              </div>
+              <div className="admin-account-menu" ref={profileMenuRef}>
+                <button
+                  className="admin-account-trigger"
+                  type="button"
+                  onClick={() => setProfileMenuOpen((open) => !open)}
+                  aria-haspopup="menu"
+                  aria-expanded={profileMenuOpen}
+                >
+                  <span className="admin-account-avatar">
+                    {avatarUrl ? <img src={avatarUrl} alt="" /> : profileInitials}
+                  </span>
+                  <span className="admin-account-name">{firstName || primaryRoleLabel || 'Account'}</span>
+                  <span className="admin-account-chevron" aria-hidden="true">▾</span>
+                </button>
+                {profileMenuOpen ? (
+                  <div className="admin-account-dropdown" role="menu">
+                    <div className="admin-account-dropdown-head">
+                      <div className="admin-account-dropdown-profile">
+                        <span className="admin-account-avatar">
+                          {avatarUrl ? <img src={avatarUrl} alt="" /> : profileInitials}
+                        </span>
+                        <div>
+                          <strong>{session?.full_name || firstName || 'Staff account'}</strong>
+                          <span>{session?.email}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <Link className="admin-account-dropdown-item" href="/admin/profile" role="menuitem">
+                      My profile
+                    </Link>
+                    <button className="admin-account-dropdown-item danger" type="button" onClick={handleLogout} role="menuitem">
+                      Log out
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
             <p className="admin-signed-in-pill" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <span>{signedInLabel}</span>
               {!sessionLoading && session?.email && !isAdmin && primaryRoleLabel ? (

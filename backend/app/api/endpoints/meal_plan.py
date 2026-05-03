@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from ...database import get_db
 from ...models.meal_plan import MealPlan
 from ...models.user import User
+from ...services.user_activity_service import add_user_activity
 from ..dependencies import get_current_user
 
 router = APIRouter(prefix="/meal-plans", tags=["meal-plans"])
@@ -39,5 +40,13 @@ def create_plan(
 ):
     plan = MealPlan(user_id=current_user.id, plan_date=payload.plan_date, recipes=payload.recipes)
     db.add(plan)
+    add_user_activity(
+        db,
+        user_id=current_user.id,
+        event_type="meal_plan.created",
+        label="Created a meal plan",
+        source="mobile",
+        metadata={"plan_date": payload.plan_date.isoformat(), "recipe_count": len(payload.recipes or [])},
+    )
     db.commit()
     return {"detail": "Created", "id": plan.id}
