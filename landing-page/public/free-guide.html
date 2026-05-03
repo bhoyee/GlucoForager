@@ -57,12 +57,12 @@
             <li><span class="tick">✓</span><span>90-minute Sunday batch cooking guide</span></li>
           </ul>
           <p class="type-note">Designed for Type 1 · Type 2 · Prediabetes · Gestational Diabetes</p>
-          <form class="inline-form js-lead-form" action="https://glucoforager.us1.list-manage.com/subscribe/post?u=XXXXXXXX&amp;id=XXXXXXXX" method="post" novalidate>
-            <input type="hidden" name="FNAME" value="Guide reader">
+          <form class="inline-form js-lead-form" action="https://api.glucoforager.com/api/newsletter/subscribe" method="post" novalidate>
+            <input type="hidden" name="source" value="free-guide">
             <label class="sr-only" for="hero-email">Email address</label>
-            <input id="hero-email" type="email" name="EMAIL" placeholder="Enter your email address" autocomplete="email" required>
-            <input class="hp" type="text" name="b_XXXXXXXX_XXXXXXXX" tabindex="-1" autocomplete="off" hidden>
-            <button class="btn" type="submit">Get the Free Guide →</button>
+            <input id="hero-email" type="email" name="email" placeholder="Enter your email address" autocomplete="email" required>
+            <input class="hp" type="text" name="website" tabindex="-1" autocomplete="off" hidden>
+            <button class="btn" type="submit">Send Me the Free Guide →</button>
           </form>
           <p class="form-note">🔒 No spam. Unsubscribe anytime. Your email is safe with us.</p>
         </div>
@@ -112,19 +112,18 @@
       <div class="container wrap">
         <span class="eyebrow">FREE - No credit card. No catch.</span>
         <h2 id="capture-title">Get your free guide now</h2>
-        <p>Enter your email and the guide comes straight to your inbox. Instant delivery. Free forever.</p>
-        <!-- Replace the Mailchimp URL above with your actual embedded form action URL from your Mailchimp account -->
-        <form class="lead-form js-lead-form" action="https://glucoforager.us1.list-manage.com/subscribe/post?u=XXXXXXXX&amp;id=XXXXXXXX" method="post" novalidate>
-          <div><label class="sr-only" for="first-name">First name</label><input id="first-name" type="text" name="FNAME" placeholder="Your first name" autocomplete="given-name" required><div class="error" data-error-for="FNAME"></div></div>
-          <div><label class="sr-only" for="email">Email address</label><input id="email" type="email" name="EMAIL" placeholder="Your email address" autocomplete="email" required><div class="error" data-error-for="EMAIL"></div></div>
-          <input class="hp" type="text" name="b_XXXXXXXX_XXXXXXXX" tabindex="-1" autocomplete="off" hidden>
+        <p>Enter your email and we will send the guide straight to your inbox. Free forever.</p>
+        <form class="lead-form js-lead-form" action="https://api.glucoforager.com/api/newsletter/subscribe" method="post" novalidate>
+          <input type="hidden" name="source" value="free-guide">
+          <div><label class="sr-only" for="email">Email address</label><input id="email" type="email" name="email" placeholder="Your email address" autocomplete="email" required><div class="error" data-error-for="email"></div></div>
+          <input class="hp" type="text" name="website" tabindex="-1" autocomplete="off" hidden>
           <button class="submit-btn" type="submit">Send Me the Free Guide →</button>
           <p class="form-note" style="text-align:center;margin:0">🔒 Your email is safe. No spam, ever. Unsubscribe anytime.</p>
         </form>
         <div class="success" aria-live="polite">
           <svg viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="30"/><path d="M25 41l10 10 21-24"/></svg>
-          <h3>Check your inbox! 📬</h3>
-          <p>Your free guide is on its way. Check your inbox (and spam folder just in case).</p>
+          <h3>Check your inbox!</h3>
+          <p>Your free guide is on its way. Please check your inbox and your spam or promotions folder just in case.</p>
           <p>While you wait - download GlucoForager free:</p>
           <div class="store-row"><a class="store-btn" href="https://apps.apple.com/app/glucoforager" target="_blank" rel="noopener"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M14.7 10.4c0-2.1 1.7-3.1 1.8-3.2-1-1.5-2.5-1.7-3-1.7-1.3-.1-2.5.8-3.1.8-.7 0-1.7-.8-2.8-.8-1.4 0-2.8.8-3.5 2.1-1.5 2.6-.4 6.5 1.1 8.6.7 1 1.6 2.2 2.7 2.1 1.1 0 1.5-.7 2.8-.7s1.7.7 2.8.7c1.2 0 1.9-1.1 2.7-2.1.8-1.2 1.1-2.3 1.1-2.4-.1 0-2.6-1-2.6-3.4zM12.7 4.1c.6-.8 1.1-1.8 1-2.8-1 .1-2 .7-2.7 1.5-.6.7-1.1 1.7-1 2.7 1 .1 2-.6 2.7-1.4z"/></svg><span><small>Download on the</small><strong>App Store</strong></span></a><a class="store-btn" href="https://play.google.com/store/apps/details?id=com.glucoforager" target="_blank" rel="noopener"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M3 2l9 8-9 8zm10 7l2-2 3 2-3 2zm0 2l2 2-3 2-3-3zm0-4L9 8 6 5z"/></svg><span><small>Get it on</small><strong>Google Play</strong></span></a></div>
         </div>
@@ -141,13 +140,13 @@
       <div class="faq-item"><button class="faq-q" type="button">Is the meal plan suitable for the whole family?</button><div class="faq-a"><p>Yes. The meals in the guide are healthy for everyone - not just people with diabetes. The main difference for family members without diabetes is simply portion sizes for the carbohydrate components.</p></div></div>
     </div></div></section>
 
-    <section class="final-cta"><div class="container"><h2>Get your free guide - takes 10 seconds</h2><button class="btn" data-scroll="#capture">Download Free Now →</button><p>Free · Instant delivery · No spam</p></div></section>
+    <section class="final-cta"><div class="container"><h2>Get your free guide - takes 10 seconds</h2><button class="btn" data-scroll="#capture">Send Me the Free Guide →</button><p>Free · Sent by email · No spam</p></div></section>
   </main>
 
   <footer class="footer"><div class="container footer-row"><a class="brand brand--white" href="#top"><img src="/images/logo.png" alt="GlucoForager logo" width="40" height="40" loading="lazy"><span>GlucoForager</span></a><p>© 2025 GlucoForager · glucoforager.com</p><div class="footer-links"><a href="https://glucoforager.com/privacy-policy">Privacy Policy</a><a href="https://glucoforager.com/terms">Terms</a></div></div></footer>
 
   <div class="exit-overlay" id="exit-popup" role="dialog" aria-modal="true" aria-labelledby="exit-title">
-    <div class="exit-modal"><button class="close-modal" type="button" aria-label="Close popup">×</button><h2 id="exit-title">Wait - don't miss the free guide!</h2><p>Get the free diabetic meal prep guide before you go.</p><form class="lead-form js-lead-form" action="https://glucoforager.us1.list-manage.com/subscribe/post?u=XXXXXXXX&amp;id=XXXXXXXX" method="post" novalidate><input type="hidden" name="FNAME" value="Guide reader"><label class="sr-only" for="exit-email">Email address</label><input id="exit-email" type="email" name="EMAIL" placeholder="Your email address" required><input class="hp" type="text" name="b_XXXXXXXX_XXXXXXXX" tabindex="-1" autocomplete="off" hidden><button class="submit-btn" type="submit">Get It Free</button></form></div>
+    <div class="exit-modal"><button class="close-modal" type="button" aria-label="Close popup">×</button><h2 id="exit-title">Wait - don't miss the free guide!</h2><p>Enter your email and we will send the free diabetic meal prep guide to your inbox.</p><form class="lead-form js-lead-form" action="https://api.glucoforager.com/api/newsletter/subscribe" method="post" novalidate><input type="hidden" name="source" value="free-guide-exit"><label class="sr-only" for="exit-email">Email address</label><input id="exit-email" type="email" name="email" placeholder="Your email address" required><input class="hp" type="text" name="website" tabindex="-1" autocomplete="off" hidden><button class="submit-btn" type="submit">Send It Free</button></form></div>
   </div>
 
   <script>
@@ -156,7 +155,8 @@
     if("IntersectionObserver"in window){const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add("in-view");io.unobserve(e.target)}}),{threshold:.18});$$(".info-card").forEach((c,i)=>{c.style.transitionDelay=`${i*.1}s`;io.observe(c)});const so=new IntersectionObserver(es=>es.forEach(e=>{if(!e.isIntersecting)return;$$("[data-count]",e.target).forEach(n=>{let end=+n.dataset.count,v=0,step=Math.max(1,Math.ceil(end/35));let t=setInterval(()=>{v+=step;if(v>=end){v=end;clearInterval(t)}n.textContent=v},24)});so.unobserve(e.target)}),{threshold:.4});so.observe($(".stats"))}
     $$(".faq-q").forEach(btn=>btn.addEventListener("click",()=>{const item=btn.parentElement,ans=$(".faq-a",item),open=item.classList.toggle("active");ans.style.maxHeight=open?ans.scrollHeight+"px":"0px"}));
     function validEmail(v){return/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)}
-    async function submitLead(form){const btn=$("button[type=submit]",form),email=$('[name="EMAIL"]',form),name=$('[name="FNAME"]',form),hp=$(".hp",form);$$(".error",form).forEach(e=>e.textContent="");let ok=true;if(name&&name.type!=="hidden"&&!name.value.trim()){const e=$('[data-error-for="FNAME"]',form);if(e)e.textContent="Please enter your first name.";ok=false}if(!email||!validEmail(email.value)){const e=$('[data-error-for="EMAIL"]',form);if(e)e.textContent="Please enter a valid email address.";ok=false}if(!ok){btn.classList.add("shake");setTimeout(()=>btn.classList.remove("shake"),360);return}if(hp&&hp.value)return;const old=btn.innerHTML;btn.disabled=true;btn.innerHTML='<span class="spinner"></span>Sending...';try{await fetch(form.action,{method:"POST",mode:"no-cors",body:new FormData(form)});const wrap=form.closest(".wrap");if(wrap){form.style.display="none";$(".success",wrap)?.classList.add("is-visible")}else{form.innerHTML="<p><strong>Check your inbox!</strong> Your free guide is on its way.</p>"}sessionStorage.setItem("gfLeadSubmitted","1")}catch(e){btn.innerHTML=old;btn.disabled=false;alert("Something went wrong. Please try again.")}}
+    function newsletterEndpoint(){const h=location.hostname;return h==="localhost"||h==="127.0.0.1"?"http://localhost:8010/api/newsletter/subscribe":"https://api.glucoforager.com/api/newsletter/subscribe"}
+    async function submitLead(form){const btn=$("button[type=submit]",form),email=$('[name="email"]',form),source=$('[name="source"]',form),hp=$(".hp",form);$$(".error",form).forEach(e=>e.textContent="");let ok=true;if(!email||!validEmail(email.value)){const e=$('[data-error-for="email"]',form);if(e)e.textContent="Please enter a valid email address.";ok=false}if(!ok){btn.classList.add("shake");setTimeout(()=>btn.classList.remove("shake"),360);return}if(hp&&hp.value)return;const old=btn.innerHTML;btn.disabled=true;btn.innerHTML='<span class="spinner"></span>Sending...';try{const res=await fetch(newsletterEndpoint(),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:email.value.trim(),source:source?.value||"free-guide",website:hp?.value||""})});const data=await res.json().catch(()=>({}));if(!res.ok)throw new Error(typeof data?.detail==="string"?data.detail:"Could not send the guide right now.");const wrap=form.closest(".wrap");if(wrap){form.style.display="none";$(".success",wrap)?.classList.add("is-visible")}else{form.innerHTML="<p><strong>Check your inbox!</strong> Your free guide is on its way. Please check your spam or promotions folder too.</p>"}sessionStorage.setItem("gfLeadSubmitted","1")}catch(e){btn.innerHTML=old;btn.disabled=false;alert(e.message||"Something went wrong. Please try again.")}}
     $$(".js-lead-form").forEach(f=>f.addEventListener("submit",e=>{if(window.fetch){e.preventDefault();submitLead(f)}}));
     const popup=$("#exit-popup");if(popup&&matchMedia("(min-width:1024px)").matches&&!sessionStorage.getItem("gfExitSeen")){document.addEventListener("mouseout",e=>{if(e.clientY<=4&&!sessionStorage.getItem("gfExitSeen")){popup.classList.add("is-open");sessionStorage.setItem("gfExitSeen","1")}})}$(".close-modal")?.addEventListener("click",()=>popup.classList.remove("is-open"));popup?.addEventListener("click",e=>{if(e.target===popup)popup.classList.remove("is-open")});
   </script>
