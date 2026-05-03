@@ -536,6 +536,50 @@ def send_newsletter_subscribed_email(to_email: str, subscriber_id: int) -> None:
     logger.info("Sent newsletter confirmation email to %s", to_email)
 
 
+def send_free_guide_email(to_email: str, subscriber_id: int) -> None:
+    site_url = (settings.site_url or "https://www.glucoforager.com").rstrip("/")
+    token = make_unsubscribe_token(subscriber_id, to_email)
+    unsubscribe_url = f"{site_url}/unsubscribe?token={token}"
+    logo_url = f"{site_url}/images/logo.png"
+    guide_url = "https://drive.google.com/file/d/1aQgpyBQGNMgmhAWCz1_ezZEYcklURYE2/view?usp=sharing"
+
+    subject = "Your free diabetic meal prep guide"
+    html_body = f"""
+    <html>
+      <body style="font-family: Arial, sans-serif; color: #0C1824;">
+        <div style="max-width:620px; margin:0 auto; border:1px solid #e5e7eb; border-radius:14px; padding:22px;">
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+            <img src="{logo_url}" alt="GlucoForager" width="36" height="36" style="display:block; border-radius:10px;" />
+            <div style="font-weight:800; font-size:18px; color:#0C1824;">GlucoForager</div>
+          </div>
+          <h2 style="color:#0FB7A5; margin-top:0;">Your free guide is ready</h2>
+          <p style="line-height:1.6; font-size:14px; color:#0C1824;">
+            Thanks for requesting The Free Diabetic Meal Prep Guide.
+          </p>
+          <p style="line-height:1.6; font-size:14px; color:#0C1824;">
+            Use the button below to open the guide:
+          </p>
+          <p style="margin:24px 0;">
+            <a href="{guide_url}" style="display:inline-block; background:#0D9488; color:#ffffff; text-decoration:none; font-weight:800; padding:12px 18px; border-radius:10px;">
+              Open the free guide
+            </a>
+          </p>
+          <p style="line-height:1.6; font-size:13px; color:#6b7280;">
+            If the button does not work, copy and paste this link into your browser:<br />
+            <a href="{guide_url}" style="color:#0D9488;">{guide_url}</a>
+          </p>
+          <p style="margin-top:24px; color:#6b7280; font-size:12px;">
+            You are also subscribed to GlucoForager updates. Unsubscribe anytime:
+            <a href="{unsubscribe_url}" style="color:#0FB7A5;">Unsubscribe</a>
+          </p>
+        </div>
+      </body>
+    </html>
+    """
+    _send_email(to_email, subject, html_body)
+    logger.info("Sent free guide email to %s", to_email)
+
+
 def send_blog_post_newsletter_email(
     to_email: str,
     post_title: str,
