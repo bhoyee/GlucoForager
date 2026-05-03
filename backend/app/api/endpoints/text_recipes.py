@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 import re
 import time
 import uuid
@@ -25,6 +26,7 @@ from ...services.subscription_service import get_effective_subscription_tier
 from ...core.config import settings
 from ...services.redis_ai_queue import RedisAIQueue
 from ...services.system_log_service import log_system_event
+from ...services.user_activity_service import add_user_activity
 from .ai_recipes import _safe_job_error
 
 router = APIRouter(prefix="/ai/text", tags=["ai"])
@@ -33,6 +35,7 @@ classifier = IngredientClassifier()
 cache = CacheService()
 image_helper = AIRecipeGenerator()
 TEXT_CACHE_TTL_SECONDS = 21600
+logger = logging.getLogger(__name__)
 
 
 ALLOWED_INGREDIENT_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9\s\-'/%]*$"
@@ -188,6 +191,18 @@ def _run_text_job(job_id: str) -> None:
             except Exception:
                 pass
             return
+        add_user_activity(
+            db,
+            user_id=user.id,
+            event_type="recipe_generation.running",
+            label="Recipe generation started",
+            source="mobile",
+            metadata={
+                "job_id": job_id,
+                "mode": mode,
+                "ingredients_count": len(ingredients) if isinstance(ingredients, list) else None,
+            },
+        )
 
         if mode not in ("surprise", "quick"):
             classified = classifier.classify(ingredients)
@@ -344,6 +359,18 @@ def _run_text_job(job_id: str) -> None:
         }
         job.status = "completed"
         job.error = None
+        add_user_activity(
+            db,
+            user_id=user.id,
+            event_type="recipe_generation.completed",
+            label="Generated recipes",
+            source="mobile",
+            metadata={
+                "job_id": job_id,
+                "mode": mode,
+                "recipes_count": len(recipes) if isinstance(recipes, list) else 0,
+            },
+        )
         db.commit()
         try:
             log_system_event(
@@ -560,6 +587,13 @@ def generate_from_text_async(
     current_user: User = Depends(get_current_user),
     device_id: str = Header(..., alias="X-Device-Id"),
 ):
+    logger.info(
+        "text_recipes.async.request user_id=%s mode=%s ingredients_count=%s device_id=%s",
+        current_user.id,
+        payload.mode,
+        len(payload.ingredients or []),
+        device_id,
+    )
     access = check_user_access(current_user, db, device_id)
     if not access["allowed"]:
         raise HTTPException(
@@ -598,6 +632,18 @@ def generate_from_text_async(
         },
     )
     db.add(job)
+    add_user_activity(
+        db,
+        user_id=current_user.id,
+        event_type="recipe_generation.started",
+        label="Started recipe generation",
+        source="mobile",
+        metadata={
+            "job_id": job_id,
+            "mode": payload.mode,
+            "ingredients_count": len(payload.ingredients or []),
+        },
+    )
     db.commit()
 
     backend = (settings.ai_queue_backend or "db").strip().lower()

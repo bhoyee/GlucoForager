@@ -40,6 +40,7 @@ from .api.endpoints import (
     admin_settings,
     admin_challenge,
     admin_revenuecat,
+    admin_user_activity,
     admin_user_email,
     admin_email_campaigns,
     app_public,
@@ -55,6 +56,7 @@ from .api.endpoints import (
     meal_plan,
     shopping_list,
     revenuecat,
+    mobile_activity,
     mobile_logs,
     system_logs,
     admin_health,
@@ -87,6 +89,7 @@ from .models import (  # ensure models are registered with SQLAlchemy
     app_setting,
     user_daily_challenge,
     push_token,
+    user_activity_event,
     admin_push_campaign,
     admin_push_send,
     staff_intranet_update,
@@ -103,6 +106,7 @@ from .models import (  # ensure models are registered with SQLAlchemy
 from .services.cache_service import CacheService
 from .services.system_log_service import log_system_event
 from .services.backup_scheduler import start_backup_scheduler
+from .services.user_activity_maintenance import start_user_activity_cleanup_scheduler
 from .services.work_plans_scheduler import start_work_plans_scheduler
 from .services.ai_job_runner import runner as ai_job_runner
 
@@ -262,6 +266,10 @@ def on_startup():
         start_work_plans_scheduler()
     except Exception as exc:  # noqa: BLE001
         logger.warning("Work plans scheduler start failed: %s", exc)
+    try:
+        start_user_activity_cleanup_scheduler()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("User activity cleanup scheduler start failed: %s", exc)
     try:
         # Only run the DB-backed in-process runner when configured.
         if (settings.ai_queue_backend or "db").strip().lower() == "db":
@@ -483,6 +491,7 @@ app.include_router(admin_reports.router, prefix="/api")
 app.include_router(admin_settings.router, prefix="/api")
 app.include_router(admin_challenge.router, prefix="/api")
 app.include_router(admin_revenuecat.router, prefix="/api")
+app.include_router(admin_user_activity.router, prefix="/api")
 app.include_router(admin_user_email.router, prefix="/api")
 app.include_router(admin_email_campaigns.router, prefix="/api")
 app.include_router(admin_push_campaigns.router, prefix="/api")
@@ -501,6 +510,7 @@ app.include_router(history.router, prefix="/api")
 app.include_router(meal_plan.router, prefix="/api")
 app.include_router(shopping_list.router, prefix="/api")
 app.include_router(revenuecat.router, prefix="/api")
+app.include_router(mobile_activity.router, prefix="/api")
 app.include_router(mobile_logs.router, prefix="/api")
 app.include_router(mobile_push_tokens.router, prefix="/api")
 app.include_router(system_logs.router, prefix="/api")

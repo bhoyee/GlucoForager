@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from ...database import get_db
 from ...models.favorite import Favorite
 from ...models.user import User
+from ...services.user_activity_service import add_user_activity
 from ..dependencies import get_current_user
 
 router = APIRouter(prefix="/favorites", tags=["favorites"])
@@ -56,6 +57,14 @@ def save_favorite(
         return {"detail": "Already saved"}
     fav = Favorite(user_id=current_user.id, title=payload.title, recipe=payload.recipe)
     db.add(fav)
+    add_user_activity(
+        db,
+        user_id=current_user.id,
+        event_type="favorite.saved",
+        label="Saved a recipe",
+        source="mobile",
+        metadata={"title": payload.title},
+    )
     db.commit()
     return {"detail": "Saved"}
 
@@ -73,6 +82,15 @@ def delete_favorite(
     )
     if not favorite:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Favorite not found")
+    title = favorite.title
     db.delete(favorite)
+    add_user_activity(
+        db,
+        user_id=current_user.id,
+        event_type="favorite.deleted",
+        label="Removed a saved recipe",
+        source="mobile",
+        metadata={"title": title},
+    )
     db.commit()
     return {"detail": "Deleted"}

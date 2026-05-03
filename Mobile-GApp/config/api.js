@@ -8,9 +8,10 @@ import { Platform } from 'react-native';
 const DEV_DEFAULT_URL =
   Platform.OS === 'android' ? 'http://10.0.2.2:8010' : 'http://localhost:8010';
 const PROD_DEFAULT_URL = 'https://api.glucoforager.com';
+const envApiUrl = process.env.EXPO_PUBLIC_API_URL;
+const resolvedApiUrl = envApiUrl || (__DEV__ ? DEV_DEFAULT_URL : PROD_DEFAULT_URL);
 
-export const API_URL =
-  process.env.EXPO_PUBLIC_API_URL || (__DEV__ ? DEV_DEFAULT_URL : PROD_DEFAULT_URL);
+export const API_URL = __DEV__ ? resolvedApiUrl.replace(/:8011\b/, ':8010') : resolvedApiUrl;
 
 export const API_ENDPOINTS = {
   SIGNUP: '/api/auth/signup',
