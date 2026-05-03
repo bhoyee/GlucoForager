@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import ValidationError
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
@@ -8,7 +9,7 @@ from ...services.newsletter_tokens import verify_unsubscribe_token
 from ...database import get_db
 from ...models.newsletter_signup import NewsletterSignup
 from ...services.cache_service import CacheService
-from ...services.email_service import send_newsletter_subscribed_email
+from ...services.email_service import send_free_guide_email, send_newsletter_subscribed_email
 
 router = APIRouter(prefix="/newsletter", tags=["newsletter"])
 cache = CacheService()
@@ -34,8 +35,24 @@ def _client_ip(request: Request) -> str:
     return (request.client.host if request.client else "unknown")[:64]
 
 
+async def _newsletter_payload_from_request(request: Request) -> NewsletterSubscribePayload:
+    content_type = (request.headers.get("content-type") or "").lower()
+    try:
+        if "application/json" in content_type:
+            raw = await request.json()
+        else:
+            form = await request.form()
+            raw = dict(form)
+        return NewsletterSubscribePayload.model_validate(raw)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid request") from exc
+
+
 @router.post("/subscribe", status_code=201)
-def subscribe(payload: NewsletterSubscribePayload, request: Request, db: Session = Depends(get_db)):  # noqa: ARG001
+async def subscribe(request: Request, db: Session = Depends(get_db)):
+    payload = await _newsletter_payload_from_request(request)
     if payload.website and payload.website.strip():
         raise HTTPException(status_code=400, detail="Invalid request")
 
@@ -52,24 +69,34 @@ def subscribe(payload: NewsletterSubscribePayload, request: Request, db: Session
     if email_count > 20:
         raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
 
+    source = (payload.source or "").strip()[:80]
+    is_free_guide = source.startswith("free-guide")
+
     existing = db.query(NewsletterSignup).filter(NewsletterSignup.email == email).first()
     if existing:
+        if is_free_guide:
+            try:
+                send_free_guide_email(existing.email, existing.id)
+            except Exception:
+                pass
+            return {"ok": True, "already": True, "guide_sent": True, "saved": False}
+
         was_unsubscribed = existing.status != "subscribed"
         if was_unsubscribed:
             existing.status = "subscribed"
-        if payload.source:
-            existing.source = payload.source.strip()[:80]
+        if source:
+            existing.source = source
         db.commit()
         if was_unsubscribed:
             try:
                 send_newsletter_subscribed_email(existing.email, existing.id)
             except Exception:
                 pass
-        return {"ok": True, "already": True}
+        return {"ok": True, "already": True, "guide_sent": False, "saved": False}
 
     signup = NewsletterSignup(
         email=email,
-        source=payload.source.strip()[:80] if payload.source else None,
+        source=source or None,
         status="subscribed",
         created_at=_utcnow(),
     )
@@ -77,11 +104,14 @@ def subscribe(payload: NewsletterSubscribePayload, request: Request, db: Session
     db.commit()
     db.refresh(signup)
     try:
-        send_newsletter_subscribed_email(signup.email, signup.id)
+        if is_free_guide:
+            send_free_guide_email(signup.email, signup.id)
+        else:
+            send_newsletter_subscribed_email(signup.email, signup.id)
     except Exception:
         # Email may not be configured; subscription should still succeed.
         pass
-    return {"ok": True, "emailed": True}
+    return {"ok": True, "emailed": True, "guide_sent": is_free_guide, "saved": True}
 
 
 @router.get("/unsubscribe", status_code=200)
