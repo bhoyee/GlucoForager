@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 class AIRecipeGenerator:
-    """GPT-5 recipe generator with DeepSeek fallback."""
+    """AI recipe generator."""
 
     def __init__(self) -> None:
         self.primary_client = (
@@ -35,7 +35,7 @@ class AIRecipeGenerator:
             else None
         )
         self.primary_model = settings.openai_model
-        # DeepSeek fallback for text (vision not supported)
+        # Optional DeepSeek-compatible text provider (vision not supported).
         self.fallback_client = (
             OpenAI(api_key=settings.deepseek_api_key, base_url=settings.deepseek_base_url, max_retries=0)
             if settings.deepseek_api_key
@@ -214,12 +214,19 @@ class AIRecipeGenerator:
             if settings.ai_debug_logging:
                 elapsed = time.time() - started if "started" in locals() else None
                 base_url = str(getattr(client, "base_url", "") or "")
+                finish_reason = None
+                try:
+                    finish_reason = resp.choices[0].finish_reason if "resp" in locals() else None
+                except Exception:
+                    finish_reason = None
                 logger.info(
-                    "AI call finished model=%s base_url=%s timeout=%s elapsed=%.3fs",
+                    "AI call finished model=%s base_url=%s timeout=%s elapsed=%.3fs finish_reason=%s max_output_tokens=%s",
                     model,
                     base_url,
                     timeout_seconds,
                     elapsed or -1.0,
+                    finish_reason,
+                    max_output_tokens,
                 )
         return resp.choices[0].message.content or ""
 
@@ -310,7 +317,7 @@ class AIRecipeGenerator:
             "IMPORTANT: Absolutely no text of any kind (no letters, numbers, titles, captions, labels, watermarks, logos, UI).",
             "Avoid AI artifacts: smeared details, warped cutlery, floating garnish, melting edges, unreadable shapes, over-saturated colors.",
             "Do not generate recipe cards, menus, app screens, packaging, or any overlay text.",
-            "No borders, no frames, no top banners, no UI elements — the image must be an edge-to-edge food photo only.",
+            "No borders, no frames, no top banners, no UI elements - the image must be an edge-to-edge food photo only.",
         ]
         # Avoid including structured labels like "Recipe name:" / "Ingredients:" which increases the chance
         # the model will generate a recipe-card image with text overlays.
@@ -324,7 +331,7 @@ class AIRecipeGenerator:
             [
                 "The subject must look like a finished, plated, ready-to-eat meal (served dish, not prep).",
                 "Main proteins must look clearly cooked (golden-brown sear, grill marks, roasted surface, crisp edges, flaky cooked fish as appropriate).",
-                "Vegetables and sides must look cooked/seasoned (sauteed, roasted, steamed) — not raw or straight from packaging.",
+                "Vegetables and sides must look cooked/seasoned (sauteed, roasted, steamed) - not raw or straight from packaging.",
                 "Do not show raw ingredient piles, cutting boards, prep scenes, or supermarket-style raw displays.",
                 "Absolutely no raw meat, no raw fish, no uncooked chicken, no sashimi, no ingredient pile, no cutting board, no prep scene.",
                 "Add subtle steam/heat cues when it makes sense for the dish.",
@@ -970,226 +977,9 @@ class AIRecipeGenerator:
                     logger.info("AI parse_content normalize failed error=%s", str(exc)[:240])
             return []
 
-        def emergency_recipes() -> List[Dict[str, Any]]:
-            is_quick = mode_norm == "quick"
-            # If we ever hit emergency fallback for Surprise/Quick, avoid returning the same 3 recipes forever.
-            # This is only used when AI calls fail, so a little variety matters for UX.
-            if not ingredients and is_quick:
-                variation = random.randint(1000, 9999)
-                return [
-                    {
-                        "title": f"10-Min Egg & Spinach Scramble ({variation})",
-                        "description": "Fast, diabetes-friendly, high-protein breakfast or light meal.",
-                        "ingredients": [
-                            {"name": "eggs", "quantity": 2, "unit": "large"},
-                            {"name": "spinach", "quantity": 2, "unit": "cups"},
-                            {"name": "olive oil", "quantity": 1, "unit": "tsp"},
-                            {"name": "garlic", "quantity": 1, "unit": "clove"},
-                        ],
-                        "instructions": [
-                            "Wash spinach and mince garlic.",
-                            "Heat a nonstick skillet over medium heat for 30 seconds; add olive oil.",
-                            "Add garlic; cook 20-30 seconds until fragrant (don’t brown).",
-                            "Add spinach; saute 1-2 minutes until wilted.",
-                            "Whisk eggs with a pinch of salt and pepper; pour into the pan.",
-                            "Stir gently 2-3 minutes until just set; remove from heat and serve.",
-                        ],
-                        "prep_time": 3,
-                        "cook_time": 7,
-                        "total_time": 10,
-                        "difficulty": "Easy",
-                        "nutritional_info": {
-                            "calories": 320,
-                            "carbs": 8,
-                            "protein": 26,
-                            "fat": 20,
-                            "fiber": 5,
-                            "sugar": 2,
-                            "glycemic_index": "Low",
-                        },
-                        "tags": ["diabetes-friendly", "low-carb", "high-protein", "quick"],
-                        "servings": 1,
-                    },
-                    {
-                        "title": "Tuna Avocado Salad Cups",
-                        "description": "No-cook, low-carb lunch that’s filling and quick to assemble.",
-                        "ingredients": [
-                            {"name": "canned tuna", "quantity": 1, "unit": "can"},
-                            {"name": "avocado", "quantity": 0.5, "unit": "whole"},
-                            {"name": "lemon", "quantity": 1, "unit": "tbsp juice"},
-                            {"name": "olive oil", "quantity": 1, "unit": "tsp"},
-                            {"name": "lettuce", "quantity": 4, "unit": "leaves"},
-                        ],
-                        "instructions": [
-                            "Drain tuna well; mash avocado with lemon juice in a bowl.",
-                            "Mix tuna into avocado; add olive oil, salt, and pepper to taste.",
-                            "Spoon mixture into lettuce leaves.",
-                            "Finish with extra lemon or chili flakes if desired; serve immediately.",
-                        ],
-                        "prep_time": 8,
-                        "cook_time": 0,
-                        "total_time": 8,
-                        "difficulty": "Easy",
-                        "nutritional_info": {
-                            "calories": 360,
-                            "carbs": 10,
-                            "protein": 32,
-                            "fat": 22,
-                            "fiber": 7,
-                            "sugar": 2,
-                            "glycemic_index": "Low",
-                        },
-                        "tags": ["diabetes-friendly", "low-carb", "high-protein", "quick"],
-                        "servings": 1,
-                    },
-                    {
-                        "title": "Greek Yogurt Chia Bowl",
-                        "description": "Quick, fiber-boosted snack or breakfast that supports steadier energy.",
-                        "ingredients": [
-                            {"name": "plain Greek yogurt", "quantity": 1, "unit": "cup"},
-                            {"name": "chia seeds", "quantity": 1, "unit": "tbsp"},
-                            {"name": "cinnamon", "quantity": 0.5, "unit": "tsp"},
-                            {"name": "berries", "quantity": 0.25, "unit": "cup"},
-                        ],
-                        "instructions": [
-                            "Stir chia seeds and cinnamon into Greek yogurt until well combined.",
-                            "Top with berries (keep portion small).",
-                            "Let sit 3-5 minutes to thicken, then eat.",
-                        ],
-                        "prep_time": 5,
-                        "cook_time": 0,
-                        "total_time": 5,
-                        "difficulty": "Easy",
-                        "nutritional_info": {
-                            "calories": 260,
-                            "carbs": 18,
-                            "protein": 25,
-                            "fat": 8,
-                            "fiber": 7,
-                            "sugar": 8,
-                            "glycemic_index": "Low",
-                        },
-                        "tags": ["diabetes-friendly", "high-protein", "high-fiber", "quick"],
-                        "servings": 1,
-                    },
-                ]
-
-            if ingredients:
-                base_ingredients = ingredients
-            else:
-                protein_pool = ["chicken breast", "salmon", "tuna", "eggs", "tofu", "turkey"]
-                veg_pool = ["spinach", "broccoli", "zucchini", "cauliflower", "mushrooms", "bell pepper", "tomatoes"]
-                flavor_pool = ["lemon", "garlic", "cumin", "chili flakes", "black pepper", "paprika"]
-                protein = random.choice(protein_pool)
-                vegs = random.sample(veg_pool, k=2)
-                flavors = random.sample(flavor_pool, k=2)
-                base_ingredients = [protein, *vegs, "olive oil", *flavors]
-
-            ingredient_text = ", ".join(base_ingredients) if base_ingredients else "common ingredients"
-            main = (base_ingredients[0] if base_ingredients else "main ingredient").strip()
-            t1 = 18 if is_quick else 25
-            t2 = 19 if is_quick else 26
-            t3 = 20 if is_quick else 30
-            base = [
-                {
-                    "title": f"{main.title()} Bowl",
-                    "description": f"Simple, portion-controlled recipe using {ingredient_text}.",
-                    "ingredients": [{"name": ing, "quantity": 1, "unit": "portion"} for ing in base_ingredients],
-                    "instructions": [
-                        "Prep: wash/peel/chop the main ingredient(s) and any other ingredients as needed.",
-                        "Heat a skillet over medium-high heat for 1 minute; add a small drizzle of olive oil.",
-                        "Cook the main ingredient until tender and safe to eat (boil/simmer for starchy foods; saute for others).",
-                        "If you have seasonings, add salt/pepper/spices to taste (avoid added sugar).",
-                        "Combine with the remaining ingredients to build a balanced bowl (keep sauces minimal).",
-                        "Plate and serve. Keep the starchy portion modest if managing blood sugar.",
-                    ],
-                    "prep_time": 10,
-                    "cook_time": max(0, t1 - 10),
-                    "total_time": t1,
-                    "difficulty": "Easy",
-                    "nutritional_info": {
-                        "calories": 350,
-                        "carbs": 35,
-                        "protein": 12,
-                        "fat": 10,
-                        "fiber": 5,
-                        "sugar": 6,
-                        "glycemic_index": "Medium",
-                    },
-                    "tags": ["diabetes-friendly", "portion-control"],
-                    "servings": 2,
-                },
-                {
-                    "title": f"{main.title()} Plate",
-                    "description": f"Straightforward recipe using {ingredient_text} with realistic portions.",
-                    "ingredients": [{"name": ing, "quantity": 1, "unit": "portion"} for ing in base_ingredients],
-                    "instructions": [
-                        "Prep: wash/peel/chop the main ingredient(s) and any other ingredients as needed.",
-                        "Cook the main ingredient using a simple method (boil/bake/saute) and avoid burning.",
-                        "Warm or lightly cook the remaining ingredients so flavors combine.",
-                        "Taste and adjust seasoning (keep added sugar low).",
-                        "Serve and consider pairing with a protein/fiber side if available.",
-                    ],
-                    "prep_time": 8,
-                    "cook_time": max(0, t2 - 8),
-                    "total_time": t2,
-                    "difficulty": "Easy",
-                    "nutritional_info": {
-                        "calories": 300,
-                        "carbs": 32,
-                        "protein": 11,
-                        "fat": 9,
-                        "fiber": 5,
-                        "sugar": 6,
-                        "glycemic_index": "Medium",
-                    },
-                    "tags": ["diabetes-friendly", "simple"],
-                    "servings": 2,
-                },
-                {
-                    "title": f"{main.title()} Skillet",
-                    "description": f"One-pan meal with {ingredient_text}.",
-                    "ingredients": [{"name": ing, "quantity": 1, "unit": "portion"} for ing in base_ingredients],
-                    "instructions": [
-                        "Prep: wash/peel/chop the main ingredient(s) and any other ingredients as needed.",
-                        "Heat a skillet over medium heat; add a small drizzle of oil if available.",
-                        "Cook the main ingredient, stirring, until cooked through and lightly browned where possible.",
-                        "Add the remaining ingredients and cook 2-3 minutes to combine flavors.",
-                        "Finish with seasonings; avoid making the dish sweet.",
-                        "Serve immediately. Keep the starchy portion smaller if needed.",
-                    ],
-                    "prep_time": 12,
-                    "cook_time": max(0, t3 - 12),
-                    "total_time": t3,
-                    "difficulty": "Easy",
-                    "nutritional_info": {
-                        "calories": 340,
-                        "carbs": 36,
-                        "protein": 12,
-                        "fat": 11,
-                        "fiber": 5,
-                        "sugar": 6,
-                        "glycemic_index": "Medium",
-                    },
-                    "tags": ["diabetes-friendly", "quick"],
-                    "servings": 2,
-                },
-            ]
-            return base
 
         if not self.enabled:
-            if settings.ai_disable_emergency_fallback:
-                raise RuntimeError("AI is not configured (missing OPENAI_API_KEY/DEEPSEEK_API_KEY).")
-            fallback = emergency_recipes()
-            for recipe in fallback:
-                if isinstance(recipe, dict):
-                    recipe["_ai_provider"] = "fallback"
-                    recipe["_ai_model"] = "emergency_recipes"
-            if generate_images:
-                self._attach_images(fallback, tier, ingredients)
-            else:
-                self._attach_placeholders(fallback)
-            return fallback
+            raise RuntimeError("AI is not configured (missing OPENAI_API_KEY/DEEPSEEK_API_KEY).")
 
         started = time.time()
         budget = float(timeout_seconds) if timeout_seconds else None
@@ -1263,7 +1053,7 @@ class AIRecipeGenerator:
                         timeout_seconds=per_request_timeout,
                         # Give enough room to finish valid JSON (truncation => invalid JSON => slow fallback chain).
                         # The prompt already enforces concision, so a higher cap doesn't mean longer outputs.
-                        max_output_tokens=2200 if mode_norm in ("surprise", "quick") else 1400,
+                        max_output_tokens=2200 if mode_norm in ("surprise", "quick") else 3200,
                     )
                     parsed = parse_content(content)
                     recipes = self._filter_recipes(parsed, banned_titles_norm)
@@ -1307,13 +1097,13 @@ class AIRecipeGenerator:
                     if settings.ai_debug_logging and settings.ai_log_raw_output:
                         raw_preview = (content or "").strip()
                         if len(raw_preview) > 6000:
-                            raw_preview = raw_preview[:6000] + "…"
+                            raw_preview = raw_preview[:6000] + "..."
                         logger.info("AI raw output provider=%s model=%s raw=%s", provider, model, raw_preview)
 
                     if settings.ai_debug_logging:
                         preview = (content or "").strip().replace("\n", " ")
                         if len(preview) > 600:
-                            preview = preview[:600] + "…"
+                            preview = preview[:600] + "..."
                         logger.info(
                             "AI output rejected provider=%s model=%s reason=%s preview=%s",
                             provider,
@@ -1428,7 +1218,7 @@ class AIRecipeGenerator:
                         if settings.ai_debug_logging and settings.ai_log_raw_output:
                             raw_preview = (content or "").strip()
                             if len(raw_preview) > 6000:
-                                raw_preview = raw_preview[:6000] + "…"
+                                raw_preview = raw_preview[:6000] + "..."
                             logger.info("AI raw output provider=gemini model=%s raw=%s", gemini_model, raw_preview)
                     except Exception as exc:  # noqa: BLE001
                         # Important: log why Gemini didn't run/returned empty so we don't silently waste fallback time.
@@ -1519,26 +1309,14 @@ class AIRecipeGenerator:
                 logger.warning("Gemini fallback failed (model=%s): %s", gemini_model, str(exc)[:400])
                 attempts.append({"model": gemini_model, "provider": "gemini", "error": str(exc)})
 
-        fallback = emergency_recipes()
-        if settings.ai_disable_emergency_fallback:
-            # Do not leak internal config details to end users.
-            raise RuntimeError("Unable to generate recipes right now. Please try again in a moment.")
-        for recipe in fallback:
-            if isinstance(recipe, dict):
-                recipe["_ai_provider"] = "fallback"
-                recipe["_ai_model"] = "emergency_recipes"
         if attempts:
             logger.warning(
-                "All AI models failed or returned invalid output (mode=%s tier=%s). Using emergency recipes. attempts=%s",
+                "All AI models failed or returned invalid output (mode=%s tier=%s). attempts=%s",
                 mode_norm or "ingredients",
                 tier,
                 attempts,
             )
-        if generate_images:
-            self._attach_images(fallback, tier, ingredients)
-        else:
-            self._attach_placeholders(fallback)
-        return fallback
+        raise RuntimeError("Unable to generate recipes right now. Please try again in a moment.")
 
     def _normalize_title(self, title: str) -> str:
         value = (title or "").strip().lower()

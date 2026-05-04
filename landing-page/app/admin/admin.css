@@ -2143,12 +2143,16 @@
 .admin-log-message {
   font-weight: 600;
   margin-bottom: 6px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .admin-log-details {
   color: #4f6b5c;
   font-size: 13px;
   margin-bottom: 8px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .admin-log-footer {
