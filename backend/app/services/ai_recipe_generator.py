@@ -14,7 +14,7 @@ from openai import OpenAI, OpenAIError
 from PIL import Image
 
 from ..core.config import settings
-from ..core.constants import EAT_NOW_PROMPT, OPENAI_PROMPT
+from ..core.constants import EAT_NOW_PROMPT, INGREDIENT_RECIPES_PROMPT, OPENAI_PROMPT
 from ..services.cache_service import CacheService
 
 logger = logging.getLogger(__name__)
@@ -646,7 +646,7 @@ class AIRecipeGenerator:
             extra_instructions = " ".join(parts)
 
         mode_norm = (mode or "").strip().lower()
-        prompt_template = EAT_NOW_PROMPT if mode_norm in ("surprise", "quick") else OPENAI_PROMPT
+        prompt_template = EAT_NOW_PROMPT if mode_norm in ("surprise", "quick") else INGREDIENT_RECIPES_PROMPT
         if mode_norm in ("surprise", "quick"):
             fast_chain = tier_cfg.get("recipe_models_fast") or []
             if isinstance(fast_chain, list) and fast_chain:
