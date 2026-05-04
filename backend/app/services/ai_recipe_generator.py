@@ -1025,7 +1025,7 @@ class AIRecipeGenerator:
                         else:
                             # Non "Eat now" flows run async (job queue) so we can afford a longer per-request timeout.
                             # This significantly reduces false failures on slower networks / provider latency spikes.
-                            cap = 30.0 if remaining_total <= 60.0 else 45.0
+                            cap = 55.0 if remaining_total <= 60.0 else 75.0
                         per_request_timeout = max(5.0, min(cap, remaining_total))
                         if phase_timeout is not None:
                             remaining_phase = phase_timeout - (time.time() - phase_started)
