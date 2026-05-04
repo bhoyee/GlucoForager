@@ -311,14 +311,6 @@ def _safe_job_error(message: str) -> str:
     if not raw:
         return "Unable to generate recipes right now. Please try again."
     lowered = raw.lower()
-    # Never leak internal fallback configuration details to end users.
-    if (
-        "ai_disable_emergency_fallback" in lowered
-        or "emergency fallback" in lowered
-        or ("fallback" in lowered and "disabled" in lowered)
-        or ("emergency" in lowered and "disabled" in lowered)
-    ):
-        return "Unable to generate recipes right now. Please try again in a moment."
     if "all ai models failed" in lowered or "invalid output" in lowered:
         return "Unable to generate recipes right now. Please try again in a moment."
     return raw[:240]
