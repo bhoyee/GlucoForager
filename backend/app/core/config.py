@@ -48,7 +48,6 @@ class Settings(BaseSettings):
     runware_api_key: str | None = Field(None, env="RUNWARE_API_KEY")
     runware_api_url: str = Field("https://api.runware.ai/v1", env="RUNWARE_API_URL")
     runware_image_model: str = Field("runware:100@1", env="RUNWARE_IMAGE_MODEL")
-    ai_disable_emergency_fallback: bool = Field(False, env="AI_DISABLE_EMERGENCY_FALLBACK")
     ai_debug_logging: bool = Field(False, env="AI_DEBUG_LOGGING")
     # When debugging recipe generation failures, allow logging model outputs (truncated) to server logs.
     ai_log_raw_output: bool = Field(False, env="AI_LOG_RAW_OUTPUT")
