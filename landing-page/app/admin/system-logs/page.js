@@ -7,10 +7,74 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
 const parseLine = (line) => {
   try {
-    return JSON.parse(line);
+    return normalizeLog(JSON.parse(line), line);
   } catch (error) {
-    return { message: line };
+    return { message: line, raw: line };
   }
+};
+
+const stringifyValue = (value) => {
+  if (value === null || value === undefined || value === '') return '';
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch (error) {
+    return String(value);
+  }
+};
+
+const normalizeTimestamp = (log) => {
+  if (log.timestamp || log.received_at) return log.timestamp || log.received_at;
+  if (typeof log.ts === 'number') return new Date(log.ts * 1000).toISOString();
+  return null;
+};
+
+const normalizeLog = (log, raw) => {
+  if (!log || typeof log !== 'object' || Array.isArray(log)) {
+    return { message: stringifyValue(log) || raw || 'Log entry', raw };
+  }
+
+  const timestamp = normalizeTimestamp(log);
+  const message =
+    stringifyValue(log.message) ||
+    stringifyValue(log.type) ||
+    stringifyValue(log.event) ||
+    stringifyValue(log.error_code) ||
+    stringifyValue(log.error) ||
+    'Log entry';
+  const details = stringifyValue(log.details);
+
+  const extra = Object.entries(log)
+    .filter(([key, value]) => {
+      if (
+        [
+          'timestamp',
+          'received_at',
+          'ts',
+          'level',
+          'source',
+          'message',
+          'details',
+          'app_version',
+          'device',
+          'ip',
+          'path',
+          'method',
+        ].includes(key)
+      ) {
+        return false;
+      }
+      return value !== null && value !== undefined && value !== '';
+    })
+    .reduce((acc, [key, value]) => ({ ...acc, [key]: value }), {});
+
+  return {
+    ...log,
+    timestamp,
+    message,
+    details: details || (Object.keys(extra).length ? JSON.stringify(extra, null, 2) : ''),
+    raw,
+  };
 };
 
 const formatTimestamp = (value) => {
