@@ -115,6 +115,45 @@ FORMAT: Return VALID JSON with this EXACT structure:
 IMPORTANT: Return ONLY the JSON object. No additional text before or after.
 """
 
+INGREDIENT_RECIPES_PROMPT = """Create 3 diabetes-friendly recipes using these selected ingredients: {ingredients}.
+
+RULES:
+- Return ONLY a single valid JSON object. No markdown, no code fences, no commentary.
+- Use the selected ingredients as the main ingredients.
+- You may add only basic pantry staples in small amounts: water, salt, pepper, dried herbs/spices, lemon/lime, vinegar, garlic, onion, olive oil.
+- Do not add other non-pantry ingredients.
+- Keep every string single-line. Use spaces instead of newline characters.
+- Keep recipes concise but usable: max 8 ingredients per recipe and 5-6 instruction steps.
+- If ingredients are starchy or sugary, keep portions modest and mention practical glucose-balance guidance in the description.
+
+FORMAT (VALID JSON):
+{
+  "recipes": [
+    {
+      "title": "Recipe title",
+      "description": "1 sentence explaining why it is diabetes-friendly",
+      "prep_time": 10,
+      "cook_time": 15,
+      "total_time": 25,
+      "servings": 2,
+      "ingredients": [
+        {"name": "ingredient", "quantity": 1, "unit": "cup"}
+      ],
+      "instructions": ["Step 1", "Step 2", "Step 3", "Step 4", "Step 5"],
+      "nutritional_info": {
+        "calories": 320,
+        "carbs": 24,
+        "protein": 18,
+        "fat": 12,
+        "fiber": 6,
+        "sugar": 5
+      },
+      "tags": ["diabetes-friendly"]
+    }
+  ]
+}
+"""
+
 # Lightweight schema for "Eat now" flows (Surprise me / Low-carb quick meal).
 # This avoids long responses that get truncated and become invalid JSON.
 EAT_NOW_PROMPT = """Create 3 diabetes-friendly meal ideas. Use common, easy-to-find ingredients.
