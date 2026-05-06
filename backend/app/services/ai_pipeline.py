@@ -109,6 +109,15 @@ class AIPipeline:
 
         lowered = [str(x).strip().lower() for x in (ingredients or []) if isinstance(x, str) and str(x).strip()]
         if lowered:
+            vague_bread_terms = {"bread", "white bread", "sliced bread", "toast bread", "sandwich bread"}
+            vague_bread = next((item for item in lowered if item in vague_bread_terms), None)
+            if vague_bread:
+                raise IngredientValidationError(
+                    "refined_bread",
+                    f'"{vague_bread}" is too vague for diabetes-friendly recipe generation. Use a clearer option like brown bread, '
+                    "wholegrain bread, whole wheat bread, or sourdough bread.",
+                )
+
             starchy_keywords = [
                 "yam",
                 "potato",
