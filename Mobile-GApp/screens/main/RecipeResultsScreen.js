@@ -47,9 +47,7 @@ export default function RecipeResultsScreen() {
   const [failedRecipeImages, setFailedRecipeImages] = useState({});
   const [generatingRecipeImages, setGeneratingRecipeImages] = useState({});
   const pollingRef = useRef(null);
-  const elapsedRef = useRef(null);
   const phaseRef = useRef(null);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [statusLine, setStatusLine] = useState('Starting recipe generation...');
   const errorShownRef = useRef(false);
   const lastJobStatusRef = useRef(null);
@@ -321,19 +319,14 @@ export default function RecipeResultsScreen() {
         return;
       }
 
-      setElapsedSeconds(0);
       setStatusLine('Starting AI recipe generation...');
-      if (elapsedRef.current) clearInterval(elapsedRef.current);
-      elapsedRef.current = setInterval(() => {
-        setElapsedSeconds((prev) => prev + 1);
-      }, 1000);
 
       const phases = [
-        'Sending ingredients...',
-        'Checking diabetes-friendly choices...',
-        'Creating recipe ideas...',
-        'Writing cooking steps...',
-        'Finishing up...',
+        'Reviewing your ingredients',
+        'Balancing carbs and protein',
+        'Building recipe ideas',
+        'Writing cooking steps',
+        'Finishing your meal options',
       ];
       let idx = 0;
       if (phaseRef.current) clearInterval(phaseRef.current);
@@ -431,61 +424,100 @@ export default function RecipeResultsScreen() {
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
       pollingRef.current = null;
-      if (elapsedRef.current) clearInterval(elapsedRef.current);
-      elapsedRef.current = null;
       if (phaseRef.current) clearInterval(phaseRef.current);
       phaseRef.current = null;
     };
   }, [detectedFromParams, recipesFromParams, selectedIngredients, source, signOut]);
 
   if (isLoading) {
-    const formatElapsed = (seconds) => {
-      const s = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
-      const mm = String(Math.floor(s / 60)).padStart(2, '0');
-      const ss = String(s % 60).padStart(2, '0');
-      return `${mm}:${ss}`;
-    };
-
     const handleCancel = () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
       pollingRef.current = null;
-      if (elapsedRef.current) clearInterval(elapsedRef.current);
-      elapsedRef.current = null;
       if (phaseRef.current) clearInterval(phaseRef.current);
       phaseRef.current = null;
       navigation.goBack();
     };
 
     const ingredientCount = Array.isArray(selectedIngredients) ? selectedIngredients.length : 0;
+    const loadingSteps = [
+      'Reviewing ingredients',
+      'Balancing nutrition',
+      'Creating recipes',
+    ];
+    const activeStep =
+      statusLine?.includes('Balancing') || statusLine?.includes('diabetes')
+        ? 1
+        : statusLine?.includes('Building') ||
+          statusLine?.includes('Writing') ||
+          statusLine?.includes('Finishing') ||
+          statusLine?.includes('Generating')
+          ? 2
+          : 0;
+
     return (
       <View style={styles.loadingContainer}>
         <LinearGradient
-          colors={[Colors.primary, Colors.primaryLight]}
+          colors={[Colors.primaryDark, Colors.primary, Colors.primaryLight]}
           style={styles.loadingGradient}
         >
-          <Ionicons name="restaurant-outline" size={60} color="white" />
-          <Text style={styles.loadingTitle}>Generating recipes</Text>
-          <Text style={styles.loadingSubtitle}>
-            {statusLine || 'Generating your recipes...'}
-          </Text>
-
-          <View style={styles.loadingMetaRow}>
-            <View style={styles.loadingPill}>
-              <Ionicons name="time-outline" size={14} color="rgba(255,255,255,0.9)" />
-              <Text style={styles.loadingPillText}>Elapsed {formatElapsed(elapsedSeconds)}</Text>
+          <View style={styles.loadingCard}>
+            <View style={styles.loadingLogoWrap}>
+              <View style={styles.loadingLogoHalo} />
+              <View style={styles.loadingLogo}>
+                <Ionicons name="restaurant-outline" size={36} color={Colors.primary} />
+              </View>
             </View>
-            <View style={styles.loadingPill}>
-              <Ionicons name="leaf-outline" size={14} color="rgba(255,255,255,0.9)" />
-              <Text style={styles.loadingPillText}>
-                {ingredientCount > 0 ? `${ingredientCount} ingredient${ingredientCount !== 1 ? 's' : ''}` : 'Your selection'}
+
+            <Text style={styles.loadingTitle}>Building your recipes</Text>
+            <Text style={styles.loadingSubtitle}>
+              {statusLine || 'Creating blood-sugar-friendly meal ideas from your ingredients.'}
+            </Text>
+
+            <View style={styles.loadingIngredientBadge}>
+              <Ionicons name="leaf-outline" size={15} color={Colors.primary} />
+              <Text style={styles.loadingIngredientText}>
+                {ingredientCount > 0 ? `${ingredientCount} ingredient${ingredientCount !== 1 ? 's' : ''} selected` : 'Using your selected ingredients'}
               </Text>
             </View>
-          </View>
 
-          <ActivityIndicator size="large" color="white" style={{ marginTop: 30 }} />
-          <TouchableOpacity style={styles.loadingCancelButton} onPress={handleCancel}>
-            <Text style={styles.loadingCancelText}>Cancel</Text>
-          </TouchableOpacity>
+            <View style={styles.loadingSteps}>
+              {loadingSteps.map((step, index) => {
+                const complete = index < activeStep;
+                const active = index === activeStep;
+                return (
+                  <View key={step} style={styles.loadingStepRow}>
+                    <View style={[
+                      styles.loadingStepIcon,
+                      complete && styles.loadingStepIconComplete,
+                      active && styles.loadingStepIconActive,
+                    ]}>
+                      {complete ? (
+                        <Ionicons name="checkmark" size={14} color="white" />
+                      ) : active ? (
+                        <ActivityIndicator size="small" color={Colors.primary} />
+                      ) : (
+                        <View style={styles.loadingStepDot} />
+                      )}
+                    </View>
+                    <Text style={[
+                      styles.loadingStepText,
+                      active && styles.loadingStepTextActive,
+                    ]}>
+                      {step}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+
+            <Text style={styles.loadingHint}>
+              This can take a moment while GlucoForager prepares practical options for your kitchen.
+            </Text>
+
+            <TouchableOpacity style={styles.loadingCancelButton} onPress={handleCancel}>
+              <Text style={styles.loadingCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
         </LinearGradient>
       </View>
     );
@@ -763,54 +795,142 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 40,
+    paddingHorizontal: 24,
+    paddingVertical: 40,
+  },
+  loadingCard: {
+    width: '100%',
+    maxWidth: 380,
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    borderRadius: 28,
+    paddingHorizontal: 24,
+    paddingVertical: 30,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowOffset: { width: 0, height: 18 },
+    shadowRadius: 28,
+    elevation: 10,
+  },
+  loadingLogoWrap: {
+    width: 92,
+    height: 92,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+  loadingLogoHalo: {
+    position: 'absolute',
+    width: 92,
+    height: 92,
+    borderRadius: 46,
+    backgroundColor: 'rgba(11,90,70,0.08)',
+  },
+  loadingLogo: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#F0FFF8',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(11,90,70,0.14)',
   },
   loadingTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: 'white',
-    marginTop: 20,
+    fontSize: 25,
+    fontWeight: '800',
+    color: Colors.text,
     marginBottom: 10,
+    textAlign: 'center',
   },
   loadingSubtitle: {
     fontSize: 16,
-    color: 'rgba(255,255,255,0.9)',
+    color: Colors.textLight,
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 23,
+    minHeight: 46,
   },
-  loadingMetaRow: {
-    marginTop: 14,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-  },
-  loadingPill: {
+  loadingIngredientBadge: {
+    marginTop: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 7,
+    paddingHorizontal: 13,
+    paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.16)',
-    marginHorizontal: 6,
-    marginTop: 8,
+    backgroundColor: '#F0FFF8',
+    borderWidth: 1,
+    borderColor: 'rgba(11,90,70,0.12)',
   },
-  loadingPillText: {
-    marginLeft: 6,
-    fontSize: 12,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.92)',
+  loadingIngredientText: {
+    marginLeft: 7,
+    color: Colors.primary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  loadingSteps: {
+    width: '100%',
+    marginTop: 24,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 18,
+    padding: 14,
+  },
+  loadingStepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  loadingStepIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  loadingStepIconComplete: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  loadingStepIconActive: {
+    borderColor: Colors.primary,
+    backgroundColor: '#F0FFF8',
+  },
+  loadingStepDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: Colors.textMuted,
+  },
+  loadingStepText: {
+    flex: 1,
+    color: Colors.textLight,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  loadingStepTextActive: {
+    color: Colors.text,
+  },
+  loadingHint: {
+    marginTop: 18,
+    color: Colors.textLight,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
   },
   loadingCancelButton: {
-    marginTop: 18,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    marginTop: 20,
+    paddingHorizontal: 22,
+    paddingVertical: 11,
+    borderRadius: 999,
+    backgroundColor: '#F1F5F9',
   },
   loadingCancelText: {
-    color: 'white',
+    color: Colors.textLight,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '800',
   },
   header: {
     flexDirection: 'row',
