@@ -54,6 +54,13 @@ export default function ManualInputScreen() {
   const lastPrefillTokenRef = useRef(null);
   const limitReached = !scanStatus.isPremium && scanStatus.remaining === 0;
   const allowedIngredientPattern = /^[A-Za-z0-9][A-Za-z0-9\s\-'/%%]*$/;
+  const vagueBreadTerms = new Set([
+    'bread',
+    'white bread',
+    'sliced bread',
+    'toast bread',
+    'sandwich bread',
+  ]);
 
   const handleAddIngredient = () => {
     if (isLoading) return;
@@ -353,6 +360,15 @@ export default function ManualInputScreen() {
         Alert.alert(
           'Invalid ingredient',
           "Use letters, numbers, spaces, hyphens, apostrophes, slashes, or % only."
+        );
+        return;
+      }
+
+      const vagueBread = normalizedUnique.find((item) => vagueBreadTerms.has(item.toLowerCase()));
+      if (vagueBread) {
+        Alert.alert(
+          'Choose a better bread option',
+          `"${vagueBread}" is too vague for diabetes-friendly recipe generation. Please use a clearer option like brown bread, wholegrain bread, whole wheat bread, or sourdough bread.`
         );
         return;
       }
