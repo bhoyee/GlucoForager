@@ -108,6 +108,20 @@ def _ensure_images(recipes: list[dict], tier: str, ingredients: list[str]) -> li
     return recipes
 
 
+def _precheck_ingredient_input(raw_ingredients: list[str], *, mode: str, tier: str) -> dict:
+    if mode in ("surprise", "quick"):
+        return {"food": [], "non_food": [], "source": "mode"}
+
+    classified = classifier.classify(raw_ingredients)
+    if not classified["food"]:
+        raise IngredientValidationError(
+            "not_food",
+            "Content not related to food. Please enter real ingredients.",
+        )
+    pipeline._ensure_diabetes_friendly_or_raise(classified["food"], mode=mode, tier=tier)
+    return classified
+
+
 def _filters_for_mode(mode: str) -> list[str]:
     if mode == "quick":
         return ["diabetes-friendly", "low carb", "under 20 minutes", "high protein"]
@@ -191,6 +205,7 @@ def _run_text_job(job_id: str) -> None:
             except Exception:
                 pass
             return
+        tier = get_effective_subscription_tier(db, user) or "free"
         add_user_activity(
             db,
             user_id=user.id,
@@ -205,37 +220,8 @@ def _run_text_job(job_id: str) -> None:
         )
 
         if mode not in ("surprise", "quick"):
-            classified = classifier.classify(ingredients)
-            if not classified["food"]:
-                job.status = "failed"
-                job.error = "Content not related to food. Please enter real ingredients."
-                job.result = {
-                    "error": {
-                        "type": "invalid_input",
-                        "code": "not_food",
-                        "message": job.error,
-                    }
-                }
-                db.commit()
-                try:
-                    log_system_event(
-                        {
-                            "ts": time.time(),
-                            "level": "warn",
-                            "type": "ai.text.job.done",
-                            "job_id": job_id,
-                            "user_id": job.user_id,
-                            "status": "failed",
-                            "error_code": "not_food",
-                            "elapsed_ms": int((time.time() - started) * 1000),
-                        }
-                    )
-                except Exception:
-                    pass
-                return
-            ingredients = classified["food"]
             try:
-                pipeline._ensure_diabetes_friendly_or_raise(ingredients, mode=mode)
+                classified = _precheck_ingredient_input(ingredients, mode=mode, tier=tier)
             except IngredientValidationError as exc:
                 job.status = "failed"
                 job.error = exc.message
@@ -243,7 +229,7 @@ def _run_text_job(job_id: str) -> None:
                     "error": {
                         "type": "invalid_input",
                         "code": exc.code,
-                        "message": exc.message,
+                        "message": job.error,
                     }
                 }
                 db.commit()
@@ -263,6 +249,7 @@ def _run_text_job(job_id: str) -> None:
                 except Exception:
                     pass
                 return
+            ingredients = classified["food"]
         else:
             classified = {"food": [], "non_food": [], "source": "mode"}
             ingredients = []
@@ -273,7 +260,7 @@ def _run_text_job(job_id: str) -> None:
             recipes = pipeline.text_to_recipes(
                 db,
                 user.id,
-                get_effective_subscription_tier(db, user) or "free",
+                tier,
                 ingredients,
                 filters=filters,
                 exclude_titles=exclude_titles,
@@ -466,20 +453,14 @@ def generate_from_text(
     tier = get_effective_subscription_tier(db, current_user) or "free"
     mode = payload.mode
     if mode == "ingredients":
-        classified = classifier.classify(payload.ingredients)
-        if not classified["food"]:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Content not related to food. Please enter real ingredients.",
-            )
-        ingredients = classified["food"]
         try:
-            pipeline._ensure_diabetes_friendly_or_raise(ingredients, mode=mode)
+            classified = _precheck_ingredient_input(payload.ingredients, mode=mode, tier=tier)
         except IngredientValidationError as exc:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail={"code": exc.code, "message": exc.message},
             ) from exc
+        ingredients = classified["food"]
         filters = payload.filters or []
         warning = None
         if classified["non_food"]:
@@ -506,7 +487,7 @@ def generate_from_text(
             if cached_recipes:
                 # Cache can outlive prompt/validation changes; re-validate on read to avoid returning stale/hallucinated content.
                 try:
-                    pipeline._ensure_diabetes_friendly_or_raise(ingredients, mode=mode)
+                    pipeline._ensure_diabetes_friendly_or_raise(ingredients, mode=mode, tier=tier)
                 except IngredientValidationError as exc:
                     cache.delete(cache_key)
                     raise HTTPException(
@@ -614,6 +595,14 @@ def generate_from_text_async(
             },
             headers={"Retry-After": str(rl.retry_after_seconds)},
         )
+
+    try:
+        _precheck_ingredient_input(payload.ingredients, mode=payload.mode, tier=tier)
+    except IngredientValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
 
     job_id = str(uuid.uuid4())
     job = AIJob(

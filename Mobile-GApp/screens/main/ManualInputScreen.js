@@ -54,13 +54,6 @@ export default function ManualInputScreen() {
   const lastPrefillTokenRef = useRef(null);
   const limitReached = !scanStatus.isPremium && scanStatus.remaining === 0;
   const allowedIngredientPattern = /^[A-Za-z0-9][A-Za-z0-9\s\-'/%%]*$/;
-  const vagueBreadTerms = new Set([
-    'bread',
-    'white bread',
-    'sliced bread',
-    'toast bread',
-    'sandwich bread',
-  ]);
 
   const handleAddIngredient = () => {
     if (isLoading) return;
@@ -363,15 +356,6 @@ export default function ManualInputScreen() {
         );
         return;
       }
-
-      const vagueBread = normalizedUnique.find((item) => vagueBreadTerms.has(item.toLowerCase()));
-      if (vagueBread) {
-        Alert.alert(
-          'Choose a better bread option',
-          `"${vagueBread}" is too vague for diabetes-friendly recipe generation. Please use a clearer option like brown bread, wholegrain bread, whole wheat bread, or sourdough bread.`
-        );
-        return;
-      }
     }
 
     const controller = new AbortController();
@@ -445,7 +429,8 @@ export default function ManualInputScreen() {
         }
         const detail = data?.detail;
         const message = detail?.message || detail || 'Unable to generate recipes.';
-        Alert.alert('Request failed', message);
+        const title = detail?.code === 'needs_clarification' ? 'Check ingredient' : 'Request failed';
+        Alert.alert(title, message);
         setIsLoading(false);
         return;
       }
