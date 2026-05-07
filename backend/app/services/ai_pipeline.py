@@ -99,7 +99,13 @@ class AIPipeline:
             }
         return None
 
-    def _ensure_diabetes_friendly_or_raise(self, ingredients: list[str], *, mode: str = "ingredients") -> None:
+    def _ensure_diabetes_friendly_or_raise(
+        self,
+        ingredients: list[str],
+        *,
+        mode: str = "ingredients",
+        tier: str = "free",
+    ) -> None:
         """
         For ingredient-driven flows, block early when the input can't realistically produce a diabetes-friendly
         result without inventing ingredients.
@@ -109,6 +115,34 @@ class AIPipeline:
 
         lowered = [str(x).strip().lower() for x in (ingredients or []) if isinstance(x, str) and str(x).strip()]
         if lowered:
+            risks = self.risk_classifier.classify(lowered, tier=tier or "free")
+            risk_by_name = risks.get("risk_by_name") or {}
+            clarification_items = []
+            avoid_items = []
+            for item in lowered:
+                risk = (risk_by_name.get(item) or {}).get("risk") or "ok"
+                reason = (risk_by_name.get(item) or {}).get("reason") or ""
+                if risk == "needs_clarification":
+                    clarification_items.append((item, reason))
+                elif risk == "avoid":
+                    avoid_items.append((item, reason))
+
+            if clarification_items:
+                item, reason = clarification_items[0]
+                raise IngredientValidationError(
+                    "needs_clarification",
+                    f'"{item}" needs more detail before we generate diabetes-friendly recipes. '
+                    f"{reason or 'Please choose a less refined or more specific option.'}",
+                )
+
+            if avoid_items:
+                item, reason = avoid_items[0]
+                raise IngredientValidationError(
+                    "not_diabetes_friendly",
+                    f'"{item}" is not suitable as a main ingredient for diabetes-friendly recipe generation. '
+                    f"{reason or 'Please choose a lower-sugar or less refined option.'}",
+                )
+
             starchy_keywords = [
                 "yam",
                 "potato",
@@ -217,7 +251,7 @@ class AIPipeline:
         selected_food_only = self._cap_recipe_ingredients(selected_food_only)
         risk_meta = flagged if isinstance(flagged, dict) else {}
         warning = self._get_diabetes_warning(selected_food_only) or risk_meta
-        self._ensure_diabetes_friendly_or_raise(selected_food_only, mode="ingredients")
+        self._ensure_diabetes_friendly_or_raise(selected_food_only, mode="ingredients", tier=tier)
         if non_food and (not isinstance(warning, dict) or not warning.get("code")):
             warning = {
                 "code": "non_food_ignored",
@@ -306,7 +340,7 @@ class AIPipeline:
         selected_food_only = self._cap_recipe_ingredients(selected_food_only, limit=14)
         risk_meta = flagged if isinstance(flagged, dict) else {}
         warning = self._get_diabetes_warning(selected_food_only) or risk_meta
-        self._ensure_diabetes_friendly_or_raise(selected_food_only, mode="ingredients")
+        self._ensure_diabetes_friendly_or_raise(selected_food_only, mode="ingredients", tier=tier)
         if non_food and (not isinstance(warning, dict) or not warning.get("code")):
             warning = {
                 "code": "non_food_ignored",
@@ -385,7 +419,7 @@ class AIPipeline:
         # Increasing the budget reduces false "Request failed" when providers have brief latency spikes.
         overall_budget_seconds = float(settings.ai_eat_now_budget_seconds) if mode in ("surprise", "quick") else 60.0
 
-        self._ensure_diabetes_friendly_or_raise(self._cap_recipe_ingredients(ingredients), mode=mode)
+        self._ensure_diabetes_friendly_or_raise(self._cap_recipe_ingredients(ingredients), mode=mode, tier=tier)
 
         recipes = self.ai.generate_recipes(
             self._cap_recipe_ingredients(ingredients),

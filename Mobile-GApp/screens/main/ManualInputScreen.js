@@ -44,10 +44,8 @@ export default function ManualInputScreen() {
   const requestControllerRef = useRef(null);
   const pollingRef = useRef(null);
   const timeoutRef = useRef(null);
-  const elapsedRef = useRef(null);
   const phaseRef = useRef(null);
   const [activeJobId, setActiveJobId] = useState(null);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [statusLine, setStatusLine] = useState('');
   const [scanStatus, setScanStatus] = useState({
     remaining: null,
@@ -192,16 +190,11 @@ export default function ManualInputScreen() {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
-    if (elapsedRef.current) {
-      clearInterval(elapsedRef.current);
-      elapsedRef.current = null;
-    }
     if (phaseRef.current) {
       clearInterval(phaseRef.current);
       phaseRef.current = null;
     }
     setLongWait(false);
-    setElapsedSeconds(0);
     setStatusLine('');
   };
 
@@ -216,36 +209,27 @@ export default function ManualInputScreen() {
 
   useEffect(() => {
     if (!isLoading) {
-      if (elapsedRef.current) clearInterval(elapsedRef.current);
-      elapsedRef.current = null;
       if (phaseRef.current) clearInterval(phaseRef.current);
       phaseRef.current = null;
-      setElapsedSeconds(0);
       setStatusLine('');
       return;
     }
 
-    setElapsedSeconds(0);
     setStatusLine(isEatNow ? 'Preparing meal ideas...' : 'Starting recipe generation...');
-
-    if (elapsedRef.current) clearInterval(elapsedRef.current);
-    elapsedRef.current = setInterval(() => {
-      setElapsedSeconds((prev) => prev + 1);
-    }, 1000);
 
     const phases = isEatNow
       ? [
-          'Checking your preferences...',
-          'Creating meal ideas...',
-          'Writing cooking steps...',
-          'Finalizing options...',
+          'Checking your preferences',
+          'Balancing nutrition',
+          'Creating meal ideas',
+          'Finishing your options',
         ]
       : [
-          'Sending ingredients...',
-          'Checking diabetes-friendly choices...',
-          'Creating recipe ideas...',
-          'Writing cooking steps...',
-          'Finalizing results...',
+          'Reviewing your ingredients',
+          'Balancing carbs and protein',
+          'Building recipe ideas',
+          'Writing cooking steps',
+          'Finishing your meal options',
         ];
     let idx = 0;
     if (phaseRef.current) clearInterval(phaseRef.current);
@@ -255,8 +239,6 @@ export default function ManualInputScreen() {
     }, 6500);
 
     return () => {
-      if (elapsedRef.current) clearInterval(elapsedRef.current);
-      elapsedRef.current = null;
       if (phaseRef.current) clearInterval(phaseRef.current);
       phaseRef.current = null;
     };
@@ -447,7 +429,8 @@ export default function ManualInputScreen() {
         }
         const detail = data?.detail;
         const message = detail?.message || detail || 'Unable to generate recipes.';
-        Alert.alert('Request failed', message);
+        const title = detail?.code === 'needs_clarification' ? 'Check ingredient' : 'Request failed';
+        Alert.alert(title, message);
         setIsLoading(false);
         return;
       }
@@ -487,16 +470,22 @@ export default function ManualInputScreen() {
   const modeParam = route.params?.mode;
   const isEatNow = modeParam === 'surprise' || modeParam === 'quick';
 
-  const formatElapsed = (seconds) => {
-    const s = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
-    const mm = String(Math.floor(s / 60)).padStart(2, '0');
-    const ss = String(s % 60).padStart(2, '0');
-    return `${mm}:${ss}`;
-  };
-
   const ingredientCount = Array.isArray(ingredients)
     ? ingredients.map((x) => `${x || ''}`.trim()).filter(Boolean).length
     : 0;
+  const loadingSteps = isEatNow
+    ? ['Reviewing preferences', 'Balancing nutrition', 'Creating meals']
+    : ['Reviewing ingredients', 'Balancing nutrition', 'Creating recipes'];
+  const activeLoadingStep =
+    statusLine?.includes('Balancing') || statusLine?.includes('diabetes')
+      ? 1
+      : statusLine?.includes('Building') ||
+        statusLine?.includes('Creating') ||
+        statusLine?.includes('Writing') ||
+        statusLine?.includes('Finishing') ||
+        statusLine?.includes('Generating')
+        ? 2
+        : 0;
 
   return (
     <View style={styles.container}>
@@ -661,47 +650,69 @@ export default function ManualInputScreen() {
       <Modal transparent visible={isLoading} animationType="fade">
         <View style={styles.loadingOverlay}>
           <View style={styles.loadingCard}>
-            <LinearGradient
-              colors={[Colors.primary, Colors.primaryLight]}
-              style={styles.loadingGradient}
-            >
-              <Ionicons name="restaurant-outline" size={56} color="white" />
-              <Text style={styles.loadingTitle}>
-                {isEatNow ? 'Meal ideas' : 'Recipes'}
-              </Text>
-              <Text style={styles.loadingSubtitle}>
-                {statusLine || (isEatNow ? 'Preparing meal ideas...' : 'Generating recipes...')}
-              </Text>
-
-              <View style={styles.loadingMetaRow}>
-                <View style={styles.loadingPill}>
-                  <Ionicons name="time-outline" size={14} color="rgba(255,255,255,0.9)" style={styles.loadingPillIcon} />
-                  <Text style={styles.loadingPillText}>
-                    Elapsed {formatElapsed(elapsedSeconds)}
-                  </Text>
-                </View>
-                <View style={styles.loadingPill}>
-                  <Ionicons name="leaf-outline" size={14} color="rgba(255,255,255,0.9)" style={styles.loadingPillIcon} />
-                  <Text style={styles.loadingPillText}>
-                    {ingredientCount ? `${ingredientCount} ingredient${ingredientCount !== 1 ? 's' : ''}` : 'Your selection'}
-                  </Text>
-                </View>
+            <View style={styles.loadingLogoWrap}>
+              <View style={styles.loadingLogoHalo} />
+              <View style={styles.loadingLogo}>
+                <Ionicons name="restaurant-outline" size={34} color={Colors.primary} />
               </View>
+            </View>
 
-              {longWait ? (
-                <View style={styles.longWaitBoxOnGradient}>
-                  <Text style={styles.longWaitTitleOnGradient}>Taking longer than usual</Text>
-                  <Text style={styles.longWaitTextOnGradient}>
-                    Still working in the background. You can keep waiting, or cancel and try again.
-                  </Text>
-                </View>
-              ) : null}
+            <Text style={styles.loadingTitle}>
+              {isEatNow ? 'Preparing meal ideas' : 'Building your recipes'}
+            </Text>
+            <Text style={styles.loadingSubtitle}>
+              {statusLine || (isEatNow ? 'Creating practical meal ideas from your preferences.' : 'Creating blood-sugar-friendly recipes from your ingredients.')}
+            </Text>
 
-              <ActivityIndicator size="large" color="white" style={styles.loadingSpinner} />
-              <TouchableOpacity style={styles.cancelButton} onPress={handleCancelRequest}>
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-            </LinearGradient>
+            <View style={styles.loadingIngredientBadge}>
+              <Ionicons name="leaf-outline" size={15} color={Colors.primary} />
+              <Text style={styles.loadingIngredientText}>
+                {ingredientCount ? `${ingredientCount} ingredient${ingredientCount !== 1 ? 's' : ''} selected` : 'Using your selection'}
+              </Text>
+            </View>
+
+            <View style={styles.loadingSteps}>
+              {loadingSteps.map((step, index) => {
+                const complete = index < activeLoadingStep;
+                const active = index === activeLoadingStep;
+                return (
+                  <View key={step} style={styles.loadingStepRow}>
+                    <View style={[
+                      styles.loadingStepIcon,
+                      complete && styles.loadingStepIconComplete,
+                      active && styles.loadingStepIconActive,
+                    ]}>
+                      {complete ? (
+                        <Ionicons name="checkmark" size={14} color="white" />
+                      ) : active ? (
+                        <ActivityIndicator size="small" color={Colors.primary} />
+                      ) : (
+                        <View style={styles.loadingStepDot} />
+                      )}
+                    </View>
+                    <Text style={[
+                      styles.loadingStepText,
+                      active && styles.loadingStepTextActive,
+                    ]}>
+                      {step}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+
+            {longWait ? (
+              <View style={styles.longWaitBox}>
+                <Text style={styles.longWaitTitle}>Taking longer than usual</Text>
+                <Text style={styles.longWaitText}>
+                  Still working in the background. You can keep waiting, or cancel and try again.
+                </Text>
+              </View>
+            ) : null}
+
+            <TouchableOpacity style={styles.cancelButton} onPress={handleCancelRequest}>
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -731,94 +742,156 @@ const styles = StyleSheet.create({
   },
   loadingOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    backgroundColor: 'rgba(8, 67, 55, 0.72)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24,
   },
   loadingCard: {
-    backgroundColor: 'transparent',
-    borderRadius: 16,
-    paddingVertical: 0,
-    paddingHorizontal: 0,
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    borderRadius: 28,
+    paddingVertical: 30,
+    paddingHorizontal: 24,
     alignItems: 'center',
     width: '100%',
-    maxWidth: 320,
-    overflow: 'hidden',
+    maxWidth: 380,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowOffset: { width: 0, height: 18 },
+    shadowRadius: 28,
+    elevation: 10,
   },
-  loadingGradient: {
-    width: '100%',
-    paddingVertical: 26,
-    paddingHorizontal: 18,
+  loadingLogoWrap: {
+    width: 88,
+    height: 88,
+    justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 18,
+  },
+  loadingLogoHalo: {
+    position: 'absolute',
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: 'rgba(11,90,70,0.08)',
+  },
+  loadingLogo: {
+    width: 66,
+    height: 66,
+    borderRadius: 33,
+    backgroundColor: '#F0FFF8',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(11,90,70,0.14)',
   },
   loadingTitle: {
-    marginTop: 14,
-    fontSize: 18,
-    fontWeight: '700',
-    color: 'white',
-  },
-  loadingSubtitle: {
-    marginTop: 8,
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.92)',
+    fontSize: 24,
+    fontWeight: '800',
+    color: Colors.text,
     textAlign: 'center',
   },
-  loadingMetaRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 14,
+  loadingSubtitle: {
+    marginTop: 10,
+    fontSize: 15,
+    color: Colors.textLight,
+    textAlign: 'center',
+    lineHeight: 22,
+    minHeight: 44,
   },
-  loadingPill: {
+  loadingIngredientBadge: {
+    marginTop: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#F0FFF8',
+    borderWidth: 1,
+    borderColor: 'rgba(11,90,70,0.12)',
+  },
+  loadingIngredientText: {
+    marginLeft: 7,
+    color: Colors.primary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  loadingSteps: {
+    width: '100%',
+    marginTop: 24,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 18,
+    padding: 14,
+  },
+  loadingStepRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    marginHorizontal: 5,
   },
-  loadingPillIcon: {
-    marginRight: 6,
+  loadingStepIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
   },
-  loadingPillText: {
-    color: 'rgba(255,255,255,0.95)',
-    fontSize: 12,
-    fontWeight: '600',
+  loadingStepIconComplete: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
   },
-  longWaitBoxOnGradient: {
+  loadingStepIconActive: {
+    borderColor: Colors.primary,
+    backgroundColor: '#F0FFF8',
+  },
+  loadingStepDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: Colors.textMuted,
+  },
+  loadingStepText: {
+    flex: 1,
+    color: Colors.textLight,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  loadingStepTextActive: {
+    color: Colors.text,
+  },
+  longWaitBox: {
     marginTop: 16,
     padding: 12,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: '#FEF3C7',
     width: '100%',
   },
-  longWaitTitleOnGradient: {
+  longWaitTitle: {
     fontSize: 13,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.95)',
+    fontWeight: '800',
+    color: '#92400E',
     marginBottom: 4,
     textAlign: 'center',
   },
-  longWaitTextOnGradient: {
+  longWaitText: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.92)',
+    color: '#92400E',
     lineHeight: 18,
     textAlign: 'center',
   },
-  loadingSpinner: {
-    marginTop: 24,
-  },
   cancelButton: {
-    marginTop: 16,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    paddingVertical: 10,
-    paddingHorizontal: 24,
-    borderRadius: 20,
+    marginTop: 20,
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 11,
+    paddingHorizontal: 22,
+    borderRadius: 999,
   },
   cancelButtonText: {
-    color: 'rgba(255,255,255,0.95)',
-    fontWeight: '600',
+    color: Colors.textLight,
+    fontWeight: '800',
     fontSize: 14,
   },
   header: {
