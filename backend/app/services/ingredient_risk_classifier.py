@@ -36,7 +36,7 @@ class IngredientRiskClassifier:
 
     def _cache_key(self, tier: str, items: List[str]) -> str:
         normalized = sorted({self._normalize(i) for i in (items or []) if self._normalize(i)})
-        raw = json.dumps({"version": 2, "tier": tier, "items": normalized}, sort_keys=True)
+        raw = json.dumps({"version": 3, "tier": tier, "items": normalized}, sort_keys=True)
         return f"ingrisk:{hashlib.sha256(raw.encode()).hexdigest()}"
 
     def _ruleset_check(self, items: List[str]) -> Dict[str, Dict[str, str]]:
@@ -62,9 +62,30 @@ class IngredientRiskClassifier:
             "fruit juice": "Fruit juice can raise blood sugar quickly.",
             "soda": "Sugary drinks are not suitable for diabetes-friendly recipe generation.",
         }
+        clarified_starches = {
+            "brown bread",
+            "wholegrain bread",
+            "whole grain bread",
+            "whole wheat bread",
+            "seeded bread",
+            "sourdough bread",
+            "rye bread",
+            "brown rice",
+            "basmati rice",
+            "whole wheat pasta",
+            "wholegrain pasta",
+            "high fiber pasta",
+            "high fibre pasta",
+            "wholegrain noodles",
+        }
         result: Dict[str, Dict[str, str]] = {}
         for item in items:
-            if item in needs_detail:
+            if item in clarified_starches:
+                result[item] = {
+                    "risk": "caution",
+                    "reason": "Use a modest portion and balance with protein and non-starchy vegetables.",
+                }
+            elif item in needs_detail:
                 result[item] = {"risk": "needs_clarification", "reason": needs_detail[item]}
             elif item in avoid:
                 result[item] = {"risk": "avoid", "reason": avoid[item]}
@@ -137,7 +158,7 @@ class IngredientRiskClassifier:
                     risk = "ok"
                 risk_by_name[name] = {"risk": risk, "reason": reason}
 
-            # The small ruleset wins for generic high-glycemic terms.
+            # The small ruleset wins for generic high-glycemic terms and explicit clarified options.
             risk_by_name.update(rules)
 
             # Default any missing items to ok.
