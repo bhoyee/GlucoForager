@@ -22,6 +22,7 @@ export const API_ENDPOINTS = {
   RESET_PASSWORD: '/api/auth/reset-password',
   RECIPE_SUGGESTIONS: '/api/recipes/suggestions',
   RECENT_RECIPES: '/api/recipes/recent',
+  RECIPE_HISTORY: '/api/recipes/history',
   RECIPE_DETAIL: '/api/recipes',
   SCANS_TODAY: '/api/user/scans-today',
   AI_VISION_RECIPES: '/api/ai/recipes/vision',
