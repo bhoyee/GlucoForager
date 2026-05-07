@@ -32,13 +32,19 @@ export default function RecentRecipesScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const headerPaddingTop = Math.max(insets.top, 16);
   const contentBottomPadding = Math.max(tabBarHeight - 12, 8);
+  const isHistoryMode = route.params?.mode === 'history';
+  const initialTotal = Number(route.params?.totalRecipes || 0);
   const initialRecipes = Array.isArray(route.params?.initialRecipes)
     ? route.params.initialRecipes
     : [];
 
-  const [recipes, setRecipes] = useState(initialRecipes);
-  const [isLoading, setIsLoading] = useState(initialRecipes.length === 0);
+  const [recipes, setRecipes] = useState(isHistoryMode ? [] : initialRecipes);
+  const [isLoading, setIsLoading] = useState(isHistoryMode || initialRecipes.length === 0);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [nextOffset, setNextOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(isHistoryMode);
+  const [totalRecipes, setTotalRecipes] = useState(initialTotal);
   const [recipeImagesEnabled, setRecipeImagesEnabled] = useState(true);
 
   useEffect(() => {
@@ -118,73 +124,104 @@ export default function RecentRecipesScreen() {
     return `${label} ${n}${unit ? unit : ''}`;
   };
 
-  const loadRecent = useCallback(async () => {
+  const hydrateRecipeImages = useCallback(async (items) => {
+    return Promise.all(
+      items.map(async (recipe) => {
+        if (!recipe || typeof recipe !== 'object') return recipe;
+        const directUrl =
+          (typeof recipe?.image_url === 'string' && recipe.image_url.trim())
+            ? recipe.image_url.trim()
+            : (typeof recipe?.image === 'string' && recipe.image.trim())
+              ? recipe.image.trim()
+              : '';
+        if (directUrl) {
+          await setCachedRecipeImageUrl(recipe, directUrl);
+          return { ...recipe, image_url: recipe.image_url || directUrl, image: recipe.image || directUrl };
+        }
+        const cached = await getCachedRecipeImageUrl(recipe);
+        if (!cached) return recipe;
+        return { ...recipe, image_url: cached, image: cached, image_source: recipe.image_source || 'ai' };
+      })
+    );
+  }, []);
+
+  const loadRecipes = useCallback(async ({ reset = true, append = false, offsetOverride = 0 } = {}) => {
     try {
+      if (append) {
+        setIsLoadingMore(true);
+      } else if (reset) {
+        setIsLoading(true);
+      }
       const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         setRecipes([]);
+        setHasMore(false);
         return;
       }
+      const offset = append ? offsetOverride : 0;
+      const endpoint = isHistoryMode
+        ? `${API_URL}${API_ENDPOINTS.RECIPE_HISTORY}?limit=20&offset=${offset}`
+        : `${API_URL}${API_ENDPOINTS.RECENT_RECIPES}`;
       const response = await apiFetch(
-        `${API_URL}${API_ENDPOINTS.RECENT_RECIPES}`,
+        endpoint,
         { headers: { Authorization: `Bearer ${token}` } },
         { onUnauthorized: signOut }
       );
       if (response.status === 401) {
         setRecipes([]);
+        setHasMore(false);
         return;
       }
       if (!response.ok) {
-        Alert.alert('Error', 'Unable to load recent recipes right now.');
+        Alert.alert('Error', `Unable to load ${isHistoryMode ? 'recipe history' : 'recent recipes'} right now.`);
         return;
       }
       const data = await response.json();
       const items = Array.isArray(data.items) ? data.items : [];
+      const hydrated = await hydrateRecipeImages(items);
 
-      const hydrated = await Promise.all(
-        items.map(async (recipe) => {
-          if (!recipe || typeof recipe !== 'object') return recipe;
-          const directUrl =
-            (typeof recipe?.image_url === 'string' && recipe.image_url.trim())
-              ? recipe.image_url.trim()
-              : (typeof recipe?.image === 'string' && recipe.image.trim())
-                ? recipe.image.trim()
-                : '';
-          if (directUrl) {
-            await setCachedRecipeImageUrl(recipe, directUrl);
-            return { ...recipe, image_url: recipe.image_url || directUrl, image: recipe.image || directUrl };
-          }
-          const cached = await getCachedRecipeImageUrl(recipe);
-          if (!cached) return recipe;
-          return { ...recipe, image_url: cached, image: cached, image_source: recipe.image_source || 'ai' };
-        })
-      );
-
-      setRecipes(hydrated);
+      setRecipes((current) => (append ? [...current, ...hydrated] : hydrated));
+      if (isHistoryMode) {
+        setTotalRecipes(Number(data.total || hydrated.length || 0));
+        setNextOffset(Number(data.next_offset || 0));
+        setHasMore(Boolean(data.has_more));
+      } else {
+        setHasMore(false);
+        setNextOffset(0);
+        setTotalRecipes(hydrated.length);
+      }
     } catch (error) {
-      Alert.alert('Error', 'Unable to load recent recipes right now.');
+      Alert.alert('Error', `Unable to load ${isHistoryMode ? 'recipe history' : 'recent recipes'} right now.`);
     } finally {
       setIsLoading(false);
+      setIsLoadingMore(false);
       setRefreshing(false);
     }
-  }, [signOut]);
+  }, [hydrateRecipeImages, isHistoryMode, signOut]);
 
   useEffect(() => {
     if (isFocused) {
-      loadRecent();
+      loadRecipes({ reset: true });
     }
-  }, [isFocused, loadRecent]);
+  }, [isFocused, loadRecipes]);
 
   const onRefresh = () => {
     setRefreshing(true);
-    loadRecent();
+    loadRecipes({ reset: true });
+  };
+
+  const handleLoadMore = () => {
+    if (!isHistoryMode || !hasMore || isLoadingMore) return;
+    loadRecipes({ reset: false, append: true, offsetOverride: nextOffset });
   };
 
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={Colors.primary} />
-        <Text style={styles.loadingText}>Loading recent recipes...</Text>
+        <Text style={styles.loadingText}>
+          {isHistoryMode ? 'Loading recipe history...' : 'Loading recent recipes...'}
+        </Text>
       </View>
     );
   }
@@ -199,15 +236,17 @@ export default function RecentRecipesScreen() {
           >
             <Ionicons name="arrow-back" size={22} color={Colors.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Recent Recipes</Text>
+          <Text style={styles.headerTitle}>{isHistoryMode ? 'Recipe History' : 'Recent Recipes'}</Text>
           <View style={styles.headerRight} />
         </View>
 
         <View style={styles.emptyContainer}>
           <Ionicons name="time-outline" size={96} color={Colors.textLight} />
-          <Text style={styles.emptyTitle}>No recent recipes</Text>
+          <Text style={styles.emptyTitle}>
+            {isHistoryMode ? 'No recipe history' : 'No recent recipes'}
+          </Text>
           <Text style={styles.emptySubtitle}>
-            Your most recent AI results will show here.
+            {isHistoryMode ? 'Every generated recipe will show here.' : 'Your most recent AI results will show here.'}
           </Text>
           <TouchableOpacity
             style={styles.button}
@@ -231,8 +270,10 @@ export default function RecentRecipesScreen() {
           <Ionicons name="arrow-back" size={22} color={Colors.text} />
         </TouchableOpacity>
         <View style={styles.headerText}>
-          <Text style={styles.headerTitle}>Recent Recipes</Text>
-          <Text style={styles.headerSubtitle}>{recipes.length} recipes</Text>
+          <Text style={styles.headerTitle}>{isHistoryMode ? 'Recipe History' : 'Recent Recipes'}</Text>
+          <Text style={styles.headerSubtitle}>
+            {isHistoryMode ? `${recipes.length} of ${totalRecipes || recipes.length} recipes` : `${recipes.length} recipes`}
+          </Text>
         </View>
       </View>
 
@@ -256,7 +297,7 @@ export default function RecentRecipesScreen() {
             recipe.image_source !== 'placeholder';
           return (
             <TouchableOpacity
-              key={recipe.id || `${title}-${index}`}
+              key={recipe.history_key || recipe.id || `${title}-${index}`}
               style={styles.recipeCard}
               onPress={() => navigation.navigate('RecipeDetail', { recipe, source: 'ai' })}
               activeOpacity={0.7}
@@ -291,6 +332,21 @@ export default function RecentRecipesScreen() {
             </TouchableOpacity>
           );
         })}
+        {isHistoryMode && hasMore ? (
+          <TouchableOpacity
+            style={[styles.loadMoreButton, isLoadingMore && styles.loadMoreButtonDisabled]}
+            onPress={handleLoadMore}
+            disabled={isLoadingMore}
+            activeOpacity={0.85}
+          >
+            {isLoadingMore ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <Ionicons name="add-circle-outline" size={18} color="white" />
+            )}
+            <Text style={styles.loadMoreText}>{isLoadingMore ? 'Loading...' : 'Load more recipes'}</Text>
+          </TouchableOpacity>
+        ) : null}
       </ScrollView>
     </View>
   );
@@ -455,5 +511,25 @@ const styles = StyleSheet.create({
   },
   recipeFib: {
     color: Colors.secondary,
+  },
+  loadMoreButton: {
+    marginTop: 4,
+    marginBottom: 18,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    backgroundColor: Colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  loadMoreButtonDisabled: {
+    opacity: 0.72,
+  },
+  loadMoreText: {
+    color: 'white',
+    fontSize: 15,
+    fontWeight: '800',
   },
 });
