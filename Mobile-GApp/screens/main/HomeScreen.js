@@ -756,7 +756,7 @@ export default function HomeScreen() {
           <View style={styles.smartMoveCard}>
             <TouchableOpacity style={styles.smartMoveMain} onPress={handleOpenTip} activeOpacity={0.9}>
               <View style={styles.smartMoveIcon}>
-                <Ionicons name="bulb-outline" size={22} color={Colors.primary} />
+                <Ionicons name="bulb-outline" size={22} color="white" />
               </View>
               <View style={styles.smartMoveText}>
                 <Text style={styles.smartMoveLabel}>Food tip</Text>
@@ -828,8 +828,11 @@ export default function HomeScreen() {
             >
               <View style={styles.miniRowContent}>
                 <View style={styles.miniLeft}>
-                  <Ionicons name="swap-horizontal-outline" size={20} color={Colors.secondary} />
+                  <View style={styles.swapIconWrap}>
+                    <Ionicons name="swap-horizontal-outline" size={20} color="white" />
+                  </View>
                   <View style={styles.miniText}>
+                    <Text style={styles.swapBadge}>Smart swaps</Text>
                     <Text style={styles.miniTitle}>Food swaps</Text>
                     <Text style={styles.miniSub} numberOfLines={1}>
                       Carbs, desserts, drinks
@@ -1416,7 +1419,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     backgroundColor: Colors.surface,
     borderRadius: 20,
-    padding: 14,
+    padding: 10,
     borderWidth: 1,
     borderColor: Colors.border,
     shadowColor: '#000',
@@ -1429,12 +1432,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    borderRadius: 16,
+    padding: 12,
+    backgroundColor: `${Colors.primary}08`,
   },
   smartMoveIcon: {
     width: 48,
     height: 48,
     borderRadius: 16,
-    backgroundColor: `${Colors.primary}12`,
+    backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1462,10 +1468,12 @@ const styles = StyleSheet.create({
     color: Colors.textLight,
   },
   smartChallengeRow: {
-    marginTop: 14,
-    paddingTop: 14,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    marginTop: 10,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: 'rgba(237, 137, 54, 0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(237, 137, 54, 0.18)',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
@@ -1474,7 +1482,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 12,
-    backgroundColor: `${Colors.accent}14`,
+    backgroundColor: 'rgba(237, 137, 54, 0.18)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1586,10 +1594,37 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   miniCardSwaps: {
-    backgroundColor: 'rgba(49, 130, 206, 0.08)',
+    backgroundColor: '#FFF7E8',
+    borderWidth: 1,
+    borderColor: 'rgba(237, 137, 54, 0.26)',
+    shadowColor: Colors.accent,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 3,
   },
   miniCardChallenge: {
     backgroundColor: `${Colors.primary}14`,
+  },
+  swapIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: Colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  swapBadge: {
+    alignSelf: 'flex-start',
+    marginBottom: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: 'rgba(237, 137, 54, 0.14)',
+    color: '#9A4F12',
+    fontSize: 10,
+    fontWeight: '900',
+    textTransform: 'uppercase',
   },
   miniTitle: { fontSize: 16, fontWeight: '900', color: Colors.text },
   miniSub: { marginTop: 3, fontSize: 13, color: Colors.textLight, fontWeight: '600' },
