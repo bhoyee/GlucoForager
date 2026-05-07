@@ -104,7 +104,7 @@
 
   </main>
 
-  <footer class="footer"><div class="container footer-row"><a class="brand brand--white" href="#top"><img src="/images/logo.png" alt="GlucoForager logo" width="40" height="40" loading="lazy"><span>GlucoForager</span></a><p>© 2025 GlucoForager · glucoforager.com</p><div class="footer-links"><a href="https://glucoforager.com/privacy-policy">Privacy Policy</a><a href="https://glucoforager.com/terms">Terms</a></div></div></footer>
+  <footer class="footer"><div class="container footer-row"><a class="brand brand--white" href="#top"><img src="/images/logo.png" alt="GlucoForager logo" width="40" height="40" loading="lazy"><span>GlucoForager</span></a><p>© <span id="footer-year">2026</span> GlucoForager · glucoforager.com</p><div class="footer-links"><a href="https://glucoforager.com/privacy-policy">Privacy Policy</a><a href="https://glucoforager.com/terms">Terms</a></div></div></footer>
 
   <div class="exit-overlay" id="exit-popup" role="dialog" aria-modal="true" aria-labelledby="exit-title">
     <div class="exit-modal"><button class="close-modal" type="button" aria-label="Close popup">×</button><h2 id="exit-title">Wait - don't miss the free guide!</h2><p>Enter your email and we will send the free diabetic meal prep guide to your inbox.</p><form class="lead-form js-lead-form" action="https://api.glucoforager.com/api/newsletter/subscribe" method="post" novalidate><input type="hidden" name="source" value="free-guide-exit"><label class="sr-only" for="exit-email">Email address</label><input id="exit-email" type="email" name="email" placeholder="Your email address" required><input class="hp" type="text" name="website" tabindex="-1" autocomplete="off" hidden><button class="submit-btn" type="submit">Send It Free</button></form></div>
@@ -112,6 +112,7 @@
 
   <script>
     const $=(s,c=document)=>c.querySelector(s),$$=(s,c=document)=>Array.from(c.querySelectorAll(s));
+    $("#footer-year").textContent=new Date().getFullYear();
     $$("[data-scroll]").forEach(b=>b.addEventListener("click",()=>$(b.dataset.scroll)?.scrollIntoView({behavior:"smooth",block:"start"})));
     function validEmail(v){return/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)}
     function newsletterEndpoint(){const h=location.hostname;return h==="localhost"||h==="127.0.0.1"?"http://localhost:8010/api/newsletter/subscribe":"https://api.glucoforager.com/api/newsletter/subscribe"}

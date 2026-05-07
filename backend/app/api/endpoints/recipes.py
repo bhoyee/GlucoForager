@@ -1,7 +1,7 @@
 import random
 import re
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from ...database import get_db
@@ -292,6 +292,52 @@ def recent_recipes(
                 recipe["image_url"] = url
                 recipe["image_source"] = "ai"
     return {"items": recipes[:3]}
+
+
+@router.get("/history")
+def recipe_history(
+    limit: int = Query(20, ge=1, le=50),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    rows = (
+        db.query(RecipeHistory)
+        .filter(RecipeHistory.user_id == current_user.id)
+        .order_by(RecipeHistory.created_at.desc(), RecipeHistory.id.desc())
+        .all()
+    )
+
+    all_items: list[dict] = []
+    for row in rows:
+        recipes = row.recipes if isinstance(row.recipes, list) else []
+        for index, recipe in enumerate(recipes):
+            if not isinstance(recipe, dict):
+                continue
+            item = dict(recipe)
+            fingerprint = _ai_recipe_fingerprint(item)
+            url = cache.get(f"recipeimg:{fingerprint}:url")
+            if url and isinstance(url, str):
+                item["image_url"] = url
+                item["image_source"] = "ai"
+            item["history_key"] = f"history-{row.id}-{index}"
+            item.setdefault("id", item["history_key"])
+            item["history_id"] = row.id
+            item["history_source"] = row.source
+            item["history_created_at"] = row.created_at.isoformat() if row.created_at else None
+            all_items.append(item)
+
+    total = len(all_items)
+    page = all_items[offset : offset + limit]
+    next_offset = offset + len(page)
+    return {
+        "items": page,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "next_offset": next_offset if next_offset < total else None,
+        "has_more": next_offset < total,
+    }
 
 
 @router.get("/{recipe_id}")

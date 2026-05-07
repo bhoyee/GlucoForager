@@ -557,6 +557,13 @@ export default function HomeScreen() {
     navigation.navigate('RecentRecipes', { initialRecipes: recentRecipes });
   };
 
+  const handleViewRecipeHistory = () => {
+    navigation.navigate('RecentRecipes', {
+      mode: 'history',
+      totalRecipes: userStats.recipesGenerated,
+    });
+  };
+
   const handleViewRecipeDetail = (recipe) => {
     navigation.navigate('RecipeDetail', { recipe, source: 'admin' });
   };
@@ -601,10 +608,19 @@ export default function HomeScreen() {
     );
   }
 
+  const scanProgress = dailyLimit ? Math.min(100, Math.max(0, (todayScans / dailyLimit) * 100)) : 0;
+  const challengeCompleted = Number(dailyChallenge?.progress?.completed || 0);
+  const challengeTotal = Number(dailyChallenge?.progress?.total || 0);
+  const hasChallenge = Boolean(dailyChallenge?.tasks?.length);
+
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#EEF2FF" />
-      <LinearGradient colors={['#EEF2FF', '#ECFEFF']} style={[styles.heroHeader, { paddingTop: headerPaddingTop }]}>
+      <StatusBar barStyle="light-content" backgroundColor={Colors.primaryDark} />
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
+      >
+      <LinearGradient colors={[Colors.primaryDark, Colors.primary, Colors.primaryLight]} style={[styles.heroHeader, { paddingTop: headerPaddingTop }]}>
         <View style={styles.heroTopRow}>
           <View>
             <Text style={styles.greeting} numberOfLines={1} ellipsizeMode="tail">
@@ -621,33 +637,25 @@ export default function HomeScreen() {
             </Text>
           </View>
           <TouchableOpacity style={styles.notificationButton} onPress={() => navigation.navigate('Profile')}>
-            <Ionicons name="notifications-outline" size={24} color={Colors.text} />
+            <Ionicons name="person-outline" size={22} color="white" />
           </TouchableOpacity>
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickActionsRow}>
-          <Pressable
-            style={({ pressed }) => [styles.quickActionChip, styles.quickActionChipEatNow, pressed && styles.cardPressed]}
-            android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
-            onPress={handleOpenEatNow}
-          >
-            <Ionicons name="fast-food-outline" size={18} color="white" />
-            <Text style={[styles.quickActionText, styles.quickActionTextOnDark]}>Eat now</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.quickActionChip, styles.quickActionChipSwaps, pressed && styles.cardPressed]}
-            android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
-            onPress={handleOpenSwaps}
-          >
-            <Ionicons name="swap-horizontal-outline" size={18} color="white" />
-            <Text style={[styles.quickActionText, styles.quickActionTextOnDark]}>Food swaps</Text>
-          </Pressable>
-        </ScrollView>
+        <View style={styles.heroStatsRow}>
+          <TouchableOpacity style={styles.heroStatPill} onPress={handleViewRecipeHistory} activeOpacity={0.86}>
+            <Text style={styles.heroStatValue}>{userStats.recipesGenerated}</Text>
+            <Text style={styles.heroStatLabel}>recipes made</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.heroStatPill} onPress={() => navigation.navigate('Favorites')} activeOpacity={0.86}>
+            <Text style={styles.heroStatValue}>{userStats.favoritesSaved}</Text>
+            <Text style={styles.heroStatLabel}>saved</Text>
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.heroCtaWrap}>
-          <LinearGradient colors={Gradients.primary} style={styles.heroPrimaryCta}>
+          <View style={styles.heroPrimaryCta}>
             <View style={styles.heroPrimaryCtaContent}>
-              <View style={styles.heroCtaIcon}>
+              <View style={styles.heroPrimaryIcon}>
                 <Ionicons name="camera-outline" size={22} color="white" />
               </View>
               <View style={{ flex: 1 }}>
@@ -661,7 +669,7 @@ export default function HomeScreen() {
                 <Ionicons name="arrow-forward" size={16} color="white" />
               </TouchableOpacity>
             </View>
-          </LinearGradient>
+          </View>
 
           <Pressable
             style={({ pressed }) => [styles.heroSecondaryCta, pressed && styles.cardPressed]}
@@ -681,12 +689,25 @@ export default function HomeScreen() {
             </View>
             <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
           </Pressable>
+          {!userIsPremium ? (
+            <View style={styles.heroUsageWrap}>
+              <View style={styles.heroUsageTop}>
+                <Text style={styles.heroUsageLabel}>Daily scan usage</Text>
+                <Text style={styles.heroUsageCount}>{todayScans}/{dailyLimit}</Text>
+              </View>
+              <View style={styles.heroUsageBar}>
+                <View style={[styles.heroUsageFill, { width: `${scanProgress}%` }]} />
+              </View>
+              {Number(remainingScans) <= 0 ? (
+                <TouchableOpacity style={styles.heroUpgradeButton} onPress={handleUpgradePaywall} activeOpacity={0.9}>
+                  <Text style={styles.heroUpgradeText}>Upgrade for unlimited scans</Text>
+                  <Ionicons name="arrow-forward" size={15} color="white" />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          ) : null}
         </View>
       </LinearGradient>
-      <ScrollView 
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
-      >
         {isRefreshing && (
           <View style={styles.refreshRow}>
             <ActivityIndicator size="small" color={Colors.primary} />
@@ -702,42 +723,6 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
         )}
-
-        {/* Search Counter Card */}
-        <LinearGradient colors={Gradients.primary} style={styles.counterCard}>
-          <View style={styles.counterHeader}>
-            <View>
-              <Text style={styles.counterTitle}>Daily Scans</Text>
-              <Text style={styles.counterSubtitle}>
-                {userIsPremium ? 'Unlimited scans' : `${remainingScans} scans remaining today`}
-              </Text>
-            </View>
-            <View style={styles.counterIcon}>
-              <Ionicons name="camera-outline" size={24} color="white" />
-            </View>
-          </View>
-          
-          {!userIsPremium && (
-            <View style={styles.progressBar}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${dailyLimit ? (todayScans / dailyLimit) * 100 : 0}%` },
-                ]}
-              />
-            </View>
-          )}
-          
-        {!userIsPremium && Number(remainingScans) <= 0 && (
-          <TouchableOpacity 
-            style={styles.upgradePrompt}
-            onPress={handleUpgradePaywall}
-            >
-              <Text style={styles.upgradeText}>Upgrade to Premium</Text>
-              <Ionicons name="arrow-forward" size={16} color={Colors.primary} />
-            </TouchableOpacity>
-          )}
-        </LinearGradient>
 
         {foodProfileHasPreferences === true ? null : (
           <View style={styles.section}>
@@ -763,78 +748,56 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* Daily guidance */}
+        {/* Daily smart move */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Daily guidance</Text>
-          <Text style={styles.sectionSubtitle}>Small daily actions to support steadier blood sugar.</Text>
+          <Text style={styles.sectionTitle}>Today's smart move</Text>
+          <Text style={styles.sectionSubtitle}>One practical nudge for steadier choices today.</Text>
 
-          <Pressable
-            style={({ pressed }) => [styles.tipCard, pressed && styles.cardPressed]}
-            android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
-            onPress={handleOpenTip}
-          >
-            <View style={styles.tipIcon}>
-              <Ionicons name="bulb-outline" size={20} color={Colors.primary} />
-            </View>
-            <View style={styles.tipText}>
-              <Text style={styles.tipLabel}>Today's tip</Text>
-              <Text style={styles.tipTitle} numberOfLines={2}>
-                {todayTip.title}
-              </Text>
-              <Text style={styles.tipSnippet} numberOfLines={1}>
-                {todayTip.tip || todayTip.body || 'Small daily actions to support steadier blood sugar.'}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
-          </Pressable>
-        </View>
-
-        {dailyChallenge?.tasks?.length ? (
-          <View style={styles.section}>
-            <Pressable
-              style={({ pressed }) => [styles.challengeCard, pressed && styles.cardPressed]}
-              android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
-              onPress={handleOpenChallenge}
-            >
-              <View style={styles.challengeIcon}>
-                <Ionicons name="trophy-outline" size={20} color={Colors.primary} />
+          <View style={styles.smartMoveCard}>
+            <TouchableOpacity style={styles.smartMoveMain} onPress={handleOpenTip} activeOpacity={0.9}>
+              <View style={styles.smartMoveIcon}>
+                <Ionicons name="bulb-outline" size={22} color="white" />
               </View>
-              <View style={styles.challengeText}>
-                <Text style={styles.tipLabel}>Challenge</Text>
-                <Text style={styles.tipTitle} numberOfLines={2}>
-                  {dailyChallenge.completed_today
-                    ? 'Challenge complete'
-                    : "Today's Diabetes Challenge"}
+              <View style={styles.smartMoveText}>
+                <Text style={styles.smartMoveLabel}>Food tip</Text>
+                <Text style={styles.smartMoveTitle} numberOfLines={2}>
+                  {todayTip.title}
                 </Text>
-                <Text style={styles.tipSnippet} numberOfLines={1}>
-                  Progress {Number(dailyChallenge?.progress?.completed || 0)} / {Number(dailyChallenge?.progress?.total || 0)} | Streak {Number(dailyChallenge?.streak_days || 0)} days
+                <Text style={styles.smartMoveSnippet} numberOfLines={2}>
+                  {todayTip.tip || todayTip.body || 'Small daily actions to support steadier blood sugar.'}
                 </Text>
-                <View style={styles.challengeRows}>
-                  {dailyChallenge.tasks.slice(0, 2).map((t) => (
-                    <View key={t.id} style={styles.challengeRow}>
-                      <Ionicons
-                        name={t.completed ? 'checkmark-circle' : 'ellipse-outline'}
-                        size={14}
-                        color={t.completed ? Colors.success : Colors.textLight}
-                      />
-                      <Text style={styles.challengeRowText} numberOfLines={1}>
-                        {t.text}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
               </View>
               <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
-            </Pressable>
+            </TouchableOpacity>
+
+            {hasChallenge ? (
+              <TouchableOpacity style={styles.smartChallengeRow} onPress={handleOpenChallenge} activeOpacity={0.9}>
+                <View style={styles.smartChallengeIcon}>
+                  <Ionicons
+                    name={dailyChallenge.completed_today ? 'checkmark-circle' : 'trophy-outline'}
+                    size={18}
+                    color={dailyChallenge.completed_today ? Colors.success : Colors.accent}
+                  />
+                </View>
+                <View style={styles.smartChallengeText}>
+                  <Text style={styles.smartChallengeTitle} numberOfLines={1}>
+                    {dailyChallenge.completed_today ? 'Challenge complete' : "Today's challenge"}
+                  </Text>
+                  <Text style={styles.smartChallengeMeta} numberOfLines={1}>
+                    {challengeCompleted}/{challengeTotal} done • {Number(dailyChallenge?.streak_days || 0)} day streak
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={Colors.textLight} />
+              </TouchableOpacity>
+            ) : null}
           </View>
-        ) : null}
+        </View>
 
-        {/* Main Actions */}
+        {/* Eat now */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick start</Text>
-          <Text style={styles.sectionSubtitle}>Choose a path to get ideas fast.</Text>
+          <Text style={styles.sectionTitle}>Eat now</Text>
+          <Text style={styles.sectionSubtitle}>Quick ideas for what you have right now.</Text>
 
-          {/* Eat now */}
           <TouchableOpacity style={styles.eatNowCard} activeOpacity={0.9} onPress={handleOpenEatNow}>
             <View style={styles.eatNowLeft}>
               <View style={styles.eatNowIcon}>
@@ -865,8 +828,11 @@ export default function HomeScreen() {
             >
               <View style={styles.miniRowContent}>
                 <View style={styles.miniLeft}>
-                  <Ionicons name="swap-horizontal-outline" size={20} color={Colors.secondary} />
+                  <View style={styles.swapIconWrap}>
+                    <Ionicons name="swap-horizontal-outline" size={20} color="white" />
+                  </View>
                   <View style={styles.miniText}>
+                    <Text style={styles.swapBadge}>Smart swaps</Text>
                     <Text style={styles.miniTitle}>Food swaps</Text>
                     <Text style={styles.miniSub} numberOfLines={1}>
                       Carbs, desserts, drinks
@@ -1037,13 +1003,18 @@ const styles = StyleSheet.create({
     color: Colors.textLight,
   },
   scrollContent: {
-    paddingTop: 14,
+    paddingTop: 0,
   },
   heroHeader: {
     paddingHorizontal: 20,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    paddingBottom: 18,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    elevation: 8,
   },
   heroTopRow: {
     flexDirection: 'row',
@@ -1084,13 +1055,22 @@ const styles = StyleSheet.create({
     color: 'white',
   },
   heroCtaWrap: {
-    marginTop: 12,
+    marginTop: 14,
     gap: 10,
     paddingBottom: 6,
   },
   heroPrimaryCta: {
-    borderRadius: 18,
+    borderRadius: 22,
     padding: 14,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.7)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 4,
+    overflow: 'hidden',
   },
   heroPrimaryCtaContent: {
     flexDirection: 'row',
@@ -1105,16 +1085,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  heroPrimaryIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   heroCtaTitle: {
     fontSize: 15,
     fontWeight: '900',
-    color: 'white',
+    color: Colors.text,
   },
   heroCtaSub: {
     marginTop: 2,
     fontSize: 12,
     fontWeight: '700',
-    color: 'rgba(255,255,255,0.9)',
+    color: Colors.textLight,
   },
   heroCtaButton: {
     flexDirection: 'row',
@@ -1123,7 +1111,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 14,
-    backgroundColor: 'rgba(0,0,0,0.16)',
+    backgroundColor: Colors.primary,
   },
   heroCtaButtonText: {
     color: 'white',
@@ -1140,6 +1128,55 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 12,
+  },
+  heroUsageWrap: {
+    borderRadius: 18,
+    padding: 14,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+  },
+  heroUsageTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 9,
+  },
+  heroUsageLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: 'rgba(255,255,255,0.78)',
+  },
+  heroUsageCount: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: 'white',
+  },
+  heroUsageBar: {
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    overflow: 'hidden',
+  },
+  heroUsageFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: 'white',
+  },
+  heroUpgradeButton: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 14,
+    paddingVertical: 11,
+    backgroundColor: Colors.accent,
+  },
+  heroUpgradeText: {
+    color: 'white',
+    fontSize: 13,
+    fontWeight: '900',
   },
   heroSecondaryLeft: {
     flexDirection: 'row',
@@ -1173,23 +1210,25 @@ const styles = StyleSheet.create({
   greeting: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: Colors.text,
+    color: 'white',
   },
   greetingName: {
     fontSize: 16,
     fontWeight: '900',
-    color: Colors.text,
+    color: 'white',
   },
   subGreeting: {
     fontSize: 16,
-    color: Colors.textLight,
+    color: 'rgba(255,255,255,0.78)',
     marginTop: 4,
   },
   notificationButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: Colors.surface,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.22)',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -1197,6 +1236,33 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
+  },
+  heroStatsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
+  heroStatPill: {
+    flex: 1,
+    minHeight: 58,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(255,255,255,0.13)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+  },
+  heroStatValue: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: 'white',
+  },
+  heroStatLabel: {
+    marginTop: 2,
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.74)',
   },
   errorBanner: {
     flexDirection: 'row',
@@ -1349,6 +1415,91 @@ const styles = StyleSheet.create({
   tipLabel: { fontSize: 12, fontWeight: '900', color: Colors.primary, textTransform: 'uppercase' },
   tipTitle: { marginTop: 2, fontSize: 14, fontWeight: '800', color: Colors.text },
   tipSnippet: { marginTop: 4, fontSize: 12, fontWeight: '700', color: Colors.textLight },
+  smartMoveCard: {
+    marginTop: 12,
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    elevation: 3,
+  },
+  smartMoveMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 16,
+    padding: 12,
+    backgroundColor: `${Colors.primary}08`,
+  },
+  smartMoveIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  smartMoveText: {
+    flex: 1,
+  },
+  smartMoveLabel: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: Colors.primary,
+    textTransform: 'uppercase',
+  },
+  smartMoveTitle: {
+    marginTop: 3,
+    fontSize: 16,
+    lineHeight: 21,
+    fontWeight: '900',
+    color: Colors.text,
+  },
+  smartMoveSnippet: {
+    marginTop: 5,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
+    color: Colors.textLight,
+  },
+  smartChallengeRow: {
+    marginTop: 10,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: 'rgba(237, 137, 54, 0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(237, 137, 54, 0.18)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  smartChallengeIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    backgroundColor: 'rgba(237, 137, 54, 0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  smartChallengeText: {
+    flex: 1,
+  },
+  smartChallengeTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: Colors.text,
+  },
+  smartChallengeMeta: {
+    marginTop: 2,
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textLight,
+  },
   urgentCard: {
     marginTop: 12,
     backgroundColor: '#FFF5F5',
@@ -1443,10 +1594,37 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   miniCardSwaps: {
-    backgroundColor: 'rgba(49, 130, 206, 0.08)',
+    backgroundColor: '#FFF7E8',
+    borderWidth: 1,
+    borderColor: 'rgba(237, 137, 54, 0.26)',
+    shadowColor: Colors.accent,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 3,
   },
   miniCardChallenge: {
     backgroundColor: `${Colors.primary}14`,
+  },
+  swapIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: Colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  swapBadge: {
+    alignSelf: 'flex-start',
+    marginBottom: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: 'rgba(237, 137, 54, 0.14)',
+    color: '#9A4F12',
+    fontSize: 10,
+    fontWeight: '900',
+    textTransform: 'uppercase',
   },
   miniTitle: { fontSize: 16, fontWeight: '900', color: Colors.text },
   miniSub: { marginTop: 3, fontSize: 13, color: Colors.textLight, fontWeight: '600' },
