@@ -25,6 +25,13 @@ class IngredientValidationError(ValueError):
         self.message = message
 
 
+class RecipeGenerationError(RuntimeError):
+    def __init__(self, message: str, *, code: str = "generation_failed", internal_message: str | None = None) -> None:
+        super().__init__(message)
+        self.code = code
+        self.internal_message = internal_message or message
+
+
 class AIPipeline:
     """End-to-end AI pipeline: vision -> recipes, with usage tracking."""
 
@@ -33,6 +40,7 @@ class AIPipeline:
         self.classifier = DiabetesFriendlyClassifier()
         self.ingredient_classifier = IngredientClassifier()
         self.risk_classifier = IngredientRiskClassifier()
+        self._last_recipe_validation_error = ""
 
     def _validate_ingredients(self, ingredients: list[str]) -> None:
         if not ingredients:
@@ -434,10 +442,15 @@ class AIPipeline:
         )
         recipes = self._validated_recipes_or_none(recipes, mode=mode, source_ingredients=ingredients)
         if recipes is None:
+            first_validation_error = self._last_recipe_validation_error
             remaining = overall_budget_seconds - (time.time() - started)
             # One retry (variety on, cache bypassed) only if there is enough time left.
             if remaining <= 8:
-                raise RuntimeError("Unable to generate recipes right now. Please try again in a moment.")
+                raise RecipeGenerationError(
+                    "Unable to generate recipes right now. Please try again in a moment.",
+                    code="recipe_validation_failed",
+                    internal_message=f"validation_failed_no_retry: {first_validation_error or 'unknown'}",
+                )
             recipes_retry = self.ai.generate_recipes(
                 ingredients,
                 tier,
@@ -452,7 +465,11 @@ class AIPipeline:
             recipes = self._validated_recipes_or_none(recipes_retry, mode=mode, source_ingredients=ingredients)
 
         if recipes is None:
-            raise RuntimeError("Unable to generate recipes right now. Please try again in a moment.")
+            raise RecipeGenerationError(
+                "Unable to generate recipes right now. Please try again in a moment.",
+                code="recipe_validation_failed",
+                internal_message=f"validation_failed_after_retry: {self._last_recipe_validation_error or 'unknown'}",
+            )
 
         record_ai_request(
             db,
@@ -478,12 +495,21 @@ class AIPipeline:
     ) -> List[Dict[str, Any]] | None:
         import re
 
-        if not recipes or not isinstance(recipes, list):
-            return None
-        if len(recipes) < 3:
+        self._last_recipe_validation_error = ""
+
+        def _fail(reason: str) -> None:
+            self._last_recipe_validation_error = reason
+            if settings.ai_debug_logging:
+                logger.info("AI validation failed mode=%s reason=%s", mode, reason)
             return None
 
-        # Strictness for ingredient-driven recipes: the model must not invent ingredients.
+        if not recipes or not isinstance(recipes, list):
+            return _fail("empty_or_not_list")
+        if len(recipes) < 3:
+            return _fail(f"too_few_recipes:{len(recipes)}")
+
+        # Keep recipe generation grounded in the user's ingredients while allowing normal wording,
+        # pluralization, and harmless supporting ingredients.
         pantry_staples = {
             "water",
             "salt",
@@ -561,66 +587,34 @@ class AIPipeline:
             return False
 
         def _has_banned_placeholders(instructions_text: str, allowed_text: str) -> bool:
-            # Block common hallucinated add-ons + placeholders when they aren't actually listed as ingredients.
-            banned = [
-                "protein",
-                "broccoli",
-                "spinach",
-                "kale",
-                "salad",
-                "lettuce",
-                "cabbage",
-                "zucchini",
-                "cauliflower",
-                "chicken",
-                "turkey",
-                "beef",
-                "pork",
-                "fish",
-                "salmon",
-                "tuna",
-                "tofu",
-                "beans",
-                "lentil",
-                "chickpea",
-                "egg",
-                "eggs",
+            # Block placeholder instructions like "cook protein" without rejecting helpful nutrition wording.
+            placeholders = [
+                "cook protein",
+                "prep protein",
+                "prepare protein",
+                "add protein",
+                "your protein",
+                "chosen protein",
+                "preferred protein",
             ]
-            for b in banned:
-                pattern = rf"\b{re.escape(b)}\b"
-                if re.search(pattern, instructions_text) and not re.search(pattern, allowed_text):
+            for phrase in placeholders:
+                if phrase in instructions_text and "protein" not in allowed_text:
                     return True
             return False
 
         cleaned: list[dict] = []
         for recipe in recipes[:3]:
             if not isinstance(recipe, dict):
-                if settings.ai_debug_logging and mode in ("surprise", "quick"):
-                    logger.info("AI validation failed mode=%s reason=recipe_not_dict", mode)
-                return None
+                return _fail("recipe_not_dict")
             title = (recipe.get("title") or recipe.get("name") or "").strip()
             if not title or title.lower() == "ai-generated recipe":
-                if settings.ai_debug_logging and mode in ("surprise", "quick"):
-                    logger.info("AI validation failed mode=%s reason=bad_title title=%s", mode, title[:120])
-                return None
+                return _fail(f"bad_title:{title[:120]}")
             instructions = recipe.get("instructions") or []
             if not isinstance(instructions, list) or len(instructions) < 3:
-                if settings.ai_debug_logging and mode in ("surprise", "quick"):
-                    logger.info(
-                        "AI validation failed mode=%s reason=bad_instructions_len len=%s",
-                        mode,
-                        (len(instructions) if isinstance(instructions, list) else "n/a"),
-                    )
-                return None
+                return _fail(f"bad_instructions_len:{len(instructions) if isinstance(instructions, list) else 'n/a'}")
             ingredients = recipe.get("ingredients") or []
             if not isinstance(ingredients, list) or len(ingredients) < 3:
-                if settings.ai_debug_logging and mode in ("surprise", "quick"):
-                    logger.info(
-                        "AI validation failed mode=%s reason=bad_ingredients_len len=%s",
-                        mode,
-                        (len(ingredients) if isinstance(ingredients, list) else "n/a"),
-                    )
-                return None
+                return _fail(f"bad_ingredients_len:{len(ingredients) if isinstance(ingredients, list) else 'n/a'}")
 
             # Ensure the recipe content actually references the detected ingredients (avoid placeholder/fallback output),
             # and does NOT invent non-pantry ingredients.
@@ -636,18 +630,18 @@ class AIPipeline:
                     title_text = (title or "").lower()
                     instr_text = " ".join([str(s).lower() for s in (instructions or []) if isinstance(s, str)])
                     hay = f"{title_text} {ing_text} {instr_text}"
-                    used_sources = {s for s in src if s and (s in hay)}
+                    used_sources: set[str] = set()
+                    for s in src:
+                        if not s:
+                            continue
+                        if any(f" {variant} " in f" {hay} " for variant in _variants(s)):
+                            used_sources.add(s)
                     min_required = 1 if len(src) <= 1 else 2
                     if len(used_sources) < min_required:
-                        if settings.ai_debug_logging:
-                            logger.info(
-                                "AI validation failed mode=%s reason=insufficient_source_ingredient_match used=%s",
-                                mode,
-                                len(used_sources),
-                            )
-                        return None
+                        return _fail(f"insufficient_source_ingredient_match:{len(used_sources)}")
 
-                    # Ingredient list must be a subset of detected ingredients + pantry staples.
+                    # The recipe must use the user's ingredients, but do not fail the whole request for harmless
+                    # synonyms/supporting ingredients. The prompt still tells the model not to add extras.
                     for ing in ingredients or []:
                         if isinstance(ing, dict):
                             nm = str(ing.get("name") or ing.get("title") or "").strip()
@@ -656,17 +650,7 @@ class AIPipeline:
                         if not nm:
                             continue
                         if "optional:" in nm.lower():
-                            if settings.ai_debug_logging:
-                                logger.info("AI validation failed mode=%s reason=optional_prefix_present", mode)
-                            return None
-                        if not _matches_source(nm):
-                            if settings.ai_debug_logging:
-                                logger.info(
-                                    "AI validation failed mode=%s reason=ingredient_not_in_source name=%s",
-                                    mode,
-                                    nm[:80],
-                                )
-                            return None
+                            return _fail("optional_prefix_present")
 
                     allowed_parts = [_norm(x) for x in src]
                     for ing in ingredients or []:
@@ -678,13 +662,11 @@ class AIPipeline:
                             allowed_parts.append(_norm(nm))
                     allowed_text = " ".join([p for p in allowed_parts if p])
                     if _has_banned_placeholders(instr_text, allowed_text):
-                        if settings.ai_debug_logging:
-                            logger.info("AI validation failed mode=%s reason=instruction_mentions_missing_ingredient", mode)
-                        return None
+                        return _fail("instruction_mentions_missing_placeholder")
                 except Exception:
                     # If this check fails unexpectedly, don't block otherwise valid recipes.
                     pass
-            ni = recipe.get("nutritional_info") or {}
+            ni = recipe.get("nutritional_info") or recipe.get("nutrition_per_serving") or recipe.get("nutrition") or {}
             calories = ni.get("calories")
             carbs = ni.get("carbs")
             protein = ni.get("protein")
@@ -694,19 +676,9 @@ class AIPipeline:
                 carbs_n = int(carbs or 0)
                 protein_n = int(protein or 0)
             except Exception:  # noqa: BLE001
-                if settings.ai_debug_logging and mode in ("surprise", "quick"):
-                    logger.info("AI validation failed mode=%s reason=non_numeric_nutrition", mode)
-                return None
+                return _fail("non_numeric_nutrition")
             if calories_n <= 0 or (carbs_n <= 0 and protein_n <= 0):
-                if settings.ai_debug_logging and mode in ("surprise", "quick"):
-                    logger.info(
-                        "AI validation failed mode=%s reason=missing_nutrition cal=%s carbs=%s protein=%s",
-                        mode,
-                        calories_n,
-                        carbs_n,
-                        protein_n,
-                    )
-                return None
+                return _fail(f"missing_nutrition:cal={calories_n},carbs={carbs_n},protein={protein_n}")
             if mode == "quick":
                 total_time = recipe.get("total_time")
                 if total_time is None or total_time == 0:
@@ -718,9 +690,7 @@ class AIPipeline:
                 except Exception:  # noqa: BLE001
                     total_n = 0
                 if total_n <= 0 or total_n > 20:
-                    if settings.ai_debug_logging:
-                        logger.info("AI validation failed mode=%s reason=total_time_out_of_range total=%s", mode, total_n)
-                    return None
+                    return _fail(f"total_time_out_of_range:{total_n}")
             cleaned.append(recipe)
 
         return cleaned
