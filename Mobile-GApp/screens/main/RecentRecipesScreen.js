@@ -293,8 +293,7 @@ export default function RecentRecipesScreen() {
           const title = recipe.name || recipe.title || `Recipe ${index + 1}`;
           const showThumb =
             recipeImagesEnabled &&
-            Boolean(recipe.image_url) &&
-            recipe.image_source !== 'placeholder';
+            Boolean(recipe.image_url);
           return (
             <TouchableOpacity
               key={recipe.history_key || recipe.id || `${title}-${index}`}

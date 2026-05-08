@@ -1316,7 +1316,21 @@ class AIRecipeGenerator:
                 tier,
                 attempts,
             )
-        raise RuntimeError("Unable to generate recipes right now. Please try again in a moment.")
+        compact_attempts = []
+        for attempt in attempts[-6:]:
+            if not isinstance(attempt, dict):
+                continue
+            compact_attempts.append(
+                {
+                    "provider": str(attempt.get("provider") or "")[:40],
+                    "model": str(attempt.get("model") or "")[:80],
+                    "error": str(attempt.get("error") or "")[:260],
+                }
+            )
+        raise RuntimeError(
+            "All AI models failed or returned invalid output "
+            f"(mode={mode_norm or 'ingredients'}, tier={tier}, attempts={compact_attempts})"
+        )
 
     def _normalize_title(self, title: str) -> str:
         value = (title or "").strip().lower()
