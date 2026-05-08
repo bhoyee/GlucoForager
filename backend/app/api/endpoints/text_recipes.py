@@ -139,6 +139,18 @@ def _run_text_job(job_id: str) -> None:
             return
         if job.status not in {"pending", "queued"}:
             return
+        previous_status = job.status
+        claimed = (
+            db.query(AIJob)
+            .filter(AIJob.id == job_id, AIJob.status.in_(["pending", "queued"]))
+            .update({AIJob.status: "running"}, synchronize_session=False)
+        )
+        db.commit()
+        if claimed != 1:
+            return
+        job = db.query(AIJob).filter(AIJob.id == job_id).first()
+        if not job:
+            return
         try:
             queue_wait_ms = None
             if getattr(job, "created_at", None):
@@ -150,14 +162,12 @@ def _run_text_job(job_id: str) -> None:
                     "type": "ai.text.job.start",
                     "job_id": job_id,
                     "user_id": job.user_id,
-                    "prev_status": job.status,
+                    "prev_status": previous_status,
                     "queue_wait_ms": queue_wait_ms,
                 }
             )
         except Exception:
             pass
-        job.status = "running"
-        db.commit()
 
         payload = job.payload or {}
         ingredients = payload.get("ingredients") or []
