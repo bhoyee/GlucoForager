@@ -873,7 +873,7 @@ export default function HomeScreen() {
                 style={styles.recipeCard}
                 onPress={() => handleViewRecipeDetail(recipe)}
               >
-                {recipeImagesEnabled && recipe.image_url && recipe.image_source !== 'placeholder' ? (
+                {recipeImagesEnabled && recipe.image_url ? (
                   <Image source={{ uri: recipe.image_url }} style={styles.recipeImage} />
                 ) : null}
                 <View style={styles.recipeInfo}>
@@ -960,7 +960,7 @@ export default function HomeScreen() {
                   onPress={() => handleViewRecipeDetail(recipe)}
                   activeOpacity={0.9}
                 >
-                  {recipeImagesEnabled && recipe.image_url && recipe.image_source !== 'placeholder' ? (
+                  {recipeImagesEnabled && recipe.image_url ? (
                     <Image source={{ uri: recipe.image_url }} style={styles.recentMiniThumb} />
                   ) : (
                     <View style={[styles.recentMiniThumb, { backgroundColor: Colors.border }]} />

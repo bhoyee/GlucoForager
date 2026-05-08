@@ -260,6 +260,24 @@ def _run_text_job(job_id: str) -> None:
                     pass
                 return
             ingredients = classified["food"]
+            try:
+                log_system_event(
+                    {
+                        "ts": time.time(),
+                        "level": "info",
+                        "type": "ai.text.job.precheck.done",
+                        "job_id": job_id,
+                        "user_id": job.user_id,
+                        "mode": mode,
+                        "tier": tier,
+                        "ingredients_count": len(ingredients) if isinstance(ingredients, list) else None,
+                        "non_food_count": len(classified.get("non_food") or []),
+                        "classification_source": classified.get("source"),
+                        "elapsed_ms": int((time.time() - started) * 1000),
+                    }
+                )
+            except Exception:
+                pass
         else:
             classified = {"food": [], "non_food": [], "source": "mode"}
             ingredients = []
@@ -267,6 +285,24 @@ def _run_text_job(job_id: str) -> None:
             variety_mode = True
 
         try:
+            try:
+                log_system_event(
+                    {
+                        "ts": time.time(),
+                        "level": "info",
+                        "type": "ai.text.job.generate.start",
+                        "job_id": job_id,
+                        "user_id": job.user_id,
+                        "mode": mode,
+                        "tier": tier,
+                        "ingredients_count": len(ingredients) if isinstance(ingredients, list) else None,
+                        "filters_count": len(filters) if isinstance(filters, list) else None,
+                        "variety_mode": variety_mode,
+                        "elapsed_ms": int((time.time() - started) * 1000),
+                    }
+                )
+            except Exception:
+                pass
             recipes = pipeline.text_to_recipes(
                 db,
                 user.id,
@@ -278,6 +314,22 @@ def _run_text_job(job_id: str) -> None:
                 mode=mode,
                 device_id=device_id,
             )
+            try:
+                log_system_event(
+                    {
+                        "ts": time.time(),
+                        "level": "info",
+                        "type": "ai.text.job.generate.done",
+                        "job_id": job_id,
+                        "user_id": job.user_id,
+                        "mode": mode,
+                        "tier": tier,
+                        "recipes_count": len(recipes) if isinstance(recipes, list) else None,
+                        "elapsed_ms": int((time.time() - started) * 1000),
+                    }
+                )
+            except Exception:
+                pass
         except IngredientValidationError as exc:
             job.status = "failed"
             job.error = exc.message
