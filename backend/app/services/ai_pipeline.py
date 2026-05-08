@@ -509,11 +509,36 @@ class AIPipeline:
             t = re.sub(r"\s+", " ", t).strip()
             return t
 
+        def _variants(text: str) -> set[str]:
+            base = _norm(text)
+            out = {base} if base else set()
+            words = base.split()
+            variant_words: list[str] = []
+            for word in words:
+                if word.endswith("ies") and len(word) > 4:
+                    variant_words.append(f"{word[:-3]}y")
+                elif word.endswith("oes") and len(word) > 4:
+                    variant_words.append(word[:-2])
+                elif word.endswith("es") and len(word) > 3:
+                    variant_words.append(word[:-2])
+                elif word.endswith("s") and len(word) > 3:
+                    variant_words.append(word[:-1])
+                else:
+                    variant_words.append(word)
+            singular = " ".join(variant_words).strip()
+            if singular:
+                out.add(singular)
+            return out
+
         src_norm: list[str] = []
         src_set: set[str] = set()
+        src_variants: set[str] = set()
         if source_ingredients:
             src_norm = [_norm(str(x)) for x in source_ingredients if isinstance(x, str) and str(x).strip()]
             src_set = {x for x in src_norm if x}
+            for src_item in source_ingredients:
+                if isinstance(src_item, str) and src_item.strip():
+                    src_variants.update(_variants(src_item))
 
         def _matches_source(ingredient_name: str) -> bool:
             n = _norm(ingredient_name)
@@ -521,16 +546,18 @@ class AIPipeline:
                 return True
             if n in pantry_staples:
                 return True
-            if n in src_set:
+            ingredient_variants = _variants(n)
+            if n in src_set or bool(ingredient_variants & src_variants):
                 return True
             # Substring match (bounded) to handle simple variants like "ketchup" vs "tomato ketchup".
-            for s in src_norm:
+            for s in src_variants or src_norm:
                 if not s:
                     continue
-                if f" {s} " in f" {n} ":
-                    return True
-                if f" {n} " in f" {s} ":
-                    return True
+                for variant in ingredient_variants:
+                    if f" {s} " in f" {variant} ":
+                        return True
+                    if f" {variant} " in f" {s} ":
+                        return True
             return False
 
         def _has_banned_placeholders(instructions_text: str, allowed_text: str) -> bool:
