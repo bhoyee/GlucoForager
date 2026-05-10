@@ -22,6 +22,7 @@ import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getRecipeImageSettings } from '../../utils/recipeImageSettings';
+import { getCachedRecipeImageUrl, setCachedRecipeImageUrl } from '../../utils/recipeImageCache';
 import { getTodayTip } from '../../utils/todayTips';
 import { scheduleDailyPlanNotifications } from '../../utils/mealReminders';
 
@@ -205,7 +206,7 @@ export default function HomeScreen() {
       if (cachedRecent) {
         const recentItems = JSON.parse(cachedRecent);
         if (Array.isArray(recentItems)) {
-          setRecentRecipes(recentItems);
+          setRecentRecipes(await hydrateRecentRecipeImages(recentItems));
         }
       }
     } catch (error) {
@@ -416,8 +417,42 @@ export default function HomeScreen() {
     }
     const data = await response.json();
     const items = Array.isArray(data.items) ? data.items : [];
-    setRecentRecipes(items);
-    await AsyncStorage.setItem('home_recent_recipes', JSON.stringify(items));
+    const hydrated = await hydrateRecentRecipeImages(items);
+    setRecentRecipes(hydrated);
+    await AsyncStorage.setItem('home_recent_recipes', JSON.stringify(hydrated));
+  };
+
+  const isPlaceholderRecipeImage = (recipe) => {
+    const source = String(recipe?.image_source || recipe?.imageSource || '').toLowerCase();
+    if (source === 'placeholder') return true;
+    const url = String(recipe?.image_url || recipe?.image || '').trim().toLowerCase();
+    return url.includes('placeholder') || url.includes('/uploads/placeholders/') || url.includes('placeholders');
+  };
+
+  const getRecipeImageUrl = (recipe) => {
+    if (!recipe || isPlaceholderRecipeImage(recipe)) return '';
+    const direct = typeof recipe?.image_url === 'string' && recipe.image_url.trim()
+      ? recipe.image_url.trim()
+      : typeof recipe?.image === 'string' && recipe.image.trim()
+        ? recipe.image.trim()
+        : '';
+    return direct;
+  };
+
+  const hydrateRecentRecipeImages = async (items) => {
+    return Promise.all(
+      (items || []).map(async (recipe) => {
+        if (!recipe || typeof recipe !== 'object') return recipe;
+        const directUrl = getRecipeImageUrl(recipe);
+        if (directUrl) {
+          await setCachedRecipeImageUrl(recipe, directUrl);
+          return { ...recipe, image_url: recipe.image_url || directUrl, image: recipe.image || directUrl };
+        }
+        const cached = await getCachedRecipeImageUrl(recipe);
+        if (!cached) return { ...recipe, image_url: '', image: '', image_source: recipe.image_source || 'none' };
+        return { ...recipe, image_url: cached, image: cached, image_source: 'ai' };
+      })
+    );
   };
 
   const handleShuffleSuggestions = async () => {
@@ -960,8 +995,8 @@ export default function HomeScreen() {
                   onPress={() => handleViewRecipeDetail(recipe)}
                   activeOpacity={0.9}
                 >
-                  {recipeImagesEnabled && recipe.image_url ? (
-                    <Image source={{ uri: recipe.image_url }} style={styles.recentMiniThumb} />
+                  {recipeImagesEnabled && getRecipeImageUrl(recipe) ? (
+                    <Image source={{ uri: getRecipeImageUrl(recipe) }} style={styles.recentMiniThumb} />
                   ) : (
                     <View style={[styles.recentMiniThumb, { backgroundColor: Colors.border }]} />
                   )}
