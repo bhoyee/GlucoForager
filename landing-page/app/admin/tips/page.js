@@ -299,6 +299,10 @@ export default function AdminTipsPage() {
   const topDisliked = Array.isArray(summary?.items)
     ? summary.items.filter((x) => (x?.not_useful || 0) > 0).slice(0, 8)
     : [];
+  const recentFeedback = Array.isArray(summary?.latest) ? summary.latest.slice(0, 10) : [];
+  const helpfulTotal = summary?.totals?.helpful || 0;
+  const notUsefulTotal = summary?.totals?.not_useful || 0;
+  const feedbackTotal = summary?.totals?.events || helpfulTotal + notUsefulTotal;
 
   const formatReasons = (reasons) => {
     if (!reasons || typeof reasons !== 'object') return '';
@@ -357,8 +361,16 @@ export default function AdminTipsPage() {
               <strong>{blockedTipIds.length}</strong>
             </div>
             <div className="admin-subcard">
-              <span>Dislikes (7d)</span>
-              <strong>{summary?.totals?.not_useful || 0}</strong>
+              <span>Helpful (7d)</span>
+              <strong>{helpfulTotal}</strong>
+            </div>
+            <div className="admin-subcard">
+              <span>Not useful (7d)</span>
+              <strong>{notUsefulTotal}</strong>
+            </div>
+            <div className="admin-subcard">
+              <span>Feedback events</span>
+              <strong>{feedbackTotal}</strong>
             </div>
           </div>
 
@@ -372,7 +384,9 @@ export default function AdminTipsPage() {
                   <thead>
                     <tr>
                       <th>Tip</th>
+                      <th>Helpful</th>
                       <th>Dislikes</th>
+                      <th>Helpful rate</th>
                       <th>Total</th>
                       <th>Action</th>
                     </tr>
@@ -389,7 +403,9 @@ export default function AdminTipsPage() {
                             </div>
                           ) : null}
                         </td>
+                        <td>{row.helpful || 0}</td>
                         <td>{row.not_useful}</td>
+                        <td>{Number(row.helpful_rate || 0).toFixed(1)}%</td>
                         <td>{row.total}</td>
                         <td>
                           <button
@@ -400,6 +416,54 @@ export default function AdminTipsPage() {
                             {blockedTipIds.includes(row.tip_id) ? 'Unblock' : 'Block'}
                           </button>
                         </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {recentFeedback.length > 0 && (
+            <div className="admin-card" style={{ marginTop: 14 }}>
+              <h3 className="admin-title" style={{ fontSize: 16, marginBottom: 6 }}>
+                Recent guidance feedback
+              </h3>
+              <div className="admin-table-wrap">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Tip</th>
+                      <th>Feedback</th>
+                      <th>Reason</th>
+                      <th>User</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recentFeedback.map((row, index) => (
+                      <tr key={`${row.timestamp || 'feedback'}-${index}`}>
+                        <td className="muted">{row.timestamp ? new Date(row.timestamp).toLocaleString() : '-'}</td>
+                        <td>
+                          <div style={{ fontWeight: 700 }}>{row.title || row.tip_id}</div>
+                          <div className="muted">{row.tip_id}</div>
+                        </td>
+                        <td>
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              padding: '4px 9px',
+                              borderRadius: 999,
+                              fontWeight: 700,
+                              background: row.feedback === 'helpful' ? '#EAF7EE' : '#FEE2E2',
+                              color: row.feedback === 'helpful' ? '#0B5A46' : '#991B1B',
+                            }}
+                          >
+                            {row.feedback === 'helpful' ? 'Helpful' : 'Not useful'}
+                          </span>
+                        </td>
+                        <td className="muted">{row.reason || '-'}</td>
+                        <td className="muted">{row.user_email || row.user_id || '-'}</td>
                       </tr>
                     ))}
                   </tbody>

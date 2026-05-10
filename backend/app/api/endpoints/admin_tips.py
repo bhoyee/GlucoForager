@@ -406,8 +406,16 @@ def tip_feedback_summary(
         value.pop("_seen_users", None)
         value.pop("_seen_helpful", None)
         value.pop("_seen_not_useful", None)
+        total = int(value.get("total") or 0)
+        helpful = int(value.get("helpful") or 0)
+        value["helpful_rate"] = round((helpful / total) * 100, 1) if total > 0 else 0.0
 
     items = sorted(per_tip.values(), key=lambda x: (x.get("not_useful", 0), x.get("total", 0)), reverse=True)
+    latest_sorted = sorted(
+        latest,
+        key=lambda x: str(x.get("timestamp") or ""),
+        reverse=True,
+    )
     return {
         "window_days": days,
         "totals": {
@@ -418,5 +426,5 @@ def tip_feedback_summary(
             "unique_users_not_useful": len(unique_not_useful_users),
         },
         "items": items,
-        "latest": latest[:200],
+        "latest": latest_sorted[:200],
     }
