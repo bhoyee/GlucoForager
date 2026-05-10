@@ -21,7 +21,7 @@ import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
 import { useAuth } from '../../context/authContext';
 import { getRecipeImageSettings } from '../../utils/recipeImageSettings';
-import { getCachedRecipeImageUrl, setCachedRecipeImageUrl } from '../../utils/recipeImageCache';
+import { getCachedRecipeImageUrl, isPlaceholderRecipeImageUrl, setCachedRecipeImageUrl } from '../../utils/recipeImageCache';
 
 export default function RecentRecipesScreen() {
   const navigation = useNavigation();
@@ -134,7 +134,8 @@ export default function RecentRecipesScreen() {
             : (typeof recipe?.image === 'string' && recipe.image.trim())
               ? recipe.image.trim()
               : '';
-        if (directUrl) {
+        const imageSource = String(recipe?.image_source || recipe?.imageSource || '').toLowerCase();
+        if (directUrl && imageSource !== 'placeholder' && !isPlaceholderRecipeImageUrl(directUrl)) {
           await setCachedRecipeImageUrl(recipe, directUrl);
           return { ...recipe, image_url: recipe.image_url || directUrl, image: recipe.image || directUrl };
         }
