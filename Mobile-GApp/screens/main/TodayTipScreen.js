@@ -81,7 +81,7 @@ export default function TodayTipScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={22} color={Colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Daily guidance</Text>
+        <Text style={styles.headerTitle}>Daily Guidance</Text>
         <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
           <Ionicons name="share-social-outline" size={20} color={Colors.text} />
         </TouchableOpacity>
@@ -91,36 +91,58 @@ export default function TodayTipScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.content, { paddingBottom: contentBottomPadding }]}
       >
-        <View style={styles.card}>
-          <View style={styles.accentBar} />
-          <View style={styles.cardHeader}>
+        <View style={styles.heroCard}>
+          <View style={styles.heroTopRow}>
             <View style={styles.iconBubble}>
-              <Ionicons name="bulb-outline" size={20} color={Colors.primary} />
+              <Ionicons name="sparkles-outline" size={22} color={Colors.primaryDark} />
             </View>
             <View style={styles.headerText}>
+              <Text style={styles.eyebrow}>Today's guidance</Text>
               <Text style={styles.title}>{tip.title}</Text>
             </View>
           </View>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Tip</Text>
-            <Text style={styles.body}>{tip.tip || tip.body}</Text>
-          </View>
+          <Text style={styles.heroBody}>{tip.tip || tip.body}</Text>
 
-          {tip.why ? (
-            <View style={styles.section}>
+          <View style={styles.guidanceMetaRow}>
+            <View style={styles.metaChip}>
+              <Ionicons name="shield-checkmark-outline" size={15} color={Colors.primaryDark} />
+              <Text style={styles.metaChipText}>Blood sugar friendly</Text>
+            </View>
+            <View style={styles.metaChip}>
+              <Ionicons name="time-outline" size={15} color={Colors.primaryDark} />
+              <Text style={styles.metaChipText}>Today</Text>
+            </View>
+          </View>
+        </View>
+
+        {tip.why ? (
+          <View style={styles.detailCard}>
+            <View style={styles.detailIcon}>
+              <Ionicons name="leaf-outline" size={18} color={Colors.primaryDark} />
+            </View>
+            <View style={styles.detailCopy}>
               <Text style={styles.sectionLabel}>Why it helps</Text>
               <Text style={styles.body}>{tip.why}</Text>
             </View>
-          ) : null}
+          </View>
+        ) : null}
 
-          {tip.try_today ? (
-            <View style={styles.section}>
+        {tip.try_today ? (
+          <View style={styles.detailCard}>
+            <View style={styles.detailIcon}>
+              <Ionicons name="checkmark-done-outline" size={18} color={Colors.primaryDark} />
+            </View>
+            <View style={styles.detailCopy}>
               <Text style={styles.sectionLabel}>Try this today</Text>
               <Text style={styles.body}>{tip.try_today}</Text>
             </View>
-          ) : null}
+          </View>
+        ) : null}
 
+        <View style={styles.feedbackCard}>
+          <Text style={styles.feedbackTitle}>Was this useful?</Text>
+          <Text style={styles.feedbackSubtitle}>Your feedback helps improve daily guidance.</Text>
           <View style={styles.feedbackRow}>
             <TouchableOpacity
               style={[styles.feedbackButton, activeState === 'helpful' && styles.feedbackButtonActive]}
@@ -160,7 +182,7 @@ export default function TodayTipScreen() {
           </View>
           {pendingNotUseful ? (
             <View style={styles.reasonBox}>
-              <Text style={styles.reasonTitle}>What didn’t fit?</Text>
+              <Text style={styles.reasonTitle}>What didn't fit?</Text>
               <View style={styles.reasonGrid}>
                 {NOT_USEFUL_REASONS.map((reason) => (
                   <TouchableOpacity
@@ -184,16 +206,16 @@ export default function TodayTipScreen() {
           ) : null}
 
           {feedback ? <Text style={styles.feedbackThanks}>Thanks - we'll use this to improve tips.</Text> : null}
-
-          <TouchableOpacity
-            style={styles.moreLink}
-            onPress={() => navigation.navigate('TipsArchive')}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.moreLinkText}>View more tips</Text>
-            <Ionicons name="chevron-forward" size={16} color={Colors.textLight} />
-          </TouchableOpacity>
         </View>
+
+        <TouchableOpacity
+          style={styles.moreLink}
+          onPress={() => navigation.navigate('TipsArchive')}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.moreLinkText}>View more tips</Text>
+          <Ionicons name="chevron-forward" size={16} color={Colors.textLight} />
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -233,51 +255,100 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 8,
   },
-  card: {
-    backgroundColor: `${Colors.primary}0A`,
-    borderRadius: 16,
+  heroCard: {
+    backgroundColor: '#F6FBF7',
+    borderRadius: 22,
     padding: 18,
-    position: 'relative',
+    borderWidth: 1,
+    borderColor: '#DCEFE4',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 3,
   },
-  accentBar: {
-    position: 'absolute',
-    left: 0,
-    top: 14,
-    bottom: 14,
-    width: 4,
-    borderTopRightRadius: 6,
-    borderBottomRightRadius: 6,
-    backgroundColor: Colors.primary,
-    opacity: 0.9,
-  },
-  cardHeader: {
+  heroTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginBottom: 12,
   },
   iconBubble: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
-    backgroundColor: `${Colors.primary}14`,
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: '#E3F5EA',
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerText: { flex: 1 },
+  eyebrow: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: Colors.primaryDark,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
   title: {
     marginTop: 4,
-    fontSize: 20,
+    fontSize: 22,
+    lineHeight: 27,
     fontWeight: '900',
     color: Colors.text,
   },
-  section: {
-    marginTop: 10,
+  heroBody: {
+    marginTop: 16,
+    fontSize: 16,
+    lineHeight: 24,
+    color: Colors.text,
+    fontWeight: '600',
+  },
+  guidanceMetaRow: {
+    marginTop: 16,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  metaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 999,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    backgroundColor: '#FFFFFF',
+  },
+  metaChipText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: Colors.primaryDark,
+  },
+  detailCard: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  detailIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E3F5EA',
+  },
+  detailCopy: {
+    flex: 1,
+    minWidth: 0,
   },
   sectionLabel: {
     fontSize: 12,
     fontWeight: '900',
-    color: Colors.textMuted,
+    color: Colors.primaryDark,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
     marginBottom: 6,
@@ -286,6 +357,24 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     color: Colors.textLight,
+  },
+  feedbackCard: {
+    marginTop: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  feedbackTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: Colors.text,
+  },
+  feedbackSubtitle: {
+    marginTop: 4,
+    color: Colors.textLight,
+    lineHeight: 19,
   },
   feedbackRow: {
     marginTop: 16,
@@ -298,9 +387,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: Colors.surface,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   feedbackButtonActive: {
     backgroundColor: Colors.primary,
@@ -328,9 +419,11 @@ const styles = StyleSheet.create({
   },
   reasonBox: {
     marginTop: 12,
-    backgroundColor: Colors.surface,
+    backgroundColor: '#F8FAFC',
     borderRadius: 14,
     padding: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   reasonTitle: {
     fontSize: 12,
@@ -373,7 +466,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 10,
+    paddingVertical: 14,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   moreLinkText: {
     fontSize: 14,

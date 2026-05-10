@@ -677,12 +677,22 @@ export default function HomeScreen() {
 
         <View style={styles.heroStatsRow}>
           <TouchableOpacity style={styles.heroStatPill} onPress={handleViewRecipeHistory} activeOpacity={0.86}>
-            <Text style={styles.heroStatValue}>{userStats.recipesGenerated}</Text>
-            <Text style={styles.heroStatLabel}>recipes made</Text>
+            <View style={styles.heroStatIcon}>
+              <Ionicons name="restaurant-outline" size={20} color={Colors.primaryDark} />
+            </View>
+            <View style={styles.heroStatText}>
+              <Text style={styles.heroStatValue}>{userStats.recipesGenerated}</Text>
+              <Text style={styles.heroStatLabel}>recipes made</Text>
+            </View>
           </TouchableOpacity>
           <TouchableOpacity style={styles.heroStatPill} onPress={() => navigation.navigate('Favorites')} activeOpacity={0.86}>
-            <Text style={styles.heroStatValue}>{userStats.favoritesSaved}</Text>
-            <Text style={styles.heroStatLabel}>saved</Text>
+            <View style={styles.heroStatIcon}>
+              <Ionicons name="bookmark-outline" size={21} color={Colors.primaryDark} />
+            </View>
+            <View style={styles.heroStatText}>
+              <Text style={styles.heroStatValue}>{userStats.favoritesSaved}</Text>
+              <Text style={styles.heroStatLabel}>saved</Text>
+            </View>
           </TouchableOpacity>
         </View>
 
@@ -1278,6 +1288,9 @@ const styles = StyleSheet.create({
   },
   heroStatPill: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     minHeight: 58,
     borderRadius: 16,
     paddingHorizontal: 12,
@@ -1285,10 +1298,22 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.13)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
+  },
+  heroStatIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#c8f5b8',
+  },
+  heroStatText: {
+    flex: 1,
+    minWidth: 0,
     justifyContent: 'center',
   },
   heroStatValue: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '900',
     color: 'white',
   },
