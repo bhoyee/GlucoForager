@@ -22,7 +22,7 @@ import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getRecipeImageSettings } from '../../utils/recipeImageSettings';
-import { getCachedRecipeImageUrl, setCachedRecipeImageUrl } from '../../utils/recipeImageCache';
+import { getCachedRecipeImageUrl, isPlaceholderRecipeImageUrl, setCachedRecipeImageUrl } from '../../utils/recipeImageCache';
 import { getTodayTip } from '../../utils/todayTips';
 import { scheduleDailyPlanNotifications } from '../../utils/mealReminders';
 
@@ -425,8 +425,7 @@ export default function HomeScreen() {
   const isPlaceholderRecipeImage = (recipe) => {
     const source = String(recipe?.image_source || recipe?.imageSource || '').toLowerCase();
     if (source === 'placeholder') return true;
-    const url = String(recipe?.image_url || recipe?.image || '').trim().toLowerCase();
-    return url.includes('placeholder') || url.includes('/uploads/placeholders/') || url.includes('placeholders');
+    return isPlaceholderRecipeImageUrl(recipe?.image_url || recipe?.image || '');
   };
 
   const getRecipeImageUrl = (recipe) => {

@@ -379,8 +379,9 @@ def _run_text_job(job_id: str) -> None:
                 recipes=recipes or [],
                 ingredients=ingredients,
                 base_url=base_url,
-                # Speed: don't auto-generate images inline; clients can request images after recipes render.
-                max_generate=0,
+                # Ensure recent recipes and detail pages have a real thumbnail immediately.
+                # The client can still generate the remaining images in the background.
+                max_generate=1,
             )
         except Exception:
             # Image generation is best-effort; never fail the recipe result.
