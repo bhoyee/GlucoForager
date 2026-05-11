@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Share, ScrollView } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +17,16 @@ const NOT_USEFUL_REASONS = [
   "Doesn't fit my food style",
 ];
 
+const getLocalDayKey = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getTipStorageId = (tip) => String(tip?.id || tip?.title || 'unknown');
+
 export default function TodayTipScreen() {
   const navigation = useNavigation();
   const route = useRoute();
@@ -32,6 +42,31 @@ export default function TodayTipScreen() {
 
   const [feedback, setFeedback] = useState(null);
   const [pendingNotUseful, setPendingNotUseful] = useState(false);
+  const feedbackDayKey = useMemo(() => getLocalDayKey(), []);
+  const feedbackStorageId = useMemo(() => `${feedbackDayKey}:${getTipStorageId(tip)}`, [feedbackDayKey, tip]);
+
+  useEffect(() => {
+    let active = true;
+    const loadFeedback = async () => {
+      try {
+        const raw = await AsyncStorage.getItem(TIP_FEEDBACK_KEY);
+        const parsed = raw ? JSON.parse(raw) : {};
+        const saved = parsed?.[feedbackStorageId];
+        if (active && saved?.day === feedbackDayKey && saved?.feedback) {
+          setFeedback(saved.feedback);
+          setPendingNotUseful(false);
+        }
+      } catch {
+        // ignore storage errors
+      }
+    };
+    setFeedback(null);
+    setPendingNotUseful(false);
+    void loadFeedback();
+    return () => {
+      active = false;
+    };
+  }, [feedbackDayKey, feedbackStorageId]);
 
   const handleShare = async () => {
     try {
@@ -47,6 +82,7 @@ export default function TodayTipScreen() {
   };
 
   const saveFeedback = async (value, reason = null) => {
+    if (feedback) return;
     setFeedback(value);
     setPendingNotUseful(false);
     try {
@@ -54,9 +90,12 @@ export default function TodayTipScreen() {
       const parsed = raw ? JSON.parse(raw) : {};
       const next = {
         ...parsed,
-        [tip.id || tip.title || 'unknown']: {
+        [feedbackStorageId]: {
           feedback: value,
           reason: reason || null,
+          day: feedbackDayKey,
+          tip_id: tip.id || null,
+          title: tip.title,
           at: new Date().toISOString(),
         },
       };
@@ -69,7 +108,13 @@ export default function TodayTipScreen() {
       source: 'TodayTip',
       level: 'info',
       message: 'Tip feedback',
-      details: JSON.stringify({ tip_id: tip.id || null, title: tip.title, feedback: value, reason: reason || null }),
+      details: JSON.stringify({
+        tip_id: tip.id || null,
+        title: tip.title,
+        feedback: value,
+        reason: reason || null,
+        day: feedbackDayKey,
+      }),
     });
   };
 
@@ -147,6 +192,7 @@ export default function TodayTipScreen() {
             <TouchableOpacity
               style={[styles.feedbackButton, activeState === 'helpful' && styles.feedbackButtonActive]}
               onPress={() => void saveFeedback('helpful')}
+              disabled={Boolean(feedback)}
               activeOpacity={0.85}
             >
               <Ionicons
@@ -159,9 +205,10 @@ export default function TodayTipScreen() {
             <TouchableOpacity
               style={[styles.feedbackButton, activeState === 'not_useful' && styles.feedbackButtonActiveNegative]}
               onPress={() => {
-                if (feedback === 'not_useful') return;
+                if (feedback) return;
                 setPendingNotUseful(true);
               }}
+              disabled={Boolean(feedback)}
               activeOpacity={0.85}
             >
               <Ionicons
@@ -189,6 +236,7 @@ export default function TodayTipScreen() {
                     key={reason}
                     style={styles.reasonChip}
                     onPress={() => void saveFeedback('not_useful', reason)}
+                    disabled={Boolean(feedback)}
                     activeOpacity={0.85}
                   >
                     <Text style={styles.reasonChipText}>{reason}</Text>
@@ -198,6 +246,7 @@ export default function TodayTipScreen() {
               <TouchableOpacity
                 style={styles.reasonSkip}
                 onPress={() => void saveFeedback('not_useful', null)}
+                disabled={Boolean(feedback)}
                 activeOpacity={0.85}
               >
                 <Text style={styles.reasonSkipText}>Skip</Text>
@@ -205,7 +254,7 @@ export default function TodayTipScreen() {
             </View>
           ) : null}
 
-          {feedback ? <Text style={styles.feedbackThanks}>Thanks - we'll use this to improve tips.</Text> : null}
+          {feedback ? <Text style={styles.feedbackThanks}>Thanks - your choice is saved for today.</Text> : null}
         </View>
 
         <TouchableOpacity
