@@ -66,6 +66,7 @@ export default function AdminTipsPage() {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [lastFeedbackRefresh, setLastFeedbackRefresh] = useState(null);
 
   const [search, setSearch] = useState('');
   const [showEditor, setShowEditor] = useState(false);
@@ -85,9 +86,19 @@ export default function AdminTipsPage() {
     void loadAll();
   }, [token]);
 
-  const loadAll = async () => {
-    setLoading(true);
-    setMessage('');
+  useEffect(() => {
+    if (!token) return undefined;
+    const timer = setInterval(() => {
+      void loadAll({ silent: true });
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [token]);
+
+  const loadAll = async ({ silent = false } = {}) => {
+    if (!silent) {
+      setLoading(true);
+      setMessage('');
+    }
     try {
       const [tipsRes, settingsRes, summaryRes] = await Promise.all([
         fetch(`${API_URL}/api/admin/tips`, { headers: { Authorization: `Bearer ${token}` } }),
@@ -108,10 +119,11 @@ export default function AdminTipsPage() {
       setTips(Array.isArray(tipsData.items) ? tipsData.items : []);
       setBlockedTipIds(Array.isArray(settingsData.blocked_tip_ids) ? settingsData.blocked_tip_ids : []);
       setSummary(summaryData && typeof summaryData === 'object' ? summaryData : null);
+      setLastFeedbackRefresh(new Date());
     } catch {
-      setMessage('Failed to load tips.');
+      if (!silent) setMessage('Failed to load tips.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -316,10 +328,13 @@ export default function AdminTipsPage() {
 
   return (
     <div className="admin-card">
-      <div className="admin-recipes-header">
-        <h2 className="admin-title">Daily Tips</h2>
-        <p className="admin-subtitle">Manage curated tips and review user feedback.</p>
-      </div>
+        <div className="admin-recipes-header">
+          <h2 className="admin-title">Daily Tips</h2>
+          <p className="admin-subtitle">
+            Manage curated tips and review user feedback.
+            {lastFeedbackRefresh ? ` Auto-refreshed ${lastFeedbackRefresh.toLocaleTimeString()}` : ''}
+          </p>
+        </div>
 
       {message && <div className="admin-message">{message}</div>}
 
