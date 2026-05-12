@@ -21,7 +21,11 @@ import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
 import { useAuth } from '../../context/authContext';
 import { getRecipeImageSettings } from '../../utils/recipeImageSettings';
-import { getCachedRecipeImageUrl, isPlaceholderRecipeImageUrl, setCachedRecipeImageUrl } from '../../utils/recipeImageCache';
+import {
+  getCachedRecipeImageUrl,
+  isDurableRecipeImageUrl,
+  setCachedRecipeImageUrl,
+} from '../../utils/recipeImageCache';
 
 export default function RecentRecipesScreen() {
   const navigation = useNavigation();
@@ -135,7 +139,7 @@ export default function RecentRecipesScreen() {
               ? recipe.image.trim()
               : '';
         const imageSource = String(recipe?.image_source || recipe?.imageSource || '').toLowerCase();
-        if (directUrl && imageSource !== 'placeholder' && !isPlaceholderRecipeImageUrl(directUrl)) {
+        if (directUrl && imageSource !== 'placeholder' && isDurableRecipeImageUrl(directUrl)) {
           await setCachedRecipeImageUrl(recipe, directUrl);
           return { ...recipe, image_url: recipe.image_url || directUrl, image: recipe.image || directUrl };
         }
@@ -230,15 +234,20 @@ export default function RecentRecipesScreen() {
   if (recipes.length === 0) {
     return (
       <View style={styles.container}>
-        <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
+        <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
+          <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
-            <Ionicons name="arrow-back" size={22} color={Colors.text} />
+            <Ionicons name="arrow-back" size={22} color="white" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>{isHistoryMode ? 'Recipe History' : 'Recent Recipes'}</Text>
+          <View style={styles.headerText}>
+            <Text style={styles.headerTitle}>{isHistoryMode ? 'Recipe History' : 'Recent Recipes'}</Text>
+            <Text style={styles.headerSubtitle}>Recipes you generated recently</Text>
+          </View>
           <View style={styles.headerRight} />
+          </View>
         </View>
 
         <View style={styles.emptyContainer}>
@@ -263,18 +272,20 @@ export default function RecentRecipesScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
+      <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
+        <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Ionicons name="arrow-back" size={22} color={Colors.text} />
+          <Ionicons name="arrow-back" size={22} color="white" />
         </TouchableOpacity>
         <View style={styles.headerText}>
           <Text style={styles.headerTitle}>{isHistoryMode ? 'Recipe History' : 'Recent Recipes'}</Text>
           <Text style={styles.headerSubtitle}>
             {isHistoryMode ? `${recipes.length} of ${totalRecipes || recipes.length} recipes` : `${recipes.length} recipes`}
           </Text>
+        </View>
         </View>
       </View>
 
@@ -357,18 +368,27 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
+  headerPanel: {
+    backgroundColor: Colors.primaryDark,
+    paddingHorizontal: 20,
+    paddingBottom: 18,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 5,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    backgroundColor: Colors.background,
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.surface,
+    backgroundColor: 'rgba(255,255,255,0.16)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -377,14 +397,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: Colors.text,
+    fontSize: 21,
+    fontWeight: '900',
+    color: 'white',
   },
   headerSubtitle: {
     fontSize: 13,
-    color: Colors.textLight,
+    color: 'rgba(255,255,255,0.78)',
     marginTop: 4,
+    fontWeight: '700',
   },
   headerRight: {
     width: 40,
@@ -437,6 +458,7 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
     paddingHorizontal: 20,
+    paddingTop: 18,
   },
   recipeCard: {
     flexDirection: 'row',

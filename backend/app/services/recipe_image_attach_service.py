@@ -41,6 +41,14 @@ def _normalize_image_url(image_url: str, *, base_url: str | None) -> str:
     return image_url
 
 
+def _is_durable_recipe_image_url(image_url: str) -> bool:
+    value = str(image_url or "").strip()
+    if not value:
+        return False
+    path = urlsplit(value).path if value.startswith(("http://", "https://")) else value
+    return isinstance(path, str) and path.startswith("/uploads/recipe-images/")
+
+
 def _recipe_fingerprint(recipe: dict) -> str:
     title = str(recipe.get("title") or recipe.get("name") or "").strip()
     raw_ingredients = recipe.get("ingredients") or []
@@ -147,14 +155,21 @@ def attach_recipe_images(
 
         fingerprint = _recipe_fingerprint(recipe)
         cached_url = None
+        cache_key = f"recipeimg:{fingerprint}:url"
         try:
-            cached_url = cache.get(f"recipeimg:{fingerprint}:url")
+            cached_url = cache.get(cache_key)
         except Exception:  # noqa: BLE001
             cached_url = None
         if cached_url and isinstance(cached_url, str):
-            recipe["image_url"] = _normalize_image_url(cached_url, base_url=base_url)
-            recipe["image_source"] = "ai"
-            continue
+            normalized_cached_url = _normalize_image_url(cached_url, base_url=base_url)
+            if _is_durable_recipe_image_url(normalized_cached_url):
+                recipe["image_url"] = normalized_cached_url
+                recipe["image_source"] = "ai"
+                continue
+            try:
+                cache.delete(cache_key)
+            except Exception:  # noqa: BLE001
+                pass
 
         per_recipe_key = f"imggen:{user.id}:{today}:{fingerprint}"
         per_recipe_count = 0

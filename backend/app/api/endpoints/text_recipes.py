@@ -14,6 +14,7 @@ from ...api.dependencies import check_user_access, get_current_user
 from ...database import get_db
 from ...database import SessionLocal
 from ...models.ai_job import AIJob
+from ...models.recipe_history import RecipeHistory
 from ...models.user import User
 from ...services.ai_pipeline import AIPipeline, IngredientValidationError
 from ...services.ai_recipe_generator import AIRecipeGenerator
@@ -383,9 +384,19 @@ def _run_text_job(job_id: str) -> None:
                 # The client can still generate the remaining images in the background.
                 max_generate=1,
             )
+            latest_history = (
+                db.query(RecipeHistory)
+                .filter(RecipeHistory.user_id == user.id, RecipeHistory.source == "text")
+                .order_by(RecipeHistory.created_at.desc(), RecipeHistory.id.desc())
+                .first()
+            )
+            if latest_history and isinstance(recipes, list):
+                latest_history.recipes = [dict(item) if isinstance(item, dict) else item for item in recipes]
+                db.add(latest_history)
+                db.commit()
         except Exception:
             # Image generation is best-effort; never fail the recipe result.
-            pass
+            db.rollback()
 
         providers: list[str] = []
         models: list[str] = []

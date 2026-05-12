@@ -22,7 +22,12 @@ import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getRecipeImageSettings } from '../../utils/recipeImageSettings';
-import { getCachedRecipeImageUrl, isPlaceholderRecipeImageUrl, setCachedRecipeImageUrl } from '../../utils/recipeImageCache';
+import {
+  getCachedRecipeImageUrl,
+  isDurableRecipeImageUrl,
+  isPlaceholderRecipeImageUrl,
+  setCachedRecipeImageUrl,
+} from '../../utils/recipeImageCache';
 import { getTodayTip } from '../../utils/todayTips';
 import { scheduleDailyPlanNotifications } from '../../utils/mealReminders';
 
@@ -435,7 +440,7 @@ export default function HomeScreen() {
       : typeof recipe?.image === 'string' && recipe.image.trim()
         ? recipe.image.trim()
         : '';
-    return direct;
+    return isDurableRecipeImageUrl(direct) ? direct : '';
   };
 
   const hydrateRecentRecipeImages = async (items) => {
