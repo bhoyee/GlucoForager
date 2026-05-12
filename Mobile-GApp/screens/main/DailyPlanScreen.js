@@ -40,16 +40,36 @@ function parsePlanDate(value) {
   return date;
 }
 
-function buildDateChips(value) {
-  const base = parsePlanDate(value);
-  return Array.from({ length: 5 }, (_, index) => {
-    const date = new Date(base);
-    date.setDate(base.getDate() + index);
+function dateKey(value = new Date()) {
+  const date = value instanceof Date ? value : parsePlanDate(value);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function buildWeekDateChips(selectedDateKey) {
+  const today = new Date();
+  const todayKey = dateKey(today);
+  const selected = parsePlanDate(selectedDateKey || todayKey);
+  const weekStart = new Date(selected);
+  const day = weekStart.getDay();
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  weekStart.setDate(weekStart.getDate() + mondayOffset);
+
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(weekStart);
+    date.setDate(weekStart.getDate() + index);
+    const key = dateKey(date);
+    const isToday = key === todayKey;
+    const isFuture = key > todayKey;
     return {
-      key: date.toISOString().slice(0, 10),
-      day: index === 0 ? 'Today' : date.toLocaleDateString('en-GB', { weekday: 'short' }),
+      key,
+      day: isToday ? 'Today' : date.toLocaleDateString('en-GB', { weekday: 'short' }),
       date: date.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' }),
-      active: index === 0,
+      active: key === selectedDateKey,
+      future: isFuture,
+      today: isToday,
     };
   });
 }
@@ -368,13 +388,15 @@ function MealPlanDetail({ meal, item, showImageLoading, onBack }) {
 export default function DailyPlanScreen() {
   const insets = useSafeAreaInsets();
   const { signOut } = useAuth();
+  const todayKey = dateKey();
   const [plan, setPlan] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(todayKey);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [refreshingImages, setRefreshingImages] = useState(false);
   const [selectedMeal, setSelectedMeal] = useState(null);
 
-  const loadToday = useCallback(async () => {
+  const loadPlanForDate = useCallback(async (targetDate = dateKey()) => {
     const token = await AsyncStorage.getItem('userToken');
     if (!token) {
       setPlan(null);
@@ -382,8 +404,9 @@ export default function DailyPlanScreen() {
     }
     setLoading(true);
     try {
+      const safeDate = targetDate || dateKey();
       const response = await apiFetch(
-        `${API_URL}${API_ENDPOINTS.DAILY_PLAN_TODAY}`,
+        `${API_URL}${API_ENDPOINTS.DAILY_PLAN_BY_DATE}?plan_date=${encodeURIComponent(safeDate)}`,
         { method: 'GET', headers: { Authorization: `Bearer ${token}` } },
         { onUnauthorized: signOut, timeoutMs: 8000 }
       );
@@ -400,7 +423,7 @@ export default function DailyPlanScreen() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [signOut]);
 
   const refreshImagesUntilReady = useCallback(async () => {
     if (refreshingImages) return;
@@ -418,7 +441,7 @@ export default function DailyPlanScreen() {
         await new Promise((r) => setTimeout(r, 3500));
         // eslint-disable-next-line no-await-in-loop
         const response = await apiFetch(
-          `${API_URL}${API_ENDPOINTS.DAILY_PLAN_TODAY}`,
+          `${API_URL}${API_ENDPOINTS.DAILY_PLAN_BY_DATE}?plan_date=${encodeURIComponent(selectedDate)}`,
           { method: 'GET', headers: { Authorization: `Bearer ${token}` } },
           { onUnauthorized: signOut, timeoutMs: 8000 }
         );
@@ -444,7 +467,7 @@ export default function DailyPlanScreen() {
     } finally {
       setRefreshingImages(false);
     }
-  }, [refreshingImages]);
+  }, [refreshingImages, selectedDate, signOut]);
 
   const hasAnyPlaceholderImages = useMemo(() => {
     const meals = Array.isArray(plan?.meals) ? plan.meals : [];
@@ -457,18 +480,19 @@ export default function DailyPlanScreen() {
       let active = true;
       const run = async () => {
         if (!active) return;
-        await loadToday();
+        await loadPlanForDate(selectedDate);
       };
       run();
       return () => {
         active = false;
       };
-    }, [loadToday])
+    }, [loadPlanForDate, selectedDate])
   );
 
   const generateToday = async ({ force } = {}) => {
     const token = await AsyncStorage.getItem('userToken');
     if (!token) return;
+    setSelectedDate(todayKey);
     setGenerating(true);
     try {
       const shouldForce = force === true;
@@ -517,7 +541,13 @@ export default function DailyPlanScreen() {
   };
 
   const meals = Array.isArray(plan?.meals) ? plan.meals : [];
-  const dateChips = useMemo(() => buildDateChips(plan?.plan_date), [plan?.plan_date]);
+  const isSelectedToday = selectedDate === todayKey;
+  const selectedDateLabel = parsePlanDate(selectedDate).toLocaleDateString('en-GB', {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+  });
+  const dateChips = useMemo(() => buildWeekDateChips(selectedDate), [selectedDate]);
   const dailyNutrition =
     plan?.daily_nutrition_estimate && typeof plan.daily_nutrition_estimate === 'object'
       ? plan.daily_nutrition_estimate
@@ -538,27 +568,29 @@ export default function DailyPlanScreen() {
             </View>
           </View>
           <Pressable style={styles.notificationButton}>
-            <Ionicons name="notifications-outline" size={21} color={Colors.text} />
+            <Ionicons name="notifications-outline" size={21} color="white" />
             <View style={styles.notificationDot} />
           </Pressable>
         </View>
 
         {meals.length ? (
           <View style={styles.headerActions}>
-            <Pressable
-              disabled={generating}
-              onPress={() => generateToday({ force: true })}
-              style={[styles.headerPrimaryButton, generating ? { opacity: 0.7 } : null]}
-            >
-              {generating ? (
-                <ActivityIndicator size="small" color="white" />
-              ) : (
-                <Ionicons name="refresh-outline" size={16} color="white" />
-              )}
-              <Text style={styles.headerPrimaryButtonText}>Regenerate</Text>
-            </Pressable>
-            <Pressable onPress={loadToday} style={styles.headerSecondaryButton}>
-              <Ionicons name="refresh-outline" size={16} color={Colors.text} />
+            {isSelectedToday ? (
+              <Pressable
+                disabled={generating}
+                onPress={() => generateToday({ force: true })}
+                style={[styles.headerPrimaryButton, generating ? { opacity: 0.7 } : null]}
+              >
+                {generating ? (
+                  <ActivityIndicator size="small" color={Colors.primaryDark} />
+                ) : (
+                  <Ionicons name="refresh-outline" size={16} color={Colors.primaryDark} />
+                )}
+                <Text style={styles.headerPrimaryButtonText}>Regenerate</Text>
+              </Pressable>
+            ) : null}
+            <Pressable onPress={() => loadPlanForDate(selectedDate)} style={styles.headerSecondaryButton}>
+              <Ionicons name="refresh-outline" size={16} color="white" />
               <Text style={styles.headerSecondaryButtonText}>Refresh</Text>
             </Pressable>
           </View>
@@ -599,17 +631,30 @@ export default function DailyPlanScreen() {
               </View>
             </View>
 
-            <Text style={styles.sectionHeading}>Today's Plan</Text>
+            <Text style={styles.sectionHeading}>{isSelectedToday ? "Today's Plan" : selectedDateLabel}</Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.dateRail}
             >
               {dateChips.map((item) => (
-                <View key={item.key} style={[styles.dayChip, item.active ? styles.dayChipActive : null]}>
+                <Pressable
+                  key={item.key}
+                  disabled={item.future}
+                  onPress={() => {
+                    setSelectedDate(item.key);
+                    setSelectedMeal(null);
+                    void loadPlanForDate(item.key);
+                  }}
+                  style={[
+                    styles.dayChip,
+                    item.active ? styles.dayChipActive : null,
+                    item.future ? styles.dayChipFuture : null,
+                  ]}
+                >
                   <Text style={[styles.dayChipDay, item.active ? styles.dayChipDayActive : null]}>{item.day}</Text>
                   <Text style={[styles.dayChipDate, item.active ? styles.dayChipDateActive : null]}>{item.date}</Text>
-                </View>
+                </Pressable>
               ))}
             </ScrollView>
 
@@ -634,25 +679,59 @@ export default function DailyPlanScreen() {
           </>
         ) : (
           <View style={styles.emptyWrap}>
+            <Text style={styles.sectionHeading}>{isSelectedToday ? "Today's Plan" : selectedDateLabel}</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.dateRail}
+            >
+              {dateChips.map((item) => (
+                <Pressable
+                  key={item.key}
+                  disabled={item.future}
+                  onPress={() => {
+                    setSelectedDate(item.key);
+                    setSelectedMeal(null);
+                    void loadPlanForDate(item.key);
+                  }}
+                  style={[
+                    styles.dayChip,
+                    item.active ? styles.dayChipActive : null,
+                    item.future ? styles.dayChipFuture : null,
+                  ]}
+                >
+                  <Text style={[styles.dayChipDay, item.active ? styles.dayChipDayActive : null]}>{item.day}</Text>
+                  <Text style={[styles.dayChipDate, item.active ? styles.dayChipDateActive : null]}>{item.date}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
             <View style={styles.heroCard}>
               <View style={styles.heroIcon}>
                 <Ionicons name="calendar-clear-outline" size={20} color="white" />
               </View>
-              <Text style={styles.emptyTitle}>Your plan for today</Text>
+              <Text style={styles.emptyTitle}>
+                {isSelectedToday ? 'Your plan for today' : `No plan for ${selectedDateLabel}`}
+              </Text>
               <Text style={styles.emptyText}>
-                Generate a practical breakfast, lunch, dinner, and snack - tailored to your profile.
+                {isSelectedToday
+                  ? 'Generate a practical breakfast, lunch, dinner, and snack - tailored to your profile.'
+                  : 'No meal plan was generated for this day. Past plans stay available here when they exist.'}
               </Text>
-              <Pressable
-                disabled={generating}
-                onPress={generateToday}
-                style={[styles.primaryButton, generating ? { opacity: 0.65 } : null]}
-              >
-                {generating ? <ActivityIndicator size="small" color="white" /> : <Ionicons name="calendar-outline" size={16} color="white" />}
-                <Text style={styles.primaryButtonText}>{generating ? 'Generating...' : "Generate today's plan"}</Text>
-              </Pressable>
-              <Text style={styles.hintText}>
-                You can generate a new plan anytime.
-              </Text>
+              {isSelectedToday ? (
+                <>
+                  <Pressable
+                    disabled={generating}
+                    onPress={generateToday}
+                    style={[styles.primaryButton, generating ? { opacity: 0.65 } : null]}
+                  >
+                    {generating ? <ActivityIndicator size="small" color="white" /> : <Ionicons name="calendar-outline" size={16} color="white" />}
+                    <Text style={styles.primaryButtonText}>{generating ? 'Generating...' : "Generate today's plan"}</Text>
+                  </Pressable>
+                  <Text style={styles.hintText}>
+                    You can generate a new plan anytime.
+                  </Text>
+                </>
+              ) : null}
             </View>
           </View>
         )}
@@ -667,14 +746,16 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   header: {
-    backgroundColor: Colors.surface,
-    paddingHorizontal: 16,
-    paddingBottom: 16,
+    backgroundColor: Colors.primaryDark,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
     shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
+    shadowOpacity: 0.14,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
   },
   headerRow: {
     flexDirection: 'row',
@@ -692,19 +773,20 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: Colors.primary,
+    backgroundColor: 'rgba(255,255,255,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 22,
-    fontWeight: '800',
-    color: Colors.text,
+    fontWeight: '900',
+    color: 'white',
   },
   headerSubtitle: {
     marginTop: 4,
-    color: Colors.textLight,
+    color: 'rgba(255,255,255,0.78)',
     lineHeight: 20,
+    fontWeight: '600',
   },
   notificationButton: {
     width: 46,
@@ -712,9 +794,9 @@ const styles = StyleSheet.create({
     borderRadius: 23,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.14)',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: 'rgba(255,255,255,0.22)',
     position: 'relative',
   },
   notificationDot: {
@@ -724,7 +806,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: Colors.primary,
+    backgroundColor: '#B9F6CA',
   },
   headerActions: {
     marginTop: 18,
@@ -733,7 +815,7 @@ const styles = StyleSheet.create({
   },
   headerPrimaryButton: {
     flex: 1,
-    backgroundColor: Colors.primaryDark,
+    backgroundColor: '#FFFFFF',
     borderRadius: 15,
     paddingVertical: 14,
     paddingHorizontal: 14,
@@ -743,7 +825,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   headerPrimaryButtonText: {
-    color: 'white',
+    color: Colors.primaryDark,
     fontWeight: '900',
     letterSpacing: 0.2,
   },
@@ -756,15 +838,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: '#F9FAFB',
+    borderColor: 'rgba(255,255,255,0.24)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
   },
   headerSecondaryButtonText: {
-    color: Colors.text,
+    color: 'white',
     fontWeight: '800',
   },
   content: {
     padding: 16,
+    paddingTop: 20,
     paddingBottom: 34,
   },
   center: {
@@ -868,6 +951,9 @@ const styles = StyleSheet.create({
   dayChipActive: {
     backgroundColor: Colors.primary,
     borderColor: Colors.primary,
+  },
+  dayChipFuture: {
+    opacity: 0.45,
   },
   dayChipDay: {
     fontWeight: '900',
