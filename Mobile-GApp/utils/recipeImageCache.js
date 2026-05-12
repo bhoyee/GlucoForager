@@ -15,6 +15,17 @@ export const isPlaceholderRecipeImageUrl = (url) => {
   );
 };
 
+export const isDurableRecipeImageUrl = (url) => {
+  const value = typeof url === 'string' ? url.trim() : '';
+  if (!value || isPlaceholderRecipeImageUrl(value)) return false;
+  try {
+    const path = /^https?:\/\//i.test(value) ? new URL(value).pathname : value;
+    return path.startsWith('/uploads/recipe-images/');
+  } catch {
+    return value.includes('/uploads/recipe-images/');
+  }
+};
+
 const normalizeIngredientForFingerprint = (value) => {
   const text = normalizeText(value);
   if (!text) return '';
@@ -79,7 +90,7 @@ export const getCachedRecipeImageUrl = async (recipe) => {
   const key = hashString(fp);
   const cache = await loadCache();
   const value = cache?.[key];
-  if (typeof value?.url === 'string' && value.url.trim() && !isPlaceholderRecipeImageUrl(value.url)) {
+  if (typeof value?.url === 'string' && isDurableRecipeImageUrl(value.url)) {
     return value.url.trim();
   }
   return null;
@@ -89,7 +100,7 @@ export const setCachedRecipeImageUrl = async (recipe, url) => {
   const fp = recipeFingerprint(recipe);
   if (!fp) return;
   const cleanUrl = typeof url === 'string' ? url.trim() : '';
-  if (!cleanUrl || isPlaceholderRecipeImageUrl(cleanUrl)) return;
+  if (!isDurableRecipeImageUrl(cleanUrl)) return;
 
   const key = hashString(fp);
   const cache = await loadCache();

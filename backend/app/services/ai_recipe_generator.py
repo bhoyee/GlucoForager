@@ -268,12 +268,9 @@ class AIRecipeGenerator:
         if provider == "runware":
             if not self.runware_api_key:
                 return {"image_url": self._placeholder_image(recipe), "image_source": "placeholder"}
-            # For speed/reliability: prefer returning the provider URL directly rather than
-            # downloading + re-encoding + storing on disk (which can fail under shared hosting).
-            image_url = self._generate_image_runware_url(prompt, size=size)
-            if not image_url:
+            image_bytes = self._generate_image_runware(prompt, size=size)
+            if not image_bytes:
                 return {"image_url": self._placeholder_image(recipe), "image_source": "placeholder"}
-            return {"image_url": image_url, "image_source": "ai"}
         elif provider == "gemini":
             if not self.gemini_api_key:
                 return {"image_url": self._placeholder_image(recipe), "image_source": "placeholder"}
@@ -281,14 +278,14 @@ class AIRecipeGenerator:
         else:
             # Best-effort fallback: prefer Runware, otherwise Gemini, otherwise placeholder.
             if self.runware_api_key:
-                image_url = self._generate_image_runware_url(prompt, size=size)
-                if image_url:
-                    return {"image_url": image_url, "image_source": "ai"}
-                return {"image_url": self._placeholder_image(recipe), "image_source": "placeholder"}
+                image_bytes = self._generate_image_runware(prompt, size=size)
             elif self.gemini_api_key:
                 image_bytes = self._generate_image_gemini(prompt, size=size)
             else:
                 return {"image_url": self._placeholder_image(recipe), "image_source": "placeholder"}
+
+        if not image_bytes:
+            return {"image_url": self._placeholder_image(recipe), "image_source": "placeholder"}
 
         image_url = self._store_generated_image(image_bytes, recipe, size=size)
         return {"image_url": image_url, "image_source": "ai"}
