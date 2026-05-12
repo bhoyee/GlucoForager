@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
@@ -99,6 +99,17 @@ def _decode_plan_payload(recipes_value):
     return {"meals": [], "summary": None, "daily_nutrition_estimate": None}
 
 
+def _serialize_plan(plan: MealPlan):
+    decoded = _decode_plan_payload(plan.recipes)
+    return {
+        "id": plan.id,
+        "plan_date": plan.plan_date.isoformat(),
+        "meals": decoded["meals"],
+        "summary": decoded["summary"],
+        "daily_nutrition_estimate": decoded["daily_nutrition_estimate"],
+    }
+
+
 @router.get("/today")
 def get_today_plan(
     request: Request,
@@ -130,15 +141,50 @@ def get_today_plan(
         )
     except Exception:
         pass
-    return {
-        "plan": {
-            "id": plan.id,
-            "plan_date": plan.plan_date.isoformat(),
-            "meals": decoded["meals"],
-            "summary": decoded["summary"],
-            "daily_nutrition_estimate": decoded["daily_nutrition_estimate"],
-        }
-    }
+    return {"plan": _serialize_plan(plan)}
+
+
+@router.get("/date")
+def get_plan_by_date(
+    request: Request,
+    plan_date: date = Query(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    today = datetime.utcnow().date()
+    if plan_date > today:
+        return {"plan": None, "future": True}
+
+    plan = (
+        db.query(MealPlan)
+        .filter(MealPlan.user_id == current_user.id, MealPlan.plan_date == plan_date)
+        .order_by(MealPlan.id.desc())
+        .first()
+    )
+    if not plan:
+        return {"plan": None, "future": False}
+
+    decoded = _decode_plan_payload(plan.recipes)
+    try:
+        meals = [m for m in (decoded.get("meals") or []) if isinstance(m, dict)]
+        attach_recipe_images(
+            db,
+            user=current_user,
+            recipes=meals,
+            ingredients=[],
+            base_url=str(request.base_url).rstrip("/"),
+            max_generate=len(meals),
+        )
+        payload = dict(plan.recipes or {}) if isinstance(plan.recipes, dict) else {}
+        payload["meals"] = decoded["meals"]
+        plan.recipes = payload
+        db.add(plan)
+        db.commit()
+        db.refresh(plan)
+    except Exception:
+        db.rollback()
+
+    return {"plan": _serialize_plan(plan), "future": False}
 
 
 @router.post("/generate")
