@@ -122,14 +122,19 @@ export default function TodayTipScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={22} color={Colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Daily Guidance</Text>
-        <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
-          <Ionicons name="share-social-outline" size={20} color={Colors.text} />
-        </TouchableOpacity>
+      <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={22} color="white" />
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle}>Daily Guidance</Text>
+            <Text style={styles.headerSubtitle}>Small habits for steadier days</Text>
+          </View>
+          <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
+            <Ionicons name="share-social-outline" size={20} color="white" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -272,18 +277,28 @@ export default function TodayTipScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
+  headerPanel: {
+    backgroundColor: Colors.primaryDark,
+    paddingHorizontal: 20,
+    paddingBottom: 18,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 5,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 12,
     justifyContent: 'space-between',
   },
   backButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: Colors.surface,
+    backgroundColor: 'rgba(255,255,255,0.16)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -291,18 +306,29 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: Colors.surface,
+    backgroundColor: 'rgba(255,255,255,0.16)',
     justifyContent: 'center',
     alignItems: 'center',
   },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 12,
+  },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: Colors.text,
+    fontSize: 20,
+    fontWeight: '900',
+    color: 'white',
+  },
+  headerSubtitle: {
+    marginTop: 3,
+    fontSize: 12,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.78)',
   },
   content: {
     paddingHorizontal: 20,
-    paddingTop: 8,
+    paddingTop: 18,
   },
   heroCard: {
     backgroundColor: '#F6FBF7',

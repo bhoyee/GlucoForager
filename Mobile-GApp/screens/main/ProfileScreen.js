@@ -582,11 +582,16 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
-        <Text style={styles.title}>Profile</Text>
-        <TouchableOpacity onPress={signOut}>
-          <Text style={styles.logoutText}>Logout</Text>
-        </TouchableOpacity>
+      <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.title}>Profile</Text>
+            <Text style={styles.headerSubtitle}>Account, preferences, and reminders</Text>
+          </View>
+          <TouchableOpacity style={styles.logoutButton} onPress={signOut}>
+            <Text style={styles.logoutText}>Logout</Text>
+          </TouchableOpacity>
+        </View>
       </View>
       <View style={{ flex: 1, paddingBottom: versionFooterBottom + versionFooterHeight }}>
         <ScrollView
@@ -899,24 +904,47 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   scrollContent: {
+    paddingTop: 18,
     paddingBottom: 8,
+  },
+  headerPanel: {
+    backgroundColor: Colors.primaryDark,
+    paddingHorizontal: 20,
+    paddingBottom: 18,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 5,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 20,
   },
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: Colors.text,
+    color: 'white',
+  },
+  headerSubtitle: {
+    marginTop: 4,
+    fontSize: 13,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.78)',
+  },
+  logoutButton: {
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    backgroundColor: 'rgba(255,255,255,0.16)',
   },
   logoutText: {
-    color: Colors.error,
-    fontSize: 16,
-    fontWeight: '600',
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '800',
   },
   userCard: {
     backgroundColor: Colors.surface,
