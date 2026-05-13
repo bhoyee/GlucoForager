@@ -14,12 +14,13 @@ from ...api.dependencies import check_user_access, get_current_user
 from ...database import get_db
 from ...database import SessionLocal
 from ...models.ai_job import AIJob
+from ...models.recipe_history import RecipeHistory
 from ...models.user import User
 from ...services.ai_pipeline import AIPipeline, IngredientValidationError
 from ...services.ai_recipe_generator import AIRecipeGenerator
 from ...services.cache_service import CacheService
 from ...services.cost_tracker import record_ai_request
-from ...services.ingredient_classifier import IngredientClassifier
+from ...services.ingredient_classifier import IngredientClassifier, IngredientNormalizer
 from ...services.recipe_image_attach_service import attach_recipe_images
 from ...services.rate_limit_service import check_ai_rate_limit
 from ...services.subscription_service import get_effective_subscription_tier
@@ -32,6 +33,7 @@ from .ai_recipes import _safe_job_error
 router = APIRouter(prefix="/ai/text", tags=["ai"])
 pipeline = AIPipeline()
 classifier = IngredientClassifier()
+normalizer = IngredientNormalizer()
 cache = CacheService()
 image_helper = AIRecipeGenerator()
 TEXT_CACHE_TTL_SECONDS = 21600
@@ -110,15 +112,40 @@ def _ensure_images(recipes: list[dict], tier: str, ingredients: list[str]) -> li
 
 def _precheck_ingredient_input(raw_ingredients: list[str], *, mode: str, tier: str) -> dict:
     if mode in ("surprise", "quick"):
-        return {"food": [], "non_food": [], "source": "mode"}
+        return {"food": [], "non_food": [], "source": "mode", "normalization": {"corrections": []}}
 
-    classified = classifier.classify(raw_ingredients)
+    normalized = normalizer.normalize(raw_ingredients)
+    classified = classifier.classify(normalized["ingredients"])
     if not classified["food"]:
         raise IngredientValidationError(
             "not_food",
             "Content not related to food. Please enter real ingredients.",
         )
+    risks = pipeline.risk_classifier.classify(classified["food"], tier=tier)
+    risk_by_name = risks.get("risk_by_name") or {}
+    safe_food = []
+    risk_filtered_out = []
+    for item in classified["food"]:
+        key = str(item or "").strip().lower()
+        risk = (risk_by_name.get(key) or {}).get("risk") or "ok"
+        if risk in {"avoid", "needs_clarification"}:
+            risk_filtered_out.append(item)
+        else:
+            safe_food.append(item)
+    if safe_food:
+        classified["food"] = safe_food
+        classified["risk_filtered_out"] = risk_filtered_out
+        classified["risk_by_name"] = risk_by_name
     pipeline._ensure_diabetes_friendly_or_raise(classified["food"], mode=mode, tier=tier)
+    classified["normalization"] = normalized
+    classified["source"] = ",".join(
+        label
+        for label in (
+            f"normalizer:{normalized.get('source')}" if normalized.get("source") else "",
+            f"classifier:{classified.get('source')}" if classified.get("source") else "",
+        )
+        if label
+    )
     return classified
 
 
@@ -272,6 +299,9 @@ def _run_text_job(job_id: str) -> None:
                         "tier": tier,
                         "ingredients_count": len(ingredients) if isinstance(ingredients, list) else None,
                         "non_food_count": len(classified.get("non_food") or []),
+                        "normalization_corrections_count": len(
+                            ((classified.get("normalization") or {}).get("corrections") or [])
+                        ),
                         "classification_source": classified.get("source"),
                         "elapsed_ms": int((time.time() - started) * 1000),
                     }
@@ -365,12 +395,23 @@ def _run_text_job(job_id: str) -> None:
                 recipes=recipes or [],
                 ingredients=ingredients,
                 base_url=base_url,
-                # Speed: don't auto-generate images inline; clients can request images after recipes render.
-                max_generate=0,
+                # Ensure recent recipes and detail pages have a real thumbnail immediately.
+                # The client can still generate the remaining images in the background.
+                max_generate=1,
             )
+            latest_history = (
+                db.query(RecipeHistory)
+                .filter(RecipeHistory.user_id == user.id, RecipeHistory.source == "text")
+                .order_by(RecipeHistory.created_at.desc(), RecipeHistory.id.desc())
+                .first()
+            )
+            if latest_history and isinstance(recipes, list):
+                latest_history.recipes = [dict(item) if isinstance(item, dict) else item for item in recipes]
+                db.add(latest_history)
+                db.commit()
         except Exception:
             # Image generation is best-effort; never fail the recipe result.
-            pass
+            db.rollback()
 
         providers: list[str] = []
         models: list[str] = []
@@ -401,6 +442,7 @@ def _run_text_job(job_id: str) -> None:
             "filtered_out": classified["non_food"],
             "classification_source": classified["source"],
             "warning": warning,
+            "normalization": classified.get("normalization") or {"corrections": []},
             "ai": {
                 "providers": sorted(set(providers)),
                 "models": sorted(set(models)),
@@ -588,6 +630,7 @@ def generate_from_text(
                         "filtered_out": classified.get("non_food") or [],
                         "classification_source": classified["source"],
                         "warning": warning,
+                        "normalization": classified.get("normalization") or {"corrections": []},
                     }
     try:
         recipes = pipeline.text_to_recipes(
@@ -618,6 +661,7 @@ def generate_from_text(
         "filtered_out": classified.get("non_food") or [],
         "classification_source": classified["source"],
         "warning": warning,
+        "normalization": classified.get("normalization") or {"corrections": []},
         "ai": {
             "providers": sorted({(r.get("_ai_provider") or "").strip() for r in (recipes or []) if isinstance(r, dict) and (r.get("_ai_provider") or "").strip()}),
             "models": sorted({(r.get("_ai_model") or "").strip() for r in (recipes or []) if isinstance(r, dict) and (r.get("_ai_model") or "").strip()}),
@@ -663,12 +707,14 @@ def generate_from_text_async(
         )
 
     try:
-        _precheck_ingredient_input(payload.ingredients, mode=payload.mode, tier=tier)
+        classified = _precheck_ingredient_input(payload.ingredients, mode=payload.mode, tier=tier)
     except IngredientValidationError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"code": exc.code, "message": exc.message},
         ) from exc
+
+    queued_ingredients = classified.get("food") if payload.mode == "ingredients" else payload.ingredients
 
     job_id = str(uuid.uuid4())
     job = AIJob(
@@ -677,7 +723,9 @@ def generate_from_text_async(
         source="text",
         status="pending",
         payload={
-            "ingredients": payload.ingredients,
+            "ingredients": queued_ingredients,
+            "original_ingredients": payload.ingredients,
+            "normalization": classified.get("normalization") or {"corrections": []},
             "filters": payload.filters or [],
             "exclude_titles": payload.exclude_titles or [],
             "variety_mode": payload.variety_mode,

@@ -1,7 +1,8 @@
 import random
 import re
+from urllib.parse import urlsplit
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from ...database import get_db
@@ -12,6 +13,7 @@ from ..dependencies import get_current_user
 from ...services.cache_service import CacheService
 from ...services.food_profile_service import extract_food_profile
 from ...services.recipe_fingerprint import recipe_fingerprint as stable_recipe_fingerprint
+from ...services.recipe_image_attach_service import attach_recipe_images
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
 cache = CacheService()
@@ -30,6 +32,31 @@ def _ai_recipe_fingerprint(item: dict) -> str:
                 if name:
                     names.append(name)
     return stable_recipe_fingerprint(title=title, ingredients=names)
+
+
+def _is_placeholder_image_url(url: str | None) -> bool:
+    value = str(url or "").strip().lower()
+    if not value:
+        return True
+    return (
+        "placeholder" in value
+        or "/uploads/placeholders/" in value
+        or "photo-1504674900247-0877df9cc836" in value
+    )
+
+
+def _is_durable_recipe_image_url(url: str | None) -> bool:
+    value = str(url or "").strip()
+    if not value or _is_placeholder_image_url(value):
+        return False
+    path = urlsplit(value).path if value.startswith(("http://", "https://")) else value
+    return isinstance(path, str) and path.startswith("/uploads/recipe-images/")
+
+
+def _persist_history_recipes(db: Session, history: RecipeHistory, recipes: list[dict]) -> None:
+    history.recipes = [dict(item) if isinstance(item, dict) else item for item in recipes]
+    db.add(history)
+    db.commit()
 
 
 def _recipe_text(recipe: Recipe) -> str:
@@ -267,6 +294,7 @@ def recipe_suggestions(
 
 @router.get("/recent")
 def recent_recipes(
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -278,7 +306,7 @@ def recent_recipes(
     )
     if not latest:
         return {"items": []}
-    recipes = latest.recipes or []
+    recipes = [dict(item) if isinstance(item, dict) else item for item in (latest.recipes or [])]
 
     # Overlay generated images (if any) using our cache mapping from image generation.
     # This makes the client "Recent recipes" reflect images even if the stored JSON still contains placeholders.
@@ -287,10 +315,40 @@ def recent_recipes(
             if not isinstance(recipe, dict):
                 continue
             fingerprint = _ai_recipe_fingerprint(recipe)
-            url = cache.get(f"recipeimg:{fingerprint}:url")
+            cache_key = f"recipeimg:{fingerprint}:url"
+            url = cache.get(cache_key)
             if url and isinstance(url, str):
-                recipe["image_url"] = url
-                recipe["image_source"] = "ai"
+                if _is_durable_recipe_image_url(url):
+                    recipe["image_url"] = url
+                    recipe["image_source"] = "ai"
+                else:
+                    cache.delete(cache_key)
+
+        needs_repair = False
+        for recipe in recipes:
+            if not isinstance(recipe, dict):
+                continue
+            url = recipe.get("image_url") or recipe.get("image")
+            source = str(recipe.get("image_source") or recipe.get("imageSource") or "").strip().lower()
+            if source == "placeholder" or not _is_durable_recipe_image_url(str(url or "")):
+                recipe.pop("image", None)
+                recipe["image_url"] = ""
+                recipe["image_source"] = "none"
+                needs_repair = True
+
+        if needs_repair:
+            try:
+                attach_recipe_images(
+                    db,
+                    user=current_user,
+                    recipes=recipes,
+                    ingredients=[],
+                    base_url=str(request.base_url).rstrip("/"),
+                    max_generate=3,
+                )
+                _persist_history_recipes(db, latest, recipes)
+            except Exception:
+                db.rollback()
     return {"items": recipes[:3]}
 
 
@@ -316,10 +374,14 @@ def recipe_history(
                 continue
             item = dict(recipe)
             fingerprint = _ai_recipe_fingerprint(item)
-            url = cache.get(f"recipeimg:{fingerprint}:url")
+            cache_key = f"recipeimg:{fingerprint}:url"
+            url = cache.get(cache_key)
             if url and isinstance(url, str):
-                item["image_url"] = url
-                item["image_source"] = "ai"
+                if _is_durable_recipe_image_url(url):
+                    item["image_url"] = url
+                    item["image_source"] = "ai"
+                else:
+                    cache.delete(cache_key)
             item["history_key"] = f"history-{row.id}-{index}"
             item.setdefault("id", item["history_key"])
             item["history_id"] = row.id

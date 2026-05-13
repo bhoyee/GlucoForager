@@ -88,26 +88,38 @@ export default function ChallengeScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} activeOpacity={0.85}>
-          <Ionicons name="arrow-back" size={22} color={Colors.text} />
-        </TouchableOpacity>
-        <View style={styles.headerText}>
-          <Text style={styles.headerTitle}>Daily Challenge</Text>
-          <Text style={styles.headerSubtitle}>
-            {progress.completed}/{progress.total} completed
-          </Text>
+      <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} activeOpacity={0.85}>
+            <Ionicons name="arrow-back" size={22} color="white" />
+          </TouchableOpacity>
+          <View style={styles.headerText}>
+            <Text style={styles.headerTitle}>Today's Challenge</Text>
+            <Text style={styles.headerSubtitle}>
+              {progress.completed}/{progress.total} completed
+            </Text>
+          </View>
+          <TouchableOpacity style={styles.resetButton} onPress={() => void loadChallenge()} activeOpacity={0.85}>
+            <Ionicons name="refresh" size={18} color="white" />
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity style={styles.resetButton} onPress={() => void loadChallenge()} activeOpacity={0.85}>
-          <Ionicons name="refresh" size={18} color={Colors.text} />
-        </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: contentBottomPadding }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.content, { paddingBottom: contentBottomPadding }]}
+      >
         <View style={styles.hero}>
-          <Text style={styles.heroLabel}>Today</Text>
-          <Text style={styles.heroTitle}>Today's Diabetes Challenge</Text>
-          <Text style={styles.heroTask}>Complete these to support healthier blood sugar habits today.</Text>
+          <View style={styles.heroTopRow}>
+            <View style={styles.heroIcon}>
+              <Ionicons name="trophy-outline" size={22} color={Colors.primaryDark} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.heroLabel}>Today</Text>
+              <Text style={styles.heroTitle}>Build your blood sugar streak</Text>
+            </View>
+          </View>
+          <Text style={styles.heroTask}>Complete these simple actions to support healthier blood sugar habits today.</Text>
 
           {loading ? (
             <View style={styles.loadingRow}>
@@ -187,17 +199,27 @@ export default function ChallengeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
+  headerPanel: {
+    backgroundColor: Colors.primaryDark,
+    paddingHorizontal: 20,
+    paddingBottom: 18,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 5,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 12,
   },
   backButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: Colors.surface,
+    backgroundColor: 'rgba(255,255,255,0.16)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -205,28 +227,45 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: Colors.surface,
+    backgroundColor: 'rgba(255,255,255,0.16)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerText: { flex: 1, marginLeft: 12 },
-  headerTitle: { fontSize: 18, fontWeight: '900', color: Colors.text },
-  headerSubtitle: { marginTop: 2, fontSize: 12, color: Colors.textLight, fontWeight: '700' },
+  headerTitle: { fontSize: 20, fontWeight: '900', color: 'white' },
+  headerSubtitle: { marginTop: 3, fontSize: 12, color: 'rgba(255,255,255,0.78)', fontWeight: '700' },
+  content: {
+    paddingTop: 18,
+  },
   hero: {
-    marginTop: 8,
     marginHorizontal: 20,
-    backgroundColor: Colors.surface,
-    borderRadius: 18,
+    backgroundColor: '#F6FBF7',
+    borderRadius: 22,
     padding: 18,
+    borderWidth: 1,
+    borderColor: '#DCEFE4',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  heroIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E3F5EA',
   },
   heroLabel: { fontSize: 12, fontWeight: '900', color: Colors.primary, textTransform: 'uppercase' },
-  heroTitle: { marginTop: 8, fontSize: 18, fontWeight: '900', color: Colors.text },
-  heroTask: { marginTop: 8, fontSize: 14, lineHeight: 20, color: Colors.textLight, fontWeight: '600' },
+  heroTitle: { marginTop: 4, fontSize: 20, fontWeight: '900', color: Colors.text },
+  heroTask: { marginTop: 14, fontSize: 15, lineHeight: 22, color: Colors.textLight, fontWeight: '600' },
   loadingRow: { marginTop: 14, flexDirection: 'row', alignItems: 'center', gap: 10 },
   loadingText: { fontSize: 13, color: Colors.textLight, fontWeight: '700' },
   errorText: { marginTop: 14, fontSize: 13, lineHeight: 18, color: Colors.danger, fontWeight: '700' },
@@ -249,8 +288,10 @@ const styles = StyleSheet.create({
     marginTop: 14,
     marginHorizontal: 20,
     backgroundColor: Colors.surface,
-    borderRadius: 18,
+    borderRadius: 20,
     padding: 18,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   listTitle: { fontSize: 16, fontWeight: '900', color: Colors.text },
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 12 },

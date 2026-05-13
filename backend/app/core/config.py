@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     resend_api_key: str | None = Field(None, env="RESEND_API_KEY")
     uploads_dir: str = Field("uploads", env="UPLOADS_DIR")
     openai_api_key: str | None = Field(None, env="OPENAI_API_KEY")
+    openai_admin_api_key: str | None = Field(None, env="OPENAI_ADMIN_API_KEY")
     openai_organization: str | None = Field(None, env="OPENAI_ORG_ID")
     # Use available models by default; can be overridden via env.
     openai_model: str = Field("gpt-4o-mini", env="OPENAI_MODEL")

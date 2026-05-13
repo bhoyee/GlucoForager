@@ -97,8 +97,6 @@ export default function AdminKPIDashboard() {
     totalUsers: 0,
     freeUsers: 0,
     premiumUsers: 0,
-    activePremiumUsers: 0,
-    expiredPremiumUsers: 0,
     totalRecipes: 0,
     totalBlogPosts: 0,
   });
@@ -113,6 +111,10 @@ export default function AdminKPIDashboard() {
     today: { count: 0, cost_usd: 0 },
     week: { count: 0, cost_usd: 0 },
     month: { count: 0, cost_usd: 0 },
+  });
+  const [providerCredits, setProviderCredits] = useState({
+    generated_at: null,
+    providers: [],
   });
   const [queueMetrics, setQueueMetrics] = useState({
     backend: 'db',
@@ -272,6 +274,25 @@ export default function AdminKPIDashboard() {
     };
   }, [router, token]);
 
+  const fetchProviderCredits = useCallback(async () => {
+    const response = await fetch(`${API_URL}/api/admin/ai/provider-credits`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (response.status === 401) {
+      localStorage.removeItem('adminToken');
+      router.push('/admin');
+      return null;
+    }
+    const data = await response.json().catch(() => ({}));
+    return data && typeof data === 'object'
+      ? {
+          generated_at: data.generated_at || null,
+          cached_for_seconds: Number(data.cached_for_seconds || 0) || 0,
+          providers: Array.isArray(data.providers) ? data.providers : [],
+        }
+      : { generated_at: null, providers: [] };
+  }, [router, token]);
+
   const safeDashboardFetch = useCallback(
     async (path, fallback) => {
       try {
@@ -302,13 +323,12 @@ export default function AdminKPIDashboard() {
         totalUsers,
         freeUsers,
         premiumUsers,
-        activePremiumUsers,
-        expiredPremiumUsers,
         totalRecipes,
         totalBlogPosts,
         salesData,
         imageUsageData,
         queueMetricsData,
+        providerCreditsData,
         recentUsersData,
         userActivityData,
         pendingRequestsData,
@@ -319,8 +339,6 @@ export default function AdminKPIDashboard() {
         fetchCount(),
         fetchCount('free'),
         fetchCount('premium'),
-        fetchCount('premium', 'active'),
-        fetchCount('premium', 'inactive'),
         fetch(`${API_URL}/api/admin/recipes?page=1&page_size=${PAGE_SIZE}`, {
           headers: { Authorization: `Bearer ${token}` },
         })
@@ -338,6 +356,7 @@ export default function AdminKPIDashboard() {
         fetchSales(),
         fetchImageUsage(),
         fetchQueueMetrics(),
+        fetchProviderCredits(),
         safeDashboardFetch('/api/admin/users?page=1&page_size=100&sort=created_at&order=desc', { items: [] }),
         safeDashboardFetch('/api/admin/user-activity/recent?limit=8', { items: [] }),
         safeDashboardFetch('/api/admin/requests/pending-count', { count: 0 }),
@@ -350,12 +369,11 @@ export default function AdminKPIDashboard() {
         totalUsers === null ||
         freeUsers === null ||
         premiumUsers === null ||
-        activePremiumUsers === null ||
-        expiredPremiumUsers === null ||
         totalBlogPosts === null ||
         salesData === null ||
         imageUsageData === null ||
-        queueMetricsData === null
+        queueMetricsData === null ||
+        providerCreditsData === null
       ) {
         return;
       }
@@ -364,14 +382,13 @@ export default function AdminKPIDashboard() {
         totalUsers,
         freeUsers,
         premiumUsers,
-        activePremiumUsers,
-        expiredPremiumUsers,
         totalRecipes: totalRecipes || 0,
         totalBlogPosts,
       });
       setSales(salesData);
       setImageUsage(imageUsageData);
       setQueueMetrics(queueMetricsData);
+      setProviderCredits(providerCreditsData);
       setRecentUsers(Array.isArray(recentUsersData?.items) ? recentUsersData.items : []);
       setRecentActivity(Array.isArray(userActivityData?.items) ? userActivityData.items : []);
       setActionSummary({
@@ -387,8 +404,6 @@ export default function AdminKPIDashboard() {
         totalUsers: 0,
         freeUsers: 0,
         premiumUsers: 0,
-        activePremiumUsers: 0,
-        expiredPremiumUsers: 0,
         totalRecipes: 0,
         totalBlogPosts: 0,
       });
@@ -399,6 +414,7 @@ export default function AdminKPIDashboard() {
         week: { count: 0, cost_usd: 0 },
         month: { count: 0, cost_usd: 0 },
       });
+      setProviderCredits({ generated_at: null, providers: [] });
       setQueueMetrics({
         backend: 'db',
         db: { counts: {} },
@@ -415,7 +431,7 @@ export default function AdminKPIDashboard() {
       setActionSummary({ pendingRequests: 0, pendingComments: 0, unreadNotifications: 0, failedJobs: 0 });
       setSystemHealth({ status: 'unknown', services: {} });
     }
-  }, [fetchBlogPostCount, fetchCount, fetchQueueMetrics, fetchSales, fetchImageUsage, router, safeDashboardFetch, token]);
+  }, [fetchBlogPostCount, fetchCount, fetchProviderCredits, fetchQueueMetrics, fetchSales, fetchImageUsage, router, safeDashboardFetch, token]);
 
   const formatMoney = useCallback((value, currency) => {
     const numeric = typeof value === 'number' ? value : Number(value);
@@ -445,7 +461,6 @@ export default function AdminKPIDashboard() {
   }, [loadStats]);
 
   const premiumRate = stats.totalUsers ? (stats.premiumUsers / stats.totalUsers) * 100 : 0;
-  const activePremiumRate = stats.premiumUsers ? (stats.activePremiumUsers / stats.premiumUsers) * 100 : 0;
   const freeRate = stats.totalUsers ? (stats.freeUsers / stats.totalUsers) * 100 : 0;
   const contentTotal = stats.totalRecipes + stats.totalBlogPosts;
   const recipeRate = contentTotal ? (stats.totalRecipes / contentTotal) * 100 : 0;
@@ -468,6 +483,15 @@ export default function AdminKPIDashboard() {
     Number(imageUsage.week?.count || 0),
     Number(imageUsage.month?.count || 0)
   );
+  const providerCreditRows = Array.isArray(providerCredits.providers) ? providerCredits.providers : [];
+  const providerCreditRefreshLabel = useMemo(() => {
+    if (!providerCredits.generated_at) return '';
+    try {
+      return `Updated ${new Date(providerCredits.generated_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`;
+    } catch {
+      return '';
+    }
+  }, [providerCredits.generated_at]);
   const queuePeak = Math.max(1, Number(textQueueLength || 0), Number(visionQueueLength || 0));
   const actionItems = [
     {
@@ -576,9 +600,9 @@ export default function AdminKPIDashboard() {
           actionLabel="Users"
         />
         <KpiTile
-          label="Premium health"
-          value={`${Math.round(clampPercent(activePremiumRate))}%`}
-          detail={`${formatNumber(stats.activePremiumUsers)} active / ${formatNumber(stats.expiredPremiumUsers)} expired`}
+          label="Premium users"
+          value={formatNumber(stats.premiumUsers)}
+          detail={`${Math.round(clampPercent(premiumRate))}% of total users`}
           tone="blue"
           href="/admin/users"
           actionLabel="Review"
@@ -618,7 +642,6 @@ export default function AdminKPIDashboard() {
             <div className="admin-kpi-stack">
               <ProgressBar label="Free users" value={freeRate} meta={formatNumber(stats.freeUsers)} />
               <ProgressBar label="Premium users" value={premiumRate} meta={formatNumber(stats.premiumUsers)} tone="blue" />
-              <ProgressBar label="Active premium" value={activePremiumRate} meta={formatNumber(stats.activePremiumUsers)} tone="gold" />
             </div>
           </div>
         </SectionCard>
@@ -701,6 +724,77 @@ export default function AdminKPIDashboard() {
               meta={formatNumber(visionQueueLength)}
               tone="gold"
             />
+          </div>
+        </SectionCard>
+
+        <SectionCard title="AI provider credits" eyebrow="External APIs" className="admin-kpi-wide">
+          <div className="admin-kpi-provider-grid">
+            {providerCreditRows.length ? (
+              providerCreditRows.map((provider) => {
+                const status = String(provider?.status || 'unknown').toLowerCase();
+                const balance = provider?.balance && typeof provider.balance === 'object' ? provider.balance : {};
+                const spend = provider?.spend && typeof provider.spend === 'object' ? provider.spend : {};
+                const usage = provider?.usage && typeof provider.usage === 'object' ? provider.usage : {};
+                const currency = provider?.currency || 'USD';
+                const todayUsage = usage.today && typeof usage.today === 'object' ? usage.today : null;
+                const isOpenAI = provider?.name === 'OpenAI';
+                const isDeepSeek = provider?.name === 'DeepSeek';
+                return (
+                  <div key={provider?.name || status} className="admin-kpi-provider-card">
+                    <div className="admin-kpi-provider-head">
+                      <strong>{provider?.name || 'Provider'}</strong>
+                      <span className={`admin-kpi-provider-status status-${status}`}>
+                        {provider?.configured ? status.replace(/_/g, ' ') : 'not configured'}
+                      </span>
+                    </div>
+                    <div className="admin-kpi-provider-values">
+                      <div>
+                        <span>{isOpenAI ? 'Today spend' : 'Balance'}</span>
+                        <strong suppressHydrationWarning>
+                          {isOpenAI
+                            ? formatMoney(spend.today_usd, 'USD')
+                            : balance.total !== undefined && balance.total !== null
+                              ? formatMoney(balance.total, currency)
+                              : '--'}
+                        </strong>
+                      </div>
+                      <div>
+                        <span>{isOpenAI ? 'Month spend' : isDeepSeek ? 'Monthly tokens' : 'Today usage'}</span>
+                        <strong suppressHydrationWarning>
+                          {isOpenAI
+                            ? formatMoney(spend.month_usd, 'USD')
+                            : isDeepSeek
+                              ? formatNumber(usage.monthly_total_tokens || 0)
+                              : todayUsage
+                                ? `${formatNumber(todayUsage.credits || 0)} cr`
+                                : '--'}
+                        </strong>
+                      </div>
+                    </div>
+                    {isOpenAI ? (
+                      <div className="admin-kpi-provider-foot" suppressHydrationWarning>
+                        Monthly tokens {formatNumber(usage.monthly_total_tokens || 0)}
+                        {usage.monthly_requests ? ` / ${formatNumber(usage.monthly_requests)} requests` : ''}
+                      </div>
+                    ) : todayUsage ? (
+                      <div className="admin-kpi-provider-foot">
+                        Today usage {formatNumber(todayUsage.credits || 0)} credits / {formatNumber(todayUsage.requests || 0)} requests
+                      </div>
+                    ) : isDeepSeek ? (
+                      <div className="admin-kpi-provider-foot">
+                        Monthly requests {formatNumber(usage.monthly_requests || 0)}
+                      </div>
+                    ) : null}
+                    {provider?.message && !isOpenAI ? <div className="admin-kpi-provider-message">{provider.message}</div> : null}
+                  </div>
+                );
+              })
+            ) : (
+              <div className="admin-kpi-note">AI provider credit data has not loaded yet.</div>
+            )}
+          </div>
+          <div className="admin-kpi-note">
+            {providerCreditRefreshLabel || 'Provider balances are cached briefly to avoid calling billing APIs on every dashboard refresh.'}
           </div>
         </SectionCard>
 

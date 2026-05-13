@@ -5257,6 +5257,101 @@
   font-weight: 800;
 }
 
+.admin-kpi-provider-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.admin-kpi-provider-card {
+  min-width: 0;
+  border: 1px solid #e5eee9;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #ffffff, #f8fbf9);
+  padding: 14px;
+}
+
+.admin-kpi-provider-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.admin-kpi-provider-head strong {
+  color: #0f172a;
+  font-size: 16px;
+  font-weight: 950;
+}
+
+.admin-kpi-provider-status {
+  border-radius: 999px;
+  padding: 5px 8px;
+  background: #eef2ff;
+  color: #3730a3;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.admin-kpi-provider-status.status-connected {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.admin-kpi-provider-status.status-error,
+.admin-kpi-provider-status.status-unavailable {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.admin-kpi-provider-status.status-not_configured {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.admin-kpi-provider-values {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-kpi-provider-values > div {
+  border-radius: 13px;
+  background: #f1f7f3;
+  padding: 10px;
+}
+
+.admin-kpi-provider-values span,
+.admin-kpi-provider-foot {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.admin-kpi-provider-values strong {
+  display: block;
+  margin-top: 6px;
+  color: #0f172a;
+  font-size: 19px;
+  line-height: 1.15;
+}
+
+.admin-kpi-provider-foot {
+  margin-top: 12px;
+}
+
+.admin-kpi-provider-message {
+  margin-top: 10px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+  font-weight: 650;
+}
+
 @media (max-width: 1100px) {
   .admin-kpi-tiles {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -5286,6 +5381,7 @@
   .admin-kpi-content-grid,
   .admin-kpi-revenue-grid,
   .admin-kpi-queue-meta,
+  .admin-kpi-provider-grid,
   .admin-kpi-action-grid {
     grid-template-columns: 1fr;
   }

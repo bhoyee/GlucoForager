@@ -163,8 +163,13 @@ export default function FavoritesScreen() {
   if (favorites.length === 0) {
     return (
       <View style={styles.container}>
-        <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
-          <Text style={styles.headerTitle}>My Favorites</Text>
+        <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
+          <View style={styles.header}>
+            <View style={styles.headerText}>
+              <Text style={styles.headerTitle}>My Favorites</Text>
+              <Text style={styles.headerSubtitle}>Saved recipes you love</Text>
+            </View>
+          </View>
         </View>
         
         <View style={styles.emptyContainer}>
@@ -190,16 +195,18 @@ export default function FavoritesScreen() {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
+      <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
+        <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Ionicons name="arrow-back" size={22} color={Colors.text} />
+          <Ionicons name="arrow-back" size={22} color="white" />
         </TouchableOpacity>
         <View style={styles.headerText}>
           <Text style={styles.headerTitle}>My Favorites</Text>
           <Text style={styles.headerSubtitle}>{favorites.length} saved recipes</Text>
+        </View>
         </View>
         
       </View>
@@ -319,19 +326,28 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
+  headerPanel: {
+    backgroundColor: Colors.primaryDark,
+    paddingHorizontal: 20,
+    paddingBottom: 18,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 5,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    backgroundColor: Colors.background,
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.surface,
+    backgroundColor: 'rgba(255,255,255,0.16)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -340,14 +356,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 'bold',
-    color: Colors.text,
+    color: 'white',
   },
   headerSubtitle: {
     fontSize: 14,
-    color: Colors.textLight,
+    color: 'rgba(255,255,255,0.78)',
     marginTop: 4,
+    fontWeight: '700',
   },
   loadingContainer: {
     flex: 1,
@@ -400,6 +417,7 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
     paddingHorizontal: 20,
+    paddingTop: 18,
   },
   favoriteCard: {
     backgroundColor: 'white',
