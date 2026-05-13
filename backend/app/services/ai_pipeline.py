@@ -74,27 +74,49 @@ class AIPipeline:
 
         selected: list[str] = []
         excluded: list[str] = []
+        optional: list[str] = []
 
         for item in ingredients or []:
             key = (item or "").strip().lower()
             label = (risk_by_name.get(key) or {}).get("risk") or "ok"
             if label == "avoid":
                 excluded.append(item)
+            elif label in {"caution", "limit", "needs_clarification"}:
+                optional.append(item)
             else:
                 selected.append(item)
 
         warning = None
-        if excluded:
+        if excluded or optional:
             warning = {
                 "code": "ingredients_flagged",
-                "message": "Some ingredients were excluded for better diabetes-friendly results.",
+                "message": "Some detected items were unselected because they may be less suitable for diabetes-friendly recipes.",
                 "risk_level": "moderate",
                 "source": risks.get("source") or "ai",
                 "excluded": excluded,
+                "optional": optional,
                 "risk_by_name": risk_by_name,
             }
 
         return selected, (warning or {"risk_by_name": risk_by_name, "source": risks.get("source") or "ai"})
+
+    def _scan_review_warning(
+        self,
+        warning: dict | None,
+        *,
+        risk_meta: dict,
+        fallback_code: str = "scan_review_required",
+        fallback_message: str = "Review the detected ingredients before generating recipes.",
+    ) -> dict:
+        payload = dict(warning or {})
+        payload.setdefault("code", fallback_code)
+        payload.setdefault("message", fallback_message)
+        payload.setdefault("risk_level", "moderate")
+        payload.setdefault("source", risk_meta.get("source") or "ai")
+        payload.setdefault("excluded", risk_meta.get("excluded") or [])
+        payload.setdefault("optional", risk_meta.get("optional") or [])
+        payload.setdefault("risk_by_name", risk_meta.get("risk_by_name") or {})
+        return payload
 
     def _get_diabetes_warning(self, ingredients: list[str]) -> dict | None:
         verdict = self.classifier.classify(ingredients)
@@ -258,8 +280,29 @@ class AIPipeline:
         selected_food_only, flagged = self._apply_risk_filter(food_only, tier=tier)
         selected_food_only = self._cap_recipe_ingredients(selected_food_only)
         risk_meta = flagged if isinstance(flagged, dict) else {}
-        warning = self._get_diabetes_warning(selected_food_only) or risk_meta
-        self._ensure_diabetes_friendly_or_raise(selected_food_only, mode="ingredients", tier=tier)
+        if include_recipes:
+            warning = (
+                risk_meta
+                if risk_meta.get("code")
+                else (self._get_diabetes_warning(selected_food_only) if selected_food_only else None) or risk_meta
+            )
+        else:
+            warning = self._scan_review_warning(
+                risk_meta if risk_meta.get("code") else None,
+                risk_meta=risk_meta,
+                fallback_message="Review the detected ingredients before generating recipes.",
+            )
+        if include_recipes:
+            try:
+                self._ensure_diabetes_friendly_or_raise(selected_food_only, mode="ingredients", tier=tier)
+            except IngredientValidationError as exc:
+                warning = self._scan_review_warning(
+                    warning if isinstance(warning, dict) else None,
+                    risk_meta=risk_meta,
+                    fallback_code=exc.code,
+                    fallback_message=exc.message,
+                )
+                include_recipes = False
         if non_food and (not isinstance(warning, dict) or not warning.get("code")):
             warning = {
                 "code": "non_food_ignored",
@@ -301,7 +344,7 @@ class AIPipeline:
             "detected": selected_food_only,
             "detected_all": food_only,
             "flagged_out": (warning or {}).get("excluded", []) if isinstance(warning, dict) else [],
-            "flagged_optional": [],
+            "flagged_optional": (warning or {}).get("optional", []) if isinstance(warning, dict) else [],
             "non_food": non_food,
             "filters": filters or [],
             "warning": warning,
@@ -347,8 +390,29 @@ class AIPipeline:
         # truncation/invalid JSON and improve latency.
         selected_food_only = self._cap_recipe_ingredients(selected_food_only, limit=14)
         risk_meta = flagged if isinstance(flagged, dict) else {}
-        warning = self._get_diabetes_warning(selected_food_only) or risk_meta
-        self._ensure_diabetes_friendly_or_raise(selected_food_only, mode="ingredients", tier=tier)
+        if include_recipes:
+            warning = (
+                risk_meta
+                if risk_meta.get("code")
+                else (self._get_diabetes_warning(selected_food_only) if selected_food_only else None) or risk_meta
+            )
+        else:
+            warning = self._scan_review_warning(
+                risk_meta if risk_meta.get("code") else None,
+                risk_meta=risk_meta,
+                fallback_message="Review the detected ingredients before generating recipes.",
+            )
+        if include_recipes:
+            try:
+                self._ensure_diabetes_friendly_or_raise(selected_food_only, mode="ingredients", tier=tier)
+            except IngredientValidationError as exc:
+                warning = self._scan_review_warning(
+                    warning if isinstance(warning, dict) else None,
+                    risk_meta=risk_meta,
+                    fallback_code=exc.code,
+                    fallback_message=exc.message,
+                )
+                include_recipes = False
         if non_food and (not isinstance(warning, dict) or not warning.get("code")):
             warning = {
                 "code": "non_food_ignored",
@@ -390,7 +454,7 @@ class AIPipeline:
             "detected": selected_food_only,
             "detected_all": food_only,
             "flagged_out": (warning or {}).get("excluded", []) if isinstance(warning, dict) else [],
-            "flagged_optional": [],
+            "flagged_optional": (warning or {}).get("optional", []) if isinstance(warning, dict) else [],
             "non_food": non_food,
             "filters": filters or [],
             "warning": warning,

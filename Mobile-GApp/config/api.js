@@ -46,6 +46,7 @@ export const API_ENDPOINTS = {
   MOBILE_PUSH_TOKENS: '/api/mobile/push-tokens',
   MOBILE_PUSH_TOKENS_DISABLE: '/api/mobile/push-tokens/disable',
   DAILY_PLAN_TODAY: '/api/app/daily-plan/today',
+  DAILY_PLAN_BY_DATE: '/api/app/daily-plan/date',
   DAILY_PLAN_GENERATE: '/api/app/daily-plan/generate',
 };
 

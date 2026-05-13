@@ -26,7 +26,7 @@ def _iter_mobile_log_lines(*, max_files: int = 14) -> list[str]:
             text = path.read_text(encoding="utf-8", errors="ignore")
         except Exception:
             continue
-        for line in text.splitlines():
+        for line in reversed(text.splitlines()):
             if line.strip():
                 lines.append(line)
     return lines
@@ -270,6 +270,7 @@ def tip_feedback_summary(
     latest: list[dict] = []
     unique_helpful_users: set[int] = set()
     unique_not_useful_users: set[int] = set()
+    seen_daily_feedback: set[tuple[str, str, str]] = set()
 
     for line in raw_lines:
         if len(latest) >= limit_events:
@@ -348,6 +349,22 @@ def tip_feedback_summary(
         except Exception:
             user_id = None
 
+        day_key = None
+        if isinstance(details, dict) and details.get("day"):
+            day_key = str(details.get("day") or "").strip()
+        if not day_key and isinstance(ts_raw, str) and len(ts_raw) >= 10:
+            day_key = ts_raw[:10]
+        day_key = day_key or "unknown"
+        identity = (
+            str(user_id)
+            if user_id is not None
+            else str(event.get("user_email") or event.get("device") or event.get("ip") or "anonymous")
+        )
+        dedupe_key = (tip_id, day_key, identity)
+        if dedupe_key in seen_daily_feedback:
+            continue
+        seen_daily_feedback.add(dedupe_key)
+
         if feedback == "helpful":
             bucket["helpful"] += 1
             helpful_total += 1
@@ -406,8 +423,16 @@ def tip_feedback_summary(
         value.pop("_seen_users", None)
         value.pop("_seen_helpful", None)
         value.pop("_seen_not_useful", None)
+        total = int(value.get("total") or 0)
+        helpful = int(value.get("helpful") or 0)
+        value["helpful_rate"] = round((helpful / total) * 100, 1) if total > 0 else 0.0
 
     items = sorted(per_tip.values(), key=lambda x: (x.get("not_useful", 0), x.get("total", 0)), reverse=True)
+    latest_sorted = sorted(
+        latest,
+        key=lambda x: str(x.get("timestamp") or ""),
+        reverse=True,
+    )
     return {
         "window_days": days,
         "totals": {
@@ -418,5 +443,5 @@ def tip_feedback_summary(
             "unique_users_not_useful": len(unique_not_useful_users),
         },
         "items": items,
-        "latest": latest[:200],
+        "latest": latest_sorted[:200],
     }

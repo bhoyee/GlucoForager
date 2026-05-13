@@ -266,6 +266,65 @@ const RecipeDetailsScreen = () => {
     );
   };
 
+  const cleanInstructionText = (value) => {
+    const text = `${value || ''}`
+      .replace(/\s+/g, ' ')
+      .replace(/^(step|instruction|method)\s*\d*\s*[:.)-]?\s*/i, '')
+      .trim();
+    if (!text || /^instruction\s*\d*$/i.test(text) || /^step\s*\d*$/i.test(text)) {
+      return '';
+    }
+    return text;
+  };
+
+  const splitInstructionText = (value) => {
+    if (typeof value !== 'string') return [];
+    const raw = value.trim();
+    if (!raw) return [];
+    const lines = raw
+      .split(/\r?\n+/)
+      .map(cleanInstructionText)
+      .filter(Boolean);
+    if (lines.length > 1) return lines;
+
+    return raw
+      .split(/(?=\b(?:step|instruction)\s*\d+\s*[:.)-])|(?=\s\d+\s*[.)]\s+)/i)
+      .map(cleanInstructionText)
+      .filter(Boolean);
+  };
+
+  const normalizeInstructions = (item) => {
+    const source =
+      item.instructions ??
+      item.steps ??
+      item.method ??
+      item.directions ??
+      item.preparation ??
+      [];
+    const rawSteps = Array.isArray(source) ? source : [source];
+    const steps = [];
+
+    rawSteps.forEach((step) => {
+      if (typeof step === 'string') {
+        steps.push(...splitInstructionText(step));
+        return;
+      }
+      if (step && typeof step === 'object') {
+        const text =
+          step.text ||
+          step.step ||
+          step.instruction ||
+          step.description ||
+          step.direction ||
+          '';
+        const cleaned = cleanInstructionText(text);
+        if (cleaned) steps.push(cleaned);
+      }
+    });
+
+    return steps.filter(Boolean);
+  };
+
   const normalizeRecipe = (item) => {
     const isAdminRecipe = Boolean(item.id);
     const ingredients = Array.isArray(item.ingredients)
@@ -279,11 +338,7 @@ const RecipeDetailsScreen = () => {
         }))
       : [];
 
-    const instructions = Array.isArray(item.instructions)
-      ? item.instructions
-      : Array.isArray(item.steps)
-      ? item.steps
-      : [];
+    const instructions = normalizeInstructions(item);
 
     const nutrition =
       item.nutrition ||
@@ -722,7 +777,12 @@ const RecipeDetailsScreen = () => {
           ]}
           onPress={() => setDetailsTab(key)}
         >
-          <Text style={[styles.detailsTabText, active ? styles.detailsTabTextActive : null]} numberOfLines={1}>
+          <Text
+            style={[styles.detailsTabText, active ? styles.detailsTabTextActive : null]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.78}
+          >
             {label}
           </Text>
         </Pressable>
@@ -1054,18 +1114,19 @@ const styles = StyleSheet.create({
   },
   detailsTabs: {
     flexDirection: 'row',
-    gap: 8,
-    paddingHorizontal: 20,
+    gap: 6,
+    paddingHorizontal: 16,
     marginTop: 14,
   },
   detailsTab: {
     flex: 1,
+    minWidth: 0,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
     height: 42,
     paddingVertical: 10,
-    paddingHorizontal: 10,
+    paddingHorizontal: 4,
     borderRadius: 14,
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
@@ -1086,6 +1147,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     color: '#111827',
+    textAlign: 'center',
+    includeFontPadding: false,
   },
   detailsTabTextActive: {
     color: 'white',
@@ -1426,6 +1489,7 @@ const styles = StyleSheet.create({
   },
   instructionStep: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
     marginBottom: 20,
     backgroundColor: '#F8FDF9',
     padding: 16,
@@ -1453,6 +1517,7 @@ const styles = StyleSheet.create({
   },
   stepText: {
     flex: 1,
+    flexShrink: 1,
     fontSize: 15,
     color: '#333',
     lineHeight: 22,

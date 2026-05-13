@@ -33,15 +33,62 @@ function titleCase(value) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+function parsePlanDate(value) {
+  const raw = typeof value === 'string' && value.trim() ? value.trim() : '';
+  const date = raw ? new Date(`${raw}T12:00:00`) : new Date();
+  if (Number.isNaN(date.getTime())) return new Date();
+  return date;
+}
+
+function dateKey(value = new Date()) {
+  const date = value instanceof Date ? value : parsePlanDate(value);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function buildWeekDateChips(selectedDateKey) {
+  const today = new Date();
+  const todayKey = dateKey(today);
+  const selected = parsePlanDate(selectedDateKey || todayKey);
+  const weekStart = new Date(selected);
+  const day = weekStart.getDay();
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  weekStart.setDate(weekStart.getDate() + mondayOffset);
+
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(weekStart);
+    date.setDate(weekStart.getDate() + index);
+    const key = dateKey(date);
+    const isToday = key === todayKey;
+    const isFuture = key > todayKey;
+    return {
+      key,
+      day: isToday ? 'Today' : date.toLocaleDateString('en-GB', { weekday: 'short' }),
+      date: date.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' }),
+      active: key === selectedDateKey,
+      future: isFuture,
+      today: isToday,
+    };
+  });
+}
+
+function cleanNutritionValue(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  if (typeof value === 'string') return value.trim();
+  return '';
+}
+
 function MealCard({ meal, item, showImageLoading }) {
   const ingredients = Array.isArray(item?.ingredients) ? item.ingredients : [];
   const steps = Array.isArray(item?.steps) ? item.steps : [];
   const minutes = Number.isFinite(Number(item?.time_minutes)) ? Number(item.time_minutes) : null;
   const nutrition = item?.nutrition_estimate && typeof item.nutrition_estimate === 'object' ? item.nutrition_estimate : null;
-  const calories = typeof nutrition?.calories === 'string' ? nutrition.calories.trim() : '';
-  const carbs = typeof nutrition?.carbs_g === 'string' ? nutrition.carbs_g.trim() : '';
-  const protein = typeof nutrition?.protein_g === 'string' ? nutrition.protein_g.trim() : '';
-  const fiber = typeof nutrition?.fiber_g === 'string' ? nutrition.fiber_g.trim() : '';
+  const calories = cleanNutritionValue(nutrition?.calories);
+  const carbs = cleanNutritionValue(nutrition?.carbs_g);
+  const protein = cleanNutritionValue(nutrition?.protein_g);
+  const fiber = cleanNutritionValue(nutrition?.fiber_g);
   const imageUrl = typeof item?.image_url === 'string' ? item.image_url.trim() : '';
   const showPlaceholder = isPlaceholderImage(item);
 
@@ -147,15 +194,209 @@ function MealCard({ meal, item, showImageLoading }) {
   );
 }
 
+function CompactMealCard({ meal, item, showImageLoading, onPress }) {
+  const minutes = Number.isFinite(Number(item?.time_minutes)) ? Number(item.time_minutes) : null;
+  const nutrition = item?.nutrition_estimate && typeof item.nutrition_estimate === 'object' ? item.nutrition_estimate : null;
+  const calories = cleanNutritionValue(nutrition?.calories);
+  const carbs = cleanNutritionValue(nutrition?.carbs_g);
+  const protein = cleanNutritionValue(nutrition?.protein_g);
+  const fiber = cleanNutritionValue(nutrition?.fiber_g);
+  const imageUrl = typeof item?.image_url === 'string' ? item.image_url.trim() : '';
+  const showPlaceholder = isPlaceholderImage(item);
+
+  return (
+    <Pressable style={styles.mealCard} onPress={onPress}>
+      <View style={styles.mealTopRow}>
+        <View style={styles.mealTitleRow}>
+          <View style={styles.mealIconBubble}>
+            <Ionicons name={mealIcon(meal)} size={17} color={Colors.primaryDark} />
+          </View>
+          <Text style={styles.mealTagText}>{titleCase(meal || 'Meal')}</Text>
+        </View>
+        {minutes ? (
+          <View style={styles.timeChip}>
+            <Ionicons name="time-outline" size={14} color={Colors.textLight} />
+            <Text style={styles.timeChipText}>{minutes} min</Text>
+          </View>
+        ) : null}
+      </View>
+
+      <View style={styles.mealBodyRow}>
+        <View style={styles.mealImageWrap}>
+          {imageUrl && !showPlaceholder ? (
+            <Image source={{ uri: imageUrl }} style={styles.mealImage} resizeMode="cover" />
+          ) : (
+            <Image source={RecipePlaceholder} style={styles.mealImage} resizeMode="cover" />
+          )}
+          {showPlaceholder && showImageLoading ? (
+            <View style={styles.mealImageOverlay}>
+              <ActivityIndicator size="small" color="white" />
+              <Text style={styles.mealImageOverlayText}>Generating image...</Text>
+            </View>
+          ) : null}
+        </View>
+        <View style={styles.mealCopy}>
+          <Text style={styles.mealName} numberOfLines={2}>{item?.title || item?.name || '--'}</Text>
+          <View style={styles.pillRow}>
+            {calories ? (
+              <View style={[styles.pillNutrition, styles.caloriePill]}>
+                <Text style={[styles.pillNutritionText, styles.caloriePillText]}>{calories} cal</Text>
+              </View>
+            ) : null}
+            {protein ? (
+              <View style={[styles.pillNutrition, styles.proteinPill]}>
+                <Text style={[styles.pillNutritionText, styles.proteinPillText]}>{protein} protein</Text>
+              </View>
+            ) : null}
+            {fiber ? (
+              <View style={[styles.pillNutrition, styles.fiberPill]}>
+                <Text style={[styles.pillNutritionText, styles.fiberPillText]}>{fiber} fiber</Text>
+              </View>
+            ) : null}
+            {carbs ? (
+              <View style={[styles.pillNutrition, styles.carbsPill]}>
+                <Text style={[styles.pillNutritionText, styles.carbsPillText]}>{carbs} carbs</Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+      </View>
+    </Pressable>
+  );
+}
+
+function MealPlanDetail({ meal, item, showImageLoading, onBack }) {
+  const ingredients = Array.isArray(item?.ingredients) ? item.ingredients : [];
+  const steps = Array.isArray(item?.steps) ? item.steps : [];
+  const minutes = Number.isFinite(Number(item?.time_minutes)) ? Number(item.time_minutes) : null;
+  const nutrition = item?.nutrition_estimate && typeof item.nutrition_estimate === 'object' ? item.nutrition_estimate : null;
+  const calories = cleanNutritionValue(nutrition?.calories);
+  const carbs = cleanNutritionValue(nutrition?.carbs_g);
+  const protein = cleanNutritionValue(nutrition?.protein_g);
+  const fiber = cleanNutritionValue(nutrition?.fiber_g);
+  const imageUrl = typeof item?.image_url === 'string' ? item.image_url.trim() : '';
+  const showPlaceholder = isPlaceholderImage(item);
+
+  return (
+    <View style={styles.detailWrap}>
+      <Pressable onPress={onBack} style={styles.detailBackButton}>
+        <Ionicons name="chevron-back" size={20} color={Colors.text} />
+        <Text style={styles.detailBackText}>Plan</Text>
+      </Pressable>
+
+      <View style={styles.detailImageWrap}>
+        {imageUrl && !showPlaceholder ? (
+          <Image source={{ uri: imageUrl }} style={styles.detailImage} resizeMode="cover" />
+        ) : (
+          <Image source={RecipePlaceholder} style={styles.detailImage} resizeMode="cover" />
+        )}
+        {showPlaceholder && showImageLoading ? (
+          <View style={styles.mealImageOverlay}>
+            <ActivityIndicator size="small" color="white" />
+            <Text style={styles.mealImageOverlayText}>Generating image...</Text>
+          </View>
+        ) : null}
+      </View>
+
+      <View style={styles.detailHeaderCard}>
+        <View style={styles.mealTopRow}>
+          <View style={styles.mealTitleRow}>
+            <View style={styles.mealIconBubble}>
+              <Ionicons name={mealIcon(meal)} size={17} color={Colors.primaryDark} />
+            </View>
+            <Text style={styles.mealTagText}>{titleCase(meal || 'Meal')}</Text>
+          </View>
+          {minutes ? (
+            <View style={styles.timeChip}>
+              <Ionicons name="time-outline" size={14} color={Colors.textLight} />
+              <Text style={styles.timeChipText}>{minutes} min</Text>
+            </View>
+          ) : null}
+        </View>
+        <Text style={styles.detailTitle}>{item?.title || item?.name || '--'}</Text>
+        {typeof item?.description === 'string' && item.description.trim() ? (
+          <Text style={styles.detailDescription}>{item.description.trim()}</Text>
+        ) : null}
+      </View>
+
+      {calories || carbs || protein || fiber ? (
+        <View style={styles.detailSection}>
+          <Text style={styles.detailSectionTitle}>Nutrition estimate</Text>
+          <View style={styles.pillRow}>
+            {calories ? (
+              <View style={[styles.pillNutrition, styles.caloriePill]}>
+                <Text style={[styles.pillNutritionText, styles.caloriePillText]}>{calories} cal</Text>
+              </View>
+            ) : null}
+            {protein ? (
+              <View style={[styles.pillNutrition, styles.proteinPill]}>
+                <Text style={[styles.pillNutritionText, styles.proteinPillText]}>{protein} protein</Text>
+              </View>
+            ) : null}
+            {fiber ? (
+              <View style={[styles.pillNutrition, styles.fiberPill]}>
+                <Text style={[styles.pillNutritionText, styles.fiberPillText]}>{fiber} fiber</Text>
+              </View>
+            ) : null}
+            {carbs ? (
+              <View style={[styles.pillNutrition, styles.carbsPill]}>
+                <Text style={[styles.pillNutritionText, styles.carbsPillText]}>{carbs} carbs</Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
+
+      {typeof item?.note === 'string' && item.note.trim() ? (
+        <View style={styles.detailNote}>
+          <Ionicons name="information-circle-outline" size={18} color={Colors.secondary} />
+          <Text style={styles.noteText}>{item.note.trim()}</Text>
+        </View>
+      ) : null}
+
+      {ingredients.length ? (
+        <View style={styles.detailSection}>
+          <Text style={styles.detailSectionTitle}>Ingredients</Text>
+          <View style={styles.pillRow}>
+            {ingredients.map((ing, idx) => (
+              <View key={`${meal}-detail-ing-${idx}`} style={styles.pill}>
+                <Text style={styles.pillText}>{String(ing)}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      ) : null}
+
+      {steps.length ? (
+        <View style={styles.detailSection}>
+          <Text style={styles.detailSectionTitle}>Steps</Text>
+          {steps.map((step, idx) => (
+            <View key={`${meal}-detail-step-${idx}`} style={styles.detailStepRow}>
+              <View style={styles.detailStepNumber}>
+                <Text style={styles.detailStepNumberText}>{idx + 1}</Text>
+              </View>
+              <Text style={styles.detailStepText}>{String(step)}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 export default function DailyPlanScreen() {
   const insets = useSafeAreaInsets();
   const { signOut } = useAuth();
+  const todayKey = dateKey();
   const [plan, setPlan] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(todayKey);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [refreshingImages, setRefreshingImages] = useState(false);
+  const [selectedMeal, setSelectedMeal] = useState(null);
 
-  const loadToday = useCallback(async () => {
+  const loadPlanForDate = useCallback(async (targetDate = dateKey()) => {
     const token = await AsyncStorage.getItem('userToken');
     if (!token) {
       setPlan(null);
@@ -163,8 +404,9 @@ export default function DailyPlanScreen() {
     }
     setLoading(true);
     try {
+      const safeDate = targetDate || dateKey();
       const response = await apiFetch(
-        `${API_URL}${API_ENDPOINTS.DAILY_PLAN_TODAY}`,
+        `${API_URL}${API_ENDPOINTS.DAILY_PLAN_BY_DATE}?plan_date=${encodeURIComponent(safeDate)}`,
         { method: 'GET', headers: { Authorization: `Bearer ${token}` } },
         { onUnauthorized: signOut, timeoutMs: 8000 }
       );
@@ -176,11 +418,12 @@ export default function DailyPlanScreen() {
       const data = await response.json().catch(() => null);
       const nextPlan = data?.plan || null;
       setPlan(nextPlan);
+      setSelectedMeal(null);
       return nextPlan;
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [signOut]);
 
   const refreshImagesUntilReady = useCallback(async () => {
     if (refreshingImages) return;
@@ -198,7 +441,7 @@ export default function DailyPlanScreen() {
         await new Promise((r) => setTimeout(r, 3500));
         // eslint-disable-next-line no-await-in-loop
         const response = await apiFetch(
-          `${API_URL}${API_ENDPOINTS.DAILY_PLAN_TODAY}`,
+          `${API_URL}${API_ENDPOINTS.DAILY_PLAN_BY_DATE}?plan_date=${encodeURIComponent(selectedDate)}`,
           { method: 'GET', headers: { Authorization: `Bearer ${token}` } },
           { onUnauthorized: signOut, timeoutMs: 8000 }
         );
@@ -206,7 +449,14 @@ export default function DailyPlanScreen() {
           // eslint-disable-next-line no-await-in-loop
           const data = await response.json().catch(() => null);
           const nextPlan = data?.plan || null;
-          if (nextPlan) setPlan(nextPlan);
+          if (nextPlan) {
+            setPlan(nextPlan);
+            setSelectedMeal((current) => {
+              if (!current) return current;
+              const updatedMeals = Array.isArray(nextPlan?.meals) ? nextPlan.meals : [];
+              return updatedMeals.find((m) => String(m?.meal || '') === String(current?.meal || '')) || current;
+            });
+          }
           const meals = Array.isArray(nextPlan?.meals) ? nextPlan.meals : [];
           if (meals.length && meals.every((m) => !isPlaceholderImage(m))) {
             break;
@@ -217,7 +467,7 @@ export default function DailyPlanScreen() {
     } finally {
       setRefreshingImages(false);
     }
-  }, [refreshingImages]);
+  }, [refreshingImages, selectedDate, signOut]);
 
   const hasAnyPlaceholderImages = useMemo(() => {
     const meals = Array.isArray(plan?.meals) ? plan.meals : [];
@@ -230,18 +480,19 @@ export default function DailyPlanScreen() {
       let active = true;
       const run = async () => {
         if (!active) return;
-        await loadToday();
+        await loadPlanForDate(selectedDate);
       };
       run();
       return () => {
         active = false;
       };
-    }, [loadToday])
+    }, [loadPlanForDate, selectedDate])
   );
 
   const generateToday = async ({ force } = {}) => {
     const token = await AsyncStorage.getItem('userToken');
     if (!token) return;
+    setSelectedDate(todayKey);
     setGenerating(true);
     try {
       const shouldForce = force === true;
@@ -283,17 +534,20 @@ export default function DailyPlanScreen() {
         return;
       }
       setPlan(data?.plan || null);
+      setSelectedMeal(null);
     } finally {
       setGenerating(false);
     }
   };
 
   const meals = Array.isArray(plan?.meals) ? plan.meals : [];
-  const planDateLabel = useMemo(() => {
-    const raw = plan?.plan_date;
-    if (typeof raw === 'string' && raw.trim()) return raw.trim();
-    return 'Today';
-  }, [plan?.plan_date]);
+  const isSelectedToday = selectedDate === todayKey;
+  const selectedDateLabel = parsePlanDate(selectedDate).toLocaleDateString('en-GB', {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+  });
+  const dateChips = useMemo(() => buildWeekDateChips(selectedDate), [selectedDate]);
   const dailyNutrition =
     plan?.daily_nutrition_estimate && typeof plan.daily_nutrition_estimate === 'object'
       ? plan.daily_nutrition_estimate
@@ -313,24 +567,30 @@ export default function DailyPlanScreen() {
               <Text style={styles.headerSubtitle}>A simple plan for steady blood sugar habits.</Text>
             </View>
           </View>
+          <Pressable style={styles.notificationButton}>
+            <Ionicons name="notifications-outline" size={21} color="white" />
+            <View style={styles.notificationDot} />
+          </Pressable>
         </View>
 
         {meals.length ? (
           <View style={styles.headerActions}>
-            <Pressable
-              disabled={generating}
-              onPress={() => generateToday({ force: true })}
-              style={[styles.headerPrimaryButton, generating ? { opacity: 0.7 } : null]}
-            >
-              {generating ? (
-                <ActivityIndicator size="small" color="white" />
-              ) : (
-                <Ionicons name="refresh-outline" size={16} color="white" />
-              )}
-              <Text style={styles.headerPrimaryButtonText}>Regenerate</Text>
-            </Pressable>
-            <Pressable onPress={loadToday} style={styles.headerSecondaryButton}>
-              <Ionicons name="refresh-outline" size={16} color={Colors.text} />
+            {isSelectedToday ? (
+              <Pressable
+                disabled={generating}
+                onPress={() => generateToday({ force: true })}
+                style={[styles.headerPrimaryButton, generating ? { opacity: 0.7 } : null]}
+              >
+                {generating ? (
+                  <ActivityIndicator size="small" color={Colors.primaryDark} />
+                ) : (
+                  <Ionicons name="refresh-outline" size={16} color={Colors.primaryDark} />
+                )}
+                <Text style={styles.headerPrimaryButtonText}>Regenerate</Text>
+              </Pressable>
+            ) : null}
+            <Pressable onPress={() => loadPlanForDate(selectedDate)} style={styles.headerSecondaryButton}>
+              <Ionicons name="refresh-outline" size={16} color="white" />
               <Text style={styles.headerSecondaryButtonText}>Refresh</Text>
             </Pressable>
           </View>
@@ -343,69 +603,135 @@ export default function DailyPlanScreen() {
             <ActivityIndicator size="large" color={Colors.primary} />
             <Text style={styles.centerText}>Loading your daily plan...</Text>
           </View>
+        ) : selectedMeal ? (
+          <MealPlanDetail
+            meal={selectedMeal?.meal}
+            item={selectedMeal}
+            showImageLoading={refreshingImages || generating}
+            onBack={() => setSelectedMeal(null)}
+          />
         ) : meals.length ? (
           <>
             <View style={styles.summaryCard}>
-              <View style={styles.summaryTopRow}>
-                <View style={styles.dateChip}>
-                  <Ionicons name="calendar-clear-outline" size={14} color={Colors.primaryDark} />
-                  <Text style={styles.dateChipText}>{planDateLabel}</Text>
-                </View>
-                <View style={styles.premiumChip}>
-                  <Ionicons name="diamond-outline" size={14} color={Colors.accent} />
-                  <Text style={styles.premiumChipText}>Premium</Text>
-                </View>
+              <View style={styles.insightIcon}>
+                <Ionicons name="leaf-outline" size={24} color={Colors.primaryDark} />
               </View>
-              {typeof plan?.summary === 'string' && plan.summary.trim() ? (
-                <Text style={styles.summaryText}>{plan.summary.trim()}</Text>
-              ) : (
-                <Text style={styles.summaryText}>
-                  Focus on protein + vegetables first, keep carbs moderate, and stay hydrated.
-                </Text>
-              )}
-
-              {null}
+              <View style={styles.summaryCopy}>
+                <View style={styles.summaryTopRow}>
+                  <Text style={styles.summaryTitle}>Balanced for you</Text>
+                  <Ionicons name="chevron-forward" size={20} color={Colors.primaryDark} />
+                </View>
+                {typeof plan?.summary === 'string' && plan.summary.trim() ? (
+                  <Text style={styles.summaryText} numberOfLines={2}>{plan.summary.trim()}</Text>
+                ) : (
+                  <Text style={styles.summaryText} numberOfLines={2}>
+                    Designed with low glycemic ingredients to support stable blood sugar.
+                  </Text>
+                )}
+              </View>
             </View>
+
+            <Text style={styles.sectionHeading}>{isSelectedToday ? "Today's Plan" : selectedDateLabel}</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.dateRail}
+            >
+              {dateChips.map((item) => (
+                <Pressable
+                  key={item.key}
+                  disabled={item.future}
+                  onPress={() => {
+                    setSelectedDate(item.key);
+                    setSelectedMeal(null);
+                    void loadPlanForDate(item.key);
+                  }}
+                  style={[
+                    styles.dayChip,
+                    item.active ? styles.dayChipActive : null,
+                    item.future ? styles.dayChipFuture : null,
+                  ]}
+                >
+                  <Text style={[styles.dayChipDay, item.active ? styles.dayChipDayActive : null]}>{item.day}</Text>
+                  <Text style={[styles.dayChipDate, item.active ? styles.dayChipDateActive : null]}>{item.date}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
 
             {hasAnyPlaceholderImages ? (
               <View style={styles.imagesHintRow}>
                 <Text style={styles.imagesHintText}>Some images are missing. Tap Refresh to try again.</Text>
                 <Pressable onPress={refreshImagesUntilReady} disabled={refreshingImages} style={styles.imagesHintButton}>
-                  <Text style={styles.imagesHintButtonText}>{refreshingImages ? 'Refreshing…' : 'Refresh'}</Text>
+                  <Text style={styles.imagesHintButtonText}>{refreshingImages ? 'Refreshing...' : 'Refresh'}</Text>
                 </Pressable>
               </View>
             ) : null}
 
             {meals.map((item, idx) => (
-              <MealCard
+              <CompactMealCard
                 key={String(item?.meal || idx)}
                 meal={item?.meal}
                 item={item}
                 showImageLoading={refreshingImages || generating}
+                onPress={() => setSelectedMeal(item)}
               />
             ))}
           </>
         ) : (
           <View style={styles.emptyWrap}>
+            <Text style={styles.sectionHeading}>{isSelectedToday ? "Today's Plan" : selectedDateLabel}</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.dateRail}
+            >
+              {dateChips.map((item) => (
+                <Pressable
+                  key={item.key}
+                  disabled={item.future}
+                  onPress={() => {
+                    setSelectedDate(item.key);
+                    setSelectedMeal(null);
+                    void loadPlanForDate(item.key);
+                  }}
+                  style={[
+                    styles.dayChip,
+                    item.active ? styles.dayChipActive : null,
+                    item.future ? styles.dayChipFuture : null,
+                  ]}
+                >
+                  <Text style={[styles.dayChipDay, item.active ? styles.dayChipDayActive : null]}>{item.day}</Text>
+                  <Text style={[styles.dayChipDate, item.active ? styles.dayChipDateActive : null]}>{item.date}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
             <View style={styles.heroCard}>
               <View style={styles.heroIcon}>
                 <Ionicons name="calendar-clear-outline" size={20} color="white" />
               </View>
-              <Text style={styles.emptyTitle}>Your plan for today</Text>
+              <Text style={styles.emptyTitle}>
+                {isSelectedToday ? 'Your plan for today' : `No plan for ${selectedDateLabel}`}
+              </Text>
               <Text style={styles.emptyText}>
-                Generate a practical breakfast, lunch, dinner, and snack - tailored to your profile.
+                {isSelectedToday
+                  ? 'Generate a practical breakfast, lunch, dinner, and snack - tailored to your profile.'
+                  : 'No meal plan was generated for this day. Past plans stay available here when they exist.'}
               </Text>
-              <Pressable
-                disabled={generating}
-                onPress={generateToday}
-                style={[styles.primaryButton, generating ? { opacity: 0.65 } : null]}
-              >
-                {generating ? <ActivityIndicator size="small" color="white" /> : <Ionicons name="calendar-outline" size={16} color="white" />}
-                <Text style={styles.primaryButtonText}>{generating ? 'Generating...' : "Generate today's plan"}</Text>
-              </Pressable>
-              <Text style={styles.hintText}>
-                You can generate a new plan anytime.
-              </Text>
+              {isSelectedToday ? (
+                <>
+                  <Pressable
+                    disabled={generating}
+                    onPress={generateToday}
+                    style={[styles.primaryButton, generating ? { opacity: 0.65 } : null]}
+                  >
+                    {generating ? <ActivityIndicator size="small" color="white" /> : <Ionicons name="calendar-outline" size={16} color="white" />}
+                    <Text style={styles.primaryButtonText}>{generating ? 'Generating...' : "Generate today's plan"}</Text>
+                  </Pressable>
+                  <Text style={styles.hintText}>
+                    You can generate a new plan anytime.
+                  </Text>
+                </>
+              ) : null}
             </View>
           </View>
         )}
@@ -420,16 +746,16 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   header: {
-    backgroundColor: Colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    paddingHorizontal: 16,
-    paddingBottom: 14,
+    backgroundColor: Colors.primaryDark,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
     shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
+    shadowOpacity: 0.14,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
   },
   headerRow: {
     flexDirection: 'row',
@@ -444,33 +770,54 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: Colors.primary,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 22,
-    fontWeight: '800',
-    color: Colors.text,
+    fontWeight: '900',
+    color: 'white',
   },
   headerSubtitle: {
-    marginTop: 6,
-    color: Colors.textLight,
+    marginTop: 4,
+    color: 'rgba(255,255,255,0.78)',
     lineHeight: 20,
+    fontWeight: '600',
+  },
+  notificationButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.22)',
+    position: 'relative',
+  },
+  notificationDot: {
+    position: 'absolute',
+    top: 8,
+    right: 9,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#B9F6CA',
   },
   headerActions: {
-    marginTop: 12,
+    marginTop: 18,
     flexDirection: 'row',
     gap: 10,
   },
   headerPrimaryButton: {
     flex: 1,
-    backgroundColor: Colors.primaryDark,
-    borderRadius: 14,
-    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 15,
+    paddingVertical: 14,
     paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
@@ -478,29 +825,30 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   headerPrimaryButtonText: {
-    color: 'white',
+    color: Colors.primaryDark,
     fontWeight: '900',
     letterSpacing: 0.2,
   },
   headerSecondaryButton: {
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    borderRadius: 15,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: '#F9FAFB',
+    borderColor: 'rgba(255,255,255,0.24)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
   },
   headerSecondaryButtonText: {
-    color: Colors.text,
+    color: 'white',
     fontWeight: '800',
   },
   content: {
     padding: 16,
-    paddingBottom: 28,
+    paddingTop: 20,
+    paddingBottom: 34,
   },
   center: {
     paddingTop: 36,
@@ -511,18 +859,38 @@ const styles = StyleSheet.create({
     color: Colors.textLight,
   },
   summaryCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: '#F6FBF7',
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
-    padding: 16,
-    marginBottom: 14,
+    borderColor: '#DCEFE4',
+    padding: 14,
+    marginBottom: 18,
+  },
+  insightIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E3F5EA',
+  },
+  summaryCopy: {
+    flex: 1,
+    minWidth: 0,
   },
   summaryTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 10,
+  },
+  summaryTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: Colors.primaryDark,
   },
   dateChip: {
     flexDirection: 'row',
@@ -555,9 +923,53 @@ const styles = StyleSheet.create({
     color: Colors.text,
   },
   summaryText: {
-    marginTop: 10,
+    marginTop: 4,
     color: Colors.textLight,
     lineHeight: 20,
+  },
+  sectionHeading: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: Colors.text,
+    marginBottom: 12,
+  },
+  dateRail: {
+    gap: 10,
+    paddingRight: 16,
+    paddingBottom: 18,
+  },
+  dayChip: {
+    minWidth: 78,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  dayChipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  dayChipFuture: {
+    opacity: 0.45,
+  },
+  dayChipDay: {
+    fontWeight: '900',
+    color: Colors.text,
+  },
+  dayChipDayActive: {
+    color: '#FFFFFF',
+  },
+  dayChipDate: {
+    marginTop: 3,
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textLight,
+  },
+  dayChipDateActive: {
+    color: '#E8FFF3',
   },
   emptyWrap: {
     paddingTop: 6,
@@ -610,28 +1022,28 @@ const styles = StyleSheet.create({
   },
   mealCard: {
     backgroundColor: Colors.surface,
-    borderRadius: 18,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: Colors.border,
-    padding: 16,
+    padding: 12,
     marginBottom: 12,
     shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
     elevation: 2,
   },
   mealImageWrap: {
-    width: '100%',
-    borderRadius: 16,
+    width: 118,
+    height: 118,
+    borderRadius: 12,
     overflow: 'hidden',
     backgroundColor: '#F2F4F7',
-    marginBottom: 12,
     position: 'relative',
   },
   mealImage: {
     width: '100%',
-    height: 160,
+    height: '100%',
   },
   mealImageOverlay: {
     position: 'absolute',
@@ -666,7 +1078,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: Colors.border,
   },
@@ -680,7 +1092,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 10,
-    marginBottom: 8,
+    marginBottom: 12,
+  },
+  mealTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    flex: 1,
+    minWidth: 0,
+  },
+  mealIconBubble: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E3F5EA',
   },
   mealTag: {
     flexDirection: 'row',
@@ -694,8 +1121,9 @@ const styles = StyleSheet.create({
     borderColor: '#C6F6D5',
   },
   mealTagText: {
+    fontSize: 18,
     fontWeight: '900',
-    color: Colors.primaryDark,
+    color: Colors.text,
   },
   timeChip: {
     flexDirection: 'row',
@@ -704,23 +1132,31 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 999,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: '#EEF8F1',
   },
   timeChipText: {
     fontWeight: '800',
-    color: Colors.textLight,
+    color: Colors.primaryDark,
+  },
+  mealBodyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  mealCopy: {
+    flex: 1,
+    minWidth: 0,
   },
   mealName: {
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 17,
+    fontWeight: '900',
     color: Colors.text,
   },
   mealDescription: {
     marginTop: 6,
     color: Colors.textLight,
     lineHeight: 19,
+    marginBottom: 10,
   },
   noteBox: {
     marginTop: 10,
@@ -786,7 +1222,7 @@ const styles = StyleSheet.create({
   pillRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 7,
   },
   pill: {
     borderRadius: 999,
@@ -802,15 +1238,134 @@ const styles = StyleSheet.create({
   },
   pillNutrition: {
     borderRadius: 999,
-    paddingVertical: 7,
-    paddingHorizontal: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 9,
     backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#BEE3F8',
   },
   pillNutritionText: {
     color: Colors.text,
     fontWeight: '800',
+    fontSize: 12,
+  },
+  caloriePill: {
+    backgroundColor: '#FFF3E8',
+  },
+  caloriePillText: {
+    color: '#C05621',
+  },
+  proteinPill: {
+    backgroundColor: '#EAF7EE',
+  },
+  proteinPillText: {
+    color: Colors.primaryDark,
+  },
+  fiberPill: {
+    backgroundColor: '#EBF5FF',
+  },
+  fiberPillText: {
+    color: Colors.secondary,
+  },
+  carbsPill: {
+    backgroundColor: '#F8FAFC',
+  },
+  carbsPillText: {
+    color: Colors.textLight,
+  },
+  detailWrap: {
+    paddingBottom: 10,
+  },
+  detailBackButton: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 8,
+    paddingRight: 12,
+    marginBottom: 6,
+  },
+  detailBackText: {
+    color: Colors.text,
+    fontWeight: '900',
+  },
+  detailImageWrap: {
+    height: 230,
+    borderRadius: 18,
+    overflow: 'hidden',
+    backgroundColor: '#F2F4F7',
+    position: 'relative',
+    marginBottom: 14,
+  },
+  detailImage: {
+    width: '100%',
+    height: '100%',
+  },
+  detailHeaderCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 14,
+    marginBottom: 12,
+  },
+  detailTitle: {
+    fontSize: 24,
+    lineHeight: 29,
+    fontWeight: '900',
+    color: Colors.text,
+  },
+  detailDescription: {
+    marginTop: 8,
+    color: Colors.textLight,
+    lineHeight: 21,
+  },
+  detailSection: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 14,
+    marginBottom: 12,
+  },
+  detailSectionTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: Colors.text,
+    marginBottom: 12,
+  },
+  detailNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 9,
+    backgroundColor: '#EBF8FF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#BEE3F8',
+    padding: 14,
+    marginBottom: 12,
+  },
+  detailStepRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginBottom: 12,
+  },
+  detailStepNumber: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E3F5EA',
+  },
+  detailStepNumberText: {
+    color: Colors.primaryDark,
+    fontWeight: '900',
+    fontSize: 12,
+  },
+  detailStepText: {
+    flex: 1,
+    color: Colors.text,
+    lineHeight: 20,
   },
   step: {
     color: Colors.textLight,

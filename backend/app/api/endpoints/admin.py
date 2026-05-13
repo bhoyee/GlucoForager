@@ -1,7 +1,11 @@
 import os
 import uuid
+import json
 from datetime import datetime
 from datetime import timedelta
+from urllib import error as urlerror
+from urllib import parse as urlparse
+from urllib import request as urlrequest
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from pydantic import BaseModel, EmailStr, Field, HttpUrl, field_validator
@@ -30,8 +34,10 @@ from ...services.redis_ai_queue import RedisAIQueue
 from ...services.recipe_upload_storage_service import store_recipe_image_upload
 from ...services.staff_rbac_service import StaffRBACService
 from ...services.subscription_service import is_subscription_active, is_premium_blocked, refresh_user_tier
+from ...services.cache_service import CacheService
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+admin_cache = CacheService()
 
 
 class AdminLoginPayload(BaseModel):
@@ -806,6 +812,266 @@ def recipe_image_usage(
         "week": week,
         "month": month,
     }
+
+
+def _mask_provider_error(exc: Exception) -> str:
+    if isinstance(exc, urlerror.HTTPError):
+        return f"Provider API returned HTTP {exc.code}"
+    if isinstance(exc, urlerror.URLError):
+        return "Provider API is unreachable"
+    return "Provider API request failed"
+
+
+def _http_json(method: str, url: str, *, headers: dict | None = None, body: dict | list | None = None, timeout: float = 8.0):
+    payload = None
+    request_headers = dict(headers or {})
+    if body is not None:
+        payload = json.dumps(body).encode("utf-8")
+        request_headers.setdefault("Content-Type", "application/json")
+    req = urlrequest.Request(url, data=payload, headers=request_headers, method=method.upper())
+    with urlrequest.urlopen(req, timeout=timeout) as response:  # noqa: S310 - fixed provider URLs from settings
+        raw = response.read().decode("utf-8")
+    return json.loads(raw) if raw else {}
+
+
+def _money_value(value) -> float | None:
+    try:
+        if value is None or value == "":
+            return None
+        numeric = float(value)
+        return numeric if numeric == numeric else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _provider_payload(name: str, *, configured: bool, status: str = "unknown", currency: str = "USD", balance=None, spend=None, usage=None, message: str = "") -> dict:
+    return {
+        "name": name,
+        "configured": bool(configured),
+        "status": status,
+        "currency": currency or "USD",
+        "balance": balance,
+        "spend": spend or {},
+        "usage": usage or {},
+        "message": message,
+    }
+
+
+def _openai_costs(start: datetime, end: datetime) -> float | None:
+    api_key = settings.openai_admin_api_key or settings.openai_api_key
+    if not api_key:
+        return None
+    query = urlparse.urlencode(
+        {
+            "start_time": int(start.timestamp()),
+            "end_time": int(end.timestamp()),
+            "bucket_width": "1d",
+        }
+    )
+    headers = {"Authorization": f"Bearer {api_key}"}
+    if settings.openai_organization:
+        headers["OpenAI-Organization"] = settings.openai_organization
+    data = _http_json("GET", f"https://api.openai.com/v1/organization/costs?{query}", headers=headers)
+    total = 0.0
+    found = False
+    for bucket in data.get("data") or []:
+        for result in bucket.get("results") or []:
+            amount = result.get("amount") if isinstance(result, dict) else None
+            value = amount.get("value") if isinstance(amount, dict) else None
+            numeric = _money_value(value)
+            if numeric is not None:
+                total += numeric
+                found = True
+    return total if found else None
+
+
+def _openai_usage(start: datetime, end: datetime) -> dict:
+    api_key = settings.openai_admin_api_key or settings.openai_api_key
+    if not api_key:
+        return {}
+    query = urlparse.urlencode(
+        {
+            "start_time": int(start.timestamp()),
+            "end_time": int(end.timestamp()),
+            "bucket_width": "1d",
+        }
+    )
+    headers = {"Authorization": f"Bearer {api_key}"}
+    if settings.openai_organization:
+        headers["OpenAI-Organization"] = settings.openai_organization
+    data = _http_json("GET", f"https://api.openai.com/v1/organization/usage/completions?{query}", headers=headers)
+    input_tokens = 0
+    output_tokens = 0
+    requests = 0
+    for bucket in data.get("data") or []:
+        for result in bucket.get("results") or []:
+            if not isinstance(result, dict):
+                continue
+            try:
+                input_tokens += int(result.get("input_tokens") or 0)
+                output_tokens += int(result.get("output_tokens") or 0)
+                requests += int(result.get("num_model_requests") or 0)
+            except Exception:  # noqa: BLE001
+                continue
+    return {
+        "monthly_input_tokens": input_tokens,
+        "monthly_output_tokens": output_tokens,
+        "monthly_total_tokens": input_tokens + output_tokens,
+        "monthly_requests": requests,
+    }
+
+
+def _openai_credit_summary(now: datetime) -> dict:
+    configured = bool(settings.openai_admin_api_key or settings.openai_api_key)
+    if not configured:
+        return _provider_payload("OpenAI", configured=False, status="not_configured", message="No OpenAI API key configured.")
+    today_start = datetime(now.year, now.month, now.day)
+    month_start = datetime(now.year, now.month, 1)
+    spend: dict = {}
+    usage: dict = {}
+    errors: list[str] = []
+    try:
+        spend["today_usd"] = _openai_costs(today_start, now)
+    except Exception as exc:  # noqa: BLE001
+        errors.append(f"today spend: {_mask_provider_error(exc)}")
+    try:
+        spend["month_usd"] = _openai_costs(month_start, now)
+    except Exception as exc:  # noqa: BLE001
+        errors.append(f"month spend: {_mask_provider_error(exc)}")
+    try:
+        usage = _openai_usage(month_start, now)
+    except Exception as exc:  # noqa: BLE001
+        errors.append(f"monthly tokens: {_mask_provider_error(exc)}")
+
+    has_data = any(value is not None for value in spend.values()) or bool(usage)
+    message = ""
+    if errors:
+        message = f"Some OpenAI metrics failed: {'; '.join(errors)}. Use an OpenAI organization Admin API key for costs/usage."
+    return _provider_payload(
+        "OpenAI",
+        configured=True,
+        status="connected" if has_data else "error",
+        currency="USD",
+        balance=None,
+        spend=spend,
+        usage=usage,
+        message=message,
+    )
+
+
+def _deepseek_credit_summary(db: Session) -> dict:
+    if not settings.deepseek_api_key:
+        return _provider_payload("DeepSeek", configured=False, status="not_configured", message="No DeepSeek API key configured.")
+    base_url = (settings.deepseek_base_url or "https://api.deepseek.com").strip().rstrip("/")
+    if base_url.endswith("/v1"):
+        base_url = base_url[:-3]
+    try:
+        data = _http_json("GET", f"{base_url}/user/balance", headers={"Authorization": f"Bearer {settings.deepseek_api_key}"})
+        infos = data.get("balance_infos") if isinstance(data, dict) else None
+        selected = None
+        if isinstance(infos, list):
+            selected = next((item for item in infos if str(item.get("currency") or "").upper() == "USD"), None)
+            selected = selected or (infos[0] if infos else None)
+        currency = str(selected.get("currency") or "USD").upper() if isinstance(selected, dict) else "USD"
+        total = _money_value(selected.get("total_balance") if isinstance(selected, dict) else None)
+        granted = _money_value(selected.get("granted_balance") if isinstance(selected, dict) else None)
+        topped_up = _money_value(selected.get("topped_up_balance") if isinstance(selected, dict) else None)
+        month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        token_sum = 0
+        request_count = 0
+        try:
+            token_sum = int(
+                db.query(func.coalesce(func.sum(AIRequest.tokens_used), 0))
+                .filter(AIRequest.created_at >= month_start)
+                .filter(func.lower(AIRequest.model_used).like("%deepseek%"))
+                .scalar()
+                or 0
+            )
+            request_count = int(
+                db.query(func.count(AIRequest.id))
+                .filter(AIRequest.created_at >= month_start)
+                .filter(func.lower(AIRequest.model_used).like("%deepseek%"))
+                .scalar()
+                or 0
+            )
+        except Exception:  # noqa: BLE001
+            token_sum = 0
+            request_count = 0
+        return _provider_payload(
+            "DeepSeek",
+            configured=True,
+            status="connected" if data.get("is_available", True) else "unavailable",
+            currency=currency,
+            balance={"total": total, "granted": granted, "topped_up": topped_up},
+            usage={
+                "monthly_total_tokens": token_sum,
+                "monthly_requests": request_count,
+                "monthly_usage_note": "Tracked from local AI request rows.",
+            },
+            message="" if selected else "DeepSeek returned no balance rows.",
+        )
+    except Exception as exc:  # noqa: BLE001
+        return _provider_payload("DeepSeek", configured=True, status="error", message=_mask_provider_error(exc))
+
+
+def _runware_credit_summary() -> dict:
+    if not settings.runware_api_key:
+        return _provider_payload("Runware", configured=False, status="not_configured", message="No Runware API key configured.")
+    try:
+        data = _http_json(
+            "POST",
+            settings.runware_api_url,
+            headers={"Authorization": f"Bearer {settings.runware_api_key}"},
+            body=[{"taskType": "accountManagement", "taskUUID": str(uuid.uuid4()), "operation": "getDetails"}],
+        )
+        rows = data.get("data") if isinstance(data, dict) else None
+        details = rows[0] if isinstance(rows, list) and rows else (data if isinstance(data, dict) else {})
+        balance_value = details.get("balance") if isinstance(details, dict) else None
+        balance_obj = balance_value if isinstance(balance_value, dict) else {}
+        free_balance_value = balance_obj.get("freeBalance") or (details.get("freeBalance") if isinstance(details, dict) else None)
+        currency = str(balance_obj.get("currency") or (details.get("currency") if isinstance(details, dict) else None) or "USD").upper()
+        usage = details.get("usage") if isinstance(details, dict) and isinstance(details.get("usage"), dict) else {}
+        return _provider_payload(
+            "Runware",
+            configured=True,
+            status="connected",
+            currency=currency,
+            balance={"total": _money_value(balance_obj.get("amount") if balance_obj else balance_value), "free": _money_value(free_balance_value)},
+            usage=usage,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return _provider_payload("Runware", configured=True, status="error", message=_mask_provider_error(exc))
+
+
+@router.get("/ai/provider-credits")
+def ai_provider_credits(
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),  # noqa: ARG001
+):
+    cache_key = "admin:ai_provider_credits:v1"
+    cached = admin_cache.get(cache_key)
+    if cached:
+        try:
+            return json.loads(cached)
+        except Exception:  # noqa: BLE001
+            pass
+
+    now = datetime.utcnow()
+    payload = {
+        "currency": "USD",
+        "cached_for_seconds": 600,
+        "generated_at": now.isoformat() + "Z",
+        "providers": [
+            _openai_credit_summary(now),
+            _runware_credit_summary(),
+            _deepseek_credit_summary(db),
+        ],
+    }
+    try:
+        admin_cache.set(cache_key, json.dumps(payload), ttl_seconds=600)
+    except Exception:  # noqa: BLE001
+        pass
+    return payload
 
 
 @router.get("/ai/queue-metrics")

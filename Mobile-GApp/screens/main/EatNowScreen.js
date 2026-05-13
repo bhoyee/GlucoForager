@@ -111,15 +111,17 @@ export default function EatNowScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={22} color={Colors.text} />
-        </TouchableOpacity>
-        <View style={styles.headerText}>
-          <Text style={styles.headerTitle}>Eat now</Text>
-          <Text style={styles.headerSubtitle}>Quick ideas for right now</Text>
+      <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={22} color="white" />
+          </TouchableOpacity>
+          <View style={styles.headerText}>
+            <Text style={styles.headerTitle}>Eat Now</Text>
+            <Text style={styles.headerSubtitle}>Quick ideas for right now</Text>
+          </View>
+          <View style={styles.headerRight} />
         </View>
-        <View style={styles.headerRight} />
       </View>
 
       <View style={styles.content}>
@@ -156,17 +158,27 @@ export default function EatNowScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
+  headerPanel: {
+    backgroundColor: Colors.primaryDark,
+    paddingHorizontal: 20,
+    paddingBottom: 18,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 5,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 12,
   },
   backButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: Colors.surface,
+    backgroundColor: 'rgba(255,255,255,0.16)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -175,20 +187,20 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 21,
     fontWeight: '900',
-    color: Colors.text,
+    color: 'white',
   },
   headerSubtitle: {
     marginTop: 2,
     fontSize: 13,
-    color: Colors.textLight,
+    color: 'rgba(255,255,255,0.78)',
     fontWeight: '600',
   },
   headerRight: { width: 44, height: 44 },
   content: {
     paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingTop: 18,
   },
   card: {
     backgroundColor: Colors.surface,
