@@ -121,6 +121,21 @@ def _precheck_ingredient_input(raw_ingredients: list[str], *, mode: str, tier: s
             "not_food",
             "Content not related to food. Please enter real ingredients.",
         )
+    risks = pipeline.risk_classifier.classify(classified["food"], tier=tier)
+    risk_by_name = risks.get("risk_by_name") or {}
+    safe_food = []
+    risk_filtered_out = []
+    for item in classified["food"]:
+        key = str(item or "").strip().lower()
+        risk = (risk_by_name.get(key) or {}).get("risk") or "ok"
+        if risk in {"avoid", "needs_clarification"}:
+            risk_filtered_out.append(item)
+        else:
+            safe_food.append(item)
+    if safe_food:
+        classified["food"] = safe_food
+        classified["risk_filtered_out"] = risk_filtered_out
+        classified["risk_by_name"] = risk_by_name
     pipeline._ensure_diabetes_friendly_or_raise(classified["food"], mode=mode, tier=tier)
     classified["normalization"] = normalized
     classified["source"] = ",".join(

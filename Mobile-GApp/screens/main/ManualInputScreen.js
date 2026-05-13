@@ -11,7 +11,8 @@ import {
   Keyboard,
   Alert,
   Modal,
-  ActivityIndicator,
+  Animated,
+  Easing,
 } from 'react-native';
 import { useNavigation, useIsFocused, useRoute } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
@@ -52,8 +53,54 @@ export default function ManualInputScreen() {
     isPremium: false,
   });
   const lastPrefillTokenRef = useRef(null);
+  const loadingPulse = useRef(new Animated.Value(0)).current;
+  const loadingRotate = useRef(new Animated.Value(0)).current;
+  const loadingSweep = useRef(new Animated.Value(0)).current;
   const limitReached = !scanStatus.isPremium && scanStatus.remaining === 0;
   const allowedIngredientPattern = /^[A-Za-z0-9][A-Za-z0-9\s\-'/%%]*$/;
+
+  useEffect(() => {
+    const pulseAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(loadingPulse, {
+          toValue: 1,
+          duration: 900,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(loadingPulse, {
+          toValue: 0,
+          duration: 900,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    const rotateAnimation = Animated.loop(
+      Animated.timing(loadingRotate, {
+        toValue: 1,
+        duration: 2600,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    );
+    const sweepAnimation = Animated.loop(
+      Animated.timing(loadingSweep, {
+        toValue: 1,
+        duration: 1800,
+        easing: Easing.inOut(Easing.quad),
+        useNativeDriver: true,
+      })
+    );
+    pulseAnimation.start();
+    rotateAnimation.start();
+    sweepAnimation.start();
+    return () => {
+      pulseAnimation.stop();
+      rotateAnimation.stop();
+      sweepAnimation.stop();
+    };
+  }, [loadingPulse, loadingRotate, loadingSweep]);
 
   const handleAddIngredient = () => {
     if (isLoading) return;
@@ -486,6 +533,26 @@ export default function ManualInputScreen() {
         statusLine?.includes('Generating')
         ? 2
         : 0;
+  const loadingLogoScale = loadingPulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.96, 1.08],
+  });
+  const loadingHaloScale = loadingPulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.2],
+  });
+  const loadingHaloOpacity = loadingPulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.22, 0.05],
+  });
+  const loadingRotateDeg = loadingRotate.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+  const loadingSweepTranslateX = loadingSweep.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-76, 76],
+  });
 
   return (
     <View style={styles.container}>
@@ -649,12 +716,53 @@ export default function ManualInputScreen() {
       </View>
       <Modal transparent visible={isLoading} animationType="fade">
         <View style={styles.loadingOverlay}>
+          <View style={styles.loadingTopBadge}>
+            <Ionicons name="restaurant-outline" size={14} color="#D9F8EC" />
+            <Text style={styles.loadingTopBadgeText}>
+              {isEatNow ? 'Meal ideas' : 'Recipe generation'}
+            </Text>
+          </View>
           <View style={styles.loadingCard}>
             <View style={styles.loadingLogoWrap}>
-              <View style={styles.loadingLogoHalo} />
-              <View style={styles.loadingLogo}>
-                <Ionicons name="restaurant-outline" size={34} color={Colors.primary} />
-              </View>
+              <Animated.View
+                style={[
+                  styles.loadingLogoHalo,
+                  {
+                    opacity: loadingHaloOpacity,
+                    transform: [{ scale: loadingHaloScale }],
+                  },
+                ]}
+              />
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.loadingOrbit,
+                  {
+                    transform: [{ rotate: loadingRotateDeg }],
+                  },
+                ]}
+              >
+                <View style={styles.loadingOrbitDot} />
+              </Animated.View>
+              <Animated.View
+                style={[
+                  styles.loadingLogo,
+                  {
+                    transform: [{ scale: loadingLogoScale }],
+                  },
+                ]}
+              >
+                <Ionicons name="restaurant-outline" size={34} color="white" />
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    styles.loadingLogoSweep,
+                    {
+                      transform: [{ translateX: loadingSweepTranslateX }, { rotate: '18deg' }],
+                    },
+                  ]}
+                />
+              </Animated.View>
             </View>
 
             <Text style={styles.loadingTitle}>
@@ -685,7 +793,15 @@ export default function ManualInputScreen() {
                       {complete ? (
                         <Ionicons name="checkmark" size={14} color="white" />
                       ) : active ? (
-                        <ActivityIndicator size="small" color={Colors.primary} />
+                        <Animated.View
+                          style={[
+                            styles.loadingActivePulse,
+                            {
+                              opacity: loadingHaloOpacity,
+                              transform: [{ scale: loadingHaloScale }],
+                            },
+                          ]}
+                        />
                       ) : (
                         <View style={styles.loadingStepDot} />
                       )}
@@ -742,10 +858,28 @@ const styles = StyleSheet.create({
   },
   loadingOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(8, 67, 55, 0.72)',
+    backgroundColor: 'rgba(7, 29, 24, 0.90)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24,
+  },
+  loadingTopBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 13,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+    marginBottom: 18,
+  },
+  loadingTopBadgeText: {
+    color: '#D9F8EC',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.2,
   },
   loadingCard: {
     backgroundColor: 'rgba(255,255,255,0.96)',
@@ -762,28 +896,57 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   loadingLogoWrap: {
-    width: 88,
-    height: 88,
+    width: 104,
+    height: 104,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 18,
   },
   loadingLogoHalo: {
     position: 'absolute',
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: 'rgba(11,90,70,0.08)',
+    width: 94,
+    height: 94,
+    borderRadius: 47,
+    backgroundColor: Colors.primary,
+  },
+  loadingOrbit: {
+    position: 'absolute',
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    borderWidth: 1,
+    borderColor: 'rgba(29,158,117,0.20)',
+  },
+  loadingOrbitDot: {
+    position: 'absolute',
+    top: 6,
+    alignSelf: 'center',
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: Colors.primary,
   },
   loadingLogo: {
-    width: 66,
-    height: 66,
-    borderRadius: 33,
-    backgroundColor: '#F0FFF8',
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    overflow: 'hidden',
+    backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(11,90,70,0.14)',
+    borderColor: 'rgba(255,255,255,0.28)',
+    shadowColor: Colors.primary,
+    shadowOpacity: 0.38,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
+  },
+  loadingLogoSweep: {
+    position: 'absolute',
+    width: 28,
+    height: 88,
+    backgroundColor: 'rgba(255,255,255,0.22)',
   },
   loadingTitle: {
     fontSize: 24,
@@ -819,9 +982,11 @@ const styles = StyleSheet.create({
   loadingSteps: {
     width: '100%',
     marginTop: 24,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F6FBF8',
     borderRadius: 18,
     padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(29,158,117,0.12)',
   },
   loadingStepRow: {
     flexDirection: 'row',
@@ -846,6 +1011,12 @@ const styles = StyleSheet.create({
   loadingStepIconActive: {
     borderColor: Colors.primary,
     backgroundColor: '#F0FFF8',
+  },
+  loadingActivePulse: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: Colors.primary,
   },
   loadingStepDot: {
     width: 7,
