@@ -169,55 +169,70 @@ def _run_vision_job(job_id: str) -> None:
         )
 
         tier = get_effective_subscription_tier(db, user) or "free"
-        try:
+        def _run_scan(*, recipes_enabled: bool) -> dict:
             if mode == "batch":
-                result = pipeline.fridge_to_recipes_batch(
+                return pipeline.fridge_to_recipes_batch(
                     db,
                     user.id,
                     tier,
                     images_base64,
                     filters=filters,
                     device_id=device_id,
-                    include_recipes=include_recipes,
+                    include_recipes=recipes_enabled,
                 )
-            else:
-                image_b64 = images_base64[0] if images_base64 else ""
-                result = pipeline.fridge_to_recipes(
-                    db,
-                    user.id,
-                    tier,
-                    image_b64,
-                    filters=filters,
-                    device_id=device_id,
-                    include_recipes=include_recipes,
-                )
+            image_b64 = images_base64[0] if images_base64 else ""
+            return pipeline.fridge_to_recipes(
+                db,
+                user.id,
+                tier,
+                image_b64,
+                filters=filters,
+                device_id=device_id,
+                include_recipes=recipes_enabled,
+            )
+
+        try:
+            result = _run_scan(recipes_enabled=include_recipes)
         except IngredientValidationError as exc:
-            job.status = "failed"
-            job.error = exc.message
-            job.result = {
-                "error": {
-                    "type": "invalid_input",
-                    "code": exc.code,
-                    "message": exc.message,
-                }
-            }
-            db.commit()
             try:
-                log_system_event(
-                    {
-                        "ts": datetime.now(timezone.utc).isoformat(),
-                        "level": "warn",
-                        "type": "ai.vision.job.done",
-                        "job_id": job_id,
-                        "user_id": job.user_id,
-                        "status": "failed",
-                        "error_code": exc.code,
-                        "elapsed_ms": int((datetime.now(timezone.utc) - started).total_seconds() * 1000),
+                result = _run_scan(recipes_enabled=False)
+                warning = result.get("warning") if isinstance(result, dict) else None
+                if isinstance(warning, dict):
+                    warning.setdefault("code", exc.code)
+                    warning.setdefault("message", exc.message)
+                else:
+                    result["warning"] = {
+                        "code": exc.code,
+                        "message": exc.message,
+                        "risk_level": "moderate",
                     }
-                )
-            except Exception:
-                pass
-            return
+            except IngredientValidationError:
+                job.status = "failed"
+                job.error = exc.message
+                job.result = {
+                    "error": {
+                        "type": "invalid_input",
+                        "code": exc.code,
+                        "message": exc.message,
+                    }
+                }
+                db.commit()
+                try:
+                    log_system_event(
+                        {
+                            "ts": datetime.now(timezone.utc).isoformat(),
+                            "level": "warn",
+                            "type": "ai.vision.job.done",
+                            "job_id": job_id,
+                            "user_id": job.user_id,
+                            "status": "failed",
+                            "error_code": exc.code,
+                            "elapsed_ms": int((datetime.now(timezone.utc) - started).total_seconds() * 1000),
+                        }
+                    )
+                except Exception:
+                    pass
+                return
 
         try:
             attach_recipe_images(
@@ -347,16 +362,17 @@ def generate_from_vision(
             # Cache can outlive prompt/validation changes; re-validate on read to avoid returning stale/hallucinated content.
             try:
                 detected_cached = cached_result.get("detected", []) if isinstance(cached_result, dict) else []
-                pipeline._ensure_diabetes_friendly_or_raise(detected_cached or [], mode="ingredients")
-                validated = pipeline._validated_recipes_or_none(
-                    cached_result.get("recipes", []) if isinstance(cached_result, dict) else None,
-                    source_ingredients=detected_cached if isinstance(detected_cached, list) else [],
-                )
-                if not validated:
-                    cache.delete(cache_key)
-                    cached_result = None
-                else:
-                    cached_result["recipes"] = validated
+                if payload.include_recipes:
+                    pipeline._ensure_diabetes_friendly_or_raise(detected_cached or [], mode="ingredients")
+                    validated = pipeline._validated_recipes_or_none(
+                        cached_result.get("recipes", []) if isinstance(cached_result, dict) else None,
+                        source_ingredients=detected_cached if isinstance(detected_cached, list) else [],
+                    )
+                    if not validated:
+                        cache.delete(cache_key)
+                        cached_result = None
+                    else:
+                        cached_result["recipes"] = validated
             except IngredientValidationError:
                 cache.delete(cache_key)
                 cached_result = None
@@ -416,10 +432,19 @@ def generate_from_vision(
             include_recipes=payload.include_recipes,
         )
     except IngredientValidationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"code": exc.code, "message": exc.message},
-        ) from exc
+        result = pipeline.fridge_to_recipes(
+            db,
+            current_user.id,
+            tier,
+            payload.image_base64,
+            filters=payload.filters or [],
+            device_id=device_id,
+            include_recipes=False,
+        )
+        warning = result.get("warning") if isinstance(result, dict) else None
+        if isinstance(warning, dict):
+            warning.setdefault("code", exc.code)
+            warning.setdefault("message", exc.message)
     cache.set(cache_key, json.dumps(result), ttl_seconds=VISION_CACHE_TTL_SECONDS)
     return {
         "results": result.get("recipes", []),
@@ -465,16 +490,17 @@ def generate_from_vision_batch(
             # Cache can outlive prompt/validation changes; re-validate on read to avoid returning stale/hallucinated content.
             try:
                 detected_cached = cached_result.get("detected", []) if isinstance(cached_result, dict) else []
-                pipeline._ensure_diabetes_friendly_or_raise(detected_cached or [], mode="ingredients")
-                validated = pipeline._validated_recipes_or_none(
-                    cached_result.get("recipes", []) if isinstance(cached_result, dict) else None,
-                    source_ingredients=detected_cached if isinstance(detected_cached, list) else [],
-                )
-                if not validated:
-                    cache.delete(cache_key)
-                    cached_result = None
-                else:
-                    cached_result["recipes"] = validated
+                if payload.include_recipes:
+                    pipeline._ensure_diabetes_friendly_or_raise(detected_cached or [], mode="ingredients")
+                    validated = pipeline._validated_recipes_or_none(
+                        cached_result.get("recipes", []) if isinstance(cached_result, dict) else None,
+                        source_ingredients=detected_cached if isinstance(detected_cached, list) else [],
+                    )
+                    if not validated:
+                        cache.delete(cache_key)
+                        cached_result = None
+                    else:
+                        cached_result["recipes"] = validated
             except IngredientValidationError:
                 cache.delete(cache_key)
                 cached_result = None
@@ -533,10 +559,19 @@ def generate_from_vision_batch(
             include_recipes=payload.include_recipes,
         )
     except IngredientValidationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"code": exc.code, "message": exc.message},
-        ) from exc
+        result = pipeline.fridge_to_recipes_batch(
+            db,
+            current_user.id,
+            tier,
+            payload.images_base64,
+            filters=payload.filters or [],
+            device_id=device_id,
+            include_recipes=False,
+        )
+        warning = result.get("warning") if isinstance(result, dict) else None
+        if isinstance(warning, dict):
+            warning.setdefault("code", exc.code)
+            warning.setdefault("message", exc.message)
     cache.set(cache_key, json.dumps(result), ttl_seconds=VISION_CACHE_TTL_SECONDS)
     return {
         "results": result.get("recipes", []),

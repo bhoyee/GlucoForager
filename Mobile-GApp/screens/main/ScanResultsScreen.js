@@ -87,6 +87,11 @@ export default function ScanResultsScreen() {
       const optional = Array.isArray(warning?.optional) ? warning.optional : [];
       const excludedSet = new Set(excluded.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean));
       const optionalSet = new Set(optional.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean));
+      const normalizeRisk = (value) => {
+        const risk = String(value || '').trim().toLowerCase();
+        if (risk === 'caution' || risk === 'needs_clarification') return 'limit';
+        return risk || 'ok';
+      };
 
       // Default selection should follow the backend-selected list (safe ingredients used for recipes),
       // not "risk === ok". This prevents the UI from auto-selecting everything when risk metadata is missing.
@@ -116,16 +121,18 @@ export default function ScanResultsScreen() {
         .filter((item) => item.length > 0)
         .map((item, index) => {
           const key = item.trim().toLowerCase();
-          const risk =
+          const risk = normalizeRisk(
             riskByName?.[key]?.risk ||
-            (excludedSet.has(key) ? 'avoid' : optionalSet.has(key) ? 'limit' : 'ok');
+            (excludedSet.has(key) ? 'avoid' : optionalSet.has(key) ? 'limit' : 'ok')
+          );
+          const safeForRecipe = risk === 'ok';
           return {
             id: `${index}-${item}`,
             name: item,
             confidence: 'AI',
             risk,
             risk_reason: riskByName?.[key]?.reason || '',
-            selected: selectedSet.has(key),
+            selected: safeForRecipe && selectedSet.has(key),
           };
         });
       setDetectedIngredients(normalized);
@@ -146,7 +153,21 @@ export default function ScanResultsScreen() {
     setShowRecipeButton(selectedIngredients.length > 0 && detectedIngredients.length > 0);
   }, [selectedIngredients, detectedIngredients]);
 
+  const isRecipeSafeIngredient = (item) => {
+    if (!item) return false;
+    if (item.confidence === 'Manual') return true;
+    return !['avoid', 'limit', 'caution', 'needs_clarification'].includes(String(item.risk || '').toLowerCase());
+  };
+
   const toggleIngredientSelection = (id) => {
+    const ingredient = detectedIngredients.find((item) => item.id === id);
+    if (!selectedIngredients.includes(id) && !isRecipeSafeIngredient(ingredient)) {
+      Alert.alert(
+        'Item not selected',
+        'This item may be less suitable for diabetes-friendly recipes. It will stay visible here, but we will not use it as a main ingredient.'
+      );
+      return;
+    }
     setSelectedIngredients(prev => {
       if (prev.includes(id)) {
         return prev.filter(item => item !== id);
@@ -157,7 +178,7 @@ export default function ScanResultsScreen() {
   };
 
   const selectAllIngredients = () => {
-    const allIds = detectedIngredients.map(item => item.id);
+    const allIds = detectedIngredients.filter(isRecipeSafeIngredient).map(item => item.id);
     if (selectedIngredients.length === allIds.length) {
       setSelectedIngredients([]);
     } else {
@@ -189,7 +210,7 @@ export default function ScanResultsScreen() {
     
     // Get selected ingredient names
     const selectedItems = detectedIngredients
-      .filter(item => selectedIngredients.includes(item.id))
+      .filter(item => selectedIngredients.includes(item.id) && isRecipeSafeIngredient(item))
       .map(item => item.name);
 
     addDebugLog({
@@ -381,7 +402,7 @@ export default function ScanResultsScreen() {
                       >
                         {item.name}
                       </Text>
-                      {item.risk === 'limit' ? (
+                      {item.risk === 'limit' || item.risk === 'caution' || item.risk === 'needs_clarification' ? (
                         <Text style={styles.riskBadgeLimit}>Use sparingly</Text>
                       ) : item.risk === 'avoid' ? (
                         <Text style={styles.riskBadgeAvoid}>Avoid</Text>
@@ -404,12 +425,18 @@ export default function ScanResultsScreen() {
                         name={
                           item.risk === 'avoid'
                             ? 'close-circle'
-                            : item.risk === 'limit'
+                            : item.risk === 'limit' || item.risk === 'caution' || item.risk === 'needs_clarification'
                               ? 'alert-circle'
                               : 'checkmark-circle'
                         }
                         size={20}
-                        color={item.risk === 'avoid' ? Colors.danger : item.risk === 'limit' ? Colors.warning : Colors.success}
+                        color={
+                          item.risk === 'avoid'
+                            ? Colors.danger
+                            : item.risk === 'limit' || item.risk === 'caution' || item.risk === 'needs_clarification'
+                              ? Colors.warning
+                              : Colors.success
+                        }
                       />
                     </View>
                   )}
