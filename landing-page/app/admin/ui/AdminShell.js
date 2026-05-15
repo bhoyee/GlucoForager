@@ -5,6 +5,268 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { adminFetch, clearAdminTokens, getAdminAccessToken, getAdminRefreshToken } from '../lib/adminAuth';
 
+const NAV_ICONS = {
+  dashboard: (
+    <>
+      <path d="M4 13h6V4H4v9Z" />
+      <path d="M14 20h6V4h-6v16Z" />
+      <path d="M4 20h6v-3H4v3Z" />
+    </>
+  ),
+  team: (
+    <>
+      <path d="M16 11a4 4 0 1 0-8 0" />
+      <path d="M4 20a8 8 0 0 1 16 0" />
+      <path d="M18 8a3 3 0 0 1 3 3" />
+    </>
+  ),
+  updates: <path d="M4 12a8 8 0 0 1 13.7-5.7L20 8" />,
+  notes: (
+    <>
+      <path d="M7 4h10a2 2 0 0 1 2 2v14l-4-2-4 2-4-2-4 2V6a2 2 0 0 1 2-2Z" />
+      <path d="M8 9h8" />
+      <path d="M8 13h6" />
+    </>
+  ),
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 8v5l3 2" />
+    </>
+  ),
+  workLogs: (
+    <>
+      <path d="M7 4h10a2 2 0 0 1 2 2v14H5V6a2 2 0 0 1 2-2Z" />
+      <path d="M8 9h8" />
+      <path d="M8 13h8" />
+      <path d="M8 17h5" />
+    </>
+  ),
+  requests: (
+    <>
+      <path d="M6 3h9l3 3v15H6V3Z" />
+      <path d="M14 3v4h4" />
+      <path d="M9 13h6" />
+      <path d="M9 17h4" />
+    </>
+  ),
+  drive: (
+    <>
+      <path d="M4 7h7l2 2h7v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7Z" />
+      <path d="M4 10h16" />
+    </>
+  ),
+  plan: (
+    <>
+      <rect x="4" y="5" width="16" height="15" rx="2" />
+      <path d="M8 3v4" />
+      <path d="M16 3v4" />
+      <path d="M8 12h8" />
+      <path d="M8 16h5" />
+    </>
+  ),
+  milestone: (
+    <>
+      <path d="M5 20V5" />
+      <path d="M5 6h11l-2 4 2 4H5" />
+    </>
+  ),
+  help: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.5 9a2.8 2.8 0 1 1 4.8 2c-.9.8-1.8 1.2-1.8 2.7" />
+      <path d="M12 17h.01" />
+    </>
+  ),
+  library: (
+    <>
+      <path d="M5 5h14v14H5z" />
+      <path d="M9 5v14" />
+      <path d="M5 9h14" />
+    </>
+  ),
+  upload: (
+    <>
+      <path d="M12 16V4" />
+      <path d="M8 8l4-4 4 4" />
+      <path d="M5 20h14" />
+    </>
+  ),
+  inbox: (
+    <>
+      <path d="M4 6h16v12H4z" />
+      <path d="m4 8 8 6 8-6" />
+    </>
+  ),
+  payroll: (
+    <>
+      <rect x="4" y="6" width="16" height="12" rx="2" />
+      <path d="M8 12h.01" />
+      <path d="M12 12h4" />
+    </>
+  ),
+  reports: (
+    <>
+      <path d="M5 20V4h14v16" />
+      <path d="M9 16V9" />
+      <path d="M12 16v-4" />
+      <path d="M15 16V7" />
+    </>
+  ),
+  staff: (
+    <>
+      <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
+      <path d="M5 20a7 7 0 0 1 14 0" />
+    </>
+  ),
+  expenses: (
+    <>
+      <path d="M6 4h12v16l-3-2-3 2-3-2-3 2V4Z" />
+      <path d="M9 9h6" />
+      <path d="M9 13h4" />
+    </>
+  ),
+  audit: (
+    <>
+      <path d="M12 3 5 6v6c0 4 3 7 7 9 4-2 7-5 7-9V6l-7-3Z" />
+      <path d="m9 12 2 2 4-5" />
+    </>
+  ),
+  users: (
+    <>
+      <path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
+      <path d="M3 20a6 6 0 0 1 12 0" />
+      <path d="M17 8a3 3 0 0 1 3 3" />
+      <path d="M16 20a5 5 0 0 1 5-5" />
+    </>
+  ),
+  recipes: (
+    <>
+      <path d="M7 3v8" />
+      <path d="M5 3v4a2 2 0 0 0 4 0V3" />
+      <path d="M17 3v18" />
+      <path d="M13 3h4a4 4 0 0 1 0 8h-4" />
+    </>
+  ),
+  tips: (
+    <>
+      <path d="M12 3a6 6 0 0 0-3 11v3h6v-3a6 6 0 0 0-3-11Z" />
+      <path d="M9 21h6" />
+    </>
+  ),
+  challenge: (
+    <>
+      <path d="M8 21h8" />
+      <path d="M12 17v4" />
+      <path d="M6 4h12v4a6 6 0 0 1-12 0V4Z" />
+      <path d="M6 6H3a4 4 0 0 0 4 4" />
+      <path d="M18 6h3a4 4 0 0 1-4 4" />
+    </>
+  ),
+  blog: (
+    <>
+      <path d="M5 4h14v16H5z" />
+      <path d="M8 8h8" />
+      <path d="M8 12h8" />
+      <path d="M8 16h5" />
+    </>
+  ),
+  comments: (
+    <>
+      <path d="M4 5h16v11H8l-4 4V5Z" />
+      <path d="M8 9h8" />
+      <path d="M8 13h5" />
+    </>
+  ),
+  newsletter: (
+    <>
+      <path d="M4 7h16v10H4z" />
+      <path d="m4 8 8 6 8-6" />
+      <path d="M18 4v4" />
+    </>
+  ),
+  send: (
+    <>
+      <path d="m21 3-9 18-3-8-8-3 20-7Z" />
+      <path d="m9 13 5-5" />
+    </>
+  ),
+  email: (
+    <>
+      <path d="M4 6h16v12H4z" />
+      <path d="m4 8 8 6 8-6" />
+      <path d="M8 4h8" />
+    </>
+  ),
+  notifications: (
+    <>
+      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9Z" />
+      <path d="M10 21h4" />
+    </>
+  ),
+  push: (
+    <>
+      <rect x="7" y="3" width="10" height="18" rx="2" />
+      <path d="M11 18h2" />
+      <path d="M12 7v5" />
+      <path d="m9.5 9.5 2.5 2.5 2.5-2.5" />
+    </>
+  ),
+  health: (
+    <>
+      <path d="M12 21s-8-4.5-8-11a5 5 0 0 1 8-4 5 5 0 0 1 8 4c0 6.5-8 11-8 11Z" />
+      <path d="M8 12h2l1-2 2 4 1-2h2" />
+    </>
+  ),
+  logs: (
+    <>
+      <path d="M5 4h14v16H5z" />
+      <path d="M8 9h8" />
+      <path d="M8 13h8" />
+      <path d="M8 17h5" />
+    </>
+  ),
+  mobile: (
+    <>
+      <rect x="7" y="3" width="10" height="18" rx="2" />
+      <path d="M11 17h2" />
+      <path d="M10 7h4" />
+    </>
+  ),
+  database: (
+    <>
+      <ellipse cx="12" cy="5" rx="7" ry="3" />
+      <path d="M5 5v7c0 1.7 3.1 3 7 3s7-1.3 7-3V5" />
+      <path d="M5 12v5c0 1.7 3.1 3 7 3s7-1.3 7-3v-5" />
+    </>
+  ),
+  logout: (
+    <>
+      <path d="M10 17l5-5-5-5" />
+      <path d="M15 12H3" />
+      <path d="M21 4v16" />
+    </>
+  ),
+};
+
+function NavIcon({ name }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {NAV_ICONS[name] || NAV_ICONS.dashboard}
+    </svg>
+  );
+}
+
 export default function AdminShell({ children }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -517,22 +779,22 @@ export default function AdminShell({ children }) {
         label: 'Staff',
         defaultOpen: true,
         items: [
-          { href: isAdmin ? '/admin/admin-dashboard' : '/admin/dashboard', label: 'Dashboard', icon: 'D' },
-          ...(session?.email && !isAdmin ? [{ href: '/admin/my-team', label: 'My Team', icon: 'TM' }] : []),
-          ...(canSeeUpdatesMenu ? [{ href: '/admin/updates', label: 'Updates', icon: 'UP', perm: 'intranet_updates.read' }] : []),
-          ...(canSeeStandupNotesMenu ? [{ href: '/admin/standup-notes', label: 'Standup Notes', icon: 'SN', perm: 'dashboard_notes.manage' }] : []),
-          { href: '/admin/attendance', label: 'Clock In/Out', icon: 'CI' },
-          { href: '/admin/work-logs', label: 'Work Logs', icon: 'WL' },
-          { href: '/admin/requests', label: 'My Requests', icon: 'RQ', perm: ['requests.read_own', 'requests.write_own'] },
-          { href: '/admin/my-drive', label: 'MyDrive', icon: 'DR' },
-          ...(isAdmin ? [{ href: '/admin/staff-drive', label: 'StaffDrive', icon: 'SD', perm: 'admin.manage' }] : []),
-          { href: '/admin/work-plans', label: 'Work Plans', icon: 'WP', perm: 'work_logs.manage' },
-          { href: '/admin/milestones', label: 'Milestones', icon: 'MS', perm: 'work_logs.manage' },
-          { href: '/admin/help', label: 'Help', icon: '?' },
-          { href: '/admin/library', label: 'Library', icon: 'LB' },
-          { href: '/admin/library/upload', label: 'Upload Asset', icon: '+', perm: 'library.upload' },
-          { href: '/admin/inbox', label: 'Inbox', icon: 'IN', perm: 'notifications.read' },
-          { href: '/admin/my-payroll', label: 'My Payroll', icon: '$', perm: 'payroll.read_own' },
+          { href: isAdmin ? '/admin/admin-dashboard' : '/admin/dashboard', label: 'Dashboard', icon: 'dashboard' },
+          ...(session?.email && !isAdmin ? [{ href: '/admin/my-team', label: 'My Team', icon: 'team' }] : []),
+          ...(canSeeUpdatesMenu ? [{ href: '/admin/updates', label: 'Updates', icon: 'updates', perm: 'intranet_updates.read' }] : []),
+          ...(canSeeStandupNotesMenu ? [{ href: '/admin/standup-notes', label: 'Standup Notes', icon: 'notes', perm: 'dashboard_notes.manage' }] : []),
+          { href: '/admin/attendance', label: 'Clock In/Out', icon: 'clock' },
+          { href: '/admin/work-logs', label: 'Work Logs', icon: 'workLogs' },
+          { href: '/admin/requests', label: 'My Requests', icon: 'requests', perm: ['requests.read_own', 'requests.write_own'] },
+          { href: '/admin/my-drive', label: 'MyDrive', icon: 'drive' },
+          ...(isAdmin ? [{ href: '/admin/staff-drive', label: 'StaffDrive', icon: 'drive', perm: 'admin.manage' }] : []),
+          { href: '/admin/work-plans', label: 'Work Plans', icon: 'plan', perm: 'work_logs.manage' },
+          { href: '/admin/milestones', label: 'Milestones', icon: 'milestone', perm: 'work_logs.manage' },
+          { href: '/admin/help', label: 'Help', icon: 'help' },
+          { href: '/admin/library', label: 'Library', icon: 'library' },
+          { href: '/admin/library/upload', label: 'Upload Asset', icon: 'upload', perm: 'library.upload' },
+          { href: '/admin/inbox', label: 'Inbox', icon: 'inbox', perm: 'notifications.read' },
+          { href: '/admin/my-payroll', label: 'My Payroll', icon: 'payroll', perm: 'payroll.read_own' },
         ],
       },
       {
@@ -540,12 +802,12 @@ export default function AdminShell({ children }) {
         label: 'Operations',
         defaultOpen: isAdmin,
         items: [
-          { href: '/admin/reports', label: 'Reports', icon: 'RP', perm: 'reports.read' },
-          { href: '/admin/payroll', label: 'Payroll', icon: 'PR', perm: 'payroll.manage' },
-          { href: '/admin/staff', label: 'Staff', icon: 'ST', perm: 'staff.manage' },
-          { href: '/admin/expenses', label: 'Expenses', icon: 'EX', perm: 'expenses.read' },
-          { href: '/admin/requests/manage', label: 'Requests', icon: 'RQ', perm: 'requests.manage' },
-          { href: '/admin/audit', label: 'Audit Log', icon: 'AL', perm: 'admin.manage' },
+          { href: '/admin/reports', label: 'Reports', icon: 'reports', perm: 'reports.read' },
+          { href: '/admin/payroll', label: 'Payroll', icon: 'payroll', perm: 'payroll.manage' },
+          { href: '/admin/staff', label: 'Staff', icon: 'staff', perm: 'staff.manage' },
+          { href: '/admin/expenses', label: 'Expenses', icon: 'expenses', perm: 'expenses.read' },
+          { href: '/admin/requests/manage', label: 'Requests', icon: 'requests', perm: 'requests.manage' },
+          { href: '/admin/audit', label: 'Audit Log', icon: 'audit', perm: 'admin.manage' },
         ],
       },
       {
@@ -553,14 +815,14 @@ export default function AdminShell({ children }) {
         label: 'Content',
         defaultOpen: isAdmin,
         items: [
-          { href: '/admin/users', label: 'Users', icon: 'U', perm: 'users.read' },
-          { href: '/admin/recipes', label: 'Recipes', icon: 'R', perm: 'recipes.write' },
-          { href: '/admin/recipes/new', label: 'New Recipe', icon: '+', perm: 'recipes.write' },
-          { href: '/admin/tips', label: 'Daily Tips', icon: 'T', perm: 'tips.write' },
-          { href: '/admin/challenge', label: 'Daily Challenge', icon: 'C', perm: 'challenge.write' },
-          { href: '/admin/blog', label: 'Blog', icon: 'B', perm: ['blog.read', 'blog.write', 'blog.publish'] },
-          { href: '/admin/blog/new', label: 'New Post', icon: '+', perm: ['blog.write', 'blog.publish'] },
-          { href: '/admin/blog/comments', label: 'Comments', icon: 'M', perm: ['blog.read', 'blog.write', 'blog.publish'] },
+          { href: '/admin/users', label: 'Users', icon: 'users', perm: 'users.read' },
+          { href: '/admin/recipes', label: 'Recipes', icon: 'recipes', perm: 'recipes.write' },
+          { href: '/admin/recipes/new', label: 'New Recipe', icon: 'upload', perm: 'recipes.write' },
+          { href: '/admin/tips', label: 'Daily Tips', icon: 'tips', perm: 'tips.write' },
+          { href: '/admin/challenge', label: 'Daily Challenge', icon: 'challenge', perm: 'challenge.write' },
+          { href: '/admin/blog', label: 'Blog', icon: 'blog', perm: ['blog.read', 'blog.write', 'blog.publish'] },
+          { href: '/admin/blog/new', label: 'New Post', icon: 'upload', perm: ['blog.write', 'blog.publish'] },
+          { href: '/admin/blog/comments', label: 'Comments', icon: 'comments', perm: ['blog.read', 'blog.write', 'blog.publish'] },
         ],
       },
       {
@@ -572,11 +834,11 @@ export default function AdminShell({ children }) {
           isMarketer && !isAdmin
             ? []
             : [
-                { href: '/admin/newsletter', label: 'Newsletter', icon: 'N', perm: 'newsletter.send' },
-                { href: '/admin/newsletter/send', label: 'Send Email', icon: 'S', perm: 'newsletter.send' },
-                { href: '/admin/user-email', label: 'User Email', icon: 'E', perm: 'email.send' },
-                { href: '/admin/notifications', label: 'Notifications', icon: '!', perm: 'push.send' },
-                { href: '/admin/push-campaigns', label: 'Push Campaigns', icon: 'PN', perm: 'push.send' },
+                { href: '/admin/newsletter', label: 'Newsletter', icon: 'newsletter', perm: 'newsletter.send' },
+                { href: '/admin/newsletter/send', label: 'Send Email', icon: 'send', perm: 'newsletter.send' },
+                { href: '/admin/user-email', label: 'User Email', icon: 'email', perm: 'email.send' },
+                { href: '/admin/notifications', label: 'Notifications', icon: 'notifications', perm: 'push.send' },
+                { href: '/admin/push-campaigns', label: 'Push Campaigns', icon: 'push', perm: 'push.send' },
               ],
       },
       {
@@ -584,10 +846,10 @@ export default function AdminShell({ children }) {
         label: 'Engineering',
         defaultOpen: false,
         items: [
-          { href: '/admin/system-health', label: 'System Health', icon: 'H', perm: 'system.read' },
-          { href: '/admin/system-logs', label: 'System Logs', icon: 'L', perm: 'logs.read' },
-          { href: '/admin/mobile-logs', label: 'Mobile Logs', icon: 'P', perm: 'logs.read' },
-          { href: '/admin/db-backups', label: 'Database Backups', icon: 'DB', perm: 'backups.run' },
+          { href: '/admin/system-health', label: 'System Health', icon: 'health', perm: 'system.read' },
+          { href: '/admin/system-logs', label: 'System Logs', icon: 'logs', perm: 'logs.read' },
+          { href: '/admin/mobile-logs', label: 'Mobile Logs', icon: 'mobile', perm: 'logs.read' },
+          { href: '/admin/db-backups', label: 'Database Backups', icon: 'database', perm: 'backups.run' },
         ],
       },
     ];
@@ -731,7 +993,9 @@ export default function AdminShell({ children }) {
           id="admin-sidebar"
         >
           <div className="admin-brand">
-            <span className="admin-brand-mark">GF</span>
+            <span className="admin-brand-mark">
+              <img src="/images/logo.png" alt="" />
+            </span>
             <div>
               <p className="admin-brand-title">GlucoForager</p>
               <p className="admin-brand-subtitle">{isAdmin ? 'Admin Console' : 'Staff Portal'}</p>
@@ -808,7 +1072,7 @@ export default function AdminShell({ children }) {
                           title={item.label}
                         >
                           <span className="admin-nav-icon" aria-hidden="true">
-                            {item.icon}
+                            <NavIcon name={item.icon} />
                           </span>
                           <span className="admin-nav-label">{item.label}</span>
                           {item.href === '/admin/help' && helpUnreadCount > 0 ? (
@@ -847,7 +1111,7 @@ export default function AdminShell({ children }) {
           <div className="admin-sidebar-footer">
             <button className="admin-sidebar-logout" type="button" onClick={handleLogout} title="Log out">
               <span className="admin-nav-icon" aria-hidden="true">
-                LO
+                <NavIcon name="logout" />
               </span>
               <span className="admin-nav-label">Log out</span>
             </button>
