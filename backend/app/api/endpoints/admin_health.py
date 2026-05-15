@@ -7,7 +7,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
@@ -57,6 +57,44 @@ def _classify_ai_job_error(job: AIJob) -> tuple[str, str]:
     if "please enter real ingredients" in raw:
         return "invalid_input", "not_food"
     return "operational", "unknown"
+
+
+def _ai_job_mode(job: AIJob) -> str | None:
+    payload = job.payload if isinstance(job.payload, dict) else {}
+    mode = payload.get("mode") or payload.get("job_type") or job.source
+    return str(mode).strip() if mode else None
+
+
+def _ai_job_provider_model(job: AIJob) -> tuple[str | None, str | None]:
+    result = job.result if isinstance(job.result, dict) else {}
+    providers = result.get("providers") if isinstance(result.get("providers"), list) else []
+    models = result.get("models") if isinstance(result.get("models"), list) else []
+    provider = ", ".join(str(item) for item in providers if item) or result.get("provider")
+    model = ", ".join(str(item) for item in models if item) or result.get("model")
+    return (
+        str(provider).strip() if provider else None,
+        str(model).strip() if model else None,
+    )
+
+
+def _ai_failed_payload(job: AIJob) -> dict:
+    error_type, error_code = _classify_ai_job_error(job)
+    provider, model = _ai_job_provider_model(job)
+    failed_at = job.updated_at or job.created_at
+    return {
+        "id": job.id,
+        "user_id": job.user_id,
+        "source": job.source,
+        "mode": _ai_job_mode(job),
+        "provider": provider,
+        "model": model,
+        "error_type": error_type,
+        "error_code": error_code,
+        "error": (job.error or "")[:300],
+        "created_at": job.created_at.isoformat() if job.created_at else None,
+        "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+        "failed_at": failed_at.isoformat() if failed_at else None,
+    }
 
 
 def _maybe_cleanup_old_jobs(db: Session) -> dict:
@@ -149,16 +187,7 @@ def admin_health(
 
         for job in recent_failed:
             error_type, error_code = _classify_ai_job_error(job)
-            payload = {
-                "id": job.id,
-                "user_id": job.user_id,
-                "source": job.source,
-                "error_type": error_type,
-                "error_code": error_code,
-                "error": (job.error or "")[:300],
-                "created_at": job.created_at.isoformat() if job.created_at else None,
-                "updated_at": job.updated_at.isoformat() if job.updated_at else None,
-            }
+            payload = _ai_failed_payload(job)
             if error_type == "invalid_input":
                 invalid_input_items.append(payload)
                 invalid_reason_counts[error_code] = invalid_reason_counts.get(error_code, 0) + 1
@@ -273,3 +302,44 @@ def admin_health(
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "services": services,
     }
+
+
+@router.delete("/admin/health/ai-jobs")
+def clear_ai_jobs(
+    scope: str = "failed",
+    db: Session = Depends(get_db),
+    admin=Depends(get_current_admin),  # noqa: ARG001
+):
+    normalized = (scope or "").strip().lower()
+    allowed = {"failed", "operational", "invalid_input", "queue"}
+    if normalized not in allowed:
+        raise HTTPException(status_code=400, detail="Invalid cleanup scope.")
+
+    try:
+        deleted = 0
+        if normalized == "queue":
+            deleted = (
+                db.query(AIJob)
+                .filter(AIJob.status.in_(["pending", "queued"]))
+                .delete(synchronize_session=False)
+            )
+        elif normalized == "failed":
+            deleted = db.query(AIJob).filter(AIJob.status == "failed").delete(synchronize_session=False)
+        else:
+            failed_jobs = db.query(AIJob).filter(AIJob.status == "failed").all()
+            ids = [
+                job.id
+                for job in failed_jobs
+                if _classify_ai_job_error(job)[0] == normalized
+            ]
+            if ids:
+                deleted = (
+                    db.query(AIJob)
+                    .filter(AIJob.id.in_(ids))
+                    .delete(synchronize_session=False)
+                )
+        db.commit()
+        return {"deleted": int(deleted), "scope": normalized}
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Cleanup failed: {str(exc)[:160]}") from exc

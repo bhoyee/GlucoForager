@@ -66,6 +66,7 @@ export default function SystemHealthClient() {
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [isDeletingJobs, setIsDeletingJobs] = useState(false);
 
   const loadHealth = useCallback(
     async (options = {}) => {
@@ -113,6 +114,45 @@ export default function SystemHealthClient() {
     const timer = setInterval(() => loadHealth({ silent: true }), 15000);
     return () => clearInterval(timer);
   }, [autoRefresh, loadHealth]);
+
+  const clearJobs = useCallback(
+    async (scope) => {
+      if (!token || isDeletingJobs) return;
+      const labels = {
+        failed: 'all failed jobs',
+        operational: 'operational failed jobs',
+        invalid_input: 'invalid input failed jobs',
+        queue: 'pending queued jobs',
+      };
+      const label = labels[scope] || 'selected jobs';
+      const ok = window.confirm(`Delete ${label}? This cannot be undone.`);
+      if (!ok) return;
+      setIsDeletingJobs(true);
+      setMessage('');
+      try {
+        const response = await fetch(`${API_URL}/api/admin/health/ai-jobs?scope=${encodeURIComponent(scope)}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (response.status === 401) {
+          localStorage.removeItem('adminToken');
+          router.push('/admin');
+          return;
+        }
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data?.detail || 'Delete failed.');
+        }
+        setMessage(`Deleted ${data.deleted || 0} ${label}.`);
+        await loadHealth({ silent: true });
+      } catch (error) {
+        setMessage(error?.message || 'Delete failed.');
+      } finally {
+        setIsDeletingJobs(false);
+      }
+    },
+    [isDeletingJobs, loadHealth, router, token]
+  );
 
   const overallBadge = statusMeta(health?.status);
   const services = health?.services || {};
@@ -251,6 +291,30 @@ export default function SystemHealthClient() {
                 onClick={() => setFailureView('invalid_input')}
               >
                 Invalid input ({services.queue?.failed_invalid_input ?? 0})
+              </button>
+              <button
+                type="button"
+                className="admin-button danger"
+                disabled={isDeletingJobs || (failureView === 'operational' ? !failedOperationalJobs.length : !failedInvalidInputJobs.length)}
+                onClick={() => clearJobs(failureView)}
+              >
+                Delete shown
+              </button>
+              <button
+                type="button"
+                className="admin-button secondary"
+                disabled={isDeletingJobs || !(services.queue?.failed ?? 0)}
+                onClick={() => clearJobs('failed')}
+              >
+                Delete all failed
+              </button>
+              <button
+                type="button"
+                className="admin-button secondary"
+                disabled={isDeletingJobs || !(services.queue?.pending ?? 0)}
+                onClick={() => clearJobs('queue')}
+              >
+                Clear queue
               </button>
             </div>
 
