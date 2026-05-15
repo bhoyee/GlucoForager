@@ -16,6 +16,10 @@ class StaffExpense(Base):
     expense_date = Column(Date, nullable=False, index=True)
     amount = Column(Numeric(12, 2), nullable=False)
     currency = Column(String, nullable=False, default="GBP")
+    amount_gbp = Column(Numeric(12, 2), nullable=True)
+    exchange_rate_to_gbp = Column(Numeric(18, 8), nullable=True)
+    exchange_rate_source = Column(String, nullable=True)
+    converted_at = Column(DateTime, nullable=True)
     category = Column(String, nullable=False, default="general")
     note = Column(String, nullable=True)
 
