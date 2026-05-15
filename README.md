@@ -1,6 +1,8 @@
 # GlucoForager
 
-GlucoForager is a mobile-first diabetes-friendly food assistant with a production backend and an internal admin/staff console. Beyond “recipe generation”, this repo includes a full operational system: staff roles & permissions, work plans, daily work logs, requests/approvals, inbox, notifications, asset libraries, payroll views, and a marketing site.
+GlucoForager is a mobile-first diabetes food decision assistant. The app helps people decide what to eat by scanning fridge or pantry ingredients, accepting typed ingredients, generating blood-sugar-friendly meal ideas, suggesting smarter food swaps, building daily meal plans, and giving profile-based tips and challenges. It is designed for real daily use: quick decisions, simple cooking steps, nutrition estimates, favorites, recent history, and guidance tailored to diabetes type, goals, preferences, cuisine, lifestyle, and available kitchen equipment.
+
+Beyond the mobile app, this repo includes a production FastAPI backend, asynchronous AI job workers, a marketing site, and a full internal admin/staff console with staff roles and permissions, work plans, daily work logs, requests and approvals, inbox, notifications, asset libraries, payroll views, health checks, backups, and operational tooling.
 
 ## Tech Stack
 - **Backend**: FastAPI, SQLAlchemy, Alembic, PostgreSQL, Redis
@@ -84,15 +86,23 @@ App identifiers (from `Mobile-GApp/app.json`):
 - iOS bundle id: `com.glucoforager.app`
 - Android package: `com.glucoforager.app`
 
-### What the mobile app does (core flows)
-- **Generate recipes from what you have**:
-  - **Scan ingredients** (camera/photo) → ingredient detection → recipe generation
-  - **Type ingredients** → recipe generation
-- **Eat Now / Quick ideas**: fast “what can I eat right now?” suggestions using a tighter prompt + fewer steps.
-- **Food swaps**: diabetes-friendly substitution suggestions (e.g., “swap X for Y”).
-- **Browse & learn**: recommended/recent recipes, recipe details (nutrition, ingredients, instructions).
-- **Personalization**: onboarding/preferences that shape suggestions (as configured).
-- **Accounts & history**: profile, favorites, generated history (as enabled by backend features).
+### Mobile app features and value
+- **Ingredient scan and typed input**: Users can scan a fridge or pantry photo, or type ingredients they already have. This removes the "what can I cook?" problem without requiring a new shopping trip.
+- **Blood-sugar-friendly meal suggestions**: Recipe ideas are generated with diabetes-aware constraints, helping users reduce guesswork and avoid meals that may cause sharper glucose spikes.
+- **Food Swap Engine**: Users can ask for better alternatives for foods, snacks, and drinks, making it easier to improve familiar meals without restrictive dieting.
+- **Personalized food guidance**: Suggestions adapt to diabetes type, goals, dietary preferences, foods to avoid, country, cuisine preference, cooking time, and available equipment.
+- **Daily diabetes challenges**: Simple daily actions encourage consistency and habit-building without overwhelming users.
+- **Profile-based daily tips**: Short, practical guidance teaches users in small steps instead of long generic advice.
+- **Meal planning with daily structure**: The app can suggest breakfast, lunch, dinner, and snacks to reduce decision fatigue across the day.
+- **Nutrition estimates**: Recipe details include calories, carbs, protein, and fibre so users can compare options without manual tracking.
+- **Save and reuse favorites**: Users can save meals and build a personal library of reliable food choices.
+- **Recent history**: Previously generated meals are easy to revisit, so users can reuse past successful choices.
+- **Real-life cooking focus**: Meals are designed around simple ingredients and clear cooking steps so users can actually follow through.
+- **Multi-condition support**: Guidance supports Type 1 diabetes, Type 2 diabetes, prediabetes, and gestational diabetes.
+- **Cuisine and lifestyle adaptation**: Recommendations can reflect country, cuisine preference, cooking time, and kitchen equipment so meals feel practical and culturally relevant.
+- **What can I eat right now guidance**: Quick suggestions solve the common real-world moment when a user needs an answer immediately.
+- **Simple cooking instructions**: Recipes use clean, easy-to-follow steps so cooking is accessible.
+- **No-guesswork decision system**: Ingredient input, user profile, daily guidance, swaps, and meal planning work together so GlucoForager behaves like a daily food decision assistant rather than a static content app.
 
 ### Engine and reliability model
 - The app calls the backend and typically receives a **job id quickly** for AI workloads; results are fetched when ready (avoids long “waiting for LLM” requests on weak networks).

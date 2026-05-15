@@ -34,6 +34,8 @@ __pycache__/
 # uploads / user content (should live in object storage in prod)
 /backend/uploads/
 /backend/logs/
+/backend/backups/*
+!/backend/backups/.gitkeep
 
 # IDEs
 .vscode/
