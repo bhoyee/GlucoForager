@@ -440,6 +440,37 @@ export default function LibraryPage() {
   };
 
   const rows = Array.isArray(items) ? items : [];
+  const previewableItems = useMemo(() => rows.filter((row) => !row.is_deleted && (isImage(row) || isPdf(row) || isVideo(row))), [rows]);
+  const previewIndex = previewItem?.id ? previewableItems.findIndex((row) => String(row.id) === String(previewItem.id)) : -1;
+  const canNavigatePreview = previewableItems.length > 1 && previewIndex >= 0;
+
+  const movePreview = (direction) => {
+    if (!canNavigatePreview) return;
+    const nextIndex = (previewIndex + direction + previewableItems.length) % previewableItems.length;
+    setPreviewItem(previewableItems[nextIndex]);
+  };
+
+  const closePreview = () => setPreviewItem(null);
+
+  useEffect(() => {
+    if (!previewItem) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        movePreview(-1);
+      }
+      if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        movePreview(1);
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closePreview();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [previewItem, canNavigatePreview, previewIndex, previewableItems]);
 
   return (
     <div className="admin-page">
@@ -632,7 +663,7 @@ export default function LibraryPage() {
         <div
           role="dialog"
           aria-modal="true"
-          onClick={() => setPreviewItem(null)}
+          onClick={closePreview}
           style={{
             position: 'fixed',
             inset: 0,
@@ -650,21 +681,60 @@ export default function LibraryPage() {
               style={{ width: 'min(980px, 98vw)', height: 'min(720px, 92vh)', padding: 12, display: 'flex', flexDirection: 'column' }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
-                <p style={{ margin: 0, fontWeight: 700 }}>{previewItem.title}</p>
+                <div>
+                  <p style={{ margin: 0, fontWeight: 700 }}>{previewItem.title}</p>
+                  {previewIndex >= 0 ? (
+                    <p className="admin-help" style={{ margin: '3px 0 0' }}>
+                      {previewIndex + 1} of {previewableItems.length}
+                    </p>
+                  ) : null}
+                </div>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                {canNavigatePreview ? (
+                  <>
+                    <button className="admin-button secondary" type="button" onClick={() => movePreview(-1)}>
+                      Previous
+                    </button>
+                    <button className="admin-button secondary" type="button" onClick={() => movePreview(1)}>
+                      Next
+                    </button>
+                  </>
+                ) : null}
                 <button className="admin-button info" type="button" onClick={openPreviewInNewTab} disabled={!previewBlobUrl || previewLoading}>
                   Open
                 </button>
                 <button className="admin-button warning" type="button" onClick={downloadPreview} disabled={previewDownloading}>
                   {previewDownloading ? 'Downloading...' : 'Download'}
                 </button>
-                <button className="admin-button danger" type="button" onClick={() => setPreviewItem(null)}>
+                <button className="admin-button danger" type="button" onClick={closePreview}>
                   Close
                 </button>
                 </div>
               </div>
 
-            <div style={{ flex: 1, marginTop: 10, borderRadius: 12, overflow: 'hidden', background: 'rgba(255,255,255,0.04)' }}>
+            <div style={{ flex: 1, marginTop: 10, borderRadius: 12, overflow: 'hidden', background: 'rgba(255,255,255,0.04)', position: 'relative' }}>
+              {canNavigatePreview ? (
+                <>
+                  <button
+                    className="admin-icon-button"
+                    type="button"
+                    aria-label="Previous preview"
+                    onClick={() => movePreview(-1)}
+                    style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', zIndex: 2, background: 'rgba(255,255,255,0.92)' }}
+                  >
+                    {'<'}
+                  </button>
+                  <button
+                    className="admin-icon-button"
+                    type="button"
+                    aria-label="Next preview"
+                    onClick={() => movePreview(1)}
+                    style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', zIndex: 2, background: 'rgba(255,255,255,0.92)' }}
+                  >
+                    {'>'}
+                  </button>
+                </>
+              ) : null}
               {previewLoading ? (
                 <div style={{ padding: 14 }}>
                   <LoadingState label="Opening preview..." />
