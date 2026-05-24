@@ -6,7 +6,7 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  KeyboardAvoidingView,
+  StatusBar,
   Platform,
   Keyboard,
   Alert,
@@ -15,11 +15,9 @@ import {
   Easing,
 } from 'react-native';
 import { useNavigation, useIsFocused, useRoute } from '@react-navigation/native';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
-import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { useAuth } from '../../context/authContext';
@@ -31,14 +29,15 @@ export default function ManualInputScreen() {
   const isFocused = useIsFocused();
   const { signOut } = useAuth();
   const insets = useSafeAreaInsets();
-  const tabBarHeight = useBottomTabBarHeight();
   const headerPaddingTop = Math.max(insets.top, 16);
   const footerSafePadding = Math.max(insets.bottom, 6);
   // Keep enough room so the last input row isn't hidden behind the fixed footer.
   const contentBottomPadding = 140;
   const scrollRef = useRef(null);
+  const ingredientsContainerYRef = useRef(0);
   const ingredientRowYRef = useRef({});
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [activeIngredientIndex, setActiveIngredientIndex] = useState(null);
   const [ingredients, setIngredients] = useState(['']);
   const [isLoading, setIsLoading] = useState(false);
   const [longWait, setLongWait] = useState(false);
@@ -58,6 +57,11 @@ export default function ManualInputScreen() {
   const loadingSweep = useRef(new Animated.Value(0)).current;
   const limitReached = !scanStatus.isPremium && scanStatus.remaining === 0;
   const allowedIngredientPattern = /^[A-Za-z0-9][A-Za-z0-9\s\-'/%%]*$/;
+  const keyboardVisible = keyboardHeight > 0;
+  const typingActive = activeIngredientIndex !== null || keyboardVisible;
+  const keyboardScrollPadding = typingActive
+    ? (keyboardVisible ? keyboardHeight : Platform.OS === 'ios' ? 320 : 360) + 180
+    : contentBottomPadding;
 
   useEffect(() => {
     const pulseAnimation = Animated.loop(
@@ -215,18 +219,35 @@ export default function ManualInputScreen() {
     };
   }, []);
 
+  const scrollIngredientIntoView = (index, delay = 80) => {
+    const rowY = ingredientRowYRef.current[index];
+    const y = ingredientsContainerYRef.current + rowY;
+    if (!Number.isFinite(y)) return;
+    setTimeout(() => {
+      scrollRef.current?.scrollTo?.({ y: Math.max(0, y - 48), animated: true });
+    }, delay);
+  };
+
   useEffect(() => {
-    if (Platform.OS !== 'ios') return;
-    const showSub = Keyboard.addListener('keyboardWillShow', (event) => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvent, (event) => {
       const height = event?.endCoordinates?.height;
       setKeyboardHeight(Number.isFinite(height) ? height : 0);
+      if (activeIngredientIndex !== null) {
+        scrollIngredientIntoView(activeIngredientIndex, 100);
+        scrollIngredientIntoView(activeIngredientIndex, 260);
+      }
     });
-    const hideSub = Keyboard.addListener('keyboardWillHide', () => setKeyboardHeight(0));
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+      setActiveIngredientIndex(null);
+    });
     return () => {
       showSub?.remove?.();
       hideSub?.remove?.();
     };
-  }, []);
+  }, [activeIngredientIndex]);
 
   const stopPolling = () => {
     if (pollingRef.current) {
@@ -556,34 +577,33 @@ export default function ManualInputScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color={Colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Type Ingredients</Text>
-        <View style={styles.headerRight} />
-      </View>
-
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        // Account for our custom header (and tab bar when present) so inputs can scroll above the keyboard.
-        keyboardVerticalOffset={headerPaddingTop + (Platform.OS === 'ios' ? 44 : 0) + (tabBarHeight || 0)}
-        style={{ flex: 1 }}
+      <StatusBar barStyle="light-content" backgroundColor={Colors.primaryDark} />
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: keyboardScrollPadding },
+        ]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
-        <ScrollView
-          ref={scrollRef}
-          contentContainerStyle={[
-            styles.scrollContent,
-            { paddingBottom: contentBottomPadding + (Platform.OS === 'ios' ? keyboardHeight : 0) },
-          ]}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
-        >
+        <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
+          <View style={styles.header}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => navigation.goBack()}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="arrow-back" size={22} color="white" />
+            </TouchableOpacity>
+            <View style={styles.headerText}>
+              <Text style={styles.headerTitle}>Type Ingredients</Text>
+              <Text style={styles.headerSubtitle}>Build recipes from what you have</Text>
+            </View>
+            <View style={styles.headerRight} />
+          </View>
+        </View>
 
         {/* Instructions */}
         <View style={styles.instructionsContainer}>
@@ -608,7 +628,12 @@ export default function ManualInputScreen() {
         )}
 
         {/* Ingredients List */}
-        <View style={styles.ingredientsContainer}>
+        <View
+          style={styles.ingredientsContainer}
+          onLayout={(event) => {
+            ingredientsContainerYRef.current = event?.nativeEvent?.layout?.y ?? 0;
+          }}
+        >
           <Text style={styles.sectionTitle}>Your Ingredients</Text>
           
           {ingredients.map((ingredient, index) => (
@@ -628,9 +653,9 @@ export default function ManualInputScreen() {
                 autoCapitalize="none"
                 editable={!isLoading}
                 onFocus={() => {
-                  const y = ingredientRowYRef.current[index];
-                  if (!Number.isFinite(y)) return;
-                  scrollRef.current?.scrollTo?.({ y: Math.max(0, y - 120), animated: true });
+                  setActiveIngredientIndex(index);
+                  scrollIngredientIntoView(index, 100);
+                  scrollIngredientIntoView(index, 280);
                 }}
               />
               {index === ingredients.length - 1 && (
@@ -672,48 +697,49 @@ export default function ManualInputScreen() {
       </View>
 
       </ScrollView>
-      </KeyboardAvoidingView>
-      <View
-        style={[
-          styles.footerBar,
-          {
-            paddingBottom: footerSafePadding,
-          },
-        ]}
-      >
-        <TouchableOpacity
+      {!typingActive ? (
+        <View
           style={[
-            styles.findButton,
-            (isLoading || limitReached) && styles.findButtonDisabled,
-            limitReached && styles.findButtonLimit,
+            styles.footerBar,
+            {
+              paddingBottom: footerSafePadding,
+            },
           ]}
-          onPress={handleFindRecipes}
-          disabled={isLoading || limitReached}
         >
-          <View style={styles.findButtonContent}>
-            {isLoading ? (
-              <>
-                <Ionicons name="refresh" size={20} color="white" style={styles.loadingIcon} />
-                <Text style={styles.findButtonText}>Searching Recipes...</Text>
-              </>
-            ) : limitReached ? (
-              <>
-                <Ionicons name="lock-closed-outline" size={20} color={Colors.textLight} />
-                <Text style={[styles.findButtonText, styles.findButtonTextLimit]}>
-                  Limit reached for today
-                </Text>
-              </>
-            ) : (
-              <>
-                <Ionicons name="search-outline" size={20} color="white" />
-                <Text style={styles.findButtonText} numberOfLines={1} ellipsizeMode="tail">
-                  Find Diabetes-Safe Recipes
-                </Text>
-              </>
-            )}
-          </View>
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity
+            style={[
+              styles.findButton,
+              (isLoading || limitReached) && styles.findButtonDisabled,
+              limitReached && styles.findButtonLimit,
+            ]}
+            onPress={handleFindRecipes}
+            disabled={isLoading || limitReached}
+          >
+            <View style={styles.findButtonContent}>
+              {isLoading ? (
+                <>
+                  <Ionicons name="refresh" size={20} color="white" style={styles.loadingIcon} />
+                  <Text style={styles.findButtonText}>Searching Recipes...</Text>
+                </>
+              ) : limitReached ? (
+                <>
+                  <Ionicons name="lock-closed-outline" size={20} color={Colors.textLight} />
+                  <Text style={[styles.findButtonText, styles.findButtonTextLimit]}>
+                    Limit reached for today
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Ionicons name="search-outline" size={20} color="white" />
+                  <Text style={styles.findButtonText} numberOfLines={1} ellipsizeMode="tail">
+                    Find Diabetes-Safe Recipes
+                  </Text>
+                </>
+              )}
+            </View>
+          </TouchableOpacity>
+        </View>
+      ) : null}
       <Modal transparent visible={isLoading} animationType="fade">
         <View style={styles.loadingOverlay}>
           <View style={styles.loadingTopBadge}>
@@ -842,7 +868,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   scrollContent: {
-    paddingTop: 8,
+    paddingTop: 0,
     paddingBottom: 0,
   },
   footerBar: {
@@ -1065,28 +1091,49 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: 14,
   },
+  headerPanel: {
+    backgroundColor: Colors.primaryDark,
+    paddingHorizontal: 20,
+    paddingBottom: 18,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 5,
+    marginBottom: 18,
+  },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 20,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.surface,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.16)',
     justifyContent: 'center',
     alignItems: 'center',
   },
+  headerText: {
+    flex: 1,
+    marginLeft: 12,
+  },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 21,
+    fontWeight: '900',
+    color: 'white',
+  },
+  headerSubtitle: {
+    marginTop: 2,
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.78)',
     fontWeight: '600',
-    color: Colors.text,
   },
   headerRight: {
-    width: 40,
+    width: 44,
+    height: 44,
   },
   instructionsContainer: {
     flexDirection: 'row',

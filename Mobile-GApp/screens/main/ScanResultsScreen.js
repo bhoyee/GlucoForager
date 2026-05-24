@@ -284,24 +284,6 @@ export default function ScanResultsScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color={Colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Scan Analysis</Text>
-        <TouchableOpacity 
-          style={styles.scanAgainButton}
-          onPress={handleScanMore}
-        >
-          <Ionicons name="camera-outline" size={20} color={Colors.primary} />
-          <Text style={styles.scanAgainText}>Scan More</Text>
-        </TouchableOpacity>
-      </View>
-
       <ScrollView 
         showsVerticalScrollIndicator={false}
         horizontal={false}
@@ -309,6 +291,22 @@ export default function ScanResultsScreen() {
         alwaysBounceHorizontal={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
       >
+        <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={24} color={Colors.text} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Scan Analysis</Text>
+          <TouchableOpacity
+            style={styles.scanAgainButton}
+            onPress={handleScanMore}
+          >
+            <Ionicons name="camera-outline" size={20} color={Colors.primary} />
+            <Text style={styles.scanAgainText}>Scan More</Text>
+          </TouchableOpacity>
+        </View>
         {((typeof warningMessage === 'string' && warningMessage.trim().length > 0) || detectedIngredients.length === 0) && (
           <View style={styles.warningBanner}>
             <Ionicons name="alert-circle-outline" size={18} color={Colors.warning} />

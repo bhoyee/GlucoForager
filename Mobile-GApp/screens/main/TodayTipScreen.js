@@ -122,25 +122,25 @@ export default function TodayTipScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={22} color="white" />
-          </TouchableOpacity>
-          <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>Daily Guidance</Text>
-            <Text style={styles.headerSubtitle}>Small habits for steadier days</Text>
-          </View>
-          <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
-            <Ionicons name="share-social-outline" size={20} color="white" />
-          </TouchableOpacity>
-        </View>
-      </View>
-
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.content, { paddingBottom: contentBottomPadding }]}
+        contentContainerStyle={{ paddingBottom: contentBottomPadding }}
       >
+        <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+              <Ionicons name="arrow-back" size={22} color="white" />
+            </TouchableOpacity>
+            <View style={styles.headerCenter}>
+              <Text style={styles.headerTitle}>Daily Guidance</Text>
+              <Text style={styles.headerSubtitle}>Small habits for steadier days</Text>
+            </View>
+            <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
+              <Ionicons name="share-social-outline" size={20} color="white" />
+            </TouchableOpacity>
+          </View>
+        </View>
+        <View style={styles.content}>
         <View style={styles.heroCard}>
           <View style={styles.heroTopRow}>
             <View style={styles.iconBubble}>
@@ -270,6 +270,7 @@ export default function TodayTipScreen() {
           <Text style={styles.moreLinkText}>View more tips</Text>
           <Ionicons name="chevron-forward" size={16} color={Colors.textLight} />
         </TouchableOpacity>
+        </View>
       </ScrollView>
     </View>
   );

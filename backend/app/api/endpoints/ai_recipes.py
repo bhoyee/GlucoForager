@@ -603,7 +603,7 @@ def generate_from_vision_async(
         )
 
     tier = get_effective_subscription_tier(db, current_user) or "free"
-    rl = check_ai_rate_limit(user_id=current_user.id, tier=tier, kind="vision")
+    rl = check_ai_rate_limit(user_id=current_user.id, tier=tier, kind="vision", db=db)
     if not rl.allowed:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -681,7 +681,7 @@ def generate_from_vision_batch_async(
         )
 
     tier = get_effective_subscription_tier(db, current_user) or "free"
-    rl = check_ai_rate_limit(user_id=current_user.id, tier=tier, kind="vision_batch")
+    rl = check_ai_rate_limit(user_id=current_user.id, tier=tier, kind="vision_batch", db=db)
     if not rl.allowed:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,

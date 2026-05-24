@@ -68,6 +68,7 @@ from .api.endpoints import (
     admin_tips,
     app_swaps,
     app_daily_plan,
+    app_agent,
     admin_push_campaigns,
     mobile_push_tokens,
 )
@@ -499,6 +500,7 @@ app.include_router(app_public.router, prefix="/api")
 app.include_router(app_challenge.router, prefix="/api")
 app.include_router(app_swaps.router, prefix="/api")
 app.include_router(app_daily_plan.router, prefix="/api")
+app.include_router(app_agent.router, prefix="/api")
 app.include_router(ingredients.router, prefix="/api")
 app.include_router(recipes.router, prefix="/api")
 app.include_router(subscriptions.router, prefix="/api")

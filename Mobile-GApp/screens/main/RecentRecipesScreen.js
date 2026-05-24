@@ -234,61 +234,46 @@ export default function RecentRecipesScreen() {
   if (recipes.length === 0) {
     return (
       <View style={styles.container}>
-        <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
-          <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={22} color="white" />
-          </TouchableOpacity>
-          <View style={styles.headerText}>
-            <Text style={styles.headerTitle}>{isHistoryMode ? 'Recipe History' : 'Recent Recipes'}</Text>
-            <Text style={styles.headerSubtitle}>Recipes you generated recently</Text>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
+          <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
+            <View style={styles.header}>
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={() => navigation.goBack()}
+              >
+                <Ionicons name="arrow-back" size={22} color="white" />
+              </TouchableOpacity>
+              <View style={styles.headerText}>
+                <Text style={styles.headerTitle}>{isHistoryMode ? 'Recipe History' : 'Recent Recipes'}</Text>
+                <Text style={styles.headerSubtitle}>Recipes you generated recently</Text>
+              </View>
+              <View style={styles.headerRight} />
+            </View>
           </View>
-          <View style={styles.headerRight} />
-          </View>
-        </View>
 
-        <View style={styles.emptyContainer}>
-          <Ionicons name="time-outline" size={96} color={Colors.textLight} />
-          <Text style={styles.emptyTitle}>
-            {isHistoryMode ? 'No recipe history' : 'No recent recipes'}
-          </Text>
-          <Text style={styles.emptySubtitle}>
-            {isHistoryMode ? 'Every generated recipe will show here.' : 'Your most recent AI results will show here.'}
-          </Text>
-          <TouchableOpacity
-            style={styles.button}
-            onPress={() => navigation.navigate('Home')}
-          >
-            <Ionicons name="restaurant-outline" size={20} color="white" />
-            <Text style={styles.buttonText}>Find Recipes</Text>
-          </TouchableOpacity>
-        </View>
+          <View style={styles.emptyContainer}>
+            <Ionicons name="time-outline" size={96} color={Colors.textLight} />
+            <Text style={styles.emptyTitle}>
+              {isHistoryMode ? 'No recipe history' : 'No recent recipes'}
+            </Text>
+            <Text style={styles.emptySubtitle}>
+              {isHistoryMode ? 'Every generated recipe will show here.' : 'Your most recent AI results will show here.'}
+            </Text>
+            <TouchableOpacity
+              style={styles.button}
+              onPress={() => navigation.navigate('Home')}
+            >
+              <Ionicons name="restaurant-outline" size={20} color="white" />
+              <Text style={styles.buttonText}>Find Recipes</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
-        <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={22} color="white" />
-        </TouchableOpacity>
-        <View style={styles.headerText}>
-          <Text style={styles.headerTitle}>{isHistoryMode ? 'Recipe History' : 'Recent Recipes'}</Text>
-          <Text style={styles.headerSubtitle}>
-            {isHistoryMode ? `${recipes.length} of ${totalRecipes || recipes.length} recipes` : `${recipes.length} recipes`}
-          </Text>
-        </View>
-        </View>
-      </View>
-
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
@@ -301,6 +286,22 @@ export default function RecentRecipesScreen() {
           />
         }
       >
+        <View style={[styles.headerPanel, styles.scrollHeaderPanel, { paddingTop: headerPaddingTop }]}>
+          <View style={styles.header}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => navigation.goBack()}
+            >
+              <Ionicons name="arrow-back" size={22} color="white" />
+            </TouchableOpacity>
+            <View style={styles.headerText}>
+              <Text style={styles.headerTitle}>{isHistoryMode ? 'Recipe History' : 'Recent Recipes'}</Text>
+              <Text style={styles.headerSubtitle}>
+                {isHistoryMode ? `${recipes.length} of ${totalRecipes || recipes.length} recipes` : `${recipes.length} recipes`}
+              </Text>
+            </View>
+          </View>
+        </View>
         {recipes.map((recipe, index) => {
           const title = recipe.name || recipe.title || `Recipe ${index + 1}`;
           const showThumb =
@@ -379,6 +380,11 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 8 },
     elevation: 5,
+  },
+  scrollHeaderPanel: {
+    marginHorizontal: -20,
+    marginTop: -18,
+    marginBottom: 18,
   },
   header: {
     flexDirection: 'row',

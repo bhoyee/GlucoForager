@@ -35,6 +35,7 @@ from ...services.recipe_upload_storage_service import store_recipe_image_upload
 from ...services.staff_rbac_service import StaffRBACService
 from ...services.subscription_service import is_subscription_active, is_premium_blocked, refresh_user_tier
 from ...services.cache_service import CacheService
+from ...services.settings_service import get_ai_guardrail_settings
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 admin_cache = CacheService()
@@ -1161,6 +1162,105 @@ def ai_queue_metrics(
         payload["redis"]["streams"][key] = stream_info
 
     return payload
+
+
+@router.get("/ai/usage-guardrails")
+def ai_usage_guardrails(
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),  # noqa: ARG001
+):
+    now = datetime.utcnow()
+    today_start = datetime(now.year, now.month, now.day)
+    guardrails = get_ai_guardrail_settings(db)
+
+    by_type_rows = (
+        db.query(
+            AIRequest.request_type,
+            func.count(AIRequest.id),
+            func.coalesce(func.sum(AIRequest.tokens_used), 0),
+            func.coalesce(func.sum(AIRequest.cost_estimate), 0),
+        )
+        .filter(AIRequest.created_at >= today_start)
+        .group_by(AIRequest.request_type)
+        .all()
+    )
+    by_type = [
+        {
+            "request_type": row[0],
+            "count": int(row[1] or 0),
+            "tokens": int(row[2] or 0),
+            "cost_estimate": float(row[3] or 0),
+        }
+        for row in by_type_rows
+    ]
+
+    top_rows = (
+        db.query(
+            AIRequest.user_id,
+            User.email,
+            User.full_name,
+            AIRequest.tier,
+            func.count(AIRequest.id).label("request_count"),
+            func.coalesce(func.sum(AIRequest.tokens_used), 0).label("tokens"),
+        )
+        .join(User, User.id == AIRequest.user_id)
+        .filter(AIRequest.created_at >= today_start)
+        .group_by(AIRequest.user_id, User.email, User.full_name, AIRequest.tier)
+        .order_by(func.count(AIRequest.id).desc())
+        .limit(15)
+        .all()
+    )
+    top_users = [
+        {
+            "user_id": int(row[0]),
+            "email": row[1],
+            "full_name": row[2],
+            "tier": row[3],
+            "request_count": int(row[4] or 0),
+            "tokens": int(row[5] or 0),
+        }
+        for row in top_rows
+    ]
+
+    queued_rows = (
+        db.query(AIJob.source, AIJob.status, func.count(AIJob.id))
+        .filter(AIJob.created_at >= today_start)
+        .group_by(AIJob.source, AIJob.status)
+        .all()
+    )
+    queued = [
+        {"source": row[0], "status": row[1], "count": int(row[2] or 0)}
+        for row in queued_rows
+    ]
+
+    return {
+        "generated_at": now.isoformat() + "Z",
+        "limits": {
+            "burst_per_minute": {
+                "free_text": guardrails.free_text_per_minute,
+                "premium_text": guardrails.premium_text_per_minute,
+                "free_vision": guardrails.free_vision_per_minute,
+                "premium_vision": guardrails.premium_vision_per_minute,
+            },
+            "daily": {
+                "free_agent": guardrails.free_agent_daily,
+                "premium_agent": guardrails.premium_agent_daily,
+                "free_recipes": guardrails.free_recipes_daily,
+                "premium_recipes": guardrails.premium_recipes_daily,
+                "free_swaps": guardrails.free_swaps_daily,
+                "premium_swaps": guardrails.premium_swaps_daily,
+                "premium_daily_plan": guardrails.premium_daily_plan_daily,
+            },
+            "weekly": {
+                "free_daily_plan": guardrails.free_daily_plan_weekly,
+            },
+        },
+        "today": {
+            "by_type": by_type,
+            "top_users": top_users,
+            "queued_jobs": queued,
+        },
+    }
 
 
 @router.post("/uploads")

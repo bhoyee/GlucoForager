@@ -13,10 +13,13 @@ from ...services.settings_service import (
     RecipeImageSettings,
     ScanLimitSettings,
     SignupNotificationSettings,
+    AIGuardrailSettings,
+    get_ai_guardrail_settings,
     get_app_update_settings,
     get_recipe_image_settings,
     get_scan_limit_settings,
     get_signup_notification_settings,
+    update_ai_guardrail_settings,
     update_app_update_settings,
     update_recipe_image_settings,
     update_scan_limit_settings,
@@ -52,6 +55,22 @@ class RecipeImagesPayload(BaseModel):
 class ScanLimitsPayload(BaseModel):
     free_count: int = Field(3, ge=0, le=100)
     free_window_days: int = Field(1, ge=1, le=30)
+
+
+class AIGuardrailsPayload(BaseModel):
+    free_agent_daily: int = Field(10, ge=0, le=10000)
+    premium_agent_daily: int = Field(100, ge=0, le=10000)
+    free_recipes_daily: int = Field(5, ge=0, le=10000)
+    premium_recipes_daily: int = Field(50, ge=0, le=10000)
+    free_swaps_daily: int = Field(10, ge=0, le=10000)
+    premium_swaps_daily: int = Field(100, ge=0, le=10000)
+    premium_daily_plan_daily: int = Field(5, ge=0, le=10000)
+    free_daily_plan_weekly: int = Field(1, ge=0, le=10000)
+    free_text_per_minute: int = Field(3, ge=0, le=1000)
+    premium_text_per_minute: int = Field(10, ge=0, le=1000)
+    free_vision_per_minute: int = Field(2, ge=0, le=1000)
+    premium_vision_per_minute: int = Field(6, ge=0, le=1000)
+
 
 class TipSettingsPayload(BaseModel):
     blocked_tip_ids: list[str] = Field(default_factory=list, max_length=500)
@@ -274,3 +293,52 @@ def put_scan_limits(
         "free_count": settings.free_count,
         "free_window_days": settings.free_window_days,
     }
+
+
+def _ai_guardrails_payload(settings: AIGuardrailSettings) -> dict:
+    return {
+        "free_agent_daily": settings.free_agent_daily,
+        "premium_agent_daily": settings.premium_agent_daily,
+        "free_recipes_daily": settings.free_recipes_daily,
+        "premium_recipes_daily": settings.premium_recipes_daily,
+        "free_swaps_daily": settings.free_swaps_daily,
+        "premium_swaps_daily": settings.premium_swaps_daily,
+        "premium_daily_plan_daily": settings.premium_daily_plan_daily,
+        "free_daily_plan_weekly": settings.free_daily_plan_weekly,
+        "free_text_per_minute": settings.free_text_per_minute,
+        "premium_text_per_minute": settings.premium_text_per_minute,
+        "free_vision_per_minute": settings.free_vision_per_minute,
+        "premium_vision_per_minute": settings.premium_vision_per_minute,
+    }
+
+
+@router.get("/ai-guardrails")
+def get_ai_guardrails(
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    return _ai_guardrails_payload(get_ai_guardrail_settings(db))
+
+
+@router.put("/ai-guardrails")
+def put_ai_guardrails(
+    payload: AIGuardrailsPayload,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    settings = update_ai_guardrail_settings(
+        db,
+        free_agent_daily=payload.free_agent_daily,
+        premium_agent_daily=payload.premium_agent_daily,
+        free_recipes_daily=payload.free_recipes_daily,
+        premium_recipes_daily=payload.premium_recipes_daily,
+        free_swaps_daily=payload.free_swaps_daily,
+        premium_swaps_daily=payload.premium_swaps_daily,
+        premium_daily_plan_daily=payload.premium_daily_plan_daily,
+        free_daily_plan_weekly=payload.free_daily_plan_weekly,
+        free_text_per_minute=payload.free_text_per_minute,
+        premium_text_per_minute=payload.premium_text_per_minute,
+        free_vision_per_minute=payload.free_vision_per_minute,
+        premium_vision_per_minute=payload.premium_vision_per_minute,
+    )
+    return _ai_guardrails_payload(settings)

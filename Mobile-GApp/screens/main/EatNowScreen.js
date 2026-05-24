@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -111,47 +111,49 @@ export default function EatNowScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={22} color="white" />
-          </TouchableOpacity>
-          <View style={styles.headerText}>
-            <Text style={styles.headerTitle}>Eat Now</Text>
-            <Text style={styles.headerSubtitle}>Quick ideas for right now</Text>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: contentBottomPadding }}>
+        <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+              <Ionicons name="arrow-back" size={22} color="white" />
+            </TouchableOpacity>
+            <View style={styles.headerText}>
+              <Text style={styles.headerTitle}>Eat Now</Text>
+              <Text style={styles.headerSubtitle}>Quick ideas for right now</Text>
+            </View>
+            <View style={styles.headerRight} />
           </View>
-          <View style={styles.headerRight} />
         </View>
-      </View>
 
-      <View style={styles.content}>
-        {cards.map((card) => (
-          <TouchableOpacity
-            key={card.key}
-            style={styles.card}
-            activeOpacity={0.8}
-            onPress={() => void card.action()}
-          >
-            <View style={[styles.cardAccent, { backgroundColor: card.accent }]} />
-            <View style={[styles.cardIcon, { backgroundColor: `${card.accent}14` }]}>
-              <Ionicons name={card.icon} size={22} color={card.accent} />
-            </View>
-            <View style={styles.cardText}>
-              <Text style={styles.cardTitle}>{card.title}</Text>
-              <Text style={styles.cardSubtitle}>{card.subtitle}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
-          </TouchableOpacity>
-        ))}
+        <View style={styles.content}>
+          {cards.map((card) => (
+            <TouchableOpacity
+              key={card.key}
+              style={styles.card}
+              activeOpacity={0.8}
+              onPress={() => void card.action()}
+            >
+              <View style={[styles.cardAccent, { backgroundColor: card.accent }]} />
+              <View style={[styles.cardIcon, { backgroundColor: `${card.accent}14` }]}>
+                <Ionicons name={card.icon} size={22} color={card.accent} />
+              </View>
+              <View style={styles.cardText}>
+                <Text style={styles.cardTitle}>{card.title}</Text>
+                <Text style={styles.cardSubtitle}>{card.subtitle}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
+            </TouchableOpacity>
+          ))}
 
-        <View style={styles.noteBox}>
-          <Ionicons name="information-circle-outline" size={18} color={Colors.secondary} />
-          <Text style={styles.noteText}>
-            <Text style={styles.noteLabel}>Tip:</Text> for best results, scan or type your ingredients first - then "Use
-            ingredients I have" becomes 1-tap.
-          </Text>
+          <View style={styles.noteBox}>
+            <Ionicons name="information-circle-outline" size={18} color={Colors.secondary} />
+            <Text style={styles.noteText}>
+              <Text style={styles.noteLabel}>Tip:</Text> for best results, scan or type your ingredients first - then "Use
+              ingredients I have" becomes 1-tap.
+            </Text>
+          </View>
         </View>
-      </View>
+      </ScrollView>
     </View>
   );
 }
