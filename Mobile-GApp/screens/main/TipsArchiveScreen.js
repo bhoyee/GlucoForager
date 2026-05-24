@@ -101,23 +101,23 @@ export default function TipsArchiveScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={22} color="white" />
-          </TouchableOpacity>
-          <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>More Guidance</Text>
-            <Text style={styles.headerSubtitle}>Browse and save daily tips</Text>
-          </View>
-          <View style={{ width: 44 }} />
-        </View>
-      </View>
-
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.content, { paddingBottom: contentBottomPadding }]}
+        contentContainerStyle={{ paddingBottom: contentBottomPadding }}
       >
+        <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+              <Ionicons name="arrow-back" size={22} color="white" />
+            </TouchableOpacity>
+            <View style={styles.headerCenter}>
+              <Text style={styles.headerTitle}>More Guidance</Text>
+              <Text style={styles.headerSubtitle}>Browse and save daily tips</Text>
+            </View>
+            <View style={{ width: 44 }} />
+          </View>
+        </View>
+        <View style={styles.content}>
         <View style={styles.tabsRow}>
           {TABS.map((t) => (
             <TouchableOpacity
@@ -181,6 +181,7 @@ export default function TipsArchiveScreen() {
               );
             })
           )}
+        </View>
         </View>
       </ScrollView>
     </View>

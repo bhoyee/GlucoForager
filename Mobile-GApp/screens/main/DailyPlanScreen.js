@@ -556,48 +556,47 @@ export default function DailyPlanScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) + 8 }]}>
-        <View style={styles.headerRow}>
-          <View style={styles.headerTitleRow}>
-            <View style={styles.headerIcon}>
-              <Ionicons name="calendar-outline" size={18} color="white" />
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) + 8 }]}>
+          <View style={styles.headerRow}>
+            <View style={styles.headerTitleRow}>
+              <View style={styles.headerIcon}>
+                <Ionicons name="calendar-outline" size={18} color="white" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.headerTitle}>Daily Meal Planner</Text>
+                <Text style={styles.headerSubtitle}>A simple plan for steady blood sugar habits.</Text>
+              </View>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.headerTitle}>Daily Meal Planner</Text>
-              <Text style={styles.headerSubtitle}>A simple plan for steady blood sugar habits.</Text>
-            </View>
-          </View>
-          <Pressable style={styles.notificationButton}>
-            <Ionicons name="notifications-outline" size={21} color="white" />
-            <View style={styles.notificationDot} />
-          </Pressable>
-        </View>
-
-        {meals.length ? (
-          <View style={styles.headerActions}>
-            {isSelectedToday ? (
-              <Pressable
-                disabled={generating}
-                onPress={() => generateToday({ force: true })}
-                style={[styles.headerPrimaryButton, generating ? { opacity: 0.7 } : null]}
-              >
-                {generating ? (
-                  <ActivityIndicator size="small" color={Colors.primaryDark} />
-                ) : (
-                  <Ionicons name="refresh-outline" size={16} color={Colors.primaryDark} />
-                )}
-                <Text style={styles.headerPrimaryButtonText}>Regenerate</Text>
-              </Pressable>
-            ) : null}
-            <Pressable onPress={() => loadPlanForDate(selectedDate)} style={styles.headerSecondaryButton}>
-              <Ionicons name="refresh-outline" size={16} color="white" />
-              <Text style={styles.headerSecondaryButtonText}>Refresh</Text>
+            <Pressable style={styles.notificationButton}>
+              <Ionicons name="notifications-outline" size={21} color="white" />
+              <View style={styles.notificationDot} />
             </Pressable>
           </View>
-        ) : null}
-      </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          {meals.length ? (
+            <View style={styles.headerActions}>
+              {isSelectedToday ? (
+                <Pressable
+                  disabled={generating}
+                  onPress={() => generateToday({ force: true })}
+                  style={[styles.headerPrimaryButton, generating ? { opacity: 0.7 } : null]}
+                >
+                  {generating ? (
+                    <ActivityIndicator size="small" color={Colors.primaryDark} />
+                  ) : (
+                    <Ionicons name="refresh-outline" size={16} color={Colors.primaryDark} />
+                  )}
+                  <Text style={styles.headerPrimaryButtonText}>Regenerate</Text>
+                </Pressable>
+              ) : null}
+              <Pressable onPress={() => loadPlanForDate(selectedDate)} style={styles.headerSecondaryButton}>
+                <Ionicons name="refresh-outline" size={16} color="white" />
+                <Text style={styles.headerSecondaryButtonText}>Refresh</Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
         {loading ? (
           <View style={styles.center}>
             <ActivityIndicator size="large" color={Colors.primary} />
@@ -749,6 +748,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primaryDark,
     paddingHorizontal: 20,
     paddingBottom: 20,
+    marginHorizontal: -16,
+    marginTop: -20,
+    marginBottom: 20,
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
     shadowColor: '#000',

@@ -214,6 +214,10 @@ export default function PersonalInfoScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
+      >
       <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={22} color={Colors.text} />
@@ -221,10 +225,6 @@ export default function PersonalInfoScreen({ navigation }) {
         <Text style={styles.title}>Personal Info</Text>
         <View style={{ width: 32 }} />
       </View>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
-      >
 
       <View style={styles.card}>
         {isLoading ? (

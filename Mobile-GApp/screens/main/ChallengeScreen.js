@@ -88,27 +88,28 @@ export default function ChallengeScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} activeOpacity={0.85}>
-            <Ionicons name="arrow-back" size={22} color="white" />
-          </TouchableOpacity>
-          <View style={styles.headerText}>
-            <Text style={styles.headerTitle}>Today's Challenge</Text>
-            <Text style={styles.headerSubtitle}>
-              {progress.completed}/{progress.total} completed
-            </Text>
-          </View>
-          <TouchableOpacity style={styles.resetButton} onPress={() => void loadChallenge()} activeOpacity={0.85}>
-            <Ionicons name="refresh" size={18} color="white" />
-          </TouchableOpacity>
-        </View>
-      </View>
-
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.content, { paddingBottom: contentBottomPadding }]}
+        contentContainerStyle={{ paddingBottom: contentBottomPadding }}
       >
+        <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} activeOpacity={0.85}>
+              <Ionicons name="arrow-back" size={22} color="white" />
+            </TouchableOpacity>
+            <View style={styles.headerText}>
+              <Text style={styles.headerTitle}>Today's Challenge</Text>
+              <Text style={styles.headerSubtitle}>
+                {progress.completed}/{progress.total} completed
+              </Text>
+            </View>
+            <TouchableOpacity style={styles.resetButton} onPress={() => void loadChallenge()} activeOpacity={0.85}>
+              <Ionicons name="refresh" size={18} color="white" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.content}>
         <View style={styles.hero}>
           <View style={styles.heroTopRow}>
             <View style={styles.heroIcon}>
@@ -192,6 +193,7 @@ export default function ChallengeScreen() {
             <Text style={styles.completeSub}>Great work supporting healthier blood sugar habits today.</Text>
           </View>
         ) : null}
+        </View>
       </ScrollView>
     </View>
   );

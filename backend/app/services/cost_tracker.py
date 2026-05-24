@@ -10,6 +10,7 @@ from .user_activity_service import add_user_activity
 
 ACTIVITY_LABELS = {
     "daily_plan": "Generated daily meal plan",
+    "agent": "Asked GlucoGuide AI",
     "recipe_image": "Generated recipe image",
     "recipes": "Generated recipes",
     "swaps": "Generated food swaps",

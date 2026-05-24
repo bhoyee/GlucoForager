@@ -13,12 +13,12 @@ from sqlalchemy.orm import Session
 
 from ...api.dependencies import get_current_user
 from ...database import get_db
-from ...models.ai_request import AIRequest
 from ...models.user import User
 from ...services.ai_swaps_service import AISwapsService
 from ...services.food_profile_service import extract_food_profile
 from ...services.cache_service import CacheService
 from ...services.cost_tracker import record_ai_request
+from ...services.rate_limit_service import check_ai_daily_limit, daily_limit_detail
 from ...services.swaps_ai_warmup import enqueue_swaps_ai_warmup
 from ...services.subscription_service import get_effective_subscription_tier
 from ...services.system_log_service import log_system_event
@@ -115,7 +115,6 @@ def generate_food_swaps(
 
     tier = get_effective_subscription_tier(db, user)
     per_minute_limit = 3 if tier != "premium" else 8
-    per_day_limit = 10 if tier != "premium" else 50
 
     food_profile = extract_food_profile(user)
 
@@ -202,33 +201,20 @@ def generate_food_swaps(
             limit_per_minute=per_minute_limit,
         )
 
-    # Daily quota (UTC-ish; uses server UTC time).
-    now = datetime.utcnow()
-    start_of_day = datetime(year=now.year, month=now.month, day=now.day)
-    used_today = (
-        db.query(AIRequest)
-        .filter(
-            AIRequest.user_id == user.id,
-            AIRequest.request_type == "swaps",
-            AIRequest.created_at >= start_of_day,
-        )
-        .count()
+    daily = check_ai_daily_limit(
+        db,
+        user_id=user.id,
+        tier=tier,
+        feature="swaps",
+        request_types=["swaps"],
     )
-    if used_today >= per_day_limit:
-        if tier != "premium":
-            _http_error(
-                status_code=429,
-                code="daily_limit_reached",
-                message="Daily Food swaps limit reached. Upgrade to Premium for more.",
-                limit_per_day=per_day_limit,
-                upgrade=True,
-            )
+    if not daily.allowed:
+        detail = daily_limit_detail(daily, label="Food swaps")
         _http_error(
             status_code=429,
-            code="daily_limit_reached",
-            message="Daily Food swaps limit reached. Please try again tomorrow.",
-            limit_per_day=per_day_limit,
-            upgrade=False,
+            code=detail.pop("code"),
+            message=detail.pop("message"),
+            **detail,
         )
 
     # Cache v11: swaps-only client payload (no assessment fields returned to mobile).

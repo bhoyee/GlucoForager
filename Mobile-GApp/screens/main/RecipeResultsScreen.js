@@ -656,27 +656,26 @@ export default function RecipeResultsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color={Colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Recipe Results</Text>
-        <TouchableOpacity
-          style={styles.scanAgainButton}
-          onPress={() => navigation.navigate('Scan', { screen: 'ScanMain' })}
-        >
-          <Ionicons name="camera-outline" size={20} color={Colors.primary} />
-          <Text style={styles.scanAgainText}>Scan Again</Text>
-        </TouchableOpacity>
-      </View>
-
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
       >
+        <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={24} color={Colors.text} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Recipe Results</Text>
+          <TouchableOpacity
+            style={styles.scanAgainButton}
+            onPress={() => navigation.navigate('Scan', { screen: 'ScanMain' })}
+          >
+            <Ionicons name="camera-outline" size={20} color={Colors.primary} />
+            <Text style={styles.scanAgainText}>Scan Again</Text>
+          </TouchableOpacity>
+        </View>
         {heroImage && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Your Scan</Text>

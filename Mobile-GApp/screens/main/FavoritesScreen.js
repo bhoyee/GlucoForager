@@ -163,30 +163,32 @@ export default function FavoritesScreen() {
   if (favorites.length === 0) {
     return (
       <View style={styles.container}>
-        <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
-          <View style={styles.header}>
-            <View style={styles.headerText}>
-              <Text style={styles.headerTitle}>My Favorites</Text>
-              <Text style={styles.headerSubtitle}>Saved recipes you love</Text>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
+          <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
+            <View style={styles.header}>
+              <View style={styles.headerText}>
+                <Text style={styles.headerTitle}>My Favorites</Text>
+                <Text style={styles.headerSubtitle}>Saved recipes you love</Text>
+              </View>
             </View>
           </View>
-        </View>
-        
-        <View style={styles.emptyContainer}>
-          <Ionicons name="heart-outline" size={100} color={Colors.textLight} />
-          <Text style={styles.emptyTitle}>No Favorites Yet</Text>
-          <Text style={styles.emptySubtitle}>
-            Save recipes you love to see them here
-          </Text>
-          
-          <TouchableOpacity 
-            style={styles.button}
-            onPress={() => navigation.navigate('Home')}
-          >
-            <Ionicons name="restaurant-outline" size={20} color="white" />
-            <Text style={styles.buttonText}>Browse Recipes</Text>
-          </TouchableOpacity>
-        </View>
+
+          <View style={styles.emptyContainer}>
+            <Ionicons name="heart-outline" size={100} color={Colors.textLight} />
+            <Text style={styles.emptyTitle}>No Favorites Yet</Text>
+            <Text style={styles.emptySubtitle}>
+              Save recipes you love to see them here
+            </Text>
+
+            <TouchableOpacity
+              style={styles.button}
+              onPress={() => navigation.navigate('Home')}
+            >
+              <Ionicons name="restaurant-outline" size={20} color="white" />
+              <Text style={styles.buttonText}>Browse Recipes</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
       </View>
     );
   }
@@ -194,23 +196,6 @@ export default function FavoritesScreen() {
   // Show favorites list
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
-        <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={22} color="white" />
-        </TouchableOpacity>
-        <View style={styles.headerText}>
-          <Text style={styles.headerTitle}>My Favorites</Text>
-          <Text style={styles.headerSubtitle}>{favorites.length} saved recipes</Text>
-        </View>
-        </View>
-        
-      </View>
-
       {/* Favorites List */}
       <ScrollView
         style={styles.scrollView}
@@ -224,6 +209,20 @@ export default function FavoritesScreen() {
           />
         }
       >
+        <View style={[styles.headerPanel, styles.scrollHeaderPanel, { paddingTop: headerPaddingTop }]}>
+          <View style={styles.header}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => navigation.goBack()}
+            >
+              <Ionicons name="arrow-back" size={22} color="white" />
+            </TouchableOpacity>
+            <View style={styles.headerText}>
+              <Text style={styles.headerTitle}>My Favorites</Text>
+              <Text style={styles.headerSubtitle}>{favorites.length} saved recipes</Text>
+            </View>
+          </View>
+        </View>
         {favorites.map((item) => (
           <TouchableOpacity
             key={item.id}
@@ -337,6 +336,11 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 8 },
     elevation: 5,
+  },
+  scrollHeaderPanel: {
+    marginHorizontal: -20,
+    marginTop: -18,
+    marginBottom: 18,
   },
   header: {
     flexDirection: 'row',
