@@ -27,6 +27,20 @@ export default function AdminNotificationsPage() {
   const [recipeImagesCostUsd, setRecipeImagesCostUsd] = useState(0.04);
   const [freeScanLimitCount, setFreeScanLimitCount] = useState(3);
   const [freeScanLimitWindowDays, setFreeScanLimitWindowDays] = useState(1);
+  const [aiGuardrails, setAiGuardrails] = useState({
+    free_agent_daily: 10,
+    premium_agent_daily: 100,
+    free_recipes_daily: 5,
+    premium_recipes_daily: 50,
+    free_swaps_daily: 10,
+    premium_swaps_daily: 100,
+    premium_daily_plan_daily: 5,
+    free_daily_plan_weekly: 1,
+    free_text_per_minute: 3,
+    premium_text_per_minute: 10,
+    free_vision_per_minute: 2,
+    premium_vision_per_minute: 6,
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -45,17 +59,19 @@ export default function AdminNotificationsPage() {
     setMessage('');
     try {
       const headers = { Authorization: `Bearer ${token}` };
-      const [signupRes, updatesRes, recipeImagesRes, scanLimitsRes] = await Promise.all([
+      const [signupRes, updatesRes, recipeImagesRes, scanLimitsRes, aiGuardrailsRes] = await Promise.all([
         fetch(`${API_URL}/api/admin/settings/signup-notifications`, { headers }),
         fetch(`${API_URL}/api/admin/settings/app-updates`, { headers }),
         fetch(`${API_URL}/api/admin/settings/recipe-images`, { headers }),
         fetch(`${API_URL}/api/admin/settings/scan-limits`, { headers }),
+        fetch(`${API_URL}/api/admin/settings/ai-guardrails`, { headers }),
       ]);
       if (
         signupRes.status === 401 ||
         updatesRes.status === 401 ||
         recipeImagesRes.status === 401 ||
-        scanLimitsRes.status === 401
+        scanLimitsRes.status === 401 ||
+        aiGuardrailsRes.status === 401
       ) {
         localStorage.removeItem('adminToken');
         router.push('/admin');
@@ -88,6 +104,14 @@ export default function AdminNotificationsPage() {
       const scanLimits = await scanLimitsRes.json().catch(() => ({}));
       setFreeScanLimitCount(safeNumber(scanLimits.free_count, 3));
       setFreeScanLimitWindowDays(safeNumber(scanLimits.free_window_days, 1));
+
+      const guardrails = await aiGuardrailsRes.json().catch(() => ({}));
+      setAiGuardrails((current) => ({
+        ...current,
+        ...Object.fromEntries(
+          Object.entries(current).map(([key, fallback]) => [key, safeNumber(guardrails[key], fallback)])
+        ),
+      }));
     } catch (error) {
       setMessage('Failed to load notification settings.');
     } finally {
@@ -111,7 +135,7 @@ export default function AdminNotificationsPage() {
     setMessage('');
     try {
       const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-      const [signupRes, updatesRes, recipeImagesRes, scanLimitsRes] = await Promise.all([
+      const [signupRes, updatesRes, recipeImagesRes, scanLimitsRes, aiGuardrailsRes] = await Promise.all([
         fetch(`${API_URL}/api/admin/settings/signup-notifications`, {
           method: 'PUT',
           headers,
@@ -148,12 +172,18 @@ export default function AdminNotificationsPage() {
             free_window_days: safeNumber(freeScanLimitWindowDays, 1),
           }),
         }),
+        fetch(`${API_URL}/api/admin/settings/ai-guardrails`, {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify(aiGuardrails),
+        }),
       ]);
       if (
         signupRes.status === 401 ||
         updatesRes.status === 401 ||
         recipeImagesRes.status === 401 ||
-        scanLimitsRes.status === 401
+        scanLimitsRes.status === 401 ||
+        aiGuardrailsRes.status === 401
       ) {
         localStorage.removeItem('adminToken');
         router.push('/admin');
@@ -163,12 +193,14 @@ export default function AdminNotificationsPage() {
       const updates = await updatesRes.json().catch(() => ({}));
       const recipeImages = await recipeImagesRes.json().catch(() => ({}));
       const scanLimits = await scanLimitsRes.json().catch(() => ({}));
-      if (!signupRes.ok || !updatesRes.ok || !recipeImagesRes.ok || !scanLimitsRes.ok) {
+      const guardrails = await aiGuardrailsRes.json().catch(() => ({}));
+      if (!signupRes.ok || !updatesRes.ok || !recipeImagesRes.ok || !scanLimitsRes.ok || !aiGuardrailsRes.ok) {
         setMessage(
           signup?.detail ||
             updates?.detail ||
             recipeImages?.detail ||
             scanLimits?.detail ||
+            guardrails?.detail ||
             'Failed to save notification settings.'
         );
         return;
@@ -195,6 +227,12 @@ export default function AdminNotificationsPage() {
       );
       setFreeScanLimitCount(safeNumber(scanLimits.free_count, 3));
       setFreeScanLimitWindowDays(safeNumber(scanLimits.free_window_days, 1));
+      setAiGuardrails((current) => ({
+        ...current,
+        ...Object.fromEntries(
+          Object.entries(current).map(([key, fallback]) => [key, safeNumber(guardrails[key], fallback)])
+        ),
+      }));
       setMessage('Settings saved.');
     } catch (error) {
       setMessage('Failed to save notification settings.');
@@ -228,6 +266,13 @@ export default function AdminNotificationsPage() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const setAiGuardrail = (key, value, fallback = 0) => {
+    setAiGuardrails((current) => ({
+      ...current,
+      [key]: safeNumber(value, fallback),
+    }));
   };
 
   if (isLoading) {
@@ -469,6 +514,160 @@ export default function AdminNotificationsPage() {
             <small className="admin-subtitle" style={{ display: 'block', marginTop: 6 }}>
               Example: 1 day = per day, 7 days = per week (rolling window).
             </small>
+          </div>
+        </div>
+
+        <div className="admin-actions" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button className="admin-button" type="button" onClick={save} disabled={busy}>
+            {busy ? 'Working...' : 'Save'}
+          </button>
+        </div>
+      </div>
+
+      <div className="admin-card" style={{ marginTop: 16 }}>
+        <h3 className="admin-title">AI abuse guardrails</h3>
+        <p className="admin-subtitle">
+          Control GlucoGuide, recipes, swaps, meal planner, and burst limits. Set a value to 0 to disable that specific cap.
+        </p>
+
+        <div className="admin-grid" style={{ marginTop: 12 }}>
+          <div className="admin-field">
+            <label>Free GlucoGuide messages / day</label>
+            <input
+              type="number"
+              min={0}
+              max={10000}
+              value={aiGuardrails.free_agent_daily}
+              onChange={(event) => setAiGuardrail('free_agent_daily', event.target.value, 10)}
+              disabled={busy}
+            />
+          </div>
+          <div className="admin-field">
+            <label>Premium GlucoGuide messages / day</label>
+            <input
+              type="number"
+              min={0}
+              max={10000}
+              value={aiGuardrails.premium_agent_daily}
+              onChange={(event) => setAiGuardrail('premium_agent_daily', event.target.value, 100)}
+              disabled={busy}
+            />
+          </div>
+          <div className="admin-field">
+            <label>Free recipe generations / day</label>
+            <input
+              type="number"
+              min={0}
+              max={10000}
+              value={aiGuardrails.free_recipes_daily}
+              onChange={(event) => setAiGuardrail('free_recipes_daily', event.target.value, 5)}
+              disabled={busy}
+            />
+          </div>
+          <div className="admin-field">
+            <label>Premium recipe generations / day</label>
+            <input
+              type="number"
+              min={0}
+              max={10000}
+              value={aiGuardrails.premium_recipes_daily}
+              onChange={(event) => setAiGuardrail('premium_recipes_daily', event.target.value, 50)}
+              disabled={busy}
+            />
+          </div>
+        </div>
+
+        <div className="admin-grid">
+          <div className="admin-field">
+            <label>Free food swaps / day</label>
+            <input
+              type="number"
+              min={0}
+              max={10000}
+              value={aiGuardrails.free_swaps_daily}
+              onChange={(event) => setAiGuardrail('free_swaps_daily', event.target.value, 10)}
+              disabled={busy}
+            />
+          </div>
+          <div className="admin-field">
+            <label>Premium food swaps / day</label>
+            <input
+              type="number"
+              min={0}
+              max={10000}
+              value={aiGuardrails.premium_swaps_daily}
+              onChange={(event) => setAiGuardrail('premium_swaps_daily', event.target.value, 100)}
+              disabled={busy}
+            />
+          </div>
+          <div className="admin-field">
+            <label>Premium meal plan generations / day</label>
+            <input
+              type="number"
+              min={0}
+              max={10000}
+              value={aiGuardrails.premium_daily_plan_daily}
+              onChange={(event) => setAiGuardrail('premium_daily_plan_daily', event.target.value, 5)}
+              disabled={busy}
+            />
+          </div>
+          <div className="admin-field">
+            <label>Free meal plan generations / week</label>
+            <input
+              type="number"
+              min={0}
+              max={10000}
+              value={aiGuardrails.free_daily_plan_weekly}
+              onChange={(event) => setAiGuardrail('free_daily_plan_weekly', event.target.value, 1)}
+              disabled={busy}
+            />
+          </div>
+        </div>
+
+        <div className="admin-grid">
+          <div className="admin-field">
+            <label>Free text AI requests / minute</label>
+            <input
+              type="number"
+              min={0}
+              max={1000}
+              value={aiGuardrails.free_text_per_minute}
+              onChange={(event) => setAiGuardrail('free_text_per_minute', event.target.value, 3)}
+              disabled={busy}
+            />
+          </div>
+          <div className="admin-field">
+            <label>Premium text AI requests / minute</label>
+            <input
+              type="number"
+              min={0}
+              max={1000}
+              value={aiGuardrails.premium_text_per_minute}
+              onChange={(event) => setAiGuardrail('premium_text_per_minute', event.target.value, 10)}
+              disabled={busy}
+            />
+          </div>
+          <div className="admin-field">
+            <label>Free vision AI requests / minute</label>
+            <input
+              type="number"
+              min={0}
+              max={1000}
+              value={aiGuardrails.free_vision_per_minute}
+              onChange={(event) => setAiGuardrail('free_vision_per_minute', event.target.value, 2)}
+              disabled={busy}
+            />
+          </div>
+          <div className="admin-field">
+            <label>Premium vision AI requests / minute</label>
+            <input
+              type="number"
+              min={0}
+              max={1000}
+              value={aiGuardrails.premium_vision_per_minute}
+              onChange={(event) => setAiGuardrail('premium_vision_per_minute', event.target.value, 6)}
+              disabled={busy}
+            />
           </div>
         </div>
 

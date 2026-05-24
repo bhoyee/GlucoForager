@@ -189,20 +189,19 @@ export default function CarbSwapsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} activeOpacity={0.85}>
-            <Ionicons name="arrow-back" size={22} color="white" />
-          </TouchableOpacity>
-          <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>Food Swaps</Text>
-            <Text style={styles.headerSubtitle}>Find lower-impact alternatives</Text>
-          </View>
-          <View style={styles.headerRight} />
-        </View>
-      </View>
-
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: contentBottomPadding }}>
+        <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} activeOpacity={0.85}>
+              <Ionicons name="arrow-back" size={22} color="white" />
+            </TouchableOpacity>
+            <View style={styles.headerCenter}>
+              <Text style={styles.headerTitle}>Food Swaps</Text>
+              <Text style={styles.headerSubtitle}>Find lower-impact alternatives</Text>
+            </View>
+            <View style={styles.headerRight} />
+          </View>
+        </View>
         <View style={styles.hero}>
           <View style={styles.heroIcon}>
             <Ionicons name="swap-horizontal-outline" size={20} color={Colors.secondary} />

@@ -22,7 +22,7 @@ from ...services.cache_service import CacheService
 from ...services.cost_tracker import record_ai_request
 from ...services.ingredient_classifier import IngredientClassifier, IngredientNormalizer
 from ...services.recipe_image_attach_service import attach_recipe_images
-from ...services.rate_limit_service import check_ai_rate_limit
+from ...services.rate_limit_service import check_ai_daily_limit, check_ai_rate_limit, daily_limit_detail
 from ...services.subscription_service import get_effective_subscription_tier
 from ...core.config import settings
 from ...services.redis_ai_queue import RedisAIQueue
@@ -559,6 +559,20 @@ def generate_from_text(
             detail=f"Daily limit reached. Scans left: {access['searches_left']}",
         )
     tier = get_effective_subscription_tier(db, current_user) or "free"
+    daily = check_ai_daily_limit(
+        db,
+        user_id=current_user.id,
+        tier=tier,
+        feature="recipes",
+        request_types=["text"],
+        pending_job_source="text",
+    )
+    if not daily.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=daily_limit_detail(daily, label="recipe generation"),
+        )
+
     mode = payload.mode
     if mode == "ingredients":
         try:
@@ -693,7 +707,7 @@ def generate_from_text_async(
         )
 
     tier = get_effective_subscription_tier(db, current_user) or "free"
-    rl = check_ai_rate_limit(user_id=current_user.id, tier=tier, kind="text")
+    rl = check_ai_rate_limit(user_id=current_user.id, tier=tier, kind="text", db=db)
     if not rl.allowed:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -704,6 +718,20 @@ def generate_from_text_async(
                 "limit_per_minute": rl.limit_per_minute,
             },
             headers={"Retry-After": str(rl.retry_after_seconds)},
+        )
+
+    daily = check_ai_daily_limit(
+        db,
+        user_id=current_user.id,
+        tier=tier,
+        feature="recipes",
+        request_types=["text"],
+        pending_job_source="text",
+    )
+    if not daily.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=daily_limit_detail(daily, label="recipe generation"),
         )
 
     try:

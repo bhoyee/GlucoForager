@@ -582,22 +582,22 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.title}>Profile</Text>
-            <Text style={styles.headerSubtitle}>Account, preferences, and reminders</Text>
-          </View>
-          <TouchableOpacity style={styles.logoutButton} onPress={signOut}>
-            <Text style={styles.logoutText}>Logout</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
       <View style={{ flex: 1, paddingBottom: versionFooterBottom + versionFooterHeight }}>
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
+          <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
+            <View style={styles.header}>
+              <View>
+                <Text style={styles.title}>Profile</Text>
+                <Text style={styles.headerSubtitle}>Account, preferences, and reminders</Text>
+              </View>
+              <TouchableOpacity style={styles.logoutButton} onPress={signOut}>
+                <Text style={styles.logoutText}>Logout</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
       <Modal
         visible={premiumModalVisible}
         animationType="slide"
@@ -904,7 +904,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   scrollContent: {
-    paddingTop: 18,
+    paddingTop: 0,
     paddingBottom: 8,
   },
   headerPanel: {
@@ -918,6 +918,7 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 8 },
     elevation: 5,
+    marginBottom: 18,
   },
   header: {
     flexDirection: 'row',

@@ -32,6 +32,7 @@ import TodayTipScreen from '../screens/main/TodayTipScreen';
 import TipsArchiveScreen from '../screens/main/TipsArchiveScreen';
 import FoodPreferencesScreen from '../screens/main/FoodPreferencesScreen';
 import DailyPlanScreen from '../screens/main/DailyPlanScreen';
+import GlucoGuideScreen from '../screens/main/GlucoGuideScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -216,6 +217,17 @@ export default function MainTabNavigator() {
           }}
         />
       ) : null}
+
+      <Tab.Screen
+        name="Guide"
+        component={GlucoGuideScreen}
+        options={{
+          tabBarLabel: 'Guide',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="sparkles-outline" size={size} color={color} />
+          ),
+        }}
+      />
       
       <Tab.Screen 
         name="Profile" 

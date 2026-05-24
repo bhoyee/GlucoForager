@@ -17,6 +17,7 @@ from ...services.subscription_service import get_effective_subscription_tier
 from ...services.user_activity_service import add_user_activity
 from ...services.recipe_image_attach_service import attach_recipe_images
 from ...services.system_log_service import log_system_event
+from ...services.settings_service import get_ai_guardrail_settings
 
 router = APIRouter(prefix="/app/daily-plan", tags=["daily-plan"])
 logger = logging.getLogger(__name__)
@@ -80,7 +81,7 @@ def _refresh_plan_images(plan_id: int, *, base_url: str) -> None:
 
 def _require_premium(db: Session, user: User) -> None:
     tier = get_effective_subscription_tier(db, user) or "free"
-    if tier != "premium":
+    if tier != "premium" and free_per_week_limit > 0:
         raise HTTPException(status_code=403, detail="Premium required")
 
 
@@ -230,8 +231,9 @@ def generate_today_plan(
 
     # Rate limit: protect costs/latency for all tiers.
     per_minute_limit = 2
-    premium_per_day_limit = 6
-    free_per_week_limit = 1
+    guardrails = get_ai_guardrail_settings(db)
+    premium_per_day_limit = int(guardrails.premium_daily_plan_daily)
+    free_per_week_limit = int(guardrails.free_daily_plan_weekly)
 
     cache = CacheService()
     minute_key = f"daily_plan:rl:v1:user:{current_user.id}"
@@ -267,7 +269,7 @@ def generate_today_plan(
                     "limit_per_week": free_per_week_limit,
                 },
             )
-    else:
+    elif premium_per_day_limit > 0:
         start_of_day = datetime(year=now.year, month=now.month, day=now.day)
         used_today = (
             db.query(AIRequest)
