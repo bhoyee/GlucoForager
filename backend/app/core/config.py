@@ -94,10 +94,20 @@ class Settings(BaseSettings):
 
     # Per-user burst rate limits for AI endpoints (protects cost + latency under abuse).
     # Limits are "requests per minute" per user.
-    ai_rate_limit_free_text_per_min: int = Field(4, env="AI_RATE_LIMIT_FREE_TEXT_PER_MIN")
+    ai_rate_limit_free_text_per_min: int = Field(3, env="AI_RATE_LIMIT_FREE_TEXT_PER_MIN")
     ai_rate_limit_free_vision_per_min: int = Field(2, env="AI_RATE_LIMIT_FREE_VISION_PER_MIN")
-    ai_rate_limit_premium_text_per_min: int = Field(12, env="AI_RATE_LIMIT_PREMIUM_TEXT_PER_MIN")
+    ai_rate_limit_premium_text_per_min: int = Field(10, env="AI_RATE_LIMIT_PREMIUM_TEXT_PER_MIN")
     ai_rate_limit_premium_vision_per_min: int = Field(6, env="AI_RATE_LIMIT_PREMIUM_VISION_PER_MIN")
+
+    # Per-user daily AI feature limits. Set to 0 or negative to disable a specific daily cap.
+    ai_daily_limit_free_agent: int = Field(10, env="AI_DAILY_LIMIT_FREE_AGENT")
+    ai_daily_limit_premium_agent: int = Field(100, env="AI_DAILY_LIMIT_PREMIUM_AGENT")
+    ai_daily_limit_free_recipes: int = Field(5, env="AI_DAILY_LIMIT_FREE_RECIPES")
+    ai_daily_limit_premium_recipes: int = Field(50, env="AI_DAILY_LIMIT_PREMIUM_RECIPES")
+    ai_daily_limit_free_swaps: int = Field(10, env="AI_DAILY_LIMIT_FREE_SWAPS")
+    ai_daily_limit_premium_swaps: int = Field(100, env="AI_DAILY_LIMIT_PREMIUM_SWAPS")
+    ai_daily_limit_premium_daily_plan: int = Field(5, env="AI_DAILY_LIMIT_PREMIUM_DAILY_PLAN")
+    ai_weekly_limit_free_daily_plan: int = Field(1, env="AI_WEEKLY_LIMIT_FREE_DAILY_PLAN")
     revenuecat_webhook_secret: str | None = Field(None, env="REVENUECAT_WEBHOOK_SECRET")
     revenuecat_secret_api_key: str | None = Field(None, env="REVENUECAT_SECRET_API_KEY")
     revenuecat_project_id: str | None = Field(None, env="REVENUECAT_PROJECT_ID")

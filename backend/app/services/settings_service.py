@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
+from ..core.config import settings
 from ..models.app_setting import AppSetting
 
 SIGNUP_NOTIFY_ENABLED_KEY = "signup_notify_enabled"
@@ -21,6 +22,18 @@ RECIPE_IMAGES_MAX_PER_RECIPE_KEY = "recipe_images_max_per_recipe"
 RECIPE_IMAGES_COST_USD_KEY = "recipe_images_cost_usd"
 FREE_SCAN_LIMIT_COUNT_KEY = "scan_limits_free_count"
 FREE_SCAN_LIMIT_WINDOW_DAYS_KEY = "scan_limits_free_window_days"
+AI_LIMIT_FREE_AGENT_KEY = "ai_limit_free_agent"
+AI_LIMIT_PREMIUM_AGENT_KEY = "ai_limit_premium_agent"
+AI_LIMIT_FREE_RECIPES_KEY = "ai_limit_free_recipes"
+AI_LIMIT_PREMIUM_RECIPES_KEY = "ai_limit_premium_recipes"
+AI_LIMIT_FREE_SWAPS_KEY = "ai_limit_free_swaps"
+AI_LIMIT_PREMIUM_SWAPS_KEY = "ai_limit_premium_swaps"
+AI_LIMIT_PREMIUM_DAILY_PLAN_KEY = "ai_limit_premium_daily_plan"
+AI_LIMIT_FREE_DAILY_PLAN_WEEKLY_KEY = "ai_limit_free_daily_plan_weekly"
+AI_LIMIT_FREE_TEXT_PER_MIN_KEY = "ai_limit_free_text_per_min"
+AI_LIMIT_PREMIUM_TEXT_PER_MIN_KEY = "ai_limit_premium_text_per_min"
+AI_LIMIT_FREE_VISION_PER_MIN_KEY = "ai_limit_free_vision_per_min"
+AI_LIMIT_PREMIUM_VISION_PER_MIN_KEY = "ai_limit_premium_vision_per_min"
 
 
 @dataclass(frozen=True)
@@ -52,6 +65,22 @@ class RecipeImageSettings:
 class ScanLimitSettings:
     free_count: int
     free_window_days: int
+
+
+@dataclass(frozen=True)
+class AIGuardrailSettings:
+    free_agent_daily: int
+    premium_agent_daily: int
+    free_recipes_daily: int
+    premium_recipes_daily: int
+    free_swaps_daily: int
+    premium_swaps_daily: int
+    premium_daily_plan_daily: int
+    free_daily_plan_weekly: int
+    free_text_per_minute: int
+    premium_text_per_minute: int
+    free_vision_per_minute: int
+    premium_vision_per_minute: int
 
 
 def _get_value(db: Session, key: str) -> str | None:
@@ -217,3 +246,105 @@ def update_scan_limit_settings(
     _set_value(db, FREE_SCAN_LIMIT_COUNT_KEY, str(int(free_count_norm)))
     _set_value(db, FREE_SCAN_LIMIT_WINDOW_DAYS_KEY, str(int(days)))
     return get_scan_limit_settings(db)
+
+
+def _normalize_limit(value: int, default: int, *, max_value: int = 10000) -> int:
+    try:
+        n = int(value)
+    except Exception:  # noqa: BLE001
+        return int(default)
+    if n < 0:
+        return 0
+    return min(n, int(max_value))
+
+
+def get_ai_guardrail_settings(db: Session) -> AIGuardrailSettings:
+    return AIGuardrailSettings(
+        free_agent_daily=_normalize_limit(
+            _to_int(_get_value(db, AI_LIMIT_FREE_AGENT_KEY), int(settings.ai_daily_limit_free_agent)),
+            int(settings.ai_daily_limit_free_agent),
+        ),
+        premium_agent_daily=_normalize_limit(
+            _to_int(_get_value(db, AI_LIMIT_PREMIUM_AGENT_KEY), int(settings.ai_daily_limit_premium_agent)),
+            int(settings.ai_daily_limit_premium_agent),
+        ),
+        free_recipes_daily=_normalize_limit(
+            _to_int(_get_value(db, AI_LIMIT_FREE_RECIPES_KEY), int(settings.ai_daily_limit_free_recipes)),
+            int(settings.ai_daily_limit_free_recipes),
+        ),
+        premium_recipes_daily=_normalize_limit(
+            _to_int(_get_value(db, AI_LIMIT_PREMIUM_RECIPES_KEY), int(settings.ai_daily_limit_premium_recipes)),
+            int(settings.ai_daily_limit_premium_recipes),
+        ),
+        free_swaps_daily=_normalize_limit(
+            _to_int(_get_value(db, AI_LIMIT_FREE_SWAPS_KEY), int(settings.ai_daily_limit_free_swaps)),
+            int(settings.ai_daily_limit_free_swaps),
+        ),
+        premium_swaps_daily=_normalize_limit(
+            _to_int(_get_value(db, AI_LIMIT_PREMIUM_SWAPS_KEY), int(settings.ai_daily_limit_premium_swaps)),
+            int(settings.ai_daily_limit_premium_swaps),
+        ),
+        premium_daily_plan_daily=_normalize_limit(
+            _to_int(_get_value(db, AI_LIMIT_PREMIUM_DAILY_PLAN_KEY), int(settings.ai_daily_limit_premium_daily_plan)),
+            int(settings.ai_daily_limit_premium_daily_plan),
+        ),
+        free_daily_plan_weekly=_normalize_limit(
+            _to_int(_get_value(db, AI_LIMIT_FREE_DAILY_PLAN_WEEKLY_KEY), int(settings.ai_weekly_limit_free_daily_plan)),
+            int(settings.ai_weekly_limit_free_daily_plan),
+        ),
+        free_text_per_minute=_normalize_limit(
+            _to_int(_get_value(db, AI_LIMIT_FREE_TEXT_PER_MIN_KEY), int(settings.ai_rate_limit_free_text_per_min)),
+            int(settings.ai_rate_limit_free_text_per_min),
+            max_value=1000,
+        ),
+        premium_text_per_minute=_normalize_limit(
+            _to_int(_get_value(db, AI_LIMIT_PREMIUM_TEXT_PER_MIN_KEY), int(settings.ai_rate_limit_premium_text_per_min)),
+            int(settings.ai_rate_limit_premium_text_per_min),
+            max_value=1000,
+        ),
+        free_vision_per_minute=_normalize_limit(
+            _to_int(_get_value(db, AI_LIMIT_FREE_VISION_PER_MIN_KEY), int(settings.ai_rate_limit_free_vision_per_min)),
+            int(settings.ai_rate_limit_free_vision_per_min),
+            max_value=1000,
+        ),
+        premium_vision_per_minute=_normalize_limit(
+            _to_int(_get_value(db, AI_LIMIT_PREMIUM_VISION_PER_MIN_KEY), int(settings.ai_rate_limit_premium_vision_per_min)),
+            int(settings.ai_rate_limit_premium_vision_per_min),
+            max_value=1000,
+        ),
+    )
+
+
+def update_ai_guardrail_settings(
+    db: Session,
+    *,
+    free_agent_daily: int,
+    premium_agent_daily: int,
+    free_recipes_daily: int,
+    premium_recipes_daily: int,
+    free_swaps_daily: int,
+    premium_swaps_daily: int,
+    premium_daily_plan_daily: int,
+    free_daily_plan_weekly: int,
+    free_text_per_minute: int,
+    premium_text_per_minute: int,
+    free_vision_per_minute: int,
+    premium_vision_per_minute: int,
+) -> AIGuardrailSettings:
+    values = {
+        AI_LIMIT_FREE_AGENT_KEY: free_agent_daily,
+        AI_LIMIT_PREMIUM_AGENT_KEY: premium_agent_daily,
+        AI_LIMIT_FREE_RECIPES_KEY: free_recipes_daily,
+        AI_LIMIT_PREMIUM_RECIPES_KEY: premium_recipes_daily,
+        AI_LIMIT_FREE_SWAPS_KEY: free_swaps_daily,
+        AI_LIMIT_PREMIUM_SWAPS_KEY: premium_swaps_daily,
+        AI_LIMIT_PREMIUM_DAILY_PLAN_KEY: premium_daily_plan_daily,
+        AI_LIMIT_FREE_DAILY_PLAN_WEEKLY_KEY: free_daily_plan_weekly,
+        AI_LIMIT_FREE_TEXT_PER_MIN_KEY: free_text_per_minute,
+        AI_LIMIT_PREMIUM_TEXT_PER_MIN_KEY: premium_text_per_minute,
+        AI_LIMIT_FREE_VISION_PER_MIN_KEY: free_vision_per_minute,
+        AI_LIMIT_PREMIUM_VISION_PER_MIN_KEY: premium_vision_per_minute,
+    }
+    for key, value in values.items():
+        _set_value(db, key, str(int(max(0, value))))
+    return get_ai_guardrail_settings(db)

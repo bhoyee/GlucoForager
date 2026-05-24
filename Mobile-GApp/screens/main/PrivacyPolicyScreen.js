@@ -10,17 +10,17 @@ export default function PrivacyPolicyScreen({ navigation }) {
   const contentBottomPadding = Math.max(insets.bottom, 16) + 16;
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={22} color={Colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Privacy Policy</Text>
-        <View style={{ width: 36 }} />
-      </View>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
       >
+        <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={22} color={Colors.text} />
+          </TouchableOpacity>
+          <Text style={styles.title}>Privacy Policy</Text>
+          <View style={{ width: 36 }} />
+        </View>
         <View style={styles.card}>
         <Text style={styles.updated}>Last updated: January 12, 2026</Text>
 
