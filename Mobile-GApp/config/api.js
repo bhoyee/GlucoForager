@@ -49,6 +49,7 @@ export const API_ENDPOINTS = {
   DAILY_PLAN_BY_DATE: '/api/app/daily-plan/date',
   DAILY_PLAN_GENERATE: '/api/app/daily-plan/generate',
   AGENT_CHAT: '/api/agent/chat',
+  AGENT_CHAT_STREAM: '/api/agent/chat/stream',
 };
 
 // For development/testing without a backend, use mock functions
