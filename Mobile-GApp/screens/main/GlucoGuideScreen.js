@@ -1,6 +1,5 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Keyboard,
   Platform,
@@ -117,11 +116,90 @@ function GuideAnswer({ content }) {
   );
 }
 
+const parseSseEvents = (raw) => {
+  const events = [];
+  String(raw || '')
+    .split('\n\n')
+    .forEach((block) => {
+      const lines = block.split('\n');
+      let event = 'message';
+      const dataLines = [];
+      lines.forEach((line) => {
+        if (line.startsWith('event:')) {
+          event = line.slice(6).trim() || 'message';
+        } else if (line.startsWith('data:')) {
+          dataLines.push(line.slice(5).trimStart());
+        }
+      });
+      if (!dataLines.length) return;
+      try {
+        events.push({ event, data: JSON.parse(dataLines.join('\n')) });
+      } catch {
+        events.push({ event, data: { raw: dataLines.join('\n') } });
+      }
+    });
+  return events;
+};
+
+const streamAgentChat = ({ token, payload, onChunk, onDone }) =>
+  new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    let processedLength = 0;
+    let buffer = '';
+    let receivedText = false;
+
+    const handleText = (text, flush = false) => {
+      buffer += text;
+      const parts = buffer.split('\n\n');
+      const complete = flush ? parts.filter(Boolean) : parts.slice(0, -1);
+      buffer = flush ? '' : parts[parts.length - 1] || '';
+      complete.forEach((block) => {
+        parseSseEvents(`${block}\n\n`).forEach(({ event, data }) => {
+          if (event === 'chunk' && data?.delta) {
+            receivedText = true;
+            onChunk(data.delta);
+          } else if (event === 'done') {
+            onDone(data || {});
+          } else if (event === 'error') {
+            reject(new Error(data?.message || 'GlucoGuide is unavailable right now. Please try again.'));
+          }
+        });
+      });
+    };
+
+    xhr.open('POST', `${API_URL}${API_ENDPOINTS.AGENT_CHAT_STREAM}`);
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.setRequestHeader('Accept', 'text/event-stream');
+    xhr.timeout = 45000;
+    xhr.onprogress = () => {
+      const nextText = xhr.responseText.slice(processedLength);
+      processedLength = xhr.responseText.length;
+      handleText(nextText);
+    };
+    xhr.onload = () => {
+      if (xhr.status < 200 || xhr.status >= 300) {
+        reject(new Error(xhr.responseText || 'GlucoGuide is unavailable right now. Please try again.'));
+        return;
+      }
+      const nextText = xhr.responseText.slice(processedLength);
+      processedLength = xhr.responseText.length;
+      handleText(nextText, true);
+      resolve({ receivedText });
+    };
+    xhr.onerror = () => reject(new Error('Network request failed.'));
+    xhr.ontimeout = () => reject(new Error('GlucoGuide took too long to respond. Please try again.'));
+    xhr.send(JSON.stringify(payload));
+  });
+
 export default function GlucoGuideScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { signOut } = useAuth();
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
+  const revealQueueRef = useRef('');
+  const revealTimerRef = useRef(null);
+  const revealWaitersRef = useRef([]);
   const [messages, setMessages] = useState([STARTER_MESSAGE]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -144,54 +222,153 @@ export default function GlucoGuideScreen({ navigation }) {
     });
   };
 
+  useEffect(
+    () => () => {
+      if (revealTimerRef.current) {
+        clearInterval(revealTimerRef.current);
+        revealTimerRef.current = null;
+      }
+    },
+    []
+  );
+
+  const updateAssistantContent = (assistantId, updater) => {
+    setMessages((current) =>
+      current.map((item) =>
+        item.id === assistantId
+          ? { ...item, content: typeof updater === 'function' ? updater(item.content || '') : String(updater || '') }
+          : item
+      )
+    );
+  };
+
+  const flushRevealWaiters = () => {
+    const waiters = revealWaitersRef.current;
+    revealWaitersRef.current = [];
+    waiters.forEach((resolve) => resolve());
+  };
+
+  const takeRevealSlice = () => {
+    const queue = revealQueueRef.current;
+    if (!queue) return '';
+    if (queue.length <= 4) return queue;
+    const match = queue.match(/^(\s+|\S+\s?)/);
+    const next = match?.[0] || queue.slice(0, Math.min(5, queue.length));
+    return next.length > 18 ? next.slice(0, 18) : next;
+  };
+
+  const startRevealLoop = (assistantId) => {
+    if (revealTimerRef.current) return;
+    revealTimerRef.current = setInterval(() => {
+      const next = takeRevealSlice();
+      if (!next) {
+        clearInterval(revealTimerRef.current);
+        revealTimerRef.current = null;
+        flushRevealWaiters();
+        return;
+      }
+      revealQueueRef.current = revealQueueRef.current.slice(next.length);
+      updateAssistantContent(assistantId, (current) => `${current}${next}`);
+      scrollToEnd();
+    }, 28);
+  };
+
+  const queueAssistantText = (assistantId, text) => {
+    revealQueueRef.current += String(text || '');
+    startRevealLoop(assistantId);
+  };
+
+  const waitForRevealComplete = () => {
+    if (!revealQueueRef.current && !revealTimerRef.current) {
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      revealWaitersRef.current.push(resolve);
+    });
+  };
+
+  const clearRevealQueue = () => {
+    revealQueueRef.current = '';
+    if (revealTimerRef.current) {
+      clearInterval(revealTimerRef.current);
+      revealTimerRef.current = null;
+    }
+    flushRevealWaiters();
+  };
+
   const sendMessage = async (overrideText) => {
     const text = String(overrideText || input || '').trim();
     if (!text || loading) return;
     setInput('');
     setLatestActions([]);
     const userMessage = { id: `u-${Date.now()}`, role: 'user', content: text };
-    setMessages((current) => [...current, userMessage]);
+    const assistantId = `a-${Date.now() + 1}`;
+    setMessages((current) => [...current, userMessage, { id: assistantId, role: 'assistant', content: '' }]);
     setLoading(true);
     scrollToEnd();
+
+    const payload = {
+      message: text,
+      history: historyForApi,
+      use_profile_context: useProfileContext,
+    };
+
+    const replaceAssistant = (content) => {
+      clearRevealQueue();
+      updateAssistantContent(assistantId, String(content || ''));
+    };
+
+    const appendAssistant = (chunk) => {
+      queueAssistantText(assistantId, chunk);
+    };
 
     try {
       const token = await AsyncStorage.getItem('userToken');
       if (!token) {
-        setMessages((current) => [
-          ...current,
-          { id: `a-${Date.now()}`, role: 'assistant', content: 'Please sign in to use GlucoGuide.' },
-        ]);
+        replaceAssistant('Please sign in to use GlucoGuide.');
         return;
       }
+
+      let streamedAnyText = false;
+      try {
+        await streamAgentChat({
+          token,
+          payload,
+          onChunk: (chunk) => {
+            streamedAnyText = true;
+            appendAssistant(chunk);
+          },
+          onDone: (data) => {
+            setLatestActions(Array.isArray(data?.actions) ? data.actions : []);
+          },
+        });
+        return;
+      } catch (streamError) {
+        if (streamedAnyText) {
+          appendAssistant('\n\nGlucoGuide stopped before finishing. Please ask again if you need more detail.');
+          return;
+        }
+      }
+
       const response = await apiFetch(
         `${API_URL}${API_ENDPOINTS.AGENT_CHAT}`,
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message: text,
-            history: historyForApi,
-            use_profile_context: useProfileContext,
-          }),
+          body: JSON.stringify(payload),
         },
         { onUnauthorized: signOut, timeoutMs: 45000 }
       );
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         const detail = data?.detail?.message || data?.detail || 'GlucoGuide is unavailable right now. Please try again.';
-        setMessages((current) => [...current, { id: `a-${Date.now()}`, role: 'assistant', content: String(detail) }]);
+        replaceAssistant(String(detail));
         return;
       }
       setLatestActions(Array.isArray(data?.actions) ? data.actions : []);
-      setMessages((current) => [
-        ...current,
-        {
-          id: `a-${Date.now()}`,
-          role: 'assistant',
-          content: data?.answer || 'I could not generate a helpful answer. Please try again.',
-        },
-      ]);
+      replaceAssistant(data?.answer || 'I could not generate a helpful answer. Please try again.');
     } finally {
+      await waitForRevealComplete();
       setLoading(false);
       scrollToEnd();
     }
@@ -249,19 +426,12 @@ export default function GlucoGuideScreen({ navigation }) {
         {messages.map((item) => (
           <View key={item.id} style={[styles.bubble, item.role === 'user' ? styles.userBubble : styles.assistantBubble]}>
             {item.role === 'assistant' ? (
-              <GuideAnswer content={item.content} />
+              item.content ? <GuideAnswer content={item.content} /> : <TypingAnswer />
             ) : (
               <Text style={[styles.bubbleText, styles.userBubbleText]}>{item.content}</Text>
             )}
           </View>
         ))}
-
-        {loading ? (
-          <View style={[styles.bubble, styles.assistantBubble, styles.loadingBubble]}>
-            <ActivityIndicator size="small" color={Colors.primary} />
-            <Text style={styles.loadingText}>Thinking...</Text>
-          </View>
-        ) : null}
 
         {!loading && latestActions.length ? (
           <View style={styles.actionsRow}>
@@ -359,6 +529,17 @@ export default function GlucoGuideScreen({ navigation }) {
         </View>
       </View>
     </KeyboardAvoidingView>
+  );
+}
+
+function TypingAnswer() {
+  return (
+    <View style={styles.typingWrap}>
+      <View style={styles.typingDot} />
+      <View style={[styles.typingDot, styles.typingDotMuted]} />
+      <View style={[styles.typingDot, styles.typingDotFaint]} />
+      <Text style={styles.typingText}>GlucoGuide is writing...</Text>
+    </View>
   );
 }
 
@@ -497,12 +678,24 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
   },
-  loadingBubble: {
+  typingWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  loadingText: {
+  typingDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: Colors.primary,
+  },
+  typingDotMuted: {
+    opacity: 0.6,
+  },
+  typingDotFaint: {
+    opacity: 0.32,
+  },
+  typingText: {
     color: Colors.textLight,
     fontWeight: '700',
   },
