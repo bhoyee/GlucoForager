@@ -1245,7 +1245,6 @@ def ai_usage_guardrails(
             "daily": {
                 "free_agent": guardrails.free_agent_daily,
                 "premium_agent": guardrails.premium_agent_daily,
-                "free_recipes": guardrails.free_recipes_daily,
                 "premium_recipes": guardrails.premium_recipes_daily,
                 "free_swaps": guardrails.free_swaps_daily,
                 "premium_swaps": guardrails.premium_swaps_daily,
