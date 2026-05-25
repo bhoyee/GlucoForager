@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from openai import OpenAI, OpenAIError
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -125,12 +126,11 @@ def _suggest_actions(message: str, answer: str) -> list[dict]:
     return actions[:3]
 
 
-@router.post("/chat")
-def chat_with_agent(
-    payload: AgentChatPayload,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
+def _sse_event(event: str, data: dict) -> str:
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=True)}\n\n"
+
+
+def _prepare_agent_chat(payload: AgentChatPayload, db: Session, current_user: User) -> dict:
     tier = get_effective_subscription_tier(db, current_user) or "free"
     rl = check_ai_rate_limit(user_id=current_user.id, tier=tier, kind="text", db=db)
     if not rl.allowed:
@@ -209,7 +209,6 @@ User context:
             messages.append({"role": role, "content": content[:1600]})
     messages.append({"role": "user", "content": message_text})
 
-    client = OpenAI(api_key=settings.openai_api_key, max_retries=0)
     model = settings.openai_model or "gpt-4o-mini"
     params = {
         "model": model,
@@ -221,8 +220,24 @@ User context:
         params["max_completion_tokens"] = 520
     else:
         params["max_tokens"] = 520
+    return {
+        "tier": tier,
+        "message_text": message_text,
+        "model": model,
+        "params": params,
+    }
+
+
+@router.post("/chat")
+def chat_with_agent(
+    payload: AgentChatPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    prepared = _prepare_agent_chat(payload, db, current_user)
+    client = OpenAI(api_key=settings.openai_api_key, max_retries=0)
     try:
-        response = client.chat.completions.create(**params)
+        response = client.chat.completions.create(**prepared["params"])
     except OpenAIError as exc:
         raise HTTPException(status_code=503, detail="GlucoGuide is unavailable right now. Please try again.") from exc
 
@@ -233,9 +248,9 @@ User context:
         record_ai_request(
             db,
             current_user.id,
-            tier,
+            prepared["tier"],
             "agent",
-            model_used=model,
+            model_used=prepared["model"],
             tokens_used=tokens_used,
             cost_estimate=0,
         )
@@ -247,9 +262,88 @@ User context:
 
     return {
         "answer": answer.strip(),
-        "actions": _suggest_actions(payload.message, answer),
+        "actions": _suggest_actions(prepared["message_text"], answer),
         "safety": {
             "medical_disclaimer": "GlucoGuide supports food and lifestyle decisions. It does not replace medical care.",
         },
-        "usage": {"model": model, "tokens": tokens_used},
+        "usage": {"model": prepared["model"], "tokens": tokens_used},
     }
+
+
+@router.post("/chat/stream")
+def stream_chat_with_agent(
+    payload: AgentChatPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    prepared = _prepare_agent_chat(payload, db, current_user)
+
+    def generate():
+        client = OpenAI(api_key=settings.openai_api_key, max_retries=0)
+        answer_parts: list[str] = []
+        tokens_used = 0
+        try:
+            params = {**prepared["params"], "stream": True}
+            stream = client.chat.completions.create(**params)
+            yield _sse_event("start", {"model": prepared["model"]})
+            for chunk in stream:
+                choices = getattr(chunk, "choices", None) or []
+                if not choices:
+                    usage = getattr(chunk, "usage", None)
+                    if usage:
+                        tokens_used = int(getattr(usage, "total_tokens", 0) or 0)
+                    continue
+                delta = getattr(choices[0].delta, "content", None) or ""
+                if not delta:
+                    continue
+                answer_parts.append(delta)
+                yield _sse_event("chunk", {"delta": delta})
+        except OpenAIError:
+            yield _sse_event(
+                "error",
+                {"message": "GlucoGuide is unavailable right now. Please try again."},
+            )
+            return
+        except Exception:
+            yield _sse_event(
+                "error",
+                {"message": "GlucoGuide stopped unexpectedly. Please try again."},
+            )
+            return
+
+        answer = "".join(answer_parts).strip()
+        try:
+            record_ai_request(
+                db,
+                current_user.id,
+                prepared["tier"],
+                "agent",
+                model_used=prepared["model"],
+                tokens_used=tokens_used,
+                cost_estimate=0,
+            )
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+
+        yield _sse_event(
+            "done",
+            {
+                "actions": _suggest_actions(prepared["message_text"], answer),
+                "safety": {
+                    "medical_disclaimer": "GlucoGuide supports food and lifestyle decisions. It does not replace medical care.",
+                },
+                "usage": {"model": prepared["model"], "tokens": tokens_used},
+            },
+        )
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
