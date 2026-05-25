@@ -527,7 +527,7 @@ export default function AdminNotificationsPage() {
       <div className="admin-card" style={{ marginTop: 16 }}>
         <h3 className="admin-title">AI abuse guardrails</h3>
         <p className="admin-subtitle">
-          Control GlucoGuide, recipes, swaps, meal planner, and burst limits. Set a value to 0 to disable that specific cap.
+          Control GlucoGuide, premium recipe generation, swaps, meal planner, and burst limits. Free scan, type-ingredient, and eat-now recipe usage is controlled by Free scans/searches allowed above.
         </p>
 
         <div className="admin-grid" style={{ marginTop: 12 }}>
@@ -550,17 +550,6 @@ export default function AdminNotificationsPage() {
               max={10000}
               value={aiGuardrails.premium_agent_daily}
               onChange={(event) => setAiGuardrail('premium_agent_daily', event.target.value, 100)}
-              disabled={busy}
-            />
-          </div>
-          <div className="admin-field">
-            <label>Free recipe generations / day</label>
-            <input
-              type="number"
-              min={0}
-              max={10000}
-              value={aiGuardrails.free_recipes_daily}
-              onChange={(event) => setAiGuardrail('free_recipes_daily', event.target.value, 5)}
               disabled={busy}
             />
           </div>
