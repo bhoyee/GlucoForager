@@ -1,13 +1,14 @@
 import os
 import uuid
 import json
+import html
 from datetime import datetime
 from datetime import timedelta
 from urllib import error as urlerror
 from urllib import parse as urlparse
 from urllib import request as urlrequest
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
 from pydantic import BaseModel, EmailStr, Field, HttpUrl, field_validator
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
@@ -375,6 +376,55 @@ def list_users(
         "page": page,
         "page_size": page_size,
     }
+
+
+@router.get("/users/platform-summary")
+def users_platform_summary(
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),  # noqa: ARG001
+):
+    rows = (
+        db.query(func.lower(func.coalesce(User.registered_platform, "unknown")).label("platform"), func.count(User.id).label("total"))
+        .group_by(func.lower(func.coalesce(User.registered_platform, "unknown")))
+        .all()
+    )
+    counts = {"ios": 0, "android": 0, "unknown": 0}
+    for platform, total in rows:
+        key = str(platform or "unknown").strip().lower()
+        if key not in {"ios", "android"}:
+            key = "unknown"
+        counts[key] = counts.get(key, 0) + int(total or 0)
+    return {"ios": counts.get("ios", 0), "android": counts.get("android", 0), "unknown": counts.get("unknown", 0), "total": sum(counts.values())}
+
+
+@router.get("/users/export.xls")
+def export_users_excel(
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),  # noqa: ARG001
+):
+    users = db.query(User).order_by(User.created_at.desc(), User.id.desc()).all()
+    rows = [
+        "<tr><th>User name</th><th>Email</th><th>Date joined</th></tr>",
+    ]
+    for user in users:
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(user.full_name or ''))}</td>"
+            f"<td>{html.escape(str(user.email or ''))}</td>"
+            f"<td>{html.escape(user.created_at.strftime('%Y-%m-%d') if user.created_at else '')}</td>"
+            "</tr>"
+        )
+    content = (
+        "<html><head><meta charset=\"utf-8\" /></head><body>"
+        "<table border=\"1\">"
+        + "".join(rows)
+        + "</table></body></html>"
+    )
+    return Response(
+        content=content,
+        media_type="application/vnd.ms-excel; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="glucoforager_users.xls"'},
+    )
 
 
 @router.get("/users/{user_id}")
