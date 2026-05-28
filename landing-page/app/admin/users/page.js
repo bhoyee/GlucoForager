@@ -22,7 +22,10 @@ export default function AdminUsersPage() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
+  const [platformSummary, setPlatformSummary] = useState({ ios: 0, android: 0, total: 0 });
+  const [platformUpdatedAt, setPlatformUpdatedAt] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [exportingUsers, setExportingUsers] = useState(false);
   const [message, setMessage] = useState('');
   const [pendingAction, setPendingAction] = useState(null);
   const [actionBusy, setActionBusy] = useState(false);
@@ -85,21 +88,77 @@ export default function AdminUsersPage() {
     }
   }, [token, page, sortKey, sortOrder, search, tierFilter, router]);
 
+  const loadPlatformSummary = useCallback(async () => {
+    if (!token) return;
+    try {
+      const response = await fetch(`${API_URL}/api/admin/users/platform-summary`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error();
+      setPlatformSummary({
+        ios: Number(data.ios || 0),
+        android: Number(data.android || 0),
+        total: Number(data.total || 0),
+      });
+      setPlatformUpdatedAt(new Date());
+    } catch {
+      // Keep the last good value; the table load handles visible error messaging.
+    }
+  }, [token, router]);
+
   useEffect(() => {
     if (!token) {
       router.push('/admin');
       return;
     }
     loadUsers();
-  }, [token, loadUsers]);
+    loadPlatformSummary();
+  }, [token, loadUsers, loadPlatformSummary]);
 
   useEffect(() => {
     if (!autoRefresh) return undefined;
     const timer = setInterval(() => {
       loadUsers({ silent: true });
+      loadPlatformSummary();
     }, 20000);
     return () => clearInterval(timer);
-  }, [autoRefresh, loadUsers]);
+  }, [autoRefresh, loadUsers, loadPlatformSummary]);
+
+  const downloadUsersExcel = async () => {
+    if (!token || exportingUsers) return;
+    setExportingUsers(true);
+    setMessage('');
+    try {
+      const response = await fetch(`${API_URL}/api/admin/users/export.xls`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      if (!response.ok) throw new Error();
+      const blob = await response.blob();
+      const href = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = href;
+      a.download = 'glucoforager_users.xls';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(href);
+    } catch {
+      setMessage('Failed to download users Excel file.');
+    } finally {
+      setExportingUsers(false);
+    }
+  };
 
   const handleSuspend = async (user) => {
     try {
@@ -261,6 +320,29 @@ export default function AdminUsersPage() {
 
       {message && <p className="admin-subtitle">{message}</p>}
 
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, margin: '18px 0' }}>
+        <div style={{ border: '1px solid #dbeafe', borderRadius: 16, padding: 16, background: 'linear-gradient(135deg, #eff6ff 0%, #ffffff 100%)' }}>
+          <div className="admin-actions" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontWeight: 800, color: '#1d4ed8' }}>iOS users</span>
+            <span className="admin-badge secondary">Live</span>
+          </div>
+          <div style={{ fontSize: 34, lineHeight: 1, fontWeight: 900, color: '#0f172a', marginTop: 12 }}>{platformSummary.ios}</div>
+          <p className="admin-help" style={{ marginTop: 8 }}>
+            {platformUpdatedAt ? `Updated ${platformUpdatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Updating quietly'}
+          </p>
+        </div>
+        <div style={{ border: '1px solid #dcfce7', borderRadius: 16, padding: 16, background: 'linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%)' }}>
+          <div className="admin-actions" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontWeight: 800, color: '#166534' }}>Android users</span>
+            <span className="admin-badge success">Live</span>
+          </div>
+          <div style={{ fontSize: 34, lineHeight: 1, fontWeight: 900, color: '#0f172a', marginTop: 12 }}>{platformSummary.android}</div>
+          <p className="admin-help" style={{ marginTop: 8 }}>
+            Auto-refreshes in the background
+          </p>
+        </div>
+      </div>
+
       <div className="admin-toolbar">
         <input
           type="text"
@@ -309,6 +391,9 @@ export default function AdminUsersPage() {
           <option value="email:asc">Email (A-Z)</option>
           <option value="tier:asc">Plan (A-Z)</option>
         </select>
+        <button className="admin-button neutral" type="button" onClick={downloadUsersExcel} disabled={exportingUsers}>
+          {exportingUsers ? 'Preparing...' : 'Download Excel'}
+        </button>
       </div>
 
       {isLoading ? (
