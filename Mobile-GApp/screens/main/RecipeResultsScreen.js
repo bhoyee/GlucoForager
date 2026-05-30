@@ -39,6 +39,7 @@ export default function RecipeResultsScreen() {
     recipes: recipesFromParams,
     selectedIngredients,
     detectedIngredients: detectedFromParams,
+    filteredOut,
     warning,
     source,
   } = route.params || {};
@@ -620,6 +621,13 @@ export default function RecipeResultsScreen() {
   const heroImage = photoUri || images?.[0]?.uri;
   const hasRecipes = recipes.length > 0;
   const hasDetectedIngredients = detectedIngredients.length > 0;
+  const ignoredIngredients = Array.from(new Set([
+    ...(Array.isArray(filteredOut) ? filteredOut : []),
+    ...(Array.isArray(warning?.excluded) ? warning.excluded : []),
+  ]
+    .map((item) => (typeof item === 'string' ? item.trim() : ''))
+    .filter(Boolean)));
+  const hasIgnoredIngredients = ignoredIngredients.length > 0;
 
   const formatTime = (recipe) => {
     const total = recipe?.total_time ?? recipe?.time ?? 0;
@@ -665,21 +673,30 @@ export default function RecipeResultsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
       >
-        <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={24} color={Colors.text} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Recipe Results</Text>
-          <TouchableOpacity
-            style={styles.scanAgainButton}
-            onPress={() => navigation.navigate('Scan', { screen: 'ScanMain' })}
-          >
-            <Ionicons name="camera-outline" size={20} color={Colors.primary} />
-            <Text style={styles.scanAgainText}>Scan Again</Text>
-          </TouchableOpacity>
+        <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
+          <View style={styles.header}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => navigation.goBack()}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="arrow-back" size={22} color="white" />
+            </TouchableOpacity>
+            <View style={styles.headerCenter}>
+              <Text style={styles.headerTitle}>Recipe Results</Text>
+              <Text style={styles.headerSubtitle}>
+                {recipes.length ? `${recipes.length} diabetes-friendly ideas` : 'Your generated meal ideas'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.headerActionButton}
+              onPress={() => navigation.navigate('Scan', { screen: 'ScanMain' })}
+              activeOpacity={0.85}
+              accessibilityLabel="Scan again"
+            >
+              <Ionicons name="camera-outline" size={20} color="white" />
+            </TouchableOpacity>
+          </View>
         </View>
         {heroImage && (
           <View style={styles.section}>
@@ -697,7 +714,7 @@ export default function RecipeResultsScreen() {
           </View>
         )}
 
-        {warning && (
+        {warning && !hasIgnoredIngredients && (
           <View style={styles.warningBanner}>
             <Ionicons name="alert-circle-outline" size={18} color={Colors.warning} />
             <Text style={styles.warningText}>{warning?.message || warning}</Text>
@@ -736,6 +753,25 @@ export default function RecipeResultsScreen() {
                 </View>
               ))}
             </ScrollView>
+          </View>
+        ) : null}
+
+        {hasIgnoredIngredients ? (
+          <View style={styles.safetyFilterBanner}>
+            <View style={styles.safetyFilterTitleRow}>
+              <Ionicons name="shield-checkmark-outline" size={18} color={Colors.primary} />
+              <Text style={styles.safetyFilterTitle}>Left out for steadier blood sugar</Text>
+            </View>
+            <Text style={styles.safetyFilterText}>
+              We did not use these in the recipes because they may be less suitable for diabetes-friendly meals.
+            </Text>
+            <View style={styles.safetyFilterChips}>
+              {ignoredIngredients.map((item) => (
+                <View key={item} style={styles.safetyFilterChip}>
+                  <Text style={styles.safetyFilterChipText}>{item}</Text>
+                </View>
+              ))}
+            </View>
           </View>
         ) : null}
 
@@ -880,6 +916,52 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     flex: 1,
+  },
+  safetyFilterBanner: {
+    marginHorizontal: 20,
+    marginTop: 4,
+    marginBottom: 18,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: '#F0FBF6',
+    borderWidth: 1,
+    borderColor: '#BDEBD8',
+  },
+  safetyFilterTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  safetyFilterTitle: {
+    flex: 1,
+    color: Colors.text,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  safetyFilterText: {
+    color: Colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  safetyFilterChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  safetyFilterChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#D8EFE6',
+  },
+  safetyFilterChipText: {
+    color: Colors.primary,
+    fontSize: 12,
+    fontWeight: '700',
   },
   loadingContainer: {
     flex: 1,
@@ -1063,43 +1145,58 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
   },
+  headerPanel: {
+    backgroundColor: Colors.primaryDark,
+    paddingHorizontal: 20,
+    paddingBottom: 18,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 5,
+    marginBottom: 18,
+  },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    backgroundColor: Colors.background,
+    justifyContent: 'space-between',
   },
   backButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: Colors.surface,
+    backgroundColor: 'rgba(255,255,255,0.16)',
     justifyContent: 'center',
     alignItems: 'center',
   },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 12,
+  },
   headerTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: Colors.text,
+    fontWeight: '900',
+    color: 'white',
   },
-  scanAgainButton: {
-    flexDirection: 'row',
+  headerSubtitle: {
+    marginTop: 3,
+    fontSize: 12,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.78)',
+  },
+  headerActionButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  scanAgainText: {
-    marginLeft: 4,
-    fontSize: 14,
-    color: Colors.primary,
-    fontWeight: '500',
   },
   scrollContent: {
-    paddingTop: 8,
+    paddingTop: 0,
   },
   section: {
     marginBottom: 30,
