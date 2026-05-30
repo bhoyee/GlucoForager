@@ -178,6 +178,16 @@ def _warning_for_classified_ingredients(classified: dict) -> dict | None:
     return None
 
 
+def _merge_unique_items(*groups: list[str] | None) -> list[str]:
+    items = []
+    for group in groups:
+        for item in group or []:
+            value = str(item or "").strip()
+            if value and value not in items:
+                items.append(value)
+    return items
+
+
 def _filters_for_mode(mode: str) -> list[str]:
     if mode == "quick":
         return ["diabetes-friendly", "low carb", "under 20 minutes", "high protein"]
@@ -233,6 +243,8 @@ def _run_text_job(job_id: str) -> None:
         mode = (payload.get("mode") or "ingredients").strip().lower()
         device_id = payload.get("device_id")
         base_url = payload.get("base_url")
+        queued_filtered_out = _merge_unique_items(payload.get("precheck_filtered_out") or [])
+        queued_warning = payload.get("precheck_warning") if isinstance(payload.get("precheck_warning"), dict) else None
 
         try:
             log_system_event(
@@ -458,11 +470,15 @@ def _run_text_job(job_id: str) -> None:
             providers = []
             models = []
 
-        warning = _warning_for_classified_ingredients(classified)
+        current_filtered_out = _filtered_items_for_response(classified)
+        filtered_out = _merge_unique_items(queued_filtered_out, current_filtered_out)
+        warning = queued_warning or _warning_for_classified_ingredients(classified)
+        if warning and filtered_out and not warning.get("excluded"):
+            warning = {**warning, "excluded": filtered_out}
         job.result = {
             "results": recipes,
             "detected": classified["food"],
-            "filtered_out": _filtered_items_for_response(classified),
+            "filtered_out": filtered_out,
             "classification_source": classified["source"],
             "warning": warning,
             "normalization": classified.get("normalization") or {"corrections": []},
@@ -761,6 +777,8 @@ def generate_from_text_async(
         ) from exc
 
     queued_ingredients = classified.get("food") if payload.mode == "ingredients" else payload.ingredients
+    precheck_filtered_out = _filtered_items_for_response(classified)
+    precheck_warning = _warning_for_classified_ingredients(classified)
 
     job_id = str(uuid.uuid4())
     job = AIJob(
@@ -772,6 +790,8 @@ def generate_from_text_async(
             "ingredients": queued_ingredients,
             "original_ingredients": payload.ingredients,
             "normalization": classified.get("normalization") or {"corrections": []},
+            "precheck_filtered_out": precheck_filtered_out,
+            "precheck_warning": precheck_warning,
             "filters": payload.filters or [],
             "exclude_titles": payload.exclude_titles or [],
             "variety_mode": payload.variety_mode,
