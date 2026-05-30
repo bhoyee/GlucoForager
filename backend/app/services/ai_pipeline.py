@@ -26,10 +26,18 @@ class IngredientValidationError(ValueError):
 
 
 class RecipeGenerationError(RuntimeError):
-    def __init__(self, message: str, *, code: str = "generation_failed", internal_message: str | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str = "generation_failed",
+        internal_message: str | None = None,
+        error_type: str = "operational",
+    ) -> None:
         super().__init__(message)
         self.code = code
         self.internal_message = internal_message or message
+        self.error_type = error_type
 
 
 class AIPipeline:
@@ -41,6 +49,30 @@ class AIPipeline:
         self.ingredient_classifier = IngredientClassifier()
         self.risk_classifier = IngredientRiskClassifier()
         self._last_recipe_validation_error = ""
+
+    def _recipe_validation_error(self, reason: str | None, *, retried: bool) -> RecipeGenerationError:
+        reason_text = (reason or "unknown").strip()
+        internal_prefix = "validation_failed_after_retry" if retried else "validation_failed_no_retry"
+        actionable_reasons = (
+            "insufficient_source_ingredient_match",
+            "too_few_recipes",
+            "empty_or_not_list",
+        )
+        if any(reason_text.startswith(prefix) for prefix in actionable_reasons):
+            return RecipeGenerationError(
+                "We could not build a balanced diabetes-friendly recipe from those ingredients. "
+                "Try adding a protein like eggs, chicken, fish, tofu, beans, or Greek yoghurt, "
+                "plus one non-starchy vegetable.",
+                code="recipe_validation_failed",
+                internal_message=f"{internal_prefix}: {reason_text}",
+                error_type="invalid_input",
+            )
+        return RecipeGenerationError(
+            "Recipe generation is taking longer than expected. Please try again in a moment.",
+            code="recipe_validation_failed",
+            internal_message=f"{internal_prefix}: {reason_text}",
+            error_type="operational",
+        )
 
     def _validate_ingredients(self, ingredients: list[str]) -> None:
         if not ingredients:
@@ -335,7 +367,7 @@ class AIPipeline:
                 )
                 recipes = self._validated_recipes_or_none(recipes_retry, source_ingredients=selected_food_only) or []
             if not recipes:
-                raise RuntimeError("Unable to generate recipes right now. Please try again in a moment.")
+                raise self._recipe_validation_error(self._last_recipe_validation_error, retried=True)
             record_ai_request(db, user_id, tier, "recipes", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
             db.add(RecipeHistory(user_id=user_id, source="vision", recipes=recipes))
             db.commit()
@@ -445,7 +477,7 @@ class AIPipeline:
                 )
                 recipes = self._validated_recipes_or_none(recipes_retry, source_ingredients=selected_food_only) or []
             if not recipes:
-                raise RuntimeError("Unable to generate recipes right now. Please try again in a moment.")
+                raise self._recipe_validation_error(self._last_recipe_validation_error, retried=True)
             record_ai_request(db, user_id, tier, "recipes", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
             db.add(RecipeHistory(user_id=user_id, source="vision", recipes=recipes))
             db.commit()
@@ -510,11 +542,7 @@ class AIPipeline:
             remaining = overall_budget_seconds - (time.time() - started)
             # One retry (variety on, cache bypassed) only if there is enough time left.
             if remaining <= 8:
-                raise RecipeGenerationError(
-                    "Unable to generate recipes right now. Please try again in a moment.",
-                    code="recipe_validation_failed",
-                    internal_message=f"validation_failed_no_retry: {first_validation_error or 'unknown'}",
-                )
+                raise self._recipe_validation_error(first_validation_error, retried=False)
             recipes_retry = self.ai.generate_recipes(
                 ingredients,
                 tier,
@@ -529,11 +557,7 @@ class AIPipeline:
             recipes = self._validated_recipes_or_none(recipes_retry, mode=mode, source_ingredients=ingredients)
 
         if recipes is None:
-            raise RecipeGenerationError(
-                "Unable to generate recipes right now. Please try again in a moment.",
-                code="recipe_validation_failed",
-                internal_message=f"validation_failed_after_retry: {self._last_recipe_validation_error or 'unknown'}",
-            )
+            raise self._recipe_validation_error(self._last_recipe_validation_error, retried=True)
 
         record_ai_request(
             db,
