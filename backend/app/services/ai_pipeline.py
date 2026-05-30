@@ -620,13 +620,36 @@ class AIPipeline:
                 out.add(singular)
             return out
 
+        def _source_terms(items: list[str] | None) -> list[str]:
+            terms: list[str] = []
+            seen: set[str] = set()
+            for item in items or []:
+                if not isinstance(item, str) or not item.strip():
+                    continue
+                raw = item.strip()
+                candidates = [raw]
+                # Users and AI precheck can produce combined phrases like
+                # "tomatoes and cayenne pepper". Match those as individual foods too.
+                candidates.extend(
+                    part.strip()
+                    for part in re.split(r"\s+(?:and|with|plus)\s+|[,&/]+", raw, flags=re.IGNORECASE)
+                    if part.strip()
+                )
+                for candidate in candidates:
+                    normalized = _norm(candidate)
+                    if normalized and normalized not in seen:
+                        terms.append(candidate)
+                        seen.add(normalized)
+            return terms
+
         src_norm: list[str] = []
         src_set: set[str] = set()
         src_variants: set[str] = set()
+        expanded_source_ingredients = _source_terms(source_ingredients)
         if source_ingredients:
-            src_norm = [_norm(str(x)) for x in source_ingredients if isinstance(x, str) and str(x).strip()]
+            src_norm = [_norm(str(x)) for x in expanded_source_ingredients if isinstance(x, str) and str(x).strip()]
             src_set = {x for x in src_norm if x}
-            for src_item in source_ingredients:
+            for src_item in expanded_source_ingredients:
                 if isinstance(src_item, str) and src_item.strip():
                     src_variants.update(_variants(src_item))
 
@@ -684,7 +707,11 @@ class AIPipeline:
             # and does NOT invent non-pantry ingredients.
             if source_ingredients:
                 try:
-                    src = [str(x).strip().lower() for x in source_ingredients if isinstance(x, str) and str(x).strip()]
+                    src = [
+                        str(x).strip().lower()
+                        for x in expanded_source_ingredients
+                        if isinstance(x, str) and str(x).strip()
+                    ]
                     ing_text = " ".join(
                         [
                             str((x.get("name") if isinstance(x, dict) else x) or "").lower()
@@ -700,7 +727,10 @@ class AIPipeline:
                             continue
                         if any(f" {variant} " in f" {hay} " for variant in _variants(s)):
                             used_sources.add(s)
-                    min_required = 1 if len(src) <= 1 else 2
+                    original_source_count = len(
+                        [x for x in source_ingredients if isinstance(x, str) and str(x).strip()]
+                    )
+                    min_required = 1 if original_source_count <= 1 or len(src) <= 1 else 2
                     if len(used_sources) < min_required:
                         return _fail(f"insufficient_source_ingredient_match:{len(used_sources)}")
 
