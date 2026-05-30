@@ -323,6 +323,7 @@ export default function ManualInputScreen() {
       selectedIngredients: normalized,
       source: 'text',
       detectedIngredients: result?.detected || [],
+      filteredOut: result?.filtered_out || [],
       warning: result?.warning || null,
     });
   };
