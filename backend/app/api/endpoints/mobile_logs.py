@@ -16,6 +16,29 @@ from ..admin_dependencies import get_current_admin
 router = APIRouter()
 
 
+def _clear_log_files(base_path: str) -> dict:
+    log_path = Path(base_path)
+    deleted_rotated = 0
+    truncated = False
+
+    for path in Path(LOG_DIR).glob(f"{log_path.name}.*"):
+        try:
+            if path.is_file():
+                path.unlink()
+                deleted_rotated += 1
+        except OSError:
+            continue
+
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path.write_text("", encoding="utf-8")
+        truncated = True
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to clear mobile logs: {str(exc)[:160]}") from exc
+
+    return {"detail": "ok", "truncated": truncated, "deleted_rotated": deleted_rotated}
+
+
 class MobileLogEntry(BaseModel):
     timestamp: str | None = None
     level: str | None = None
@@ -88,3 +111,8 @@ def read_mobile_logs(limit: int = 200, admin=Depends(get_current_admin)):  # noq
     # Newest first for admin view.
     items = list(reversed(lines))[:limit]
     return {"items": items}
+
+
+@router.delete("/admin/mobile-logs")
+def clear_mobile_logs(admin=Depends(get_current_admin)):  # noqa: ARG001
+    return _clear_log_files(LOG_PATH)
