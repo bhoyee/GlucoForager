@@ -759,7 +759,9 @@ export default function RecipeResultsScreen() {
         {hasIgnoredIngredients ? (
           <View style={styles.safetyFilterBanner}>
             <View style={styles.safetyFilterTitleRow}>
-              <Ionicons name="shield-checkmark-outline" size={18} color={Colors.primary} />
+              <View style={styles.safetyFilterIcon}>
+                <Ionicons name="warning-outline" size={18} color="#9A4D00" />
+              </View>
               <Text style={styles.safetyFilterTitle}>Left out for steadier blood sugar</Text>
             </View>
             <Text style={styles.safetyFilterText}>
@@ -923,9 +925,9 @@ const styles = StyleSheet.create({
     marginBottom: 18,
     padding: 14,
     borderRadius: 18,
-    backgroundColor: '#F0FBF6',
+    backgroundColor: '#FFF3DF',
     borderWidth: 1,
-    borderColor: '#BDEBD8',
+    borderColor: '#F0B45D',
   },
   safetyFilterTitleRow: {
     flexDirection: 'row',
@@ -933,14 +935,22 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 8,
   },
+  safetyFilterIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#FFE0AD',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   safetyFilterTitle: {
     flex: 1,
-    color: Colors.text,
+    color: '#5B3200',
     fontSize: 14,
     fontWeight: '800',
   },
   safetyFilterText: {
-    color: Colors.textSecondary,
+    color: '#6B4A1F',
     fontSize: 13,
     lineHeight: 18,
     marginBottom: 12,
@@ -956,10 +966,10 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: 'white',
     borderWidth: 1,
-    borderColor: '#D8EFE6',
+    borderColor: '#F2C27D',
   },
   safetyFilterChipText: {
-    color: Colors.primary,
+    color: '#8A4A00',
     fontSize: 12,
     fontWeight: '700',
   },
