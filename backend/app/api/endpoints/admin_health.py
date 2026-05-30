@@ -67,8 +67,11 @@ def _ai_job_mode(job: AIJob) -> str | None:
 
 def _ai_job_provider_model(job: AIJob) -> tuple[str | None, str | None]:
     result = job.result if isinstance(job.result, dict) else {}
-    providers = result.get("providers") if isinstance(result.get("providers"), list) else []
-    models = result.get("models") if isinstance(result.get("models"), list) else []
+    ai_meta = result.get("ai") if isinstance(result.get("ai"), dict) else {}
+    raw_providers = result.get("providers") if result.get("providers") is not None else ai_meta.get("providers")
+    raw_models = result.get("models") if result.get("models") is not None else ai_meta.get("models")
+    providers = raw_providers if isinstance(raw_providers, list) else ([raw_providers] if raw_providers else [])
+    models = raw_models if isinstance(raw_models, list) else ([raw_models] if raw_models else [])
     provider = ", ".join(str(item) for item in providers if item) or result.get("provider")
     model = ", ".join(str(item) for item in models if item) or result.get("model")
     return (
@@ -77,10 +80,35 @@ def _ai_job_provider_model(job: AIJob) -> tuple[str | None, str | None]:
     )
 
 
+def _short_list(value, limit: int = 8) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    items = [str(item).strip() for item in value if str(item).strip()]
+    return items[:limit]
+
+
+def _ai_job_payload_summary(job: AIJob) -> dict:
+    payload = job.payload if isinstance(job.payload, dict) else {}
+    normalization = payload.get("normalization") if isinstance(payload.get("normalization"), dict) else {}
+    corrections = normalization.get("corrections") if isinstance(normalization.get("corrections"), list) else []
+    return {
+        "ingredients": _short_list(payload.get("ingredients")),
+        "original_ingredients": _short_list(payload.get("original_ingredients")),
+        "filters": _short_list(payload.get("filters")),
+        "normalization_source": normalization.get("source"),
+        "corrections": corrections[:6],
+        "device_id": payload.get("device_id"),
+    }
+
+
 def _ai_failed_payload(job: AIJob) -> dict:
     error_type, error_code = _classify_ai_job_error(job)
     provider, model = _ai_job_provider_model(job)
     failed_at = job.updated_at or job.created_at
+    result = job.result if isinstance(job.result, dict) else {}
+    error_payload = result.get("error") if isinstance(result.get("error"), dict) else {}
+    public_message = error_payload.get("message") or job.error or ""
+    internal_reason = error_payload.get("internal_message") or ""
     return {
         "id": job.id,
         "user_id": job.user_id,
@@ -91,6 +119,9 @@ def _ai_failed_payload(job: AIJob) -> dict:
         "error_type": error_type,
         "error_code": error_code,
         "error": (job.error or "")[:300],
+        "public_message": str(public_message)[:300],
+        "internal_reason": str(internal_reason)[:500],
+        "payload_summary": _ai_job_payload_summary(job),
         "created_at": job.created_at.isoformat() if job.created_at else None,
         "updated_at": job.updated_at.isoformat() if job.updated_at else None,
         "failed_at": failed_at.isoformat() if failed_at else None,

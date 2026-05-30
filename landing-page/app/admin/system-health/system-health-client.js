@@ -54,6 +54,14 @@ const formatDateTime = (value) => {
   return date.toLocaleString();
 };
 
+const shortId = (value) => {
+  const raw = String(value || '');
+  if (raw.length <= 12) return raw || '--';
+  return `${raw.slice(0, 8)}...${raw.slice(-4)}`;
+};
+
+const compactList = (items) => (Array.isArray(items) ? items.filter(Boolean) : []);
+
 export default function SystemHealthClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -169,6 +177,103 @@ export default function SystemHealthClient() {
   const failedInvalidInputJobs = services?.queue?.failed_invalid_input_items || [];
   const failureBreakdown = services?.queue?.failed_breakdown || {};
   const cleanupInfo = services?.queue?.cleanup || null;
+  const failedJobsToShow = failureView === 'operational' ? failedOperationalJobs : failedInvalidInputJobs;
+
+  const renderFailedJob = (job) => {
+    const summary = job?.payload_summary || {};
+    const ingredients = compactList(summary.ingredients);
+    const originalIngredients = compactList(summary.original_ingredients);
+    const filters = compactList(summary.filters);
+    const corrections = Array.isArray(summary.corrections) ? summary.corrections : [];
+    const correctionText = corrections
+      .map((item) => {
+        if (!item || typeof item !== 'object') return '';
+        return [item.from, item.to].filter(Boolean).join(' -> ');
+      })
+      .filter(Boolean)
+      .join(', ');
+    return (
+      <div key={job.id} className="admin-health-failed-card">
+        <div className="admin-health-failed-top">
+          <div>
+            <strong>{job.mode || job.source || 'job'}</strong>
+            <p className="admin-health-job-id" title={job.id}>
+              Job: {shortId(job.id)}
+            </p>
+          </div>
+          <span className="admin-health-failed-time">{formatDateTime(job.failed_at)}</span>
+        </div>
+
+        <div className="admin-health-trace-grid">
+          <div>
+            <span className="admin-health-trace-label">User</span>
+            <strong>{job.user_id || '--'}</strong>
+          </div>
+          <div>
+            <span className="admin-health-trace-label">Source</span>
+            <strong>{job.source || '--'}</strong>
+          </div>
+          <div>
+            <span className="admin-health-trace-label">Reason</span>
+            <strong>{job.error_code || '--'}</strong>
+          </div>
+          <div>
+            <span className="admin-health-trace-label">Provider / model</span>
+            <strong>{[job.provider, job.model].filter(Boolean).join(' / ') || '--'}</strong>
+          </div>
+        </div>
+
+        <div className="admin-health-trace-block">
+          <span className="admin-health-trace-label">Public message</span>
+          <p>{job.public_message || job.error || '--'}</p>
+        </div>
+
+        {job.internal_reason ? (
+          <div className="admin-health-trace-block">
+            <span className="admin-health-trace-label">Internal reason</span>
+            <p className="admin-health-trace-code">{job.internal_reason}</p>
+          </div>
+        ) : null}
+
+        <div className="admin-health-trace-block">
+          <span className="admin-health-trace-label">Ingredients used</span>
+          {ingredients.length ? (
+            <div className="admin-health-chip-row">
+              {ingredients.map((item) => (
+                <span key={item} className="admin-health-chip">
+                  {item}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p>--</p>
+          )}
+        </div>
+
+        {originalIngredients.length ? (
+          <div className="admin-health-trace-block">
+            <span className="admin-health-trace-label">Original input</span>
+            <div className="admin-health-chip-row">
+              {originalIngredients.map((item) => (
+                <span key={item} className="admin-health-chip muted">
+                  {item}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {corrections.length || filters.length || summary.device_id ? (
+          <div className="admin-health-failed-footer">
+            {correctionText ? <span>Corrections: {correctionText}</span> : null}
+            {summary.normalization_source ? <span>Normalization: {summary.normalization_source}</span> : null}
+            {filters.length ? <span>Filters: {filters.join(', ')}</span> : null}
+            {summary.device_id ? <span>Device: {summary.device_id}</span> : null}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
 
   return (
     <div className="admin-card admin-health-page">
@@ -352,42 +457,12 @@ export default function SystemHealthClient() {
             </div>
 
             <div className="admin-health-failed-list">
-              {failureView === 'operational' ? (
-                failedOperationalJobs.length ? (
-                  failedOperationalJobs.map((job) => (
-                    <div key={job.id} className="admin-health-failed-card">
-                      <div className="admin-health-failed-top">
-                        <strong>{job.mode || 'job'}</strong>
-                        <span className="admin-health-failed-time">{formatDateTime(job.failed_at)}</span>
-                      </div>
-                      <p className="admin-health-failed-detail">{job.error || '--'}</p>
-                      <div className="admin-health-failed-footer">
-                        {job.user_id ? <span>User: {job.user_id}</span> : null}
-                        {job.provider ? <span>Provider: {job.provider}</span> : null}
-                        {job.model ? <span>Model: {job.model}</span> : null}
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <p className="admin-help">No operational failures today.</p>
-                )
-              ) : failedInvalidInputJobs.length ? (
-                failedInvalidInputJobs.map((job) => (
-                  <div key={job.id} className="admin-health-failed-card">
-                    <div className="admin-health-failed-top">
-                      <strong>{job.mode || 'job'}</strong>
-                      <span className="admin-health-failed-time">{formatDateTime(job.failed_at)}</span>
-                    </div>
-                    <p className="admin-health-failed-detail">{job.error || '--'}</p>
-                    <div className="admin-health-failed-footer">
-                      {job.user_id ? <span>User: {job.user_id}</span> : null}
-                      {job.provider ? <span>Provider: {job.provider}</span> : null}
-                      {job.model ? <span>Model: {job.model}</span> : null}
-                    </div>
-                  </div>
-                ))
+              {failedJobsToShow.length ? (
+                failedJobsToShow.map(renderFailedJob)
               ) : (
-                <p className="admin-help">No invalid input failures today.</p>
+                <p className="admin-help">
+                  No {failureView === 'operational' ? 'operational' : 'invalid input'} failures today.
+                </p>
               )}
             </div>
           </div>
