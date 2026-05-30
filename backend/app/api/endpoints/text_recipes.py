@@ -149,6 +149,35 @@ def _precheck_ingredient_input(raw_ingredients: list[str], *, mode: str, tier: s
     return classified
 
 
+def _filtered_items_for_response(classified: dict) -> list[str]:
+    items = []
+    for key in ("risk_filtered_out", "non_food"):
+        for item in classified.get(key) or []:
+            value = str(item or "").strip()
+            if value and value not in items:
+                items.append(value)
+    return items
+
+
+def _warning_for_classified_ingredients(classified: dict) -> dict | None:
+    risk_filtered = [str(item).strip() for item in classified.get("risk_filtered_out") or [] if str(item).strip()]
+    if risk_filtered:
+        return {
+            "code": "diabetes_unfriendly_ignored",
+            "message": "Some ingredients were left out because they may not support steady blood sugar.",
+            "excluded": risk_filtered,
+            "source": classified.get("source"),
+        }
+    if classified.get("non_food"):
+        return {
+            "code": "non_food_ignored",
+            "message": "Some items were not food ingredients and were ignored.",
+            "excluded": classified.get("non_food") or [],
+            "source": classified.get("source"),
+        }
+    return None
+
+
 def _filters_for_mode(mode: str) -> list[str]:
     if mode == "quick":
         return ["diabetes-friendly", "low carb", "under 20 minutes", "high protein"]
@@ -429,17 +458,11 @@ def _run_text_job(job_id: str) -> None:
             providers = []
             models = []
 
-        warning = None
-        if classified.get("non_food"):
-            warning = {
-                "code": "non_food_ignored",
-                "message": "Some items were not food ingredients and were ignored.",
-                "source": classified["source"],
-            }
+        warning = _warning_for_classified_ingredients(classified)
         job.result = {
             "results": recipes,
             "detected": classified["food"],
-            "filtered_out": classified["non_food"],
+            "filtered_out": _filtered_items_for_response(classified),
             "classification_source": classified["source"],
             "warning": warning,
             "normalization": classified.get("normalization") or {"corrections": []},
@@ -585,13 +608,7 @@ def generate_from_text(
             ) from exc
         ingredients = classified["food"]
         filters = payload.filters or []
-        warning = None
-        if classified["non_food"]:
-            warning = {
-                "code": "non_food_ignored",
-                "message": "Some items were not food ingredients and were ignored.",
-                "source": classified["source"],
-            }
+        warning = _warning_for_classified_ingredients(classified)
     else:
         classified = {"food": [], "non_food": [], "source": "mode"}
         ingredients = []
@@ -642,7 +659,7 @@ def generate_from_text(
                         "results": cached_recipes,
                         "access": access,
                         "detected": classified.get("food") or [],
-                        "filtered_out": classified.get("non_food") or [],
+                        "filtered_out": _filtered_items_for_response(classified),
                         "classification_source": classified["source"],
                         "warning": warning,
                         "normalization": classified.get("normalization") or {"corrections": []},
@@ -673,7 +690,7 @@ def generate_from_text(
         "results": recipes,
         "access": access,
         "detected": classified.get("food") or [],
-        "filtered_out": classified.get("non_food") or [],
+        "filtered_out": _filtered_items_for_response(classified),
         "classification_source": classified["source"],
         "warning": warning,
         "normalization": classified.get("normalization") or {"corrections": []},
