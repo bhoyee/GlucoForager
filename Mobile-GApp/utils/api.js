@@ -16,6 +16,19 @@ const shouldSuppressFailureDebugLog = (url) => {
   return false;
 };
 
+const shouldDowngradeNetworkFailureLog = (url) => {
+  const u = String(url || '');
+  // Background convenience calls should not appear as critical app errors when
+  // the user's connection drops briefly.
+  return (
+    u.includes('/api/app/update') ||
+    u.includes('/api/mobile/push-tokens') ||
+    u.includes('/api/app/tips/config') ||
+    u.includes('/api/app/tips/today') ||
+    u.includes('/api/app/challenge/today')
+  );
+};
+
 const shouldShowRateLimitAlert = (url) => {
   const u = String(url || '');
   // Never show popups for background / silent endpoints.
@@ -198,12 +211,14 @@ export const apiFetch = async (
       );
     }
     const ms = Date.now() - startedAt;
-    addDebugLog({
-      source: 'API',
-      level: 'error',
-      message: 'Network request failed.',
-      details: `${url} | ${error?.message || error} | ms=${ms} timeoutMs=${timeoutMs}`,
-    });
+    if (!shouldSuppressFailureDebugLog(url)) {
+      addDebugLog({
+        source: 'API',
+        level: shouldDowngradeNetworkFailureLog(url) ? 'warn' : 'error',
+        message: 'Network request failed.',
+        details: `${url} | ${error?.message || error} | ms=${ms} timeoutMs=${timeoutMs}`,
+      });
+    }
     return buildNetworkErrorResponse(url, error);
   } finally {
     clearTimeout(timeoutId);
