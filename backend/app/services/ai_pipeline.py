@@ -60,9 +60,8 @@ class AIPipeline:
         )
         if any(reason_text.startswith(prefix) for prefix in actionable_reasons):
             return RecipeGenerationError(
-                "We could not build a balanced diabetes-friendly recipe from those ingredients. "
-                "Try adding a protein like eggs, chicken, fish, tofu, beans, or Greek yoghurt, "
-                "plus one non-starchy vegetable.",
+                "We need a little more balance to build diabetes-friendly recipes. "
+                "Add a protein like eggs, chicken, fish, tofu, or beans, plus one non-starchy vegetable.",
                 code="recipe_validation_failed",
                 internal_message=f"{internal_prefix}: {reason_text}",
                 error_type="invalid_input",

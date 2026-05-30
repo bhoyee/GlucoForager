@@ -58,6 +58,9 @@ export default function RecipeResultsScreen() {
   const loadingPulse = useRef(new Animated.Value(0)).current;
   const loadingSweep = useRef(new Animated.Value(0)).current;
 
+  const recipeFailureTitle = (error) =>
+    error?.type === 'invalid_input' ? 'Add a little more balance' : 'Recipe generation failed';
+
   useEffect(() => {
     const pulseAnimation = Animated.loop(
       Animated.sequence([
@@ -332,8 +335,9 @@ export default function RecipeResultsScreen() {
         if (!errorShownRef.current) {
           errorShownRef.current = true;
           const result = data.result || {};
+          const error = result?.error || {};
           const message =
-            result?.error?.message ||
+            error?.message ||
             data.error ||
             'Unable to generate recipes right now. Please try again.';
           addDebugLog({
@@ -342,7 +346,7 @@ export default function RecipeResultsScreen() {
             message: 'Text recipes job failed',
             details: JSON.stringify({ job_id: jobId, message }),
           });
-          Alert.alert('Recipe generation failed', message, [
+          Alert.alert(recipeFailureTitle(error), message, [
             { text: 'OK', onPress: () => navigation.goBack() },
           ]);
         }
@@ -413,6 +417,7 @@ export default function RecipeResultsScreen() {
           if (!errorShownRef.current) {
             errorShownRef.current = true;
             const detail = data?.detail;
+            const error = typeof detail === 'object' && detail ? detail : {};
             const message =
               detail?.message ||
               (typeof detail === 'string' ? detail : null) ||
@@ -424,7 +429,7 @@ export default function RecipeResultsScreen() {
               message: 'Text recipe job start failed',
               details: JSON.stringify({ status: response.status, message }),
             });
-            Alert.alert('Recipe generation failed', message, [
+            Alert.alert(recipeFailureTitle(error), message, [
               { text: 'OK', onPress: () => navigation.goBack() },
             ]);
           }
