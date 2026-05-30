@@ -31,6 +31,7 @@ export default function AdminMobileLogsPage() {
   const [limit, setLimit] = useState(200);
   const [isLoading, setIsLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [isClearing, setIsClearing] = useState(false);
   const [message, setMessage] = useState('');
 
   const loadLogs = useCallback(
@@ -70,6 +71,35 @@ export default function AdminMobileLogsPage() {
     [token, router, limit]
   );
 
+  const clearLogs = useCallback(async () => {
+    if (!token || isClearing) return;
+    const ok = window.confirm('Delete all current and rotated mobile logs? This cannot be undone.');
+    if (!ok) return;
+    setIsClearing(true);
+    setMessage('');
+    try {
+      const response = await fetch(`${API_URL}/api/admin/mobile-logs`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.detail || 'Failed to clear mobile logs.');
+      }
+      setLogs([]);
+      setMessage(`Mobile logs cleared. Removed ${data.deleted_rotated || 0} archived log file(s).`);
+    } catch (error) {
+      setMessage(error?.message || 'Failed to clear mobile logs.');
+    } finally {
+      setIsClearing(false);
+    }
+  }, [isClearing, router, token]);
+
   useEffect(() => {
     loadLogs();
   }, [loadLogs]);
@@ -104,6 +134,14 @@ export default function AdminMobileLogsPage() {
         </select>
         <button type="button" className="admin-button info" onClick={() => loadLogs()}>
           Refresh
+        </button>
+        <button
+          type="button"
+          className="admin-button danger"
+          disabled={isClearing}
+          onClick={clearLogs}
+        >
+          {isClearing ? 'Clearing...' : 'Clear logs'}
         </button>
       </div>
 

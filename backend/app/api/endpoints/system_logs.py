@@ -6,9 +6,32 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from ..admin_dependencies import get_current_admin
-from ...services.system_log_service import LOG_PATH, log_system_event
+from ...services.system_log_service import LOG_DIR, LOG_PATH, log_system_event
 
 router = APIRouter()
+
+
+def _clear_log_files(base_path: str) -> dict:
+    log_path = Path(base_path)
+    deleted_rotated = 0
+    truncated = False
+
+    for path in Path(LOG_DIR).glob(f"{log_path.name}.*"):
+        try:
+            if path.is_file():
+                path.unlink()
+                deleted_rotated += 1
+        except OSError:
+            continue
+
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path.write_text("", encoding="utf-8")
+        truncated = True
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to clear system logs: {str(exc)[:160]}") from exc
+
+    return {"detail": "ok", "truncated": truncated, "deleted_rotated": deleted_rotated}
 
 
 class SystemLogEntry(BaseModel):
@@ -60,3 +83,8 @@ def read_system_logs(limit: int = 200, admin=Depends(get_current_admin)):  # noq
     lines = log_path.read_text(encoding="utf-8", errors="ignore").splitlines()
     items = list(reversed(lines))[:limit]
     return {"items": items}
+
+
+@router.delete("/admin/system-logs")
+def clear_system_logs(admin=Depends(get_current_admin)):  # noqa: ARG001
+    return _clear_log_files(LOG_PATH)
