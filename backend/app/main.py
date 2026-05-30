@@ -219,7 +219,8 @@ def _is_noise_scan_path(path: str) -> bool:
     normalized = (path or "").lower()
     if not normalized.startswith("/api/"):
         return False
-    # Common automated exploit scans for non-Python stacks.
+
+    # Common automated exploit scans and framework fingerprinting paths.
     noise_fragments = (
         "/vendor/phpunit/",
         "phpunit",
@@ -229,8 +230,60 @@ def _is_noise_scan_path(path: str) -> bool:
         "/wp-admin/",
         "/.env",
         "/.git",
+        "docker-compose",
+        "phpinfo",
+        "heapdump",
+        "configprops",
+        "actuator",
+        "logfile",
+        "/server-status",
+        "/debug",
+        "/metrics",
     )
-    return any(fragment in normalized for fragment in noise_fragments)
+    if any(fragment in normalized for fragment in noise_fragments):
+        return True
+
+    # Generic scanner routes from common API templates. These are not GlucoForager
+    # routes and should not crowd the admin System Logs page.
+    noise_exact = {
+        "/api/env",
+        "/api/login",
+        "/api/register",
+        "/api/token",
+        "/api/oauth/callback",
+        "/api/version",
+        "/api/sse",
+        "/api/v1/sse",
+        "/api/billing",
+        "/api/organizations",
+        "/api/v1/organizations",
+        "/api/projects",
+        "/api/documents",
+        "/api/orders",
+        "/api/v1/orders",
+        "/api/v1/incidents",
+        "/api/predict",
+        "/api/v1/auth/login",
+        "/api/v1/auth/register",
+    }
+    return normalized in noise_exact
+
+
+def _is_routine_mobile_auth_miss(path: str) -> bool:
+    normalized = (path or "").lower()
+    return normalized in {
+        "/api/user/profile",
+        "/api/user/stats",
+        "/api/user/scans-today",
+        "/api/recipes/recent",
+        "/api/recipes/suggestions",
+        "/api/favorites",
+        "/api/subscriptions/me",
+        "/api/app/update",
+        "/api/app/tips/config",
+        "/api/app/tips/today",
+        "/api/app/challenge/today",
+    }
 
 
 def _should_log_failed_api_request(request: Request, status_code: int) -> bool:
@@ -238,6 +291,15 @@ def _should_log_failed_api_request(request: Request, status_code: int) -> bool:
     if not path.startswith("/api/"):
         return False
     if _is_noise_scan_path(path):
+        return False
+
+    # Keep true operational failures visible.
+    if status_code >= 500:
+        return True
+
+    # Most 404/405 events in production are internet scanners trying common routes
+    # with wrong paths or methods. Access logs still keep the request trail.
+    if status_code in {404, 405}:
         return False
 
     # 429s are expected under rate limiting and can be noisy (e.g., mobile log batching).
@@ -250,6 +312,8 @@ def _should_log_failed_api_request(request: Request, status_code: int) -> bool:
         has_auth = bool(request.headers.get("authorization"))
         has_app_version = bool(request.headers.get("x-app-version") or request.headers.get("x-appversion"))
         has_device = bool(request.headers.get("x-device"))
+        if _is_routine_mobile_auth_miss(path):
+            return False
         if not has_auth and not (has_app_version or has_device):
             return False
 
