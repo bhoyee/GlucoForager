@@ -481,12 +481,13 @@ def _run_text_job(job_id: str) -> None:
     except Exception as exc:  # noqa: BLE001
         internal_error = getattr(exc, "internal_message", str(exc))
         internal_code = getattr(exc, "code", "exception")
+        error_type = getattr(exc, "error_type", "operational")
         if "job" in locals() and job:
             job.status = "failed"
             job.error = _safe_job_error(str(exc))
             job.result = {
                 "error": {
-                    "type": "operational",
+                    "type": error_type,
                     "code": internal_code,
                     "message": str(exc),
                     "internal_message": str(internal_error)[:500],

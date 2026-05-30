@@ -290,14 +290,18 @@ def _run_vision_job(job_id: str) -> None:
         except Exception:
             pass
     except Exception as exc:  # noqa: BLE001
+        internal_error = getattr(exc, "internal_message", str(exc))
+        internal_code = getattr(exc, "code", "exception")
+        error_type = getattr(exc, "error_type", "operational")
         if "job" in locals() and job:
             job.status = "failed"
             job.error = _safe_job_error(str(exc))
             job.result = {
                 "error": {
-                    "type": "operational",
-                    "code": "exception",
+                    "type": error_type,
+                    "code": internal_code,
                     "message": _safe_job_error(str(exc)),
+                    "internal_message": str(internal_error)[:500],
                 }
             }
             db.commit()
@@ -310,8 +314,9 @@ def _run_vision_job(job_id: str) -> None:
                     "job_id": job_id,
                     "user_id": job.user_id if "job" in locals() and job else None,
                     "status": "failed",
-                    "error_code": "exception",
+                    "error_code": internal_code,
                     "error_message": str(exc)[:200],
+                    "internal_error_message": str(internal_error)[:500],
                     "elapsed_ms": int((datetime.now(timezone.utc) - started).total_seconds() * 1000),
                 }
             )

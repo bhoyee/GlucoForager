@@ -1482,6 +1482,149 @@
   font-weight: 700;
 }
 
+.admin-health-failed-list {
+  display: grid;
+  gap: 14px;
+}
+
+.admin-health-failed-card {
+  border: 1px solid #e5eee9;
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 16px;
+  box-shadow: 0 10px 24px rgba(18, 47, 34, 0.06);
+}
+
+.admin-health-failed-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.admin-health-failed-top strong {
+  display: block;
+  color: #1b3b2f;
+  font-size: 15px;
+  text-transform: capitalize;
+}
+
+.admin-health-job-id,
+.admin-health-failed-time {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.admin-health-job-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.admin-health-trace-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.admin-health-trace-grid > div,
+.admin-health-trace-block {
+  border: 1px solid #e5eee9;
+  border-radius: 12px;
+  background: #f8fbf9;
+  padding: 10px 12px;
+}
+
+.admin-health-trace-grid strong {
+  display: block;
+  margin-top: 5px;
+  color: #1b3b2f;
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.admin-health-trace-label {
+  display: block;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.admin-health-trace-block {
+  margin-top: 10px;
+}
+
+.admin-health-trace-block p {
+  margin: 6px 0 0;
+  color: #1b3b2f;
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.admin-health-trace-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  color: #334155 !important;
+}
+
+.admin-health-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.admin-health-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 7px 9px;
+  border-radius: 999px;
+  background: rgba(46, 125, 50, 0.1);
+  border: 1px solid rgba(46, 125, 50, 0.16);
+  color: #1b3b2f;
+  font-size: 12px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.admin-health-chip.muted {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+  color: #475569;
+}
+
+.admin-health-failed-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 12px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+@media (max-width: 980px) {
+  .admin-health-trace-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .admin-health-failed-top {
+    flex-direction: column;
+  }
+
+  .admin-health-trace-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .admin-health-table td.mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-weight: 700;

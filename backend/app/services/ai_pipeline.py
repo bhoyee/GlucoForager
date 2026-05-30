@@ -26,10 +26,18 @@ class IngredientValidationError(ValueError):
 
 
 class RecipeGenerationError(RuntimeError):
-    def __init__(self, message: str, *, code: str = "generation_failed", internal_message: str | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str = "generation_failed",
+        internal_message: str | None = None,
+        error_type: str = "operational",
+    ) -> None:
         super().__init__(message)
         self.code = code
         self.internal_message = internal_message or message
+        self.error_type = error_type
 
 
 class AIPipeline:
@@ -41,6 +49,29 @@ class AIPipeline:
         self.ingredient_classifier = IngredientClassifier()
         self.risk_classifier = IngredientRiskClassifier()
         self._last_recipe_validation_error = ""
+
+    def _recipe_validation_error(self, reason: str | None, *, retried: bool) -> RecipeGenerationError:
+        reason_text = (reason or "unknown").strip()
+        internal_prefix = "validation_failed_after_retry" if retried else "validation_failed_no_retry"
+        actionable_reasons = (
+            "insufficient_source_ingredient_match",
+            "too_few_recipes",
+            "empty_or_not_list",
+        )
+        if any(reason_text.startswith(prefix) for prefix in actionable_reasons):
+            return RecipeGenerationError(
+                "We need a little more balance to build diabetes-friendly recipes. "
+                "Add a protein like eggs, chicken, fish, tofu, or beans, plus one non-starchy vegetable.",
+                code="recipe_validation_failed",
+                internal_message=f"{internal_prefix}: {reason_text}",
+                error_type="invalid_input",
+            )
+        return RecipeGenerationError(
+            "Recipe generation is taking longer than expected. Please try again in a moment.",
+            code="recipe_validation_failed",
+            internal_message=f"{internal_prefix}: {reason_text}",
+            error_type="operational",
+        )
 
     def _validate_ingredients(self, ingredients: list[str]) -> None:
         if not ingredients:
@@ -335,7 +366,7 @@ class AIPipeline:
                 )
                 recipes = self._validated_recipes_or_none(recipes_retry, source_ingredients=selected_food_only) or []
             if not recipes:
-                raise RuntimeError("Unable to generate recipes right now. Please try again in a moment.")
+                raise self._recipe_validation_error(self._last_recipe_validation_error, retried=True)
             record_ai_request(db, user_id, tier, "recipes", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
             db.add(RecipeHistory(user_id=user_id, source="vision", recipes=recipes))
             db.commit()
@@ -445,7 +476,7 @@ class AIPipeline:
                 )
                 recipes = self._validated_recipes_or_none(recipes_retry, source_ingredients=selected_food_only) or []
             if not recipes:
-                raise RuntimeError("Unable to generate recipes right now. Please try again in a moment.")
+                raise self._recipe_validation_error(self._last_recipe_validation_error, retried=True)
             record_ai_request(db, user_id, tier, "recipes", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
             db.add(RecipeHistory(user_id=user_id, source="vision", recipes=recipes))
             db.commit()
@@ -510,11 +541,7 @@ class AIPipeline:
             remaining = overall_budget_seconds - (time.time() - started)
             # One retry (variety on, cache bypassed) only if there is enough time left.
             if remaining <= 8:
-                raise RecipeGenerationError(
-                    "Unable to generate recipes right now. Please try again in a moment.",
-                    code="recipe_validation_failed",
-                    internal_message=f"validation_failed_no_retry: {first_validation_error or 'unknown'}",
-                )
+                raise self._recipe_validation_error(first_validation_error, retried=False)
             recipes_retry = self.ai.generate_recipes(
                 ingredients,
                 tier,
@@ -529,11 +556,7 @@ class AIPipeline:
             recipes = self._validated_recipes_or_none(recipes_retry, mode=mode, source_ingredients=ingredients)
 
         if recipes is None:
-            raise RecipeGenerationError(
-                "Unable to generate recipes right now. Please try again in a moment.",
-                code="recipe_validation_failed",
-                internal_message=f"validation_failed_after_retry: {self._last_recipe_validation_error or 'unknown'}",
-            )
+            raise self._recipe_validation_error(self._last_recipe_validation_error, retried=True)
 
         record_ai_request(
             db,
@@ -620,13 +643,36 @@ class AIPipeline:
                 out.add(singular)
             return out
 
+        def _source_terms(items: list[str] | None) -> list[str]:
+            terms: list[str] = []
+            seen: set[str] = set()
+            for item in items or []:
+                if not isinstance(item, str) or not item.strip():
+                    continue
+                raw = item.strip()
+                candidates = [raw]
+                # Users and AI precheck can produce combined phrases like
+                # "tomatoes and cayenne pepper". Match those as individual foods too.
+                candidates.extend(
+                    part.strip()
+                    for part in re.split(r"\s+(?:and|with|plus)\s+|[,&/]+", raw, flags=re.IGNORECASE)
+                    if part.strip()
+                )
+                for candidate in candidates:
+                    normalized = _norm(candidate)
+                    if normalized and normalized not in seen:
+                        terms.append(candidate)
+                        seen.add(normalized)
+            return terms
+
         src_norm: list[str] = []
         src_set: set[str] = set()
         src_variants: set[str] = set()
+        expanded_source_ingredients = _source_terms(source_ingredients)
         if source_ingredients:
-            src_norm = [_norm(str(x)) for x in source_ingredients if isinstance(x, str) and str(x).strip()]
+            src_norm = [_norm(str(x)) for x in expanded_source_ingredients if isinstance(x, str) and str(x).strip()]
             src_set = {x for x in src_norm if x}
-            for src_item in source_ingredients:
+            for src_item in expanded_source_ingredients:
                 if isinstance(src_item, str) and src_item.strip():
                     src_variants.update(_variants(src_item))
 
@@ -684,7 +730,11 @@ class AIPipeline:
             # and does NOT invent non-pantry ingredients.
             if source_ingredients:
                 try:
-                    src = [str(x).strip().lower() for x in source_ingredients if isinstance(x, str) and str(x).strip()]
+                    src = [
+                        str(x).strip().lower()
+                        for x in expanded_source_ingredients
+                        if isinstance(x, str) and str(x).strip()
+                    ]
                     ing_text = " ".join(
                         [
                             str((x.get("name") if isinstance(x, dict) else x) or "").lower()
@@ -700,7 +750,10 @@ class AIPipeline:
                             continue
                         if any(f" {variant} " in f" {hay} " for variant in _variants(s)):
                             used_sources.add(s)
-                    min_required = 1 if len(src) <= 1 else 2
+                    original_source_count = len(
+                        [x for x in source_ingredients if isinstance(x, str) and str(x).strip()]
+                    )
+                    min_required = 1 if original_source_count <= 1 or len(src) <= 1 else 2
                     if len(used_sources) < min_required:
                         return _fail(f"insufficient_source_ingredient_match:{len(used_sources)}")
 
