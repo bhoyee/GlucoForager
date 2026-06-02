@@ -12,6 +12,15 @@ function isValidStaffEmail(email) {
   return Boolean(e) && e.includes('@') && e.includes('.');
 }
 
+function parseRecipientEmails(value) {
+  return String(value || '')
+    .replace(/;/g, ',')
+    .split(',')
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean)
+    .filter((item, index, list) => list.indexOf(item) === index);
+}
+
 export default function ComposeMailPage() {
   const router = useRouter();
   const token = useMemo(() => (typeof window === 'undefined' ? null : localStorage.getItem('adminToken')), []);
@@ -73,9 +82,10 @@ export default function ComposeMailPage() {
     if (!token) return;
     setMessage('');
 
-    if (!isValidStaffEmail(to)) {
+    const recipients = parseRecipientEmails(to);
+    if (!recipients.length || recipients.some((email) => !isValidStaffEmail(email))) {
       setTone('danger');
-      setMessage('Enter a valid recipient email.');
+      setMessage('Enter valid staff emails separated by commas.');
       return;
     }
     if (!String(subject || '').trim()) {
@@ -93,7 +103,7 @@ export default function ComposeMailPage() {
     setSending(true);
     try {
       const fd = new FormData();
-      fd.set('to', to);
+      fd.set('to', recipients.join(','));
       fd.set('subject', subject);
       fd.set('body_html', bodyHtml);
       if (scheduleEnabled) {
@@ -140,9 +150,9 @@ export default function ComposeMailPage() {
       if (!res.ok) throw new Error(data.detail || 'Failed to send.');
       setTone('info');
       if (data?.scheduled) {
-        setMessage('Scheduled.');
+        setMessage(recipients.length > 1 ? `Scheduled for ${recipients.length} recipients.` : 'Scheduled.');
       } else {
-        setMessage('Sent.');
+        setMessage(recipients.length > 1 ? `Sent to ${recipients.length} recipients.` : 'Sent.');
       }
       if (typeof window !== 'undefined') window.dispatchEvent(new Event('admin-inbox-updated'));
       router.push('/admin/inbox?tab=mail');
@@ -163,7 +173,7 @@ export default function ComposeMailPage() {
               Compose mail
             </h2>
             <p className="admin-subtitle" style={{ margin: 0 }}>
-              Staff-to-staff mail (recipient must be a registered staff email).
+              Staff-to-staff mail. Send to one or more registered staff emails.
             </p>
           </div>
           <Link className="admin-button secondary" href="/admin/inbox?tab=mail">
@@ -182,9 +192,9 @@ export default function ComposeMailPage() {
             <div className="admin-compose-fields">
               <div className="admin-field" style={{ marginBottom: 0 }}>
                 <label>To</label>
-                <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="someone@example.com" />
+                <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="someone@example.com, another@example.com" />
                 <p className="admin-help">
-                  Recipient must match an existing staff email in the system.
+                  Separate multiple staff emails with commas. Every recipient must exist as an active staff member.
                 </p>
               </div>
 
