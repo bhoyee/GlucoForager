@@ -41,6 +41,49 @@ def _ensure_staff_email(email: str) -> str:
     return e[:254]
 
 
+def _parse_staff_emails(value: str) -> list[str]:
+    raw = str(value or "").replace(";", ",")
+    emails: list[str] = []
+    seen: set[str] = set()
+    for item in raw.split(","):
+        if not str(item or "").strip():
+            continue
+        email = _ensure_staff_email(item)
+        if email in seen:
+            continue
+        seen.add(email)
+        emails.append(email)
+    if not emails:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Enter at least one recipient email")
+    return emails
+
+
+def _get_active_staff_recipients(db: Session, emails: list[str]) -> list[StaffUser]:
+    recipients = (
+        db.query(StaffUser)
+        .filter(StaffUser.email.in_(emails), StaffUser.deleted_at.is_(None))
+        .all()
+    )
+    by_email = {str(staff.email or "").strip().lower(): staff for staff in recipients}
+    missing = [email for email in emails if email not in by_email]
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"These recipient emails do not belong to active staff: {', '.join(missing)}",
+        )
+    inactive = [
+        str(staff.email or "").strip().lower()
+        for staff in recipients
+        if not StaffRBACService.is_active_staff(staff)
+    ]
+    if inactive:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"These recipients are not active staff members: {', '.join(inactive)}",
+        )
+    return [by_email[email] for email in emails]
+
+
 class _Sanitizer(HTMLParser):
     allowed_tags = {"b", "strong", "i", "em", "u", "br", "p", "div", "span", "ul", "ol", "li", "a"}
     allowed_attrs = {"a": {"href", "target", "rel"}}
@@ -127,7 +170,7 @@ def sanitize_html(html: str) -> str:
 
 
 class ComposePayload(BaseModel):
-    to: str = Field(..., max_length=254)
+    to: str = Field(..., max_length=4000)
     subject: str = Field(..., max_length=200)
     body_html: str = Field(..., max_length=100_000)
 
@@ -139,82 +182,83 @@ def compose_message(
     db: Session = Depends(get_db),
     current_staff: StaffUser = Depends(require_staff_permission("notifications.read")),
 ):
-    to_email = _ensure_staff_email(payload.to)
+    to_emails = _parse_staff_emails(payload.to)
     subject = str(payload.subject or "").strip()
     if not subject:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Subject is required")
 
-    recipient = db.query(StaffUser).filter(StaffUser.email == to_email, StaffUser.deleted_at.is_(None)).first()
-    if not recipient:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Recipient email does not belong to any staff member")
-    if not StaffRBACService.is_active_staff(recipient):
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Recipient is not an active staff member")
+    recipients = _get_active_staff_recipients(db, to_emails)
 
     html_body = sanitize_html(payload.body_html)
     if not html_body.strip():
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Message is required")
 
-    msg = StaffInboxMessage(
-        thread_id=None,
-        parent_id=None,
-        sender_staff_user_id=int(current_staff.id),
-        recipient_staff_user_id=int(recipient.id),
-        to_email=to_email,
-        subject=subject[:200],
-        body_html=html_body,
-        created_at=datetime.utcnow(),
-    )
-    db.add(msg)
-    db.flush()
-    msg.thread_id = int(msg.id)
-
-    db.add(
-        StaffNotification(
-            staff_user_id=int(recipient.id),
-            type="mail.message",
-            title=f"New mail: {subject[:80]}",
-            body=None,
-            data={"message_id": int(msg.id)},
+    messages: list[StaffInboxMessage] = []
+    for recipient in recipients:
+        to_email = str(recipient.email or "").strip().lower()
+        msg = StaffInboxMessage(
+            thread_id=None,
+            parent_id=None,
+            sender_staff_user_id=int(current_staff.id),
+            recipient_staff_user_id=int(recipient.id),
+            to_email=to_email,
+            subject=subject[:200],
+            body_html=html_body,
             created_at=datetime.utcnow(),
         )
-    )
+        db.add(msg)
+        db.flush()
+        msg.thread_id = int(msg.id)
+        messages.append(msg)
 
-    db.add(
-        StaffAuditLog(
-            actor_id=int(current_staff.id),
-            action="inbox.compose",
-            entity="staff_inbox_messages",
-            entity_id=str(msg.id),
-            details={"to": to_email, "subject": subject[:200]},
-            ip=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent"),
-            created_at=datetime.utcnow(),
+        db.add(
+            StaffNotification(
+                staff_user_id=int(recipient.id),
+                type="mail.message",
+                title=f"New mail: {subject[:80]}",
+                body=None,
+                data={"message_id": int(msg.id)},
+                created_at=datetime.utcnow(),
+            )
         )
-    )
+
+        db.add(
+            StaffAuditLog(
+                actor_id=int(current_staff.id),
+                action="inbox.compose",
+                entity="staff_inbox_messages",
+                entity_id=str(msg.id),
+                details={"to": to_email, "subject": subject[:200], "recipient_count": len(recipients)},
+                ip=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+                created_at=datetime.utcnow(),
+            )
+        )
 
     db.commit()
 
     # Also send external email (best-effort).
     try:
         sender_label = getattr(current_staff, "full_name", None) or current_staff.email
-        _send_email(
-            to_email,
-            f"[GlucoForager Staff] {subject}",
-            f"""
-            <html><body style="font-family: Arial, sans-serif; color:#0C1824;">
-              <div style="max-width:640px; margin:0 auto; border:1px solid #e5e7eb; border-radius:12px; padding:16px;">
-                <p style="margin-top:0; color:#6b7280; font-size:12px;">From: {sender_label}</p>
-                {html_body}
-                <hr style="border:none;border-top:1px solid #e5e7eb; margin:16px 0;" />
-                <p style="color:#6b7280; font-size:12px; margin:0;">This message is also available in your staff inbox.</p>
-              </div>
-            </body></html>
-            """,
-        )
+        for to_email in to_emails:
+            _send_email(
+                to_email,
+                f"[GlucoForager Staff] {subject}",
+                f"""
+                <html><body style="font-family: Arial, sans-serif; color:#0C1824;">
+                  <div style="max-width:640px; margin:0 auto; border:1px solid #e5e7eb; border-radius:12px; padding:16px;">
+                    <p style="margin-top:0; color:#6b7280; font-size:12px;">From: {sender_label}</p>
+                    {html_body}
+                    <hr style="border:none;border-top:1px solid #e5e7eb; margin:16px 0;" />
+                    <p style="color:#6b7280; font-size:12px; margin:0;">This message is also available in your staff inbox.</p>
+                  </div>
+                </body></html>
+                """,
+            )
     except Exception:
         pass
 
-    return {"ok": True, "message_id": int(msg.id)}
+    return {"ok": True, "message_id": int(messages[0].id), "message_ids": [int(m.id) for m in messages], "sent": len(messages)}
 
 
 @router.post("/messages/form")
@@ -229,16 +273,12 @@ def compose_message_form(
 ):
     payload = ComposePayload(to=to, subject=subject, body_html=body_html)
 
-    to_email = _ensure_staff_email(payload.to)
+    to_emails = _parse_staff_emails(payload.to)
     subj = str(payload.subject or "").strip()
     if not subj:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Subject is required")
 
-    recipient = db.query(StaffUser).filter(StaffUser.email == to_email, StaffUser.deleted_at.is_(None)).first()
-    if not recipient:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Recipient email does not belong to any staff member")
-    if not StaffRBACService.is_active_staff(recipient):
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Recipient is not an active staff member")
+    recipients = _get_active_staff_recipients(db, to_emails)
 
     html_body = sanitize_html(payload.body_html)
     if not html_body.strip():
@@ -253,50 +293,54 @@ def compose_message_form(
         except Exception:
             raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Failed to store attachment")
 
-    msg = StaffInboxMessage(
-        thread_id=None,
-        parent_id=None,
-        sender_staff_user_id=int(current_staff.id),
-        recipient_staff_user_id=int(recipient.id),
-        to_email=to_email,
-        subject=subj[:200],
-        body_html=html_body,
-        attachment_original_name=getattr(stored, "original_name", None) if stored else None,
-        attachment_filename=getattr(stored, "filename", None) if stored else None,
-        attachment_url=getattr(stored, "url", None) if stored else None,
-        attachment_content_type=getattr(stored, "content_type", None) if stored else None,
-        attachment_size_bytes=getattr(stored, "size_bytes", None) if stored else None,
-        attachment_storage_backend=getattr(stored, "storage_backend", None) if stored else None,
-        attachment_remote_dir=getattr(stored, "remote_dir", None) if stored else None,
-        created_at=datetime.utcnow(),
-    )
-    db.add(msg)
-    db.flush()
-    msg.thread_id = int(msg.id)
-
-    db.add(
-        StaffNotification(
-            staff_user_id=int(recipient.id),
-            type="mail.message",
-            title=f"New mail: {subj[:80]}",
-            body=None,
-            data={"message_id": int(msg.id)},
+    messages: list[StaffInboxMessage] = []
+    for recipient in recipients:
+        to_email = str(recipient.email or "").strip().lower()
+        msg = StaffInboxMessage(
+            thread_id=None,
+            parent_id=None,
+            sender_staff_user_id=int(current_staff.id),
+            recipient_staff_user_id=int(recipient.id),
+            to_email=to_email,
+            subject=subj[:200],
+            body_html=html_body,
+            attachment_original_name=getattr(stored, "original_name", None) if stored else None,
+            attachment_filename=getattr(stored, "filename", None) if stored else None,
+            attachment_url=getattr(stored, "url", None) if stored else None,
+            attachment_content_type=getattr(stored, "content_type", None) if stored else None,
+            attachment_size_bytes=getattr(stored, "size_bytes", None) if stored else None,
+            attachment_storage_backend=getattr(stored, "storage_backend", None) if stored else None,
+            attachment_remote_dir=getattr(stored, "remote_dir", None) if stored else None,
             created_at=datetime.utcnow(),
         )
-    )
+        db.add(msg)
+        db.flush()
+        msg.thread_id = int(msg.id)
+        messages.append(msg)
 
-    db.add(
-        StaffAuditLog(
-            actor_id=int(current_staff.id),
-            action="inbox.compose",
-            entity="staff_inbox_messages",
-            entity_id=str(msg.id),
-            details={"to": to_email, "subject": subj[:200], "has_attachment": bool(stored)},
-            ip=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent"),
-            created_at=datetime.utcnow(),
+        db.add(
+            StaffNotification(
+                staff_user_id=int(recipient.id),
+                type="mail.message",
+                title=f"New mail: {subj[:80]}",
+                body=None,
+                data={"message_id": int(msg.id)},
+                created_at=datetime.utcnow(),
+            )
         )
-    )
+
+        db.add(
+            StaffAuditLog(
+                actor_id=int(current_staff.id),
+                action="inbox.compose",
+                entity="staff_inbox_messages",
+                entity_id=str(msg.id),
+                details={"to": to_email, "subject": subj[:200], "has_attachment": bool(stored), "recipient_count": len(recipients)},
+                ip=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+                created_at=datetime.utcnow(),
+            )
+        )
 
     db.commit()
 
@@ -305,25 +349,26 @@ def compose_message_form(
         attachment_line = ""
         if stored and getattr(stored, "url", None):
             attachment_line = f'<p style="margin:10px 0 0 0; font-size:12px; color:#6b7280;">Attachment: <a href="{html.escape(str(stored.url))}" target="_blank" rel="noreferrer">Download</a></p>'
-        _send_email(
-            to_email,
-            f"[GlucoForager Staff] {subj}",
-            f"""
-            <html><body style="font-family: Arial, sans-serif; color:#0C1824;">
-              <div style="max-width:640px; margin:0 auto; border:1px solid #e5e7eb; border-radius:12px; padding:16px;">
-                <p style="margin-top:0; color:#6b7280; font-size:12px;">From: {sender_label}</p>
-                {html_body}
-                {attachment_line}
-                <hr style="border:none;border-top:1px solid #e5e7eb; margin:16px 0;" />
-                <p style="color:#6b7280; font-size:12px; margin:0;">This message is also available in your staff inbox.</p>
-              </div>
-            </body></html>
-            """,
-        )
+        for to_email in to_emails:
+            _send_email(
+                to_email,
+                f"[GlucoForager Staff] {subj}",
+                f"""
+                <html><body style="font-family: Arial, sans-serif; color:#0C1824;">
+                  <div style="max-width:640px; margin:0 auto; border:1px solid #e5e7eb; border-radius:12px; padding:16px;">
+                    <p style="margin-top:0; color:#6b7280; font-size:12px;">From: {sender_label}</p>
+                    {html_body}
+                    {attachment_line}
+                    <hr style="border:none;border-top:1px solid #e5e7eb; margin:16px 0;" />
+                    <p style="color:#6b7280; font-size:12px; margin:0;">This message is also available in your staff inbox.</p>
+                  </div>
+                </body></html>
+                """,
+            )
     except Exception:
         pass
 
-    return {"ok": True, "message_id": int(msg.id)}
+    return {"ok": True, "message_id": int(messages[0].id), "message_ids": [int(m.id) for m in messages], "sent": len(messages)}
 
 
 @router.get("/messages")
