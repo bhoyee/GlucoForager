@@ -8,9 +8,9 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 const PAGE_SIZE = 1;
 const REFRESH_MS = 20000;
 const GROWTH_RANGES = {
-  week: { label: 'Weekly', days: 7, buckets: 7 },
-  month: { label: 'Monthly', days: 30, buckets: 30 },
-  year: { label: 'Yearly', days: 365, buckets: 12 },
+  week: { label: 'Weekly' },
+  month: { label: 'Monthly' },
+  year: { label: 'Yearly' },
 };
 
 function clampPercent(value) {
@@ -128,6 +128,7 @@ export default function AdminKPIDashboard() {
     },
   });
   const [recentUsers, setRecentUsers] = useState([]);
+  const [userGrowth, setUserGrowth] = useState(null);
   const [recentActivity, setRecentActivity] = useState([]);
   const [actionSummary, setActionSummary] = useState({
     pendingRequests: 0,
@@ -330,6 +331,7 @@ export default function AdminKPIDashboard() {
         queueMetricsData,
         providerCreditsData,
         recentUsersData,
+        userGrowthData,
         userActivityData,
         pendingRequestsData,
         pendingCommentsData,
@@ -358,6 +360,7 @@ export default function AdminKPIDashboard() {
         fetchQueueMetrics(),
         fetchProviderCredits(),
         safeDashboardFetch('/api/admin/users?page=1&page_size=100&sort=created_at&order=desc', { items: [] }),
+        safeDashboardFetch('/api/admin/users/growth', null),
         safeDashboardFetch('/api/admin/user-activity/recent?limit=8', { items: [] }),
         safeDashboardFetch('/api/admin/requests/pending-count', { count: 0 }),
         safeDashboardFetch('/api/admin/blog/comments?page=1&page_size=1&status_filter=pending', { total: 0 }),
@@ -390,6 +393,7 @@ export default function AdminKPIDashboard() {
       setQueueMetrics(queueMetricsData);
       setProviderCredits(providerCreditsData);
       setRecentUsers(Array.isArray(recentUsersData?.items) ? recentUsersData.items : []);
+      setUserGrowth(userGrowthData && typeof userGrowthData === 'object' ? userGrowthData : null);
       setRecentActivity(Array.isArray(userActivityData?.items) ? userActivityData.items : []);
       setActionSummary({
         pendingRequests: Number(pendingRequestsData?.count || 0) || 0,
@@ -427,6 +431,7 @@ export default function AdminKPIDashboard() {
         },
       });
       setRecentUsers([]);
+      setUserGrowth(null);
       setRecentActivity([]);
       setActionSummary({ pendingRequests: 0, pendingComments: 0, unreadNotifications: 0, failedJobs: 0 });
       setSystemHealth({ status: 'unknown', services: {} });
@@ -526,37 +531,15 @@ export default function AdminKPIDashboard() {
     detail: systemHealth.services?.[key]?.detail || '',
   }));
   const signupSeries = useMemo(() => {
-    const today = new Date();
-    const dayMs = 24 * 60 * 60 * 1000;
-    const range = GROWTH_RANGES[growthRange] || GROWTH_RANGES.week;
-
-    if (growthRange === 'year') {
-      return Array.from({ length: range.buckets }).map((_, index) => {
-        const date = new Date(today.getFullYear(), today.getMonth() - (range.buckets - 1 - index), 1);
-        const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        const count = recentUsers.filter((u) => String(u?.created_at || '').slice(0, 7) === key).length;
-        return {
-          key,
-          label: date.toLocaleDateString(undefined, { month: 'short' }),
-          count,
-        };
-      });
-    }
-
-    return Array.from({ length: range.buckets }).map((_, index) => {
-      const date = new Date(today.getTime() - (range.buckets - 1 - index) * dayMs);
-      const key = date.toISOString().slice(0, 10);
-      const count = recentUsers.filter((u) => String(u?.created_at || '').slice(0, 10) === key).length;
-      return {
-        key,
-        label:
-          growthRange === 'week'
-            ? date.toLocaleDateString(undefined, { weekday: 'short' })
-            : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-        count,
-      };
-    });
-  }, [growthRange, recentUsers]);
+    const items = userGrowth?.[growthRange]?.items;
+    if (!Array.isArray(items)) return [];
+    return items.map((item) => ({
+      key: String(item?.key || ''),
+      label: String(item?.label || item?.key || ''),
+      count: Number(item?.count || 0) || 0,
+    }));
+  }, [growthRange, userGrowth]);
+  const signupScopeLabel = userGrowth?.[growthRange]?.label || '';
   const signupPeak = Math.max(1, ...signupSeries.map((d) => d.count));
   const signupTotal = signupSeries.reduce((sum, d) => sum + Number(d.count || 0), 0);
   const signupAverage = signupSeries.length ? signupTotal / signupSeries.length : 0;
@@ -824,6 +807,12 @@ export default function AdminKPIDashboard() {
               </button>
             ))}
           </div>
+          {signupScopeLabel ? (
+            <p className="admin-subtitle" style={{ margin: '8px 0 0 0' }}>
+              Showing {signupScopeLabel}
+              {growthRange === 'week' ? ' (Sunday to Saturday)' : ''}
+            </p>
+          ) : null}
           <div className="admin-kpi-growth-summary">
             <div>
               <span>Total signups</span>

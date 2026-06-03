@@ -397,6 +397,103 @@ def users_platform_summary(
     return {"ios": counts.get("ios", 0), "android": counts.get("android", 0), "unknown": counts.get("unknown", 0), "total": sum(counts.values())}
 
 
+def _count_users_between(users: list[User], start: datetime, end: datetime) -> int:
+    total = 0
+    for user in users:
+        created_at = user.created_at
+        if created_at and start <= created_at < end:
+            total += 1
+    return total
+
+
+@router.get("/users/growth")
+def users_growth(
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),  # noqa: ARG001
+):
+    now = datetime.utcnow()
+    today = now.date()
+
+    # Sunday-to-Saturday week. Python weekday: Monday=0, Sunday=6.
+    days_since_sunday = (today.weekday() + 1) % 7
+    week_start_date = today - timedelta(days=days_since_sunday)
+    week_start = datetime.combine(week_start_date, datetime.min.time())
+    week_end = week_start + timedelta(days=7)
+
+    month_start = datetime(now.year, now.month, 1)
+    month_end = datetime(now.year + 1, 1, 1) if now.month == 12 else datetime(now.year, now.month + 1, 1)
+
+    year_start = datetime(now.year, 1, 1)
+    year_end = datetime(now.year + 1, 1, 1)
+
+    query_start = min(week_start, year_start)
+    users = (
+        db.query(User)
+        .filter(User.created_at >= query_start, User.created_at < year_end)
+        .all()
+    )
+
+    week_items = []
+    for index in range(7):
+        bucket_start = week_start + timedelta(days=index)
+        bucket_end = bucket_start + timedelta(days=1)
+        week_items.append(
+            {
+                "key": bucket_start.strftime("%Y-%m-%d"),
+                "label": bucket_start.strftime("%a"),
+                "count": _count_users_between(users, bucket_start, bucket_end),
+            }
+        )
+
+    month_items = []
+    cursor = month_start
+    while cursor < month_end:
+        bucket_end = cursor + timedelta(days=1)
+        month_items.append(
+            {
+                "key": cursor.strftime("%Y-%m-%d"),
+                "label": cursor.strftime("%b %d"),
+                "count": _count_users_between(users, cursor, bucket_end),
+            }
+        )
+        cursor = bucket_end
+
+    year_items = []
+    for month_index in range(1, 13):
+        bucket_start = datetime(now.year, month_index, 1)
+        bucket_end = datetime(now.year + 1, 1, 1) if month_index == 12 else datetime(now.year, month_index + 1, 1)
+        year_items.append(
+            {
+                "key": bucket_start.strftime("%Y-%m"),
+                "label": bucket_start.strftime("%b"),
+                "count": _count_users_between(users, bucket_start, bucket_end),
+            }
+        )
+
+    return {
+        "generated_at": now.isoformat(),
+        "week": {
+            "label": "Current week",
+            "starts_on": "Sunday",
+            "start": week_start.isoformat(),
+            "end": week_end.isoformat(),
+            "items": week_items,
+        },
+        "month": {
+            "label": month_start.strftime("%B %Y"),
+            "start": month_start.isoformat(),
+            "end": month_end.isoformat(),
+            "items": month_items,
+        },
+        "year": {
+            "label": str(now.year),
+            "start": year_start.isoformat(),
+            "end": year_end.isoformat(),
+            "items": year_items,
+        },
+    }
+
+
 @router.get("/users/export.xls")
 def export_users_excel(
     db: Session = Depends(get_db),
