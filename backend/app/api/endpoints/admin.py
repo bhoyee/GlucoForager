@@ -79,6 +79,14 @@ class RecipePayload(BaseModel):
     ingredients: list[IngredientInput]
     instructions: list[str]
     nutrition: NutritionInput | None = None
+    cuisine_tags: list[str] = Field(default_factory=list, max_length=12)
+    dietary_tags: list[str] = Field(default_factory=list, max_length=12)
+    allergen_tags: list[str] = Field(default_factory=list, max_length=16)
+    food_exclusion_tags: list[str] = Field(default_factory=list, max_length=16)
+    goal_tags: list[str] = Field(default_factory=list, max_length=16)
+    equipment_tags: list[str] = Field(default_factory=list, max_length=16)
+    diabetes_type_tags: list[str] = Field(default_factory=list, max_length=8)
+    cook_time_tag: str | None = Field(None, max_length=30)
 
     @field_validator("meal_type")
     def validate_meal_type(cls, value: str) -> str:  # noqa: N805
@@ -94,6 +102,36 @@ class RecipePayload(BaseModel):
         if not cleaned:
             raise ValueError("At least one instruction is required")
         return cleaned
+
+    @field_validator(
+        "cuisine_tags",
+        "dietary_tags",
+        "allergen_tags",
+        "food_exclusion_tags",
+        "goal_tags",
+        "equipment_tags",
+        "diabetes_type_tags",
+    )
+    def normalize_tag_list(cls, value: list[str]) -> list[str]:  # noqa: N805
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for item in value or []:
+            tag = str(item or "").strip().lower()
+            if not tag or tag in seen:
+                continue
+            cleaned.append(tag)
+            seen.add(tag)
+        return cleaned
+
+    @field_validator("cook_time_tag")
+    def validate_cook_time_tag(cls, value: str | None) -> str | None:  # noqa: N805
+        tag = str(value or "").strip().lower()
+        if not tag:
+            return None
+        allowed = {"under_15", "15_30", "30_45", "45_plus"}
+        if tag not in allowed:
+            raise ValueError("cook_time_tag must be under_15, 15_30, 30_45, or 45_plus")
+        return tag
 
 
 class AdminUserUpdate(BaseModel):
@@ -122,6 +160,19 @@ class AdminTierPayload(BaseModel):
 class AdminPremiumBlockPayload(BaseModel):
     reason: str | None = Field(None, max_length=200)
     until: datetime | None = None
+
+
+def _recipe_metadata_payload(recipe: Recipe) -> dict:
+    return {
+        "cuisine_tags": recipe.cuisine_tags or [],
+        "dietary_tags": recipe.dietary_tags or [],
+        "allergen_tags": recipe.allergen_tags or [],
+        "food_exclusion_tags": recipe.food_exclusion_tags or [],
+        "goal_tags": recipe.goal_tags or [],
+        "equipment_tags": recipe.equipment_tags or [],
+        "diabetes_type_tags": recipe.diabetes_type_tags or [],
+        "cook_time_tag": recipe.cook_time_tag,
+    }
 
 
 @router.post("/login", response_model=AdminToken)
@@ -156,6 +207,14 @@ def create_recipe(
         ingredients=[item.dict() for item in payload.ingredients],
         instructions=payload.instructions,
         nutrition=payload.nutrition.dict() if payload.nutrition else None,
+        cuisine_tags=payload.cuisine_tags,
+        dietary_tags=payload.dietary_tags,
+        allergen_tags=payload.allergen_tags,
+        food_exclusion_tags=payload.food_exclusion_tags,
+        goal_tags=payload.goal_tags,
+        equipment_tags=payload.equipment_tags,
+        diabetes_type_tags=payload.diabetes_type_tags,
+        cook_time_tag=payload.cook_time_tag,
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
     )
@@ -184,6 +243,7 @@ def list_recipes(
                 "servings": r.servings,
                 "nutrition": r.nutrition,
                 "created_at": r.created_at,
+                **_recipe_metadata_payload(r),
             }
             for r in items
         ]
@@ -848,6 +908,7 @@ def get_recipe(
         "ingredients": recipe.ingredients,
         "instructions": recipe.instructions,
         "nutrition": recipe.nutrition,
+        **_recipe_metadata_payload(recipe),
         "created_at": recipe.created_at,
         "updated_at": recipe.updated_at,
     }
@@ -874,6 +935,14 @@ def update_recipe(
     recipe.ingredients = [item.dict() for item in payload.ingredients]
     recipe.instructions = payload.instructions
     recipe.nutrition = payload.nutrition.dict() if payload.nutrition else None
+    recipe.cuisine_tags = payload.cuisine_tags
+    recipe.dietary_tags = payload.dietary_tags
+    recipe.allergen_tags = payload.allergen_tags
+    recipe.food_exclusion_tags = payload.food_exclusion_tags
+    recipe.goal_tags = payload.goal_tags
+    recipe.equipment_tags = payload.equipment_tags
+    recipe.diabetes_type_tags = payload.diabetes_type_tags
+    recipe.cook_time_tag = payload.cook_time_tag
     recipe.updated_at = datetime.utcnow()
     db.commit()
     return {"status": "updated"}

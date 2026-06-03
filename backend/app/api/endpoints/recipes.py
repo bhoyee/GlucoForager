@@ -76,6 +76,26 @@ def _recipe_text(recipe: Recipe) -> str:
     return " ".join(parts).lower()
 
 
+def _recipe_tags(recipe: Recipe, field: str) -> set[str]:
+    raw = getattr(recipe, field, None)
+    if not isinstance(raw, list):
+        return set()
+    return {str(item).strip().lower() for item in raw if isinstance(item, str) and str(item).strip()}
+
+
+def _recipe_metadata_payload(recipe: Recipe) -> dict:
+    return {
+        "cuisine_tags": list(_recipe_tags(recipe, "cuisine_tags")),
+        "dietary_tags": list(_recipe_tags(recipe, "dietary_tags")),
+        "allergen_tags": list(_recipe_tags(recipe, "allergen_tags")),
+        "food_exclusion_tags": list(_recipe_tags(recipe, "food_exclusion_tags")),
+        "goal_tags": list(_recipe_tags(recipe, "goal_tags")),
+        "equipment_tags": list(_recipe_tags(recipe, "equipment_tags")),
+        "diabetes_type_tags": list(_recipe_tags(recipe, "diabetes_type_tags")),
+        "cook_time_tag": getattr(recipe, "cook_time_tag", None),
+    }
+
+
 def _time_minutes(recipe: Recipe) -> int | None:
     def _num(value) -> float | None:
         if value is None:
@@ -119,12 +139,22 @@ def _get_nutrition_value(recipe: Recipe, keys: list[str]) -> float | None:
 
 def _profile_hard_allows(recipe: Recipe, *, profile: dict) -> bool:
     text = _recipe_text(recipe)
+    dietary_tags = _recipe_tags(recipe, "dietary_tags")
+    allergen_tags = _recipe_tags(recipe, "allergen_tags")
+    exclusion_tags = _recipe_tags(recipe, "food_exclusion_tags")
 
     dietary = str(profile.get("dietary_pattern") or "").strip().lower()
     allergens = set(str(x).strip().lower() for x in (profile.get("allergens") or []) if isinstance(x, str) and x.strip())
     exclusions = set(
         str(x).strip().lower() for x in (profile.get("food_exclusions") or []) if isinstance(x, str) and x.strip()
     )
+
+    if allergens and allergen_tags and allergens.intersection(allergen_tags):
+        return False
+    if exclusions and exclusion_tags and exclusions.intersection(exclusion_tags):
+        return False
+    if dietary and dietary != "none" and dietary_tags and dietary not in dietary_tags:
+        return False
 
     allergen_keywords: dict[str, list[str]] = {
         "dairy": ["milk", "cheese", "yogurt", "butter", "cream", "whey", "casein", "kefir"],
@@ -177,6 +207,10 @@ def _profile_hard_allows(recipe: Recipe, *, profile: dict) -> bool:
 
 def _profile_score(recipe: Recipe, *, profile: dict) -> int:
     score = 0
+    recipe_cuisines = _recipe_tags(recipe, "cuisine_tags")
+    recipe_goals = _recipe_tags(recipe, "goal_tags")
+    recipe_equipment = _recipe_tags(recipe, "equipment_tags")
+    recipe_diabetes_types = _recipe_tags(recipe, "diabetes_type_tags")
     goals = set(
         str(x).strip().lower() for x in (profile.get("meal_goals") or []) if isinstance(x, str) and x.strip()
     )
@@ -186,6 +220,15 @@ def _profile_score(recipe: Recipe, *, profile: dict) -> int:
         if isinstance(x, str) and x.strip()
     )
     cook_pref = str(profile.get("cook_time_preference") or "").strip().lower()
+    blood_sugar_profile = str(profile.get("blood_sugar_profile") or "").strip().lower()
+    equipment = set(
+        str(x).strip().lower()
+        for x in (profile.get("available_equipment") or [])
+        if isinstance(x, str) and x.strip()
+    )
+
+    if cook_pref and cook_pref == str(getattr(recipe, "cook_time_tag", "") or "").strip().lower():
+        score += 4
 
     total_time = _time_minutes(recipe)
     if cook_pref == "under_15" and total_time is not None and total_time <= 15:
@@ -197,6 +240,15 @@ def _profile_score(recipe: Recipe, *, profile: dict) -> int:
 
     if "quick_meals" in goals and total_time is not None and total_time <= 20:
         score += 3
+
+    matching_goals = goals.intersection(recipe_goals)
+    score += len(matching_goals) * 3
+    if cuisines and recipe_cuisines:
+        score += len(cuisines.intersection(recipe_cuisines)) * 3
+    if equipment and recipe_equipment:
+        score += len(equipment.intersection(recipe_equipment)) * 1
+    if blood_sugar_profile and recipe_diabetes_types and blood_sugar_profile in recipe_diabetes_types:
+        score += 2
 
     carbs = _get_nutrition_value(recipe, ["carbs", "carbohydrates", "total_carbs", "net_carbs"])
     protein = _get_nutrition_value(recipe, ["protein"])
@@ -286,6 +338,7 @@ def recipe_suggestions(
                 "servings": r.servings,
                 "image_url": r.image_url,
                 "nutrition": r.nutrition,
+                **_recipe_metadata_payload(r),
             }
             for r in selection
         ]
@@ -423,4 +476,5 @@ def get_recipe(
         "ingredients": recipe.ingredients,
         "instructions": recipe.instructions,
         "nutrition": recipe.nutrition,
+        **_recipe_metadata_payload(recipe),
     }
