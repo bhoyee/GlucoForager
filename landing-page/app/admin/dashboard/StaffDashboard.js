@@ -491,9 +491,7 @@ export default function StaffDashboard() {
     () => ({
       week: sumCounts(userGrowth?.week?.items),
       month: sumCounts(userGrowth?.month?.items),
-      year: sumCounts(userGrowth?.year?.items),
       monthLabel: userGrowth?.month?.label || 'Current month',
-      yearLabel: userGrowth?.year?.label || 'Current year',
     }),
     [userGrowth]
   );
@@ -666,7 +664,7 @@ export default function StaffDashboard() {
           <div className="admin-dashboard-span-6">
             <Widget
               title="New app users"
-              subtitle={`Current week, ${userGrowthTotals.monthLabel}, and ${userGrowthTotals.yearLabel}.`}
+              subtitle={`Current week and ${userGrowthTotals.monthLabel}.`}
               href={canViewUsers ? '/admin/users' : null}
               actionLabel="Users"
             >
@@ -678,10 +676,6 @@ export default function StaffDashboard() {
                 <div className="admin-dashboard-stat">
                   <div className="admin-dashboard-stat-label">This month</div>
                   <div className="admin-dashboard-stat-value">{formatNumber(userGrowthTotals.month)}</div>
-                </div>
-                <div className="admin-dashboard-stat">
-                  <div className="admin-dashboard-stat-label">This year</div>
-                  <div className="admin-dashboard-stat-value">{formatNumber(userGrowthTotals.year)}</div>
                 </div>
               </div>
             </Widget>
@@ -702,14 +696,6 @@ export default function StaffDashboard() {
                 <div className="admin-dashboard-stat">
                   <div className="admin-dashboard-stat-label">Android</div>
                   <div className="admin-dashboard-stat-value">{formatNumber(downloadCounts?.android)}</div>
-                </div>
-                <div className="admin-dashboard-stat">
-                  <div className="admin-dashboard-stat-label">Unknown</div>
-                  <div className="admin-dashboard-stat-value">{formatNumber(downloadCounts?.unknown)}</div>
-                </div>
-                <div className="admin-dashboard-stat">
-                  <div className="admin-dashboard-stat-label">Total</div>
-                  <div className="admin-dashboard-stat-value">{formatNumber(downloadCounts?.total)}</div>
                 </div>
               </div>
             </Widget>
