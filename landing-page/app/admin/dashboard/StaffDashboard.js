@@ -37,6 +37,19 @@ function formatRelativeTime(iso) {
   }
 }
 
+function formatNumber(value) {
+  const n = Number(value || 0);
+  try {
+    return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(Number.isFinite(n) ? n : 0);
+  } catch {
+    return String(Number.isFinite(n) ? n : 0);
+  }
+}
+
+function sumCounts(items) {
+  return (Array.isArray(items) ? items : []).reduce((total, item) => total + (Number(item?.count || 0) || 0), 0);
+}
+
 function isoDateInTimeZone(date, timeZone) {
   try {
     const parts = new Intl.DateTimeFormat('en-CA', {
@@ -211,6 +224,7 @@ export default function StaffDashboard() {
   const [week, setWeek] = useState(null);
   const [intranetUpdates, setIntranetUpdates] = useState([]);
   const [standupNotes, setStandupNotes] = useState([]);
+  const [userMetrics, setUserMetrics] = useState(null);
 
   const permissions = Array.isArray(me?.permissions) ? me.permissions : [];
   const loadInFlightRef = useRef(false);
@@ -304,6 +318,7 @@ export default function StaffDashboard() {
           setAttendanceMonth([]);
           setWeek(null);
           setIntranetUpdates([]);
+          setUserMetrics(null);
           setMessage(meRes?.data?.detail || meRes?.error || 'Dashboard is taking too long to load. Check the backend and try refresh.');
           setLoading(false);
           setRefreshing(false);
@@ -366,6 +381,14 @@ export default function StaffDashboard() {
             timeoutMs: 12000,
             allowUnauthorized: true,
           }).then((r) => setStandupNotes(Array.isArray(r?.data?.items) ? r.data.items : []))
+        );
+
+        // Staff-safe operational metrics for quick daily visibility.
+        requests.push(
+          safeJson(`${API_URL}/api/admin/dashboard/user-metrics`, {
+            timeoutMs: 12000,
+            allowUnauthorized: true,
+          }).then((r) => setUserMetrics(r?.data && typeof r.data === 'object' ? r.data : null))
         );
 
         await Promise.allSettled(requests);
@@ -461,6 +484,19 @@ export default function StaffDashboard() {
   }, [primaryQuickActions, quickActions]);
 
   const tickerUpdates = useMemo(() => (Array.isArray(intranetUpdates) ? intranetUpdates.slice(0, 8) : []), [intranetUpdates]);
+  const canViewUsers = hasPermission(permissions, 'users.read');
+  const userGrowth = userMetrics?.growth && typeof userMetrics.growth === 'object' ? userMetrics.growth : null;
+  const downloadCounts = userMetrics?.downloads && typeof userMetrics.downloads === 'object' ? userMetrics.downloads : null;
+  const userGrowthTotals = useMemo(
+    () => ({
+      week: sumCounts(userGrowth?.week?.items),
+      month: sumCounts(userGrowth?.month?.items),
+      year: sumCounts(userGrowth?.year?.items),
+      monthLabel: userGrowth?.month?.label || 'Current month',
+      yearLabel: userGrowth?.year?.label || 'Current year',
+    }),
+    [userGrowth]
+  );
 
   if (adminRedirecting) {
     return (
@@ -627,6 +663,57 @@ export default function StaffDashboard() {
             </Widget>
           </div>
 
+          <div className="admin-dashboard-span-6">
+            <Widget
+              title="New app users"
+              subtitle={`Current week, ${userGrowthTotals.monthLabel}, and ${userGrowthTotals.yearLabel}.`}
+              href={canViewUsers ? '/admin/users' : null}
+              actionLabel="Users"
+            >
+              <div className="admin-dashboard-stats">
+                <div className="admin-dashboard-stat">
+                  <div className="admin-dashboard-stat-label">This week</div>
+                  <div className="admin-dashboard-stat-value">{formatNumber(userGrowthTotals.week)}</div>
+                </div>
+                <div className="admin-dashboard-stat">
+                  <div className="admin-dashboard-stat-label">This month</div>
+                  <div className="admin-dashboard-stat-value">{formatNumber(userGrowthTotals.month)}</div>
+                </div>
+                <div className="admin-dashboard-stat">
+                  <div className="admin-dashboard-stat-label">This year</div>
+                  <div className="admin-dashboard-stat-value">{formatNumber(userGrowthTotals.year)}</div>
+                </div>
+              </div>
+            </Widget>
+          </div>
+
+          <div className="admin-dashboard-span-6">
+            <Widget
+              title="App downloads"
+              subtitle="Registered mobile users by platform."
+              href={canViewUsers ? '/admin/users' : null}
+              actionLabel="Users"
+            >
+              <div className="admin-dashboard-stats">
+                <div className="admin-dashboard-stat">
+                  <div className="admin-dashboard-stat-label">iOS</div>
+                  <div className="admin-dashboard-stat-value">{formatNumber(downloadCounts?.ios)}</div>
+                </div>
+                <div className="admin-dashboard-stat">
+                  <div className="admin-dashboard-stat-label">Android</div>
+                  <div className="admin-dashboard-stat-value">{formatNumber(downloadCounts?.android)}</div>
+                </div>
+                <div className="admin-dashboard-stat">
+                  <div className="admin-dashboard-stat-label">Unknown</div>
+                  <div className="admin-dashboard-stat-value">{formatNumber(downloadCounts?.unknown)}</div>
+                </div>
+                <div className="admin-dashboard-stat">
+                  <div className="admin-dashboard-stat-label">Total</div>
+                  <div className="admin-dashboard-stat-value">{formatNumber(downloadCounts?.total)}</div>
+                </div>
+              </div>
+            </Widget>
+          </div>
 
         </div>
       )}
