@@ -19,5 +19,13 @@ class Recipe(Base):
     ingredients = Column(JSON, nullable=False)  # list[{name, quantity, unit, note?}]
     instructions = Column(JSON, nullable=False)  # list[str]
     nutrition = Column(JSON, nullable=True)  # {calories, carbs, protein, fat, fiber, sugar}
+    cuisine_tags = Column(JSON, nullable=True)  # e.g. ["west_african", "mediterranean"]
+    dietary_tags = Column(JSON, nullable=True)  # e.g. ["vegetarian", "halal"]
+    allergen_tags = Column(JSON, nullable=True)  # allergens present in the recipe
+    food_exclusion_tags = Column(JSON, nullable=True)  # avoid-list items present in the recipe
+    goal_tags = Column(JSON, nullable=True)  # e.g. ["lower_carb", "high_protein"]
+    equipment_tags = Column(JSON, nullable=True)  # e.g. ["air_fryer", "microwave"]
+    diabetes_type_tags = Column(JSON, nullable=True)  # e.g. ["type_2", "prediabetes"]
+    cook_time_tag = Column(String, nullable=True)  # under_15 | 15_30 | 30_45 | 45_plus
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)

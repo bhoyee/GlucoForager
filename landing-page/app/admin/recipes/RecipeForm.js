@@ -3,10 +3,123 @@
 import { useState } from 'react';
 
 const emptyIngredient = { name: '', quantity: '', unit: '', note: '' };
+const DEFAULT_METADATA = {
+  cuisine_tags: [],
+  dietary_tags: [],
+  allergen_tags: [],
+  food_exclusion_tags: [],
+  goal_tags: [],
+  equipment_tags: [],
+  diabetes_type_tags: [],
+  cook_time_tag: '',
+};
+
+const METADATA_GROUPS = [
+  {
+    field: 'cuisine_tags',
+    title: 'Cuisine fit',
+    options: [
+      ['west_african', 'West African'],
+      ['british_irish', 'British / Irish'],
+      ['caribbean', 'Caribbean'],
+      ['mediterranean', 'Mediterranean'],
+      ['south_asian', 'South Asian'],
+      ['east_asian', 'East Asian'],
+      ['latin_american', 'Latin American'],
+      ['mena', 'Middle Eastern / North African'],
+    ],
+  },
+  {
+    field: 'dietary_tags',
+    title: 'Dietary fit',
+    options: [
+      ['vegetarian', 'Vegetarian'],
+      ['vegan', 'Vegan'],
+      ['pescatarian', 'Pescatarian'],
+      ['halal', 'Halal'],
+      ['kosher', 'Kosher'],
+    ],
+  },
+  {
+    field: 'goal_tags',
+    title: 'User goals',
+    options: [
+      ['lower_carb', 'Lower carb'],
+      ['high_protein', 'High protein'],
+      ['quick_meals', 'Quick meal'],
+      ['simple_ingredients', 'Simple ingredients'],
+      ['weight_loss', 'Weight loss'],
+      ['balanced', 'Balanced'],
+    ],
+  },
+  {
+    field: 'equipment_tags',
+    title: 'Equipment',
+    options: [
+      ['air_fryer', 'Air fryer'],
+      ['blender', 'Blender'],
+      ['microwave', 'Microwave'],
+      ['oven', 'Oven'],
+      ['stovetop', 'Stovetop'],
+      ['grill', 'Grill'],
+      ['slow_cooker', 'Slow cooker'],
+    ],
+  },
+  {
+    field: 'diabetes_type_tags',
+    title: 'Diabetes profile',
+    options: [
+      ['type_1', 'Type 1'],
+      ['type_2', 'Type 2'],
+      ['prediabetes', 'Prediabetes'],
+      ['gestational', 'Gestational'],
+    ],
+  },
+  {
+    field: 'allergen_tags',
+    title: 'Allergens present',
+    options: [
+      ['dairy', 'Dairy'],
+      ['eggs', 'Eggs'],
+      ['fish', 'Fish'],
+      ['shellfish', 'Shellfish'],
+      ['peanuts', 'Peanuts'],
+      ['tree_nuts', 'Tree nuts'],
+      ['soy', 'Soy'],
+      ['wheat_gluten', 'Wheat / gluten'],
+      ['sesame', 'Sesame'],
+    ],
+  },
+  {
+    field: 'food_exclusion_tags',
+    title: 'Avoid-list items present',
+    options: [
+      ['pork', 'Pork'],
+      ['beef', 'Beef'],
+      ['chicken', 'Chicken'],
+      ['seafood', 'Seafood'],
+      ['onion_garlic', 'Onion / garlic'],
+      ['spicy_food', 'Spicy food'],
+      ['mushrooms', 'Mushrooms'],
+      ['alcohol', 'Alcohol'],
+      ['caffeine', 'Caffeine'],
+    ],
+  },
+];
+
+const COOK_TIME_OPTIONS = [
+  ['', 'Auto / not tagged'],
+  ['under_15', 'Under 15 minutes'],
+  ['15_30', '15-30 minutes'],
+  ['30_45', '30-45 minutes'],
+  ['45_plus', '45+ minutes'],
+];
 
 export default function RecipeForm({ initialData, onSubmit, onUpload, isSubmitting }) {
   const [formState, setFormState] = useState(
-    initialData || {
+    initialData
+      ? { ...DEFAULT_METADATA, ...initialData }
+      : {
       name: '',
       meal_type: 'breakfast',
       description: '',
@@ -24,6 +137,7 @@ export default function RecipeForm({ initialData, onSubmit, onUpload, isSubmitti
         fiber: '',
         sugar: '',
       },
+      ...DEFAULT_METADATA,
     }
   );
 
@@ -42,6 +156,12 @@ export default function RecipeForm({ initialData, onSubmit, onUpload, isSubmitti
   const removeIngredient = (index) => {
     const updated = formState.ingredients.filter((_, idx) => idx !== index);
     setFormState({ ...formState, ingredients: updated.length ? updated : [emptyIngredient] });
+  };
+
+  const toggleMetadataTag = (field, value) => {
+    const current = Array.isArray(formState[field]) ? formState[field] : [];
+    const next = current.includes(value) ? current.filter((item) => item !== value) : [...current, value];
+    setFormState({ ...formState, [field]: next });
   };
 
   const handleSubmit = (event) => {
@@ -199,6 +319,52 @@ export default function RecipeForm({ initialData, onSubmit, onUpload, isSubmitti
           rows="4"
           className="admin-form-textarea"
         />
+      </div>
+
+      {/* Matching Metadata */}
+      <div className="admin-form-section">
+        <h3 className="admin-form-section-title">Recipe Matching Metadata</h3>
+        <p className="admin-help" style={{ marginTop: -4 }}>
+          These fields help the app match recipes to user preferences instead of relying only on text.
+        </p>
+
+        <div className="admin-field">
+          <label className="admin-field-label">Cook time preference tag</label>
+          <select
+            value={formState.cook_time_tag || ''}
+            onChange={(event) => setFormState({ ...formState, cook_time_tag: event.target.value })}
+            className="admin-form-select"
+          >
+            {COOK_TIME_OPTIONS.map(([value, label]) => (
+              <option key={value || 'none'} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="admin-metadata-grid">
+          {METADATA_GROUPS.map((group) => (
+            <fieldset key={group.field} className="admin-metadata-group">
+              <legend>{group.title}</legend>
+              <div className="admin-metadata-options">
+                {group.options.map(([value, label]) => {
+                  const selected = Array.isArray(formState[group.field]) && formState[group.field].includes(value);
+                  return (
+                    <label key={value} className={`admin-metadata-option ${selected ? 'selected' : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={() => toggleMetadataTag(group.field, value)}
+                      />
+                      <span>{label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+          ))}
+        </div>
       </div>
 
       {/* Ingredients Section */}
