@@ -100,6 +100,14 @@ export default function NewRecipePage() {
         fiber: parseFloat(formState.nutrition.fiber) || 0,
         sugar: parseFloat(formState.nutrition.sugar) || 0,
       },
+      cuisine_tags: Array.isArray(formState.cuisine_tags) ? formState.cuisine_tags : [],
+      dietary_tags: Array.isArray(formState.dietary_tags) ? formState.dietary_tags : [],
+      allergen_tags: Array.isArray(formState.allergen_tags) ? formState.allergen_tags : [],
+      food_exclusion_tags: Array.isArray(formState.food_exclusion_tags) ? formState.food_exclusion_tags : [],
+      goal_tags: Array.isArray(formState.goal_tags) ? formState.goal_tags : [],
+      equipment_tags: Array.isArray(formState.equipment_tags) ? formState.equipment_tags : [],
+      diabetes_type_tags: Array.isArray(formState.diabetes_type_tags) ? formState.diabetes_type_tags : [],
+      cook_time_tag: formState.cook_time_tag || null,
     };
 
     const response = await fetch(`${API_URL}/api/admin/recipes`, {

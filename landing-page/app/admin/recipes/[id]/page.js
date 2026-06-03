@@ -86,6 +86,14 @@ export default function EditRecipePage() {
           fiber: data.nutrition?.fiber ?? '',
           sugar: data.nutrition?.sugar ?? '',
         },
+        cuisine_tags: Array.isArray(data.cuisine_tags) ? data.cuisine_tags : [],
+        dietary_tags: Array.isArray(data.dietary_tags) ? data.dietary_tags : [],
+        allergen_tags: Array.isArray(data.allergen_tags) ? data.allergen_tags : [],
+        food_exclusion_tags: Array.isArray(data.food_exclusion_tags) ? data.food_exclusion_tags : [],
+        goal_tags: Array.isArray(data.goal_tags) ? data.goal_tags : [],
+        equipment_tags: Array.isArray(data.equipment_tags) ? data.equipment_tags : [],
+        diabetes_type_tags: Array.isArray(data.diabetes_type_tags) ? data.diabetes_type_tags : [],
+        cook_time_tag: data.cook_time_tag || '',
       });
     };
     loadRecipe();
@@ -147,6 +155,14 @@ export default function EditRecipePage() {
         fiber: parseFloat(formState.nutrition.fiber) || 0,
         sugar: parseFloat(formState.nutrition.sugar) || 0,
       },
+      cuisine_tags: Array.isArray(formState.cuisine_tags) ? formState.cuisine_tags : [],
+      dietary_tags: Array.isArray(formState.dietary_tags) ? formState.dietary_tags : [],
+      allergen_tags: Array.isArray(formState.allergen_tags) ? formState.allergen_tags : [],
+      food_exclusion_tags: Array.isArray(formState.food_exclusion_tags) ? formState.food_exclusion_tags : [],
+      goal_tags: Array.isArray(formState.goal_tags) ? formState.goal_tags : [],
+      equipment_tags: Array.isArray(formState.equipment_tags) ? formState.equipment_tags : [],
+      diabetes_type_tags: Array.isArray(formState.diabetes_type_tags) ? formState.diabetes_type_tags : [],
+      cook_time_tag: formState.cook_time_tag || null,
     };
 
     const response = await fetch(`${API_URL}/api/admin/recipes/${recipeId}`, {
