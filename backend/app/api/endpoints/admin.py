@@ -13,7 +13,7 @@ from pydantic import BaseModel, EmailStr, Field, HttpUrl, field_validator
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
-from ..admin_dependencies import get_current_admin
+from ..admin_dependencies import get_current_admin, get_current_staff_user
 from ...core.config import settings
 from ...core.security import create_access_token, get_password_hash, verify_password
 from ...database import get_db
@@ -383,6 +383,10 @@ def users_platform_summary(
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin),  # noqa: ARG001
 ):
+    return _get_user_platform_counts(db)
+
+
+def _get_user_platform_counts(db: Session) -> dict:
     rows = (
         db.query(func.lower(func.coalesce(User.registered_platform, "unknown")).label("platform"), func.count(User.id).label("total"))
         .group_by(func.lower(func.coalesce(User.registered_platform, "unknown")))
@@ -411,6 +415,21 @@ def users_growth(
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin),  # noqa: ARG001
 ):
+    return _build_user_growth_payload(db)
+
+
+@router.get("/dashboard/user-metrics")
+def staff_dashboard_user_metrics(
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(get_current_staff_user),  # noqa: ARG001
+):
+    return {
+        "growth": _build_user_growth_payload(db),
+        "downloads": _get_user_platform_counts(db),
+    }
+
+
+def _build_user_growth_payload(db: Session) -> dict:
     now = datetime.utcnow()
     today = now.date()
 
