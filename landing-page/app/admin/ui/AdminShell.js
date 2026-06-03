@@ -1213,7 +1213,12 @@ export default function AdminShell({ children }) {
                 <span className="admin-footer-brand">GF-Staff Portal v1.0</span>
               </div>
               <div className="admin-footer-right">
-                <span className="admin-footer-muted">Powered by Bhoyee Global Dev Team</span>
+                <span className="admin-footer-muted">
+                  Powered by{' '}
+                  <a className="admin-link" href="https://www.bhoyee.com/" target="_blank" rel="noopener noreferrer">
+                    Bhoyee Global Dev Team
+                  </a>
+                </span>
               </div>
             </footer>
           ) : null}
