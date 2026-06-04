@@ -115,6 +115,70 @@ const COOK_TIME_OPTIONS = [
   ['45_plus', '45+ minutes'],
 ];
 
+const MAX_RECIPE_IMAGE_BYTES = 2 * 1024 * 1024;
+const RECIPE_IMAGE_MAX_DIMENSION = 1600;
+
+const formatFileSize = (bytes) => {
+  if (!Number.isFinite(bytes)) return '';
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))}KB`;
+};
+
+const canvasToBlob = (canvas, type, quality) =>
+  new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), type, quality);
+  });
+
+const resizeRecipeImage = async (file) => {
+  if (!file || file.size <= MAX_RECIPE_IMAGE_BYTES) {
+    return { file, resized: false };
+  }
+
+  const supportedType = ['image/jpeg', 'image/png', 'image/webp'].includes(file.type);
+  if (!supportedType || typeof window === 'undefined' || typeof document === 'undefined') {
+    return { file, resized: false };
+  }
+
+  const imageUrl = URL.createObjectURL(file);
+  try {
+    const image = await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = imageUrl;
+    });
+
+    const scale = Math.min(1, RECIPE_IMAGE_MAX_DIMENSION / Math.max(image.width, image.height));
+    const width = Math.max(1, Math.round(image.width * scale));
+    const height = Math.max(1, Math.round(image.height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+
+    const context = canvas.getContext('2d');
+    if (!context) return { file, resized: false };
+    context.drawImage(image, 0, 0, width, height);
+
+    const outputType = file.type === 'image/png' ? 'image/jpeg' : file.type;
+    const outputName = file.name.replace(/\.[^.]+$/, '') || 'recipe-image';
+    const extension = outputType === 'image/webp' ? 'webp' : 'jpg';
+
+    for (const quality of [0.86, 0.78, 0.7, 0.62, 0.54, 0.48]) {
+      const blob = await canvasToBlob(canvas, outputType, quality);
+      if (blob && blob.size <= MAX_RECIPE_IMAGE_BYTES) {
+        return {
+          file: new File([blob], `${outputName}.${extension}`, { type: outputType }),
+          resized: true,
+        };
+      }
+    }
+  } finally {
+    URL.revokeObjectURL(imageUrl);
+  }
+
+  return { file, resized: false };
+};
+
 export default function RecipeForm({ initialData, onSubmit, onUpload, isSubmitting }) {
   const [formState, setFormState] = useState(
     initialData
@@ -144,6 +208,7 @@ export default function RecipeForm({ initialData, onSubmit, onUpload, isSubmitti
   );
 
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadNote, setUploadNote] = useState('');
 
   const handleIngredientChange = (index, field, value) => {
     const updated = [...formState.ingredients];
@@ -174,13 +239,32 @@ export default function RecipeForm({ initialData, onSubmit, onUpload, isSubmitti
   const handleUpload = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    
+
     setIsUploading(true);
-    const url = await onUpload(file);
-    setIsUploading(false);
-    
-    if (url) {
-      setFormState({ ...formState, image_url: url });
+    setUploadNote('');
+    try {
+      const result = await resizeRecipeImage(file);
+      const uploadFile = result.file;
+      if (uploadFile.size > MAX_RECIPE_IMAGE_BYTES) {
+        setUploadNote(`Image is still ${formatFileSize(uploadFile.size)}. Please choose a smaller image.`);
+        return;
+      }
+
+      const url = await onUpload(uploadFile);
+
+      if (url) {
+        setFormState({ ...formState, image_url: url });
+        setUploadNote(
+          result.resized
+            ? `Image resized from ${formatFileSize(file.size)} to ${formatFileSize(uploadFile.size)} before upload.`
+            : 'Image uploaded.'
+        );
+      }
+    } catch {
+      setUploadNote('Unable to resize this image. Please try a JPG, PNG, or WebP file.');
+    } finally {
+      setIsUploading(false);
+      event.target.value = '';
     }
   };
 
@@ -296,12 +380,16 @@ export default function RecipeForm({ initialData, onSubmit, onUpload, isSubmitti
               id="recipe-image-upload"
             />
             <label htmlFor="recipe-image-upload" className="admin-image-upload-button">
-              {isUploading ? 'Uploading...' : 'Choose File'}
+              {isUploading ? 'Preparing image...' : 'Choose File'}
             </label>
             {formState.image_url && !isUploading && (
               <span className="admin-image-upload-status">✓ Image ready</span>
             )}
           </div>
+          <p className="admin-field-help">
+            Images larger than 2MB are automatically resized before upload when possible.
+          </p>
+          {uploadNote ? <p className="admin-field-help">{uploadNote}</p> : null}
         </div>
 
         {/* Image Preview */}
