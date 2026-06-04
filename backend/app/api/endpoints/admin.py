@@ -2,6 +2,7 @@ import os
 import uuid
 import json
 import html
+import re
 from datetime import datetime
 from datetime import timedelta
 from urllib import error as urlerror
@@ -37,6 +38,7 @@ from ...services.staff_rbac_service import StaffRBACService
 from ...services.subscription_service import is_subscription_active, is_premium_blocked, refresh_user_tier
 from ...services.cache_service import CacheService
 from ...services.settings_service import get_ai_guardrail_settings
+from ...services.ai_recipe_generator import AIRecipeGenerator
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 admin_cache = CacheService()
@@ -75,7 +77,8 @@ class RecipePayload(BaseModel):
     prep_time_minutes: int | None = Field(None, ge=0)
     cook_time_minutes: int | None = Field(None, ge=0)
     servings: int | None = Field(None, ge=1)
-    image_url: HttpUrl
+    image_url: HttpUrl | None = None
+    image_prompt: str | None = Field(None, max_length=500)
     ingredients: list[IngredientInput]
     instructions: list[str]
     nutrition: NutritionInput | None = None
@@ -87,6 +90,7 @@ class RecipePayload(BaseModel):
     equipment_tags: list[str] = Field(default_factory=list, max_length=16)
     diabetes_type_tags: list[str] = Field(default_factory=list, max_length=8)
     cook_time_tag: str | None = Field(None, max_length=30)
+    status: str | None = Field(None, max_length=20)
 
     @field_validator("meal_type")
     def validate_meal_type(cls, value: str) -> str:  # noqa: N805
@@ -133,6 +137,53 @@ class RecipePayload(BaseModel):
             raise ValueError("cook_time_tag must be under_15, 15_30, 30_45, or 45_plus")
         return tag
 
+    @field_validator("status")
+    def validate_status(cls, value: str | None) -> str | None:  # noqa: N805
+        status_value = str(value or "").strip().lower()
+        if not status_value:
+            return None
+        allowed = {"draft", "published", "archived"}
+        if status_value not in allowed:
+            raise ValueError("status must be draft, published, or archived")
+        return status_value
+
+
+class RecipeGenerateDraftsPayload(BaseModel):
+    count: int = Field(10, ge=1, le=30)
+    meal_type: str | None = Field(None, max_length=20)
+    cuisine_tags: list[str] = Field(default_factory=list, max_length=8)
+    dietary_tags: list[str] = Field(default_factory=list, max_length=8)
+    goal_tags: list[str] = Field(default_factory=list, max_length=8)
+    diabetes_type_tags: list[str] = Field(default_factory=list, max_length=4)
+    equipment_tags: list[str] = Field(default_factory=list, max_length=8)
+    cook_time_tag: str | None = Field(None, max_length=30)
+    notes: str | None = Field(None, max_length=600)
+
+    @field_validator("meal_type")
+    def validate_optional_meal_type(cls, value: str | None) -> str | None:  # noqa: N805
+        normalized = str(value or "").strip().lower()
+        if not normalized:
+            return None
+        if normalized not in {"breakfast", "lunch", "dinner", "snack"}:
+            raise ValueError("meal_type must be breakfast, lunch, dinner, or snack")
+        return normalized
+
+    @field_validator("cuisine_tags", "dietary_tags", "goal_tags", "diabetes_type_tags", "equipment_tags")
+    def normalize_generate_tags(cls, value: list[str]) -> list[str]:  # noqa: N805
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for item in value or []:
+            tag = str(item or "").strip().lower()
+            if not tag or tag in seen:
+                continue
+            cleaned.append(tag)
+            seen.add(tag)
+        return cleaned
+
+    @field_validator("cook_time_tag")
+    def validate_generate_cook_time(cls, value: str | None) -> str | None:  # noqa: N805
+        return RecipePayload.validate_cook_time_tag(value)
+
 
 class AdminUserUpdate(BaseModel):
     email: EmailStr | None = None
@@ -172,6 +223,186 @@ def _recipe_metadata_payload(recipe: Recipe) -> dict:
         "equipment_tags": recipe.equipment_tags or [],
         "diabetes_type_tags": recipe.diabetes_type_tags or [],
         "cook_time_tag": recipe.cook_time_tag,
+        "status": getattr(recipe, "status", None) or "published",
+        "source": getattr(recipe, "source", None) or "manual",
+        "image_prompt": getattr(recipe, "image_prompt", None),
+    }
+
+
+def _normalize_recipe_title(title: str) -> str:
+    text = re.sub(r"[^a-z0-9]+", " ", str(title or "").lower())
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _existing_recipe_title_set(db: Session) -> set[str]:
+    rows = db.query(Recipe.name).all()
+    return {_normalize_recipe_title(row[0]) for row in rows if row and row[0]}
+
+
+def _clean_ai_tag_list(value, *, allowed: set[str] | None = None) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    raw = value if isinstance(value, list) else []
+    for item in raw:
+        tag = str(item or "").strip().lower()
+        if not tag or tag in seen:
+            continue
+        if allowed and tag not in allowed:
+            continue
+        out.append(tag)
+        seen.add(tag)
+    return out
+
+
+def _coerce_number(value, default=0):
+    if value is None:
+        return default
+    if isinstance(value, (int, float)):
+        return value
+    match = re.search(r"-?\d+(?:\.\d+)?", str(value))
+    if not match:
+        return default
+    try:
+        number = float(match.group(0))
+        return int(number) if number.is_integer() else number
+    except Exception:
+        return default
+
+
+def _coerce_ingredients(value) -> list[dict]:
+    if not isinstance(value, list):
+        return []
+    out: list[dict] = []
+    for item in value:
+        if isinstance(item, str):
+            name = item.strip()
+            if name:
+                out.append({"name": name, "quantity": "", "unit": "", "note": ""})
+            continue
+        if isinstance(item, dict):
+            name = str(item.get("name") or item.get("ingredient") or "").strip()
+            if not name:
+                continue
+            out.append(
+                {
+                    "name": name,
+                    "quantity": str(item.get("quantity") or "").strip(),
+                    "unit": str(item.get("unit") or "").strip(),
+                    "note": str(item.get("note") or "").strip(),
+                }
+            )
+    return out
+
+
+def _coerce_steps(value) -> list[str]:
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item or "").strip()]
+    if isinstance(value, str):
+        return [line.strip() for line in value.split("\n") if line.strip()]
+    return []
+
+
+def _extract_json_object(raw: str):
+    text = str(raw or "").strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```[a-zA-Z]*", "", text).strip("`").strip()
+    try:
+        return json.loads(text)
+    except Exception:
+        pass
+    start = text.find("{")
+    end = text.rfind("}")
+    if start >= 0 and end > start:
+        return json.loads(text[start : end + 1])
+    start = text.find("[")
+    end = text.rfind("]")
+    if start >= 0 and end > start:
+        return json.loads(text[start : end + 1])
+    raise ValueError("AI response did not contain valid JSON")
+
+
+def _admin_recipe_ai_prompt(payload: RecipeGenerateDraftsPayload, existing_titles: list[str]) -> str:
+    allowed = {
+        "meal_types": ["breakfast", "lunch", "dinner", "snack"],
+        "cuisine_tags": ["west_african", "british_irish", "caribbean", "mediterranean", "south_asian", "east_asian", "latin_american", "mena"],
+        "dietary_tags": ["vegetarian", "vegan", "pescatarian", "halal", "kosher"],
+        "allergen_tags": ["dairy", "eggs", "fish", "shellfish", "peanuts", "tree_nuts", "soy", "wheat_gluten", "sesame"],
+        "food_exclusion_tags": ["pork", "beef", "chicken", "seafood", "onion_garlic", "spicy_food", "mushrooms", "alcohol", "caffeine"],
+        "goal_tags": ["lower_carb", "high_protein", "quick_meals", "simple_ingredients", "weight_loss", "balanced"],
+        "equipment_tags": ["air_fryer", "blender", "microwave", "oven", "stovetop", "grill", "slow_cooker"],
+        "diabetes_type_tags": ["type_1", "type_2", "prediabetes", "gestational"],
+        "cook_time_tags": ["under_15", "15_30", "30_45", "45_plus"],
+    }
+    constraints = {
+        "count": payload.count,
+        "meal_type": payload.meal_type,
+        "cuisine_tags": payload.cuisine_tags,
+        "dietary_tags": payload.dietary_tags,
+        "goal_tags": payload.goal_tags,
+        "diabetes_type_tags": payload.diabetes_type_tags,
+        "equipment_tags": payload.equipment_tags,
+        "cook_time_tag": payload.cook_time_tag,
+        "notes": payload.notes,
+        "existing_titles_to_avoid": existing_titles[:80],
+    }
+    return (
+        "Generate production-ready diabetes-friendly recipes for the GlucoForager admin recipe library. "
+        "Return ONLY valid JSON with shape {\"recipes\":[...]}. "
+        "Each recipe must fit this schema: name, meal_type, description, prep_time_minutes, cook_time_minutes, servings, "
+        "image_prompt, ingredients[{name,quantity,unit,note}], instructions[], nutrition{calories,carbs,protein,fat,fiber,sugar}, "
+        "cuisine_tags[], dietary_tags[], allergen_tags[], food_exclusion_tags[], goal_tags[], equipment_tags[], "
+        "diabetes_type_tags[], cook_time_tag. "
+        "Use only the allowed metadata values. Do not include pork or alcohol. Keep sugar low and carbs preferably under 30g "
+        "per serving where realistic; protein should be 20g+ for lunch/dinner where possible; fiber should be 5g+ where possible. "
+        "Avoid duplicate or very similar titles from existing_titles_to_avoid. "
+        f"Allowed metadata: {json.dumps(allowed)}. "
+        f"Generation constraints: {json.dumps(constraints)}."
+    )
+
+
+def _normalize_ai_recipe_draft(item: dict) -> dict | None:
+    if not isinstance(item, dict):
+        return None
+    allowed_cook = {"under_15", "15_30", "30_45", "45_plus"}
+    name = str(item.get("name") or item.get("title") or "").strip()
+    meal_type = str(item.get("meal_type") or "").strip().lower()
+    if meal_type not in {"breakfast", "lunch", "dinner", "snack"}:
+        meal_type = "dinner"
+    ingredients = _coerce_ingredients(item.get("ingredients"))
+    instructions = _coerce_steps(item.get("instructions") or item.get("steps"))
+    if not name or not ingredients or not instructions:
+        return None
+    nutrition_src = item.get("nutrition") or item.get("nutrition_per_serving") or item.get("nutritional_info") or {}
+    nutrition = {
+        "calories": _coerce_number(nutrition_src.get("calories"), 0),
+        "carbs": _coerce_number(nutrition_src.get("carbs"), 0),
+        "protein": _coerce_number(nutrition_src.get("protein"), 0),
+        "fat": _coerce_number(nutrition_src.get("fat"), 0),
+        "fiber": _coerce_number(nutrition_src.get("fiber"), 0),
+        "sugar": _coerce_number(nutrition_src.get("sugar"), 0),
+    }
+    cook_time_tag = str(item.get("cook_time_tag") or "").strip().lower()
+    if cook_time_tag not in allowed_cook:
+        cook_time_tag = None
+    return {
+        "name": name[:120],
+        "meal_type": meal_type,
+        "description": str(item.get("description") or "").strip()[:500] or "Diabetes-friendly recipe draft.",
+        "prep_time_minutes": int(_coerce_number(item.get("prep_time_minutes"), 0) or 0),
+        "cook_time_minutes": int(_coerce_number(item.get("cook_time_minutes"), 0) or 0),
+        "servings": int(_coerce_number(item.get("servings"), 2) or 2),
+        "image_prompt": str(item.get("image_prompt") or "").strip()[:500],
+        "ingredients": ingredients,
+        "instructions": instructions,
+        "nutrition": nutrition,
+        "cuisine_tags": _clean_ai_tag_list(item.get("cuisine_tags")),
+        "dietary_tags": _clean_ai_tag_list(item.get("dietary_tags")),
+        "allergen_tags": _clean_ai_tag_list(item.get("allergen_tags")),
+        "food_exclusion_tags": _clean_ai_tag_list(item.get("food_exclusion_tags")),
+        "goal_tags": _clean_ai_tag_list(item.get("goal_tags")),
+        "equipment_tags": _clean_ai_tag_list(item.get("equipment_tags")),
+        "diabetes_type_tags": _clean_ai_tag_list(item.get("diabetes_type_tags")),
+        "cook_time_tag": cook_time_tag,
     }
 
 
@@ -203,7 +434,8 @@ def create_recipe(
         prep_time_minutes=payload.prep_time_minutes,
         cook_time_minutes=payload.cook_time_minutes,
         servings=payload.servings,
-        image_url=payload.image_url.strip(),
+        image_url=str(payload.image_url).strip() if payload.image_url else None,
+        image_prompt=payload.image_prompt.strip() if payload.image_prompt else None,
         ingredients=[item.dict() for item in payload.ingredients],
         instructions=payload.instructions,
         nutrition=payload.nutrition.dict() if payload.nutrition else None,
@@ -215,6 +447,8 @@ def create_recipe(
         equipment_tags=payload.equipment_tags,
         diabetes_type_tags=payload.diabetes_type_tags,
         cook_time_tag=payload.cook_time_tag,
+        status=payload.status or "published",
+        source="manual",
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
     )
@@ -226,10 +460,14 @@ def create_recipe(
 
 @router.get("/recipes")
 def list_recipes(
+    status_filter: str | None = None,
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin),
 ):
-    items = db.query(Recipe).order_by(Recipe.created_at.desc()).all()
+    query = db.query(Recipe)
+    if status_filter in {"draft", "published", "archived"}:
+        query = query.filter(Recipe.status == status_filter)
+    items = query.order_by(Recipe.created_at.desc()).all()
     return {
         "total": len(items),
         "items": [
@@ -887,6 +1125,115 @@ def delete_user(
     return {"status": "deleted"}
 
 
+@router.post("/recipes/generate-drafts")
+def generate_recipe_drafts(
+    payload: RecipeGenerateDraftsPayload,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    generator = AIRecipeGenerator()
+    if not generator.enabled:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="AI recipe generation is not configured.")
+
+    existing_norm = _existing_recipe_title_set(db)
+    existing_titles = [row[0] for row in db.query(Recipe.name).order_by(Recipe.created_at.desc()).limit(120).all() if row and row[0]]
+    prompt = _admin_recipe_ai_prompt(payload, existing_titles)
+
+    attempts: list[str] = []
+    raw = ""
+    providers = []
+    if generator.primary_client:
+        providers.append(("openai", generator.primary_client, generator.primary_model))
+    if generator.fallback_client:
+        providers.append(("fallback", generator.fallback_client, generator.fallback_model))
+
+    for provider, client, model in providers:
+        if not model:
+            continue
+        try:
+            raw = generator._call(  # Reuse the same configured provider/model path as the app recipe generator.
+                client,
+                model,
+                [],
+                [],
+                prompt_template=prompt,
+                temperature=0.45,
+                timeout_seconds=75.0,
+                max_output_tokens=min(8000, max(2200, payload.count * 700)),
+            )
+            if raw:
+                break
+        except Exception as exc:  # noqa: BLE001
+            attempts.append(f"{provider}:{model}:{str(exc)[:160]}")
+
+    if not raw:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="AI did not return recipe drafts.")
+
+    try:
+        data = _extract_json_object(raw)
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"AI returned invalid recipe JSON: {str(exc)[:160]}") from exc
+
+    raw_recipes = data.get("recipes") if isinstance(data, dict) else data
+    if not isinstance(raw_recipes, list):
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="AI response did not include a recipes list.")
+
+    created: list[dict] = []
+    skipped_duplicates: list[str] = []
+    skipped_invalid = 0
+    now = datetime.utcnow()
+    for item in raw_recipes:
+        draft = _normalize_ai_recipe_draft(item)
+        if not draft:
+            skipped_invalid += 1
+            continue
+        title_norm = _normalize_recipe_title(draft["name"])
+        if not title_norm or title_norm in existing_norm:
+            skipped_duplicates.append(draft["name"])
+            continue
+        recipe = Recipe(
+            name=draft["name"],
+            meal_type=draft["meal_type"],
+            description=draft["description"],
+            prep_time_minutes=draft["prep_time_minutes"],
+            cook_time_minutes=draft["cook_time_minutes"],
+            servings=draft["servings"],
+            image_url=None,
+            image_prompt=draft["image_prompt"] or None,
+            ingredients=draft["ingredients"],
+            instructions=draft["instructions"],
+            nutrition=draft["nutrition"],
+            cuisine_tags=draft["cuisine_tags"],
+            dietary_tags=draft["dietary_tags"],
+            allergen_tags=draft["allergen_tags"],
+            food_exclusion_tags=draft["food_exclusion_tags"],
+            goal_tags=draft["goal_tags"],
+            equipment_tags=draft["equipment_tags"],
+            diabetes_type_tags=draft["diabetes_type_tags"],
+            cook_time_tag=draft["cook_time_tag"],
+            status="draft",
+            source="ai_generated",
+            generated_by_admin_user_id=current_admin.id,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(recipe)
+        db.flush()
+        existing_norm.add(title_norm)
+        created.append({"id": recipe.id, "name": recipe.name, "meal_type": recipe.meal_type})
+        if len(created) >= payload.count:
+            break
+
+    db.commit()
+    return {
+        "created": created,
+        "created_count": len(created),
+        "skipped_duplicates": skipped_duplicates,
+        "skipped_invalid": skipped_invalid,
+        "attempts": attempts,
+    }
+
+
 @router.get("/recipes/{recipe_id}")
 def get_recipe(
     recipe_id: int,
@@ -931,7 +1278,8 @@ def update_recipe(
     recipe.prep_time_minutes = payload.prep_time_minutes
     recipe.cook_time_minutes = payload.cook_time_minutes
     recipe.servings = payload.servings
-    recipe.image_url = payload.image_url.strip()
+    recipe.image_url = str(payload.image_url).strip() if payload.image_url else None
+    recipe.image_prompt = payload.image_prompt.strip() if payload.image_prompt else None
     recipe.ingredients = [item.dict() for item in payload.ingredients]
     recipe.instructions = payload.instructions
     recipe.nutrition = payload.nutrition.dict() if payload.nutrition else None
@@ -943,9 +1291,28 @@ def update_recipe(
     recipe.equipment_tags = payload.equipment_tags
     recipe.diabetes_type_tags = payload.diabetes_type_tags
     recipe.cook_time_tag = payload.cook_time_tag
+    if payload.status:
+        recipe.status = payload.status
     recipe.updated_at = datetime.utcnow()
     db.commit()
     return {"status": "updated"}
+
+
+@router.post("/recipes/{recipe_id}/publish")
+def publish_recipe(
+    recipe_id: int,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),  # noqa: ARG001
+):
+    recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
+    if not recipe:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recipe not found")
+    if not str(recipe.image_url or "").strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Upload an image before publishing this recipe.")
+    recipe.status = "published"
+    recipe.updated_at = datetime.utcnow()
+    db.commit()
+    return {"status": "published"}
 
 
 @router.delete("/recipes/{recipe_id}")
