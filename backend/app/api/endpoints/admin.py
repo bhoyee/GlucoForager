@@ -302,23 +302,101 @@ def _coerce_steps(value) -> list[str]:
     return []
 
 
+def _escape_newlines_in_json_strings(text: str) -> str:
+    out: list[str] = []
+    in_string = False
+    escape = False
+    for ch in text:
+        if in_string:
+            if escape:
+                escape = False
+                out.append(ch)
+                continue
+            if ch == "\\":
+                escape = True
+                out.append(ch)
+                continue
+            if ch == "\"":
+                in_string = False
+                out.append(ch)
+                continue
+            if ch == "\n":
+                out.append("\\n")
+                continue
+            if ch == "\r":
+                out.append("\\r")
+                continue
+            out.append(ch)
+            continue
+        if ch == "\"":
+            in_string = True
+        out.append(ch)
+    return "".join(out)
+
+
+def _json_loads_with_repair(text: str):
+    try:
+        return json.loads(text)
+    except Exception:
+        return json.loads(_escape_newlines_in_json_strings(text))
+
+
 def _extract_json_object(raw: str):
     text = str(raw or "").strip()
     if text.startswith("```"):
         text = re.sub(r"^```[a-zA-Z]*", "", text).strip("`").strip()
     try:
-        return json.loads(text)
+        return _json_loads_with_repair(text)
     except Exception:
         pass
     start = text.find("{")
     end = text.rfind("}")
     if start >= 0 and end > start:
-        return json.loads(text[start : end + 1])
+        return _json_loads_with_repair(text[start : end + 1])
     start = text.find("[")
     end = text.rfind("]")
     if start >= 0 and end > start:
-        return json.loads(text[start : end + 1])
+        return _json_loads_with_repair(text[start : end + 1])
     raise ValueError("AI response did not contain valid JSON")
+
+
+def _repair_recipe_json_with_ai(
+    *,
+    generator: AIRecipeGenerator,
+    providers: list[tuple[str, object, str | None]],
+    raw: str,
+    parse_error: Exception,
+    expected_count: int,
+    attempts: list[str],
+):
+    repair_prompt = (
+        "Repair the following invalid JSON into one valid minified JSON object only. "
+        "Do not add markdown or explanations. Preserve the same recipe data where possible. "
+        "The output must be exactly {\"recipes\":[...]} and must contain no trailing commas, "
+        "no comments, and all quote marks inside strings must be escaped. "
+        f"Expected recipe count: {expected_count}. "
+        f"Parser error: {str(parse_error)[:300]}\n\n"
+        f"Invalid JSON:\n{str(raw or '')[:70000]}"
+    )
+    for provider, client, model in providers:
+        if not model:
+            continue
+        try:
+            repaired = generator._call(
+                client,
+                model,
+                [],
+                [],
+                prompt_template=repair_prompt,
+                temperature=0.0,
+                timeout_seconds=60.0,
+                max_output_tokens=min(12000, max(3000, expected_count * 900)),
+            )
+            if repaired:
+                return _extract_json_object(repaired)
+        except Exception as exc:  # noqa: BLE001
+            attempts.append(f"repair:{provider}:{model}:{str(exc)[:160]}")
+    raise parse_error
 
 
 def _admin_recipe_ai_prompt(payload: RecipeGenerateDraftsPayload, existing_titles: list[str]) -> str:
@@ -347,11 +425,13 @@ def _admin_recipe_ai_prompt(payload: RecipeGenerateDraftsPayload, existing_title
     }
     return (
         "Generate production-ready diabetes-friendly recipes for the GlucoForager admin recipe library. "
-        "Return ONLY valid JSON with shape {\"recipes\":[...]}. "
+        "Return ONLY valid minified JSON with shape {\"recipes\":[...]}. "
+        "Do not use markdown. Do not add comments. Do not use trailing commas. Escape all quote marks inside strings. "
         "Each recipe must fit this schema: name, meal_type, description, prep_time_minutes, cook_time_minutes, servings, "
         "image_prompt, ingredients[{name,quantity,unit,note}], instructions[], nutrition{calories,carbs,protein,fat,fiber,sugar}, "
         "cuisine_tags[], dietary_tags[], allergen_tags[], food_exclusion_tags[], goal_tags[], equipment_tags[], "
         "diabetes_type_tags[], cook_time_tag. "
+        "Keep description, image_prompt, and each instruction concise. "
         "Use only the allowed metadata values. Do not include pork or alcohol. Keep sugar low and carbs preferably under 30g "
         "per serving where realistic; protein should be 20g+ for lunch/dinner where possible; fiber should be 5g+ where possible. "
         "Avoid duplicate or very similar titles from existing_titles_to_avoid. "
@@ -1159,7 +1239,7 @@ def generate_recipe_drafts(
                 prompt_template=prompt,
                 temperature=0.45,
                 timeout_seconds=75.0,
-                max_output_tokens=min(8000, max(2200, payload.count * 700)),
+                max_output_tokens=min(12000, max(3000, payload.count * 1000)),
             )
             if raw:
                 break
@@ -1172,7 +1252,20 @@ def generate_recipe_drafts(
     try:
         data = _extract_json_object(raw)
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"AI returned invalid recipe JSON: {str(exc)[:160]}") from exc
+        try:
+            data = _repair_recipe_json_with_ai(
+                generator=generator,
+                providers=providers,
+                raw=raw,
+                parse_error=exc,
+                expected_count=payload.count,
+                attempts=attempts,
+            )
+        except Exception as repair_exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"AI returned invalid recipe JSON after repair attempt: {str(repair_exc)[:160]}",
+            ) from repair_exc
 
     raw_recipes = data.get("recipes") if isinstance(data, dict) else data
     if not isinstance(raw_recipes, list):
