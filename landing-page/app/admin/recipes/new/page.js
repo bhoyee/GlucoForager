@@ -87,6 +87,7 @@ export default function NewRecipePage() {
       cook_time_minutes: Number(formState.cook_time_minutes) || 0,
       servings: Number(formState.servings) || 0,
       image_url: formState.image_url,
+      image_prompt: formState.image_prompt || null,
       ingredients: formState.ingredients.filter((item) => item.name.trim()),
       instructions: formState.instructions
         .split('\n')
@@ -108,6 +109,7 @@ export default function NewRecipePage() {
       equipment_tags: Array.isArray(formState.equipment_tags) ? formState.equipment_tags : [],
       diabetes_type_tags: Array.isArray(formState.diabetes_type_tags) ? formState.diabetes_type_tags : [],
       cook_time_tag: formState.cook_time_tag || null,
+      status: 'published',
     };
 
     const response = await fetch(`${API_URL}/api/admin/recipes`, {

@@ -18,6 +18,7 @@ export default function AdminRecipesList() {
   const [recipes, setRecipes] = useState([]);
   const [search, setSearch] = useState('');
   const [mealType, setMealType] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [sortKey, setSortKey] = useState('created_at');
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
@@ -109,9 +110,19 @@ export default function AdminRecipesList() {
     return counts;
   }, [recipes]);
 
+  const statusCounts = useMemo(() => {
+    const counts = { draft: 0, published: 0, archived: 0 };
+    for (const recipe of recipes) {
+      const key = String(recipe?.status || 'published').toLowerCase();
+      if (Object.prototype.hasOwnProperty.call(counts, key)) counts[key] += 1;
+    }
+    return counts;
+  }, [recipes]);
+
   const filtered = recipes
     .filter((recipe) => recipe.name.toLowerCase().includes(search.toLowerCase()))
     .filter((recipe) => (mealType === 'all' ? true : recipe.meal_type === mealType))
+    .filter((recipe) => (statusFilter === 'all' ? true : (recipe.status || 'published') === statusFilter))
     .sort((a, b) => {
       if (sortKey === 'name') return a.name.localeCompare(b.name);
       if (sortKey === 'meal_type') return a.meal_type.localeCompare(b.meal_type);
@@ -184,6 +195,20 @@ export default function AdminRecipesList() {
               <option value="dinner">Dinner</option>
               <option value="snack">Snack</option>
             </select>
+
+            <select
+              value={statusFilter}
+              onChange={(event) => {
+                setStatusFilter(event.target.value);
+                setPage(1);
+              }}
+              className="admin-filter-select"
+            >
+              <option value="all">All status</option>
+              <option value="draft">Drafts ({statusCounts.draft})</option>
+              <option value="published">Published ({statusCounts.published})</option>
+              <option value="archived">Archived ({statusCounts.archived})</option>
+            </select>
             
             <select 
               value={sortKey} 
@@ -197,6 +222,9 @@ export default function AdminRecipesList() {
           </div>
           
           <div className="admin-toolbar-actions">
+            <Link className="admin-button secondary" href="/admin/recipes/ai-generator">
+              AI Recipe Studio
+            </Link>
             <Link className="admin-button admin-add-button" href="/admin/recipes/new">
               Add Recipe
             </Link>
@@ -243,6 +271,9 @@ export default function AdminRecipesList() {
                         <h3 className="admin-recipe-card-title">{recipe.name}</h3>
                         <div className="admin-recipe-card-meta">
                           <span className="admin-recipe-badge">{recipe.meal_type}</span>
+                          <span className={`admin-badge ${(recipe.status || 'published') === 'published' ? 'success' : 'warning'}`}>
+                            {recipe.status || 'published'}
+                          </span>
                           <span className="admin-recipe-time">
                             {(recipe.prep_time_minutes || 0) + (recipe.cook_time_minutes || 0)} min
                           </span>
@@ -331,6 +362,9 @@ export default function AdminRecipesList() {
                         </td>
                         <td>
                           <span className="admin-badge admin-badge-meal">{recipe.meal_type}</span>
+                          <span className={`admin-badge ${(recipe.status || 'published') === 'published' ? 'success' : 'warning'}`}>
+                            {recipe.status || 'published'}
+                          </span>
                         </td>
                         <td>
                           <div className="admin-recipe-time-cell">

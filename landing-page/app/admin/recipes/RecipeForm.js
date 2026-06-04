@@ -127,6 +127,8 @@ export default function RecipeForm({ initialData, onSubmit, onUpload, isSubmitti
       cook_time_minutes: '',
       servings: '',
       image_url: '',
+      image_prompt: '',
+      status: 'published',
       ingredients: [emptyIngredient],
       instructions: '',
       nutrition: {
@@ -268,6 +270,17 @@ export default function RecipeForm({ initialData, onSubmit, onUpload, isSubmitti
             onChange={(event) => setFormState({ ...formState, image_url: event.target.value })}
             placeholder="https://example.com/image.jpg"
             className="admin-form-input"
+          />
+        </div>
+
+        <div className="admin-field">
+          <label className="admin-field-label">Image prompt / direction</label>
+          <textarea
+            value={formState.image_prompt || ''}
+            onChange={(event) => setFormState({ ...formState, image_prompt: event.target.value })}
+            placeholder="Describe the image needed for this recipe..."
+            rows="3"
+            className="admin-form-textarea"
           />
         </div>
 
