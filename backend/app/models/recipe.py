@@ -15,7 +15,8 @@ class Recipe(Base):
     prep_time_minutes = Column(Integer, nullable=True)
     cook_time_minutes = Column(Integer, nullable=True)
     servings = Column(Integer, nullable=True)
-    image_url = Column(String, nullable=False)
+    image_url = Column(String, nullable=True)
+    image_prompt = Column(String, nullable=True)
     ingredients = Column(JSON, nullable=False)  # list[{name, quantity, unit, note?}]
     instructions = Column(JSON, nullable=False)  # list[str]
     nutrition = Column(JSON, nullable=True)  # {calories, carbs, protein, fat, fiber, sugar}
@@ -27,5 +28,8 @@ class Recipe(Base):
     equipment_tags = Column(JSON, nullable=True)  # e.g. ["air_fryer", "microwave"]
     diabetes_type_tags = Column(JSON, nullable=True)  # e.g. ["type_2", "prediabetes"]
     cook_time_tag = Column(String, nullable=True)  # under_15 | 15_30 | 30_45 | 45_plus
+    status = Column(String, nullable=False, default="published")  # draft | published | archived
+    source = Column(String, nullable=False, default="manual")  # manual | ai_generated
+    generated_by_admin_user_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
