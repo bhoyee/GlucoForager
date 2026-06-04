@@ -297,7 +297,7 @@ def recipe_suggestions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    query = db.query(Recipe)
+    query = db.query(Recipe).filter(Recipe.status == "published")
     if meal_type:
         query = query.filter(Recipe.meal_type == meal_type.lower())
     items = query.all()
@@ -461,7 +461,7 @@ def get_recipe(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
+    recipe = db.query(Recipe).filter(Recipe.id == recipe_id, Recipe.status == "published").first()
     if not recipe:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recipe not found")
     return {

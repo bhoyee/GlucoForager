@@ -14,6 +14,7 @@ export default function EditRecipePage() {
 
   const [initialData, setInitialData] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
   const [message, setMessage] = useState('');
 
   const parseErrorResponse = async (response) => {
@@ -40,7 +41,7 @@ export default function EditRecipePage() {
   const validateRecipe = (formState) => {
     const missing = [];
     if (!formState.name?.trim()) missing.push('meal name');
-    if (!formState.image_url?.trim()) missing.push('image');
+    if ((formState.status || 'published') === 'published' && !formState.image_url?.trim()) missing.push('image');
     const hasIngredient = formState.ingredients?.some((item) => item.name?.trim());
     if (!hasIngredient) missing.push('at least one ingredient');
     if (!formState.instructions?.trim()) missing.push('instructions');
@@ -76,6 +77,9 @@ export default function EditRecipePage() {
         cook_time_minutes: data.cook_time_minutes ?? '',
         servings: data.servings ?? '',
         image_url: data.image_url || '',
+        image_prompt: data.image_prompt || '',
+        status: data.status || 'published',
+        source: data.source || 'manual',
         ingredients: data.ingredients?.length ? data.ingredients : [{ name: '', quantity: '', unit: '', note: '' }],
         instructions: Array.isArray(data.instructions) ? data.instructions.join('\n') : '',
         nutrition: {
@@ -142,6 +146,7 @@ export default function EditRecipePage() {
       cook_time_minutes: Number(formState.cook_time_minutes) || 0,
       servings: Number(formState.servings) || 0,
       image_url: formState.image_url,
+      image_prompt: formState.image_prompt || null,
       ingredients: formState.ingredients.filter((item) => item.name.trim()),
       instructions: formState.instructions
         .split('\n')
@@ -163,6 +168,7 @@ export default function EditRecipePage() {
       equipment_tags: Array.isArray(formState.equipment_tags) ? formState.equipment_tags : [],
       diabetes_type_tags: Array.isArray(formState.diabetes_type_tags) ? formState.diabetes_type_tags : [],
       cook_time_tag: formState.cook_time_tag || null,
+      status: formState.status || 'draft',
     };
 
     const response = await fetch(`${API_URL}/api/admin/recipes/${recipeId}`, {
@@ -190,6 +196,36 @@ export default function EditRecipePage() {
     router.push('/admin/recipes');
   };
 
+  const handlePublish = async () => {
+    if (!token) {
+      router.push('/admin');
+      return;
+    }
+    if (!initialData?.image_url?.trim()) {
+      setMessage('Upload an image before publishing this recipe.');
+      return;
+    }
+    setIsPublishing(true);
+    setMessage('');
+    const response = await fetch(`${API_URL}/api/admin/recipes/${recipeId}/publish`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (response.status === 401) {
+      localStorage.removeItem('adminToken');
+      router.push('/admin');
+      return;
+    }
+    if (!response.ok) {
+      const errorMessage = await parseErrorResponse(response);
+      setMessage(errorMessage || 'Failed to publish recipe.');
+      setIsPublishing(false);
+      return;
+    }
+    setIsPublishing(false);
+    router.push('/admin/recipes');
+  };
+
   if (!initialData) {
     return <div className="admin-card">Loading recipe...</div>;
   }
@@ -198,6 +234,17 @@ export default function EditRecipePage() {
     <div className="admin-card">
       <h2 className="admin-title">Edit recipe</h2>
       <p className="admin-subtitle">Update details for this recipe.</p>
+      <div className="admin-actions" style={{ justifyContent: 'flex-start', marginBottom: 12 }}>
+        <span className={`admin-badge ${initialData.status === 'published' ? 'success' : 'warning'}`}>
+          {initialData.status === 'published' ? 'Published' : 'Draft'}
+        </span>
+        {initialData.source === 'ai_generated' ? <span className="admin-badge info">AI generated</span> : null}
+        {initialData.status !== 'published' ? (
+          <button className="admin-button" type="button" onClick={handlePublish} disabled={isPublishing || isSubmitting}>
+            {isPublishing ? 'Publishing...' : 'Publish'}
+          </button>
+        ) : null}
+      </div>
       {message && <p className="admin-subtitle">{message}</p>}
       <RecipeForm
         initialData={initialData}

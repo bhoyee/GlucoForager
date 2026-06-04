@@ -148,6 +148,13 @@ const NAV_ICONS = {
       <path d="M13 3h4a4 4 0 0 1 0 8h-4" />
     </>
   ),
+  ai: (
+    <>
+      <path d="M12 3 13.8 8.2 19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z" />
+      <path d="M19 15v4" />
+      <path d="M17 17h4" />
+    </>
+  ),
   tips: (
     <>
       <path d="M12 3a6 6 0 0 0-3 11v3h6v-3a6 6 0 0 0-3-11Z" />
@@ -817,6 +824,7 @@ export default function AdminShell({ children }) {
         items: [
           { href: '/admin/users', label: 'Users', icon: 'users', perm: 'users.read' },
           { href: '/admin/recipes', label: 'Recipes', icon: 'recipes', perm: 'recipes.write' },
+          { href: '/admin/recipes/ai-generator', label: 'AI Recipe Studio', icon: 'ai', perm: 'recipes.write' },
           { href: '/admin/recipes/new', label: 'New Recipe', icon: 'upload', perm: 'recipes.write' },
           { href: '/admin/tips', label: 'Daily Tips', icon: 'tips', perm: 'tips.write' },
           { href: '/admin/challenge', label: 'Daily Challenge', icon: 'challenge', perm: 'challenge.write' },
