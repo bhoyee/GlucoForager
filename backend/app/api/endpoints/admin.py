@@ -226,7 +226,89 @@ def _recipe_metadata_payload(recipe: Recipe) -> dict:
         "status": getattr(recipe, "status", None) or "published",
         "source": getattr(recipe, "source", None) or "manual",
         "image_prompt": getattr(recipe, "image_prompt", None),
+        "safety_flags": getattr(recipe, "safety_flags", None) or [],
     }
+
+
+def _recipe_nutrition_safety_flags(meal_type: str | None, nutrition: dict | None) -> list[dict]:
+    if not isinstance(nutrition, dict):
+        return [{"code": "nutrition_missing", "level": "warning", "message": "Nutrition values are missing. Review before publishing."}]
+
+    def _num(key: str) -> float:
+        try:
+            return float(nutrition.get(key) or 0)
+        except Exception:
+            return 0.0
+
+    meal = str(meal_type or "").strip().lower()
+    sugar = _num("sugar")
+    carbs = _num("carbs")
+    protein = _num("protein")
+    fiber = _num("fiber")
+    flags: list[dict] = []
+
+    sugar_limit = 10.0 if meal in {"breakfast", "snack"} else 8.0
+    carb_limit = 30.0 if meal in {"breakfast", "snack"} else 35.0
+    protein_target = 10.0 if meal in {"breakfast", "snack"} else 15.0
+    fiber_target = 4.0 if meal in {"breakfast", "snack"} else 5.0
+
+    if sugar > 25:
+        flags.append(
+            {
+                "code": "danger_high_sugar",
+                "level": "danger",
+                "message": f"Sugar is {sugar:g}g per serving. This is too high for a diabetes-friendly recipe.",
+            }
+        )
+    elif sugar > sugar_limit:
+        flags.append(
+            {
+                "code": "high_sugar",
+                "level": "warning",
+                "message": f"Sugar is {sugar:g}g per serving. Target is {sugar_limit:g}g or less for this meal type.",
+            }
+        )
+
+    if carbs > 60:
+        flags.append(
+            {
+                "code": "danger_high_carbs",
+                "level": "danger",
+                "message": f"Carbs are {carbs:g}g per serving. Review or lower the carbohydrate load before publishing.",
+            }
+        )
+    elif carbs > carb_limit:
+        flags.append(
+            {
+                "code": "high_carbs",
+                "level": "warning",
+                "message": f"Carbs are {carbs:g}g per serving. Target is about {carb_limit:g}g or less where realistic.",
+            }
+        )
+
+    if protein and protein < protein_target:
+        flags.append(
+            {
+                "code": "low_protein",
+                "level": "warning",
+                "message": f"Protein is {protein:g}g per serving. Consider increasing protein for better satiety and glucose response.",
+            }
+        )
+
+    if fiber and fiber < fiber_target:
+        flags.append(
+            {
+                "code": "low_fiber",
+                "level": "warning",
+                "message": f"Fiber is {fiber:g}g per serving. Consider adding more fiber-rich ingredients.",
+            }
+        )
+
+    return flags
+
+
+def _has_blocking_recipe_safety_flag(flags: list[dict] | None) -> bool:
+    return any(str(item.get("level") or "").lower() == "danger" for item in flags or [] if isinstance(item, dict))
 
 
 def _normalize_recipe_title(title: str) -> str:
@@ -432,8 +514,9 @@ def _admin_recipe_ai_prompt(payload: RecipeGenerateDraftsPayload, existing_title
         "cuisine_tags[], dietary_tags[], allergen_tags[], food_exclusion_tags[], goal_tags[], equipment_tags[], "
         "diabetes_type_tags[], cook_time_tag. "
         "Keep description, image_prompt, and each instruction concise. "
-        "Use only the allowed metadata values. Do not include pork or alcohol. Keep sugar low and carbs preferably under 30g "
-        "per serving where realistic; protein should be 20g+ for lunch/dinner where possible; fiber should be 5g+ where possible. "
+        "Use only the allowed metadata values. Do not include pork or alcohol. Hard nutrition targets per serving: "
+        "sugar <=10g for breakfast/snack, <=8g for lunch/dinner; carbs <=30g for breakfast/snack, <=35g for lunch/dinner; "
+        "protein should be 20g+ for lunch/dinner where possible; fiber should be 5g+ where possible. "
         "Avoid duplicate or very similar titles from existing_titles_to_avoid. "
         f"Allowed metadata: {json.dumps(allowed)}. "
         f"Generation constraints: {json.dumps(constraints)}."
@@ -507,6 +590,13 @@ def create_recipe(
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin),
 ):
+    nutrition = payload.nutrition.dict() if payload.nutrition else None
+    safety_flags = _recipe_nutrition_safety_flags(payload.meal_type, nutrition)
+    if (payload.status or "published") == "published" and _has_blocking_recipe_safety_flag(safety_flags):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Recipe nutrition is not safe enough to publish. Fix the highlighted nutrition warnings first.",
+        )
     recipe = Recipe(
         name=payload.name.strip(),
         meal_type=payload.meal_type,
@@ -518,7 +608,7 @@ def create_recipe(
         image_prompt=payload.image_prompt.strip() if payload.image_prompt else None,
         ingredients=[item.dict() for item in payload.ingredients],
         instructions=payload.instructions,
-        nutrition=payload.nutrition.dict() if payload.nutrition else None,
+        nutrition=nutrition,
         cuisine_tags=payload.cuisine_tags,
         dietary_tags=payload.dietary_tags,
         allergen_tags=payload.allergen_tags,
@@ -527,6 +617,7 @@ def create_recipe(
         equipment_tags=payload.equipment_tags,
         diabetes_type_tags=payload.diabetes_type_tags,
         cook_time_tag=payload.cook_time_tag,
+        safety_flags=safety_flags,
         status=payload.status or "published",
         source="manual",
         created_at=datetime.utcnow(),
@@ -1284,6 +1375,7 @@ def generate_recipe_drafts(
         if not title_norm or title_norm in existing_norm:
             skipped_duplicates.append(draft["name"])
             continue
+        safety_flags = _recipe_nutrition_safety_flags(draft["meal_type"], draft["nutrition"])
         recipe = Recipe(
             name=draft["name"],
             meal_type=draft["meal_type"],
@@ -1304,6 +1396,7 @@ def generate_recipe_drafts(
             equipment_tags=draft["equipment_tags"],
             diabetes_type_tags=draft["diabetes_type_tags"],
             cook_time_tag=draft["cook_time_tag"],
+            safety_flags=safety_flags,
             status="draft",
             source="ai_generated",
             generated_by_admin_user_id=current_admin.id,
@@ -1313,7 +1406,7 @@ def generate_recipe_drafts(
         db.add(recipe)
         db.flush()
         existing_norm.add(title_norm)
-        created.append({"id": recipe.id, "name": recipe.name, "meal_type": recipe.meal_type})
+        created.append({"id": recipe.id, "name": recipe.name, "meal_type": recipe.meal_type, "safety_flags": safety_flags})
         if len(created) >= payload.count:
             break
 
@@ -1375,7 +1468,15 @@ def update_recipe(
     recipe.image_prompt = payload.image_prompt.strip() if payload.image_prompt else None
     recipe.ingredients = [item.dict() for item in payload.ingredients]
     recipe.instructions = payload.instructions
-    recipe.nutrition = payload.nutrition.dict() if payload.nutrition else None
+    nutrition = payload.nutrition.dict() if payload.nutrition else None
+    safety_flags = _recipe_nutrition_safety_flags(payload.meal_type, nutrition)
+    requested_status = payload.status or recipe.status or "draft"
+    if requested_status == "published" and _has_blocking_recipe_safety_flag(safety_flags):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Recipe nutrition is not safe enough to publish. Fix the highlighted nutrition warnings first.",
+        )
+    recipe.nutrition = nutrition
     recipe.cuisine_tags = payload.cuisine_tags
     recipe.dietary_tags = payload.dietary_tags
     recipe.allergen_tags = payload.allergen_tags
@@ -1384,6 +1485,7 @@ def update_recipe(
     recipe.equipment_tags = payload.equipment_tags
     recipe.diabetes_type_tags = payload.diabetes_type_tags
     recipe.cook_time_tag = payload.cook_time_tag
+    recipe.safety_flags = safety_flags
     if payload.status:
         recipe.status = payload.status
     recipe.updated_at = datetime.utcnow()
@@ -1402,6 +1504,14 @@ def publish_recipe(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recipe not found")
     if not str(recipe.image_url or "").strip():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Upload an image before publishing this recipe.")
+    safety_flags = _recipe_nutrition_safety_flags(recipe.meal_type, recipe.nutrition)
+    recipe.safety_flags = safety_flags
+    if _has_blocking_recipe_safety_flag(safety_flags):
+        messages = [str(item.get("message") or item.get("code") or "Nutrition warning") for item in safety_flags if isinstance(item, dict) and item.get("level") == "danger"]
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Recipe nutrition is not safe enough to publish. " + " ".join(messages[:2]),
+        )
     recipe.status = "published"
     recipe.updated_at = datetime.utcnow()
     db.commit()

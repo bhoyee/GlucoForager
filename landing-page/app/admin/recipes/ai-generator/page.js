@@ -217,6 +217,7 @@ export default function AIRecipeGeneratorPage() {
                 <tr>
                   <th>Name</th>
                   <th>Meal type</th>
+                  <th>Safety</th>
                   <th>Action</th>
                 </tr>
               </thead>
@@ -225,6 +226,15 @@ export default function AIRecipeGeneratorPage() {
                   <tr key={recipe.id}>
                     <td>{recipe.name}</td>
                     <td>{recipe.meal_type}</td>
+                    <td>
+                      {recipe.safety_flags?.length ? (
+                        <span className={`admin-badge ${recipe.safety_flags.some((item) => item?.level === 'danger') ? 'danger' : 'warning'}`}>
+                          Nutrition review
+                        </span>
+                      ) : (
+                        <span className="admin-badge success">OK</span>
+                      )}
+                    </td>
                     <td>
                       <Link className="admin-button admin-button-small admin-button-edit" href={`/admin/recipes/${recipe.id}`}>
                         Review
