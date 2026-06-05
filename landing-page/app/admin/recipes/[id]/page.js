@@ -80,6 +80,7 @@ export default function EditRecipePage() {
         image_prompt: data.image_prompt || '',
         status: data.status || 'published',
         source: data.source || 'manual',
+        safety_flags: Array.isArray(data.safety_flags) ? data.safety_flags : [],
         ingredients: data.ingredients?.length ? data.ingredients : [{ name: '', quantity: '', unit: '', note: '' }],
         instructions: Array.isArray(data.instructions) ? data.instructions.join('\n') : '',
         nutrition: {
@@ -239,12 +240,27 @@ export default function EditRecipePage() {
           {initialData.status === 'published' ? 'Published' : 'Draft'}
         </span>
         {initialData.source === 'ai_generated' ? <span className="admin-badge info">AI generated</span> : null}
+        {initialData.safety_flags?.length ? (
+          <span className={`admin-badge ${initialData.safety_flags.some((item) => item?.level === 'danger') ? 'danger' : 'warning'}`}>
+            Nutrition review
+          </span>
+        ) : null}
         {initialData.status !== 'published' ? (
           <button className="admin-button" type="button" onClick={handlePublish} disabled={isPublishing || isSubmitting}>
             {isPublishing ? 'Publishing...' : 'Publish'}
           </button>
         ) : null}
       </div>
+      {initialData.safety_flags?.length ? (
+        <div className={`admin-message ${initialData.safety_flags.some((item) => item?.level === 'danger') ? 'danger' : 'warning'}`}>
+          <strong>Nutrition safety review needed.</strong>
+          <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
+            {initialData.safety_flags.map((flag, index) => (
+              <li key={`${flag?.code || 'flag'}-${index}`}>{flag?.message || flag?.code || 'Review nutrition values.'}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {message && <p className="admin-subtitle">{message}</p>}
       <RecipeForm
         initialData={initialData}
