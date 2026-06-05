@@ -3657,6 +3657,18 @@
   border-left: 4px solid #e53935;
 }
 
+.admin-message.warning {
+  background-color: #fff8e1;
+  color: #7a4b00;
+  border-left: 4px solid #f59e0b;
+}
+
+.admin-message.danger {
+  background-color: #ffebee;
+  color: #9f1239;
+  border-left: 4px solid #e11d48;
+}
+
 /* Toolbar */
 .admin-recipes-toolbar {
   display: grid;

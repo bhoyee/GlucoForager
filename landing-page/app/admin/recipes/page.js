@@ -274,6 +274,11 @@ export default function AdminRecipesList() {
                           <span className={`admin-badge ${(recipe.status || 'published') === 'published' ? 'success' : 'warning'}`}>
                             {recipe.status || 'published'}
                           </span>
+                          {recipe.safety_flags?.length ? (
+                            <span className={`admin-badge ${recipe.safety_flags.some((item) => item?.level === 'danger') ? 'danger' : 'warning'}`}>
+                              Nutrition review
+                            </span>
+                          ) : null}
                           <span className="admin-recipe-time">
                             {(recipe.prep_time_minutes || 0) + (recipe.cook_time_minutes || 0)} min
                           </span>
@@ -365,6 +370,11 @@ export default function AdminRecipesList() {
                           <span className={`admin-badge ${(recipe.status || 'published') === 'published' ? 'success' : 'warning'}`}>
                             {recipe.status || 'published'}
                           </span>
+                          {recipe.safety_flags?.length ? (
+                            <span className={`admin-badge ${recipe.safety_flags.some((item) => item?.level === 'danger') ? 'danger' : 'warning'}`}>
+                              Nutrition review
+                            </span>
+                          ) : null}
                         </td>
                         <td>
                           <div className="admin-recipe-time-cell">
