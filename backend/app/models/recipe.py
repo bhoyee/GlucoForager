@@ -28,6 +28,7 @@ class Recipe(Base):
     equipment_tags = Column(JSON, nullable=True)  # e.g. ["air_fryer", "microwave"]
     diabetes_type_tags = Column(JSON, nullable=True)  # e.g. ["type_2", "prediabetes"]
     cook_time_tag = Column(String, nullable=True)  # under_15 | 15_30 | 30_45 | 45_plus
+    safety_flags = Column(JSON, nullable=True)  # generated/admin review warnings, e.g. high sugar/carbs
     status = Column(String, nullable=False, default="published")  # draft | published | archived
     source = Column(String, nullable=False, default="manual")  # manual | ai_generated
     generated_by_admin_user_id = Column(Integer, nullable=True)
