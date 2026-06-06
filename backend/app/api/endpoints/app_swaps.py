@@ -11,7 +11,7 @@ from openai import OpenAIError
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from ...api.dependencies import get_current_user
+from ...api.dependencies import get_current_user, require_ai_feature_access
 from ...database import get_db
 from ...models.user import User
 from ...services.ai_swaps_service import AISwapsService
@@ -113,6 +113,7 @@ def generate_food_swaps(
             trace_id=trace_id,
         )
 
+    require_ai_feature_access(user, db)
     tier = get_effective_subscription_tier(db, user)
     per_minute_limit = 3 if tier != "premium" else 8
 

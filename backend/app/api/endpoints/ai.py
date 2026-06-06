@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from ...api.dependencies import check_user_access, get_current_user
+from ...api.dependencies import get_current_user, require_ai_feature_access
 from ...database import get_db
 from ...models.user import SearchLog, User
 from ...services.ai_recipe_generator import AIRecipeGenerator
@@ -31,12 +31,7 @@ def analyze_vision(
     current_user: User = Depends(get_current_user),
     device_id: str = Header(..., alias="X-Device-Id"),
 ):
-    access = check_user_access(current_user, db, device_id)
-    if not access["allowed"]:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Daily limit reached. Scans left: {access['searches_left']}",
-        )
+    access = require_ai_feature_access(current_user, db, device_id)
     if not vision_service.enabled:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Vision service not configured")
     try:
@@ -55,12 +50,7 @@ def generate_recipes(
     current_user: User = Depends(get_current_user),
     device_id: str = Header(..., alias="X-Device-Id"),
 ):
-    access = check_user_access(current_user, db, device_id)
-    if not access["allowed"]:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Daily limit reached. Searches left: {access['searches_left']}",
-        )
+    access = require_ai_feature_access(current_user, db, device_id)
 
     if not recipe_service.enabled:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Recipe AI not configured")

@@ -1,10 +1,10 @@
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 import logging
 
-from ...api.dependencies import get_current_user
+from ...api.dependencies import get_current_user, require_ai_feature_access
 from ...database import SessionLocal, get_db
 from ...models.ai_request import AIRequest
 from ...models.meal_plan import MealPlan
@@ -14,6 +14,7 @@ from ...services.cost_tracker import record_ai_request
 from ...services.daily_plan_service import DailyPlanService
 from ...services.food_profile_service import extract_food_profile, build_food_profile_instructions
 from ...services.subscription_service import get_effective_subscription_tier
+from ...services.trial_access_service import get_access_snapshot
 from ...services.user_activity_service import add_user_activity
 from ...services.recipe_image_attach_service import attach_recipe_images
 from ...services.system_log_service import log_system_event
@@ -38,6 +39,8 @@ def _refresh_plan_images(plan_id: int, *, base_url: str) -> None:
             return
         user = db.query(User).filter(User.id == plan.user_id).first()
         if not user:
+            return
+        if not get_access_snapshot(db, user).allowed:
             return
 
         decoded = _decode_plan_payload(plan.recipes)
@@ -77,12 +80,6 @@ def _refresh_plan_images(plan_id: int, *, base_url: str) -> None:
             db.close()
         except Exception:
             pass
-
-
-def _require_premium(db: Session, user: User) -> None:
-    tier = get_effective_subscription_tier(db, user) or "free"
-    if tier != "premium" and free_per_week_limit > 0:
-        raise HTTPException(status_code=403, detail="Premium required")
 
 
 def _decode_plan_payload(recipes_value):
@@ -132,14 +129,15 @@ def get_today_plan(
     # This respects admin settings/daily limits and uses cache/fingerprints to avoid repeat spend.
     try:
         meals = [m for m in (decoded.get("meals") or []) if isinstance(m, dict)]
-        attach_recipe_images(
-            db,
-            user=current_user,
-            recipes=meals,
-            ingredients=[],
-            base_url=str(request.base_url).rstrip("/"),
-            max_generate=len(meals),
-        )
+        if get_access_snapshot(db, current_user).allowed:
+            attach_recipe_images(
+                db,
+                user=current_user,
+                recipes=meals,
+                ingredients=[],
+                base_url=str(request.base_url).rstrip("/"),
+                max_generate=len(meals),
+            )
     except Exception:
         pass
     return {"plan": _serialize_plan(plan)}
@@ -168,14 +166,15 @@ def get_plan_by_date(
     decoded = _decode_plan_payload(plan.recipes)
     try:
         meals = [m for m in (decoded.get("meals") or []) if isinstance(m, dict)]
-        attach_recipe_images(
-            db,
-            user=current_user,
-            recipes=meals,
-            ingredients=[],
-            base_url=str(request.base_url).rstrip("/"),
-            max_generate=len(meals),
-        )
+        if get_access_snapshot(db, current_user).allowed:
+            attach_recipe_images(
+                db,
+                user=current_user,
+                recipes=meals,
+                ingredients=[],
+                base_url=str(request.base_url).rstrip("/"),
+                max_generate=len(meals),
+            )
         payload = dict(plan.recipes or {}) if isinstance(plan.recipes, dict) else {}
         payload["meals"] = decoded["meals"]
         plan.recipes = payload
@@ -195,6 +194,7 @@ def generate_today_plan(
     current_user: User = Depends(get_current_user),
     force: bool = Query(False),
 ):
+    require_ai_feature_access(current_user, db)
     tier = get_effective_subscription_tier(db, current_user) or "free"
     today = datetime.utcnow().date()
 
@@ -233,7 +233,6 @@ def generate_today_plan(
     per_minute_limit = 2
     guardrails = get_ai_guardrail_settings(db)
     premium_per_day_limit = int(guardrails.premium_daily_plan_daily)
-    free_per_week_limit = int(guardrails.free_daily_plan_weekly)
 
     cache = CacheService()
     minute_key = f"daily_plan:rl:v1:user:{current_user.id}"
@@ -249,27 +248,7 @@ def generate_today_plan(
         )
 
     now = datetime.utcnow()
-    if tier != "premium":
-        window_start = now - timedelta(days=7)
-        used_recent = (
-            db.query(AIRequest)
-            .filter(
-                AIRequest.user_id == current_user.id,
-                AIRequest.request_type == "daily_plan",
-                AIRequest.created_at >= window_start,
-            )
-            .count()
-        )
-        if used_recent >= free_per_week_limit:
-            raise HTTPException(
-                status_code=429,
-                detail={
-                    "code": "weekly_limit_reached",
-                    "message": "Free plan includes 1 meal plan per week. Upgrade to Premium for more.",
-                    "limit_per_week": free_per_week_limit,
-                },
-            )
-    elif premium_per_day_limit > 0:
+    if premium_per_day_limit > 0:
         start_of_day = datetime(year=now.year, month=now.month, day=now.day)
         used_today = (
             db.query(AIRequest)

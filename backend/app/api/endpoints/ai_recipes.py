@@ -9,7 +9,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, 
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from ...api.dependencies import check_user_access, get_current_user
+from ...api.dependencies import get_current_user, require_ai_feature_access
 from ...database import get_db, SessionLocal
 from ...models.ai_job import AIJob
 from ...models.user import User
@@ -343,12 +343,7 @@ def generate_from_vision(
     current_user: User = Depends(get_current_user),
     device_id: str = Header(..., alias="X-Device-Id"),
 ):
-    access = check_user_access(current_user, db, device_id)
-    if not access["allowed"]:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Daily limit reached. Scans left: {access['searches_left']}",
-        )
+    access = require_ai_feature_access(current_user, db, device_id)
     tier = get_effective_subscription_tier(db, current_user) or "free"
     cache_key = _vision_cache_key(
         current_user.id,
@@ -471,12 +466,7 @@ def generate_from_vision_batch(
     current_user: User = Depends(get_current_user),
     device_id: str = Header(..., alias="X-Device-Id"),
 ):
-    access = check_user_access(current_user, db, device_id)
-    if not access["allowed"]:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Daily limit reached. Scans left: {access['searches_left']}",
-        )
+    access = require_ai_feature_access(current_user, db, device_id)
     tier = get_effective_subscription_tier(db, current_user) or "free"
     cache_key = _vision_cache_key(
         current_user.id,
@@ -600,12 +590,7 @@ def generate_from_vision_async(
     current_user: User = Depends(get_current_user),
     device_id: str = Header(..., alias="X-Device-Id"),
 ):
-    access = check_user_access(current_user, db, device_id)
-    if not access["allowed"]:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Daily limit reached. Scans left: {access['searches_left']}",
-        )
+    access = require_ai_feature_access(current_user, db, device_id)
 
     tier = get_effective_subscription_tier(db, current_user) or "free"
     rl = check_ai_rate_limit(user_id=current_user.id, tier=tier, kind="vision", db=db)
@@ -678,12 +663,7 @@ def generate_from_vision_batch_async(
     current_user: User = Depends(get_current_user),
     device_id: str = Header(..., alias="X-Device-Id"),
 ):
-    access = check_user_access(current_user, db, device_id)
-    if not access["allowed"]:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Daily limit reached. Scans left: {access['searches_left']}",
-        )
+    access = require_ai_feature_access(current_user, db, device_id)
 
     tier = get_effective_subscription_tier(db, current_user) or "free"
     rl = check_ai_rate_limit(user_id=current_user.id, tier=tier, kind="vision_batch", db=db)
@@ -773,8 +753,9 @@ def fridge_to_recipes_alias(
     payload: VisionRecipeRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    device_id: str = Header(..., alias="X-Device-Id"),
 ):
-    return generate_from_vision(payload, db, current_user)
+    return generate_from_vision(payload, db, current_user, device_id)
 
 
 @router.post("/image")
@@ -784,6 +765,7 @@ def generate_recipe_image(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    require_ai_feature_access(current_user, db)
     tier = get_effective_subscription_tier(db, current_user) or "free"
     settings = get_recipe_image_settings(db)
     if not settings.enabled:
