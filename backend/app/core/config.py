@@ -108,6 +108,11 @@ class Settings(BaseSettings):
     ai_daily_limit_premium_swaps: int = Field(100, env="AI_DAILY_LIMIT_PREMIUM_SWAPS")
     ai_daily_limit_premium_daily_plan: int = Field(5, env="AI_DAILY_LIMIT_PREMIUM_DAILY_PLAN")
     ai_weekly_limit_free_daily_plan: int = Field(1, env="AI_WEEKLY_LIMIT_FREE_DAILY_PLAN")
+
+    # Monetisation access model. New users get a 7-day account trial. Existing
+    # users get a one-time grace period via migration when this model is enabled.
+    trial_access_days: int = Field(7, env="TRIAL_ACCESS_DAYS")
+    existing_user_trial_grace_days: int = Field(14, env="EXISTING_USER_TRIAL_GRACE_DAYS")
     revenuecat_webhook_secret: str | None = Field(None, env="REVENUECAT_WEBHOOK_SECRET")
     revenuecat_secret_api_key: str | None = Field(None, env="REVENUECAT_SECRET_API_KEY")
     revenuecat_project_id: str | None = Field(None, env="REVENUECAT_PROJECT_ID")

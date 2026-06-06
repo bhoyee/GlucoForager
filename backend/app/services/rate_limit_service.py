@@ -99,14 +99,10 @@ def ai_daily_limit_for_feature(*, tier: str, feature: str, db: Session | None = 
             else (settings.ai_daily_limit_premium_agent if is_premium else settings.ai_daily_limit_free_agent)
         )
     if feature_norm == "recipes":
-        if not is_premium:
-            # Free scan/type/eat-now recipe usage is already governed by
-            # check_user_access via the admin scan/search window.
-            return 0
         return int(
-            guardrails.premium_recipes_daily
+            (guardrails.premium_recipes_daily if is_premium else guardrails.free_recipes_daily)
             if guardrails
-            else settings.ai_daily_limit_premium_recipes
+            else (settings.ai_daily_limit_premium_recipes if is_premium else settings.ai_daily_limit_free_recipes)
         )
     if feature_norm == "swaps":
         return int(
