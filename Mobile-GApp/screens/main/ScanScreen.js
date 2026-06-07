@@ -48,9 +48,10 @@ export default function ScanScreen() {
   const MAX_IMAGES = 5;
   
   const [userIsPremium, setUserIsPremium] = useState(false);
-  const [remainingScans, setRemainingScans] = useState(3);
-  const [freeLimitCount, setFreeLimitCount] = useState(3);
-  const [freeLimitWindowDays, setFreeLimitWindowDays] = useState(1);
+  const [remainingScans, setRemainingScans] = useState(0);
+  const [hasFeatureAccess, setHasFeatureAccess] = useState(true);
+  const [accessStatus, setAccessStatus] = useState('trial');
+  const [trialDaysLeft, setTrialDaysLeft] = useState(null);
   const [isScanning, setIsScanning] = useState(false);
   const [capturedImages, setCapturedImages] = useState([]);
   const [showPreview, setShowPreview] = useState(false);
@@ -74,7 +75,10 @@ export default function ScanScreen() {
     const token = await AsyncStorage.getItem('userToken');
     if (!token) {
       setUserIsPremium(false);
-      setRemainingScans(3);
+      setRemainingScans(0);
+      setHasFeatureAccess(false);
+      setAccessStatus('expired');
+      setTrialDaysLeft(0);
       return;
     }
     const deviceId = await getDeviceId();
@@ -85,21 +89,27 @@ export default function ScanScreen() {
     );
     if (response.status === 401) {
       setUserIsPremium(false);
-      setRemainingScans(3);
+      setRemainingScans(0);
+      setHasFeatureAccess(false);
+      setAccessStatus('expired');
+      setTrialDaysLeft(0);
       return;
     }
     if (!response.ok) {
       throw new Error('Unable to fetch scan status.');
     }
     const data = await response.json();
-    const isPremium =
-      data.is_premium === true ||
-      data.subscription_tier === 'premium' ||
+    const isPremium = data.is_premium === true || data.subscription_tier === 'premium';
+    const allowed =
+      data.has_feature_access === true ||
+      isPremium ||
+      ['premium', 'trial', 'grace'].includes(String(data.access_status || '').toLowerCase()) ||
       data.searches_left === 'unlimited';
     setUserIsPremium(isPremium);
-    setRemainingScans(typeof data.searches_left === 'number' ? data.searches_left : 0);
-    if (typeof data.daily_limit === 'number') setFreeLimitCount(data.daily_limit);
-    if (typeof data.limit_window_days === 'number') setFreeLimitWindowDays(data.limit_window_days);
+    setHasFeatureAccess(allowed);
+    setAccessStatus(data.access_status || (allowed ? 'trial' : 'expired'));
+    setTrialDaysLeft(data.trial_days_left ?? null);
+    setRemainingScans(allowed ? 1 : 0);
   }, [signOut]);
 
   useEffect(() => {
@@ -122,17 +132,14 @@ export default function ScanScreen() {
   }, [isFocused, autoLaunched]);
 
   const showUpgradeAlert = () => {
-    const count = Number.isFinite(Number(freeLimitCount)) ? Number(freeLimitCount) : 3;
-    const days = Number.isFinite(Number(freeLimitWindowDays)) ? Number(freeLimitWindowDays) : 1;
-    const periodText = days <= 1 ? 'today' : `in the last ${days} days`;
     Alert.alert(
-      'Limit Reached',
-      `You have used all ${count} free scans/searches ${periodText}. Upgrade to Premium for unlimited access.`,
+      'Trial ended',
+      'Your free trial has ended. Start Premium to continue using GlucoForager.',
       [
         { text: 'OK', style: 'cancel' },
         { 
-          text: 'Upgrade', 
-          onPress: () => navigation.navigate('ProfileTab') 
+          text: 'Start Premium',
+          onPress: () => navigation.navigate('ProfileTab', { openPremium: true })
         }
       ]
     );
@@ -155,18 +162,17 @@ export default function ScanScreen() {
         return false;
       }
       const data = await response.json();
-      const isPremium =
-        data.is_premium === true ||
-        data.subscription_tier === 'premium' ||
+      const isPremium = data.is_premium === true || data.subscription_tier === 'premium';
+      const allowed =
+        data.has_feature_access === true ||
+        isPremium ||
+        ['premium', 'trial', 'grace'].includes(String(data.access_status || '').toLowerCase()) ||
         data.searches_left === 'unlimited';
       setUserIsPremium(isPremium);
-      if (typeof data.searches_left === 'number') {
-        setRemainingScans(data.searches_left);
-      }
-      if (typeof data.daily_limit === 'number') setFreeLimitCount(data.daily_limit);
-      if (typeof data.limit_window_days === 'number') setFreeLimitWindowDays(data.limit_window_days);
-      const numericLeft = Number(data.searches_left);
-      const allowed = isPremium || (Number.isFinite(numericLeft) && numericLeft > 0);
+      setHasFeatureAccess(allowed);
+      setAccessStatus(data.access_status || (allowed ? 'trial' : 'expired'));
+      setTrialDaysLeft(data.trial_days_left ?? null);
+      setRemainingScans(allowed ? 1 : 0);
       if (!allowed && capturedImages.length === 0) {
         showUpgradeAlert();
         return false;
@@ -395,10 +401,13 @@ export default function ScanScreen() {
           <View style={styles.counterContent}>
             <Ionicons name="camera-outline" size={20} color={Colors.primary} />
             <Text style={styles.counterText}>
-              {userIsPremium 
-                ? 'Unlimited scans' 
-                : `${remainingScans} scans left today`
-              }
+              {userIsPremium || accessStatus === 'premium'
+                ? 'Premium active'
+                : accessStatus === 'expired'
+                  ? 'Trial ended'
+                  : Number(trialDaysLeft) > 0
+                    ? `${trialDaysLeft} trial day${Number(trialDaysLeft) === 1 ? '' : 's'} left`
+                    : 'Trial active'}
             </Text>
           </View>
         </View>
@@ -440,7 +449,7 @@ export default function ScanScreen() {
         )}
 
         {/* Premium Upgrade Prompt */}
-        {!userIsPremium && remainingScans <= 1 && capturedImages.length === 0 && (
+        {!hasFeatureAccess && capturedImages.length === 0 && (
           <TouchableOpacity 
             style={styles.upgradePrompt}
             onPress={() => navigation.navigate('ProfileTab')}
@@ -448,7 +457,7 @@ export default function ScanScreen() {
             <View style={styles.upgradeContent}>
               <Ionicons name="diamond-outline" size={16} color={Colors.primary} />
               <Text style={styles.upgradeText}>
-                Upgrade to Premium for unlimited scans
+                Start Premium to keep scanning
               </Text>
             </View>
           </TouchableOpacity>

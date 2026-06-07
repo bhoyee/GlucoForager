@@ -621,10 +621,10 @@ export default function ProfileScreen() {
                 </Pressable>
               </View>
 
-              <Text style={styles.premiumModalSubtitle}>Monthly auto-renewable subscription</Text>
+              <Text style={styles.premiumModalSubtitle}>7-day free trial, then monthly subscription</Text>
 
               <View style={styles.premiumInfoRow}>
-                <Text style={styles.premiumInfoLabel}>Price (per month)</Text>
+                <Text style={styles.premiumInfoLabel}>After trial</Text>
                 <Text
                   style={[
                     styles.premiumInfoValue,
@@ -639,13 +639,13 @@ export default function ProfileScreen() {
                 </Text>
               </View>
               <View style={styles.premiumInfoRow}>
-                <Text style={styles.premiumInfoLabel}>Length</Text>
-                <Text style={styles.premiumInfoValue}>1 month</Text>
+                <Text style={styles.premiumInfoLabel}>Trial</Text>
+                <Text style={styles.premiumInfoValue}>7 days free</Text>
               </View>
 
               <View style={styles.premiumBenefits}>
                 <Text style={styles.premiumBenefitsTitle}>What you get:</Text>
-                <Text style={styles.premiumBenefitItem}>- Unlimited scans & ingredient searches</Text>
+                <Text style={styles.premiumBenefitItem}>- Scan and type ingredients without daily free limits</Text>
                 <Text style={styles.premiumBenefitItem}>- Daily meal planner (incl. snacks)</Text>
                 <Text style={styles.premiumBenefitItem}>- Food swaps for meals, snacks & drinks</Text>
                 <Text style={styles.premiumBenefitItem}>- Daily challenges to build healthy habits</Text>
@@ -688,7 +688,7 @@ export default function ProfileScreen() {
                 {premiumModalBusy ? (
                   <ActivityIndicator size="small" color={Colors.white} />
                 ) : (
-                  <Text style={styles.premiumButtonTextPrimary}>Continue</Text>
+                  <Text style={styles.premiumButtonTextPrimary}>Start 7-Day Free Trial</Text>
                 )}
               </TouchableOpacity>
               <TouchableOpacity
@@ -730,7 +730,7 @@ export default function ProfileScreen() {
           <View style={styles.membershipBadge}>
             <Ionicons name="star" size={14} color={Colors.warning} />
             <Text style={styles.membershipText}>
-              {profile.subscriptionTier === 'premium' ? 'Premium Plan' : 'Free Plan'}
+              {profile.subscriptionTier === 'premium' ? 'Premium Plan' : 'Trial Access'}
             </Text>
           </View>
         </View>
@@ -740,8 +740,8 @@ export default function ProfileScreen() {
       {profile.subscriptionTier !== 'premium' && (
         <TouchableOpacity style={styles.upgradeCard} onPress={handleUpgrade} disabled={isUpgrading}>
           <View>
-            <Text style={styles.upgradeTitle}>Upgrade to Premium</Text>
-            <Text style={styles.upgradeSubtitle}>Unlock all features</Text>
+            <Text style={styles.upgradeTitle}>Start Premium</Text>
+            <Text style={styles.upgradeSubtitle}>7-day free trial, then monthly</Text>
           </View>
           {isUpgrading ? (
             <ActivityIndicator size="small" color={Colors.primary} />

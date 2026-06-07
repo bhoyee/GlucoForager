@@ -10,7 +10,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, 
 from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy.orm import Session
 
-from ...api.dependencies import check_user_access, get_current_user
+from ...api.dependencies import get_current_user, require_ai_feature_access
 from ...database import get_db
 from ...database import SessionLocal
 from ...models.ai_job import AIJob
@@ -592,12 +592,7 @@ def generate_from_text(
     current_user: User = Depends(get_current_user),
     device_id: str = Header(..., alias="X-Device-Id"),
 ):
-    access = check_user_access(current_user, db, device_id)
-    if not access["allowed"]:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Daily limit reached. Scans left: {access['searches_left']}",
-        )
+    access = require_ai_feature_access(current_user, db, device_id)
     tier = get_effective_subscription_tier(db, current_user) or "free"
     daily = check_ai_daily_limit(
         db,
@@ -733,12 +728,7 @@ def generate_from_text_async(
         len(payload.ingredients or []),
         device_id,
     )
-    access = check_user_access(current_user, db, device_id)
-    if not access["allowed"]:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Daily limit reached. Scans left: {access['searches_left']}",
-        )
+    access = require_ai_feature_access(current_user, db, device_id)
 
     tier = get_effective_subscription_tier(db, current_user) or "free"
     rl = check_ai_rate_limit(user_id=current_user.id, tier=tier, kind="text", db=db)

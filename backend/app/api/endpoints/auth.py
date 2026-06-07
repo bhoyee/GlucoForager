@@ -24,6 +24,7 @@ from ...models.user import User
 from ...services.email_service import send_admin_signup_alert, send_password_reset_code, send_welcome_email
 from ...services.login_throttler import LoginThrottler
 from ...services.settings_service import get_signup_notification_settings
+from ...services.trial_access_service import start_trial_for_new_user
 from ...services.user_activity_service import add_user_activity, touch_user_activity
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -158,6 +159,7 @@ def signup(payload: UserCreate, background_tasks: BackgroundTasks, request: Requ
             registered_os_version=client.os_version if client else None,
             registered_device_model=client.device_model if client else None,
         )
+        start_trial_for_new_user(user)
         db.add(user)
         db.commit()
         db.refresh(user)

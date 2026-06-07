@@ -41,8 +41,10 @@ export default function HomeScreen() {
   
   const [userIsPremium, setUserIsPremium] = useState(false);
   const [todayScans, setTodayScans] = useState(0);
-  const [remainingScans, setRemainingScans] = useState(3);
-  const [dailyLimit, setDailyLimit] = useState(3);
+  const [remainingScans, setRemainingScans] = useState(0);
+  const [dailyLimit, setDailyLimit] = useState(0);
+  const [accessStatus, setAccessStatus] = useState('trial');
+  const [trialDaysLeft, setTrialDaysLeft] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [suggestedRecipes, setSuggestedRecipes] = useState([]);
   const [recipeImagesEnabled, setRecipeImagesEnabled] = useState(true);
@@ -187,6 +189,12 @@ export default function HomeScreen() {
         if (typeof data.dailyLimit === 'number') {
           setDailyLimit(data.dailyLimit);
         }
+        if (typeof data.accessStatus === 'string') {
+          setAccessStatus(data.accessStatus);
+        }
+        if (data.trialDaysLeft !== undefined) {
+          setTrialDaysLeft(data.trialDaysLeft);
+        }
       }
 
       const cachedStats = await AsyncStorage.getItem('home_user_stats');
@@ -279,8 +287,10 @@ export default function HomeScreen() {
     if (!token) {
       setUserIsPremium(false);
       setTodayScans(0);
-      setRemainingScans(3);
-      setDailyLimit(3);
+      setRemainingScans(0);
+      setDailyLimit(0);
+      setAccessStatus('expired');
+      setTrialDaysLeft(0);
       return;
     }
 
@@ -293,33 +303,34 @@ export default function HomeScreen() {
     if (response.status === 401) {
       setUserIsPremium(false);
       setTodayScans(0);
-      setRemainingScans(3);
-      setDailyLimit(3);
+      setRemainingScans(0);
+      setDailyLimit(0);
+      setAccessStatus('expired');
+      setTrialDaysLeft(0);
       return;
     }
     if (!response.ok) {
       throw new Error('Unable to fetch scan status.');
     }
     const data = await response.json();
-    const isPremium =
-      data.is_premium === true ||
-      data.subscription_tier === 'premium' ||
-      data.searches_left === 'unlimited';
+    const isPremium = data.is_premium === true || data.subscription_tier === 'premium';
+    const nextAccessStatus = data.access_status || (isPremium ? 'premium' : hasActiveAccess(data) ? 'trial' : 'expired');
     setUserIsPremium(isPremium);
+    setAccessStatus(nextAccessStatus);
+    setTrialDaysLeft(data.trial_days_left ?? null);
     setTodayScans(data.total || 0);
-    setRemainingScans(
-      typeof data.searches_left === 'number' ? data.searches_left : 0
-    );
-    setDailyLimit(typeof data.daily_limit === 'number' ? data.daily_limit : 3);
+    setRemainingScans(hasActiveAccess(data) ? 1 : 0);
+    setDailyLimit(0);
 
     await AsyncStorage.setItem(
       'home_scan_status',
       JSON.stringify({
         isPremium,
         todayScans: data.total || 0,
-        remainingScans:
-          typeof data.searches_left === 'number' ? data.searches_left : 0,
-        dailyLimit: typeof data.daily_limit === 'number' ? data.daily_limit : 3,
+        remainingScans: hasActiveAccess(data) ? 1 : 0,
+        dailyLimit: 0,
+        accessStatus: nextAccessStatus,
+        trialDaysLeft: data.trial_days_left ?? null,
       })
     );
 
@@ -425,6 +436,24 @@ export default function HomeScreen() {
     const hydrated = await hydrateRecentRecipeImages(items);
     setRecentRecipes(hydrated);
     await AsyncStorage.setItem('home_recent_recipes', JSON.stringify(hydrated));
+  };
+
+  const hasActiveAccess = (data = {}) =>
+    data.has_feature_access === true ||
+    data.is_premium === true ||
+    ['premium', 'trial', 'grace'].includes(String(data.access_status || '').toLowerCase()) ||
+    data.searches_left === 'unlimited';
+
+  const getAccessLabel = () => {
+    if (userIsPremium || accessStatus === 'premium') return 'Premium active';
+    if (accessStatus === 'trial' || accessStatus === 'grace') {
+      const days = Number(trialDaysLeft);
+      return Number.isFinite(days) && days > 0
+        ? `${days} day${days === 1 ? '' : 's'} left`
+        : 'Trial active';
+    }
+    if (accessStatus === 'expired') return 'Trial ended';
+    return 'Trial access';
   };
 
   const isPlaceholderRecipeImage = (recipe) => {
@@ -552,12 +581,11 @@ export default function HomeScreen() {
         return;
       }
       const data = await response.json();
-      const isPremium =
-        data.is_premium === true ||
-        data.subscription_tier === 'premium' ||
-        data.searches_left === 'unlimited';
-      const numericLeft = Number(data.searches_left);
-      const allowed = isPremium || (Number.isFinite(numericLeft) && numericLeft > 0);
+      const isPremium = data.is_premium === true || data.subscription_tier === 'premium';
+      const allowed = hasActiveAccess(data);
+      setUserIsPremium(isPremium);
+      setAccessStatus(data.access_status || (allowed ? 'trial' : 'expired'));
+      setTrialDaysLeft(data.trial_days_left ?? null);
 
       if (allowed) {
         if (source === 'manual') {
@@ -568,13 +596,13 @@ export default function HomeScreen() {
         }
       } else {
         Alert.alert(
-          'Daily Limit Reached',
-          'You have used all 3 free scans today. Upgrade to Premium for unlimited scans.',
+          'Trial ended',
+          data?.detail?.message || 'Your free trial has ended. Start Premium to continue using GlucoForager.',
           [
             { text: 'OK', style: 'cancel' },
             { 
-              text: 'Upgrade', 
-              onPress: () => navigation.navigate('Profile')
+              text: 'Start Premium',
+              onPress: () => navigation.navigate('Profile', { openPremium: true })
             }
           ]
         );
@@ -647,7 +675,7 @@ export default function HomeScreen() {
     );
   }
 
-  const scanProgress = dailyLimit ? Math.min(100, Math.max(0, (todayScans / dailyLimit) * 100)) : 0;
+  const scanProgress = 0;
   const challengeCompleted = Number(dailyChallenge?.progress?.completed || 0);
   const challengeTotal = Number(dailyChallenge?.progress?.total || 0);
   const hasChallenge = Boolean(dailyChallenge?.tasks?.length);
@@ -672,7 +700,7 @@ export default function HomeScreen() {
               ) : null}
             </Text>
             <Text style={styles.subGreeting}>
-              {`It's ${getMealLabel()} time • ${userIsPremium ? 'Unlimited scans' : `${remainingScans} scans left`}`}
+              {`It's ${getMealLabel()} time • ${getAccessLabel()}`}
             </Text>
           </View>
           <TouchableOpacity style={styles.notificationButton} onPress={() => navigation.navigate('Profile')}>
@@ -710,7 +738,7 @@ export default function HomeScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.heroCtaTitle}>Scan your fridge</Text>
                 <Text style={styles.heroCtaSub} numberOfLines={1}>
-                  {userIsPremium ? 'Unlimited scans' : `${remainingScans} scans left today`}
+                  {getAccessLabel()}
                 </Text>
               </View>
               <TouchableOpacity style={styles.heroCtaButton} onPress={handleScanPress} activeOpacity={0.9}>
@@ -732,27 +760,22 @@ export default function HomeScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.heroSecondaryTitle}>Type ingredients</Text>
                 <Text style={styles.heroSecondarySub} numberOfLines={1}>
-                  {userIsPremium ? 'Manual input' : `${remainingScans} searches left today`}
+                  {getAccessLabel()}
                 </Text>
               </View>
             </View>
             <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
           </Pressable>
-          {!userIsPremium ? (
+          {accessStatus === 'expired' ? (
             <View style={styles.heroUsageWrap}>
               <View style={styles.heroUsageTop}>
-                <Text style={styles.heroUsageLabel}>Daily scan usage</Text>
-                <Text style={styles.heroUsageCount}>{todayScans}/{dailyLimit}</Text>
+                <Text style={styles.heroUsageLabel}>Trial access</Text>
+                <Text style={styles.heroUsageCount}>Ended</Text>
               </View>
-              <View style={styles.heroUsageBar}>
-                <View style={[styles.heroUsageFill, { width: `${scanProgress}%` }]} />
-              </View>
-              {Number(remainingScans) <= 0 ? (
-                <TouchableOpacity style={styles.heroUpgradeButton} onPress={handleUpgradePaywall} activeOpacity={0.9}>
-                  <Text style={styles.heroUpgradeText}>Upgrade for unlimited scans</Text>
-                  <Ionicons name="arrow-forward" size={15} color="white" />
-                </TouchableOpacity>
-              ) : null}
+              <TouchableOpacity style={styles.heroUpgradeButton} onPress={handleUpgradePaywall} activeOpacity={0.9}>
+                <Text style={styles.heroUpgradeText}>Start Premium</Text>
+                <Ionicons name="arrow-forward" size={15} color="white" />
+              </TouchableOpacity>
             </View>
           ) : null}
         </View>
