@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, TouchableOpacity, StatusBar } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,16 +10,22 @@ export default function TermsScreen({ navigation }) {
   const contentBottomPadding = Math.max(insets.bottom, 16) + 16;
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={Colors.primaryDark} />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
       >
-        <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
-          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={22} color={Colors.text} />
-          </TouchableOpacity>
-          <Text style={styles.title}>Terms & Condition</Text>
-          <View style={{ width: 36 }} />
+        <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} activeOpacity={0.85}>
+              <Ionicons name="arrow-back" size={22} color="white" />
+            </TouchableOpacity>
+            <View style={styles.headerText}>
+              <Text style={styles.headerTitle}>Terms & Conditions</Text>
+              <Text style={styles.headerSubtitle}>How GlucoForager works for you</Text>
+            </View>
+            <View style={styles.headerRight} />
+          </View>
         </View>
         <View style={styles.card}>
         <Text style={styles.updated}>Last updated: January 12, 2026</Text>
@@ -115,25 +121,48 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 24,
   },
+  headerPanel: {
+    backgroundColor: Colors.primaryDark,
+    paddingHorizontal: 20,
+    paddingBottom: 18,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 5,
+    marginBottom: 18,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 20,
   },
   backButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: Colors.surface,
+    backgroundColor: 'rgba(255,255,255,0.16)',
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 12,
   },
-  title: {
-    fontSize: 20,
+  headerText: {
+    flex: 1,
+  },
+  headerRight: {
+    width: 36,
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: 'white',
+  },
+  headerSubtitle: {
+    marginTop: 3,
+    fontSize: 13,
     fontWeight: '700',
-    color: Colors.text,
+    color: 'rgba(255,255,255,0.78)',
   },
   card: {
     backgroundColor: Colors.surface,
