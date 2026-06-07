@@ -864,7 +864,10 @@ export default function ProfileScreen() {
         <TouchableOpacity
           style={styles.menuItem}
           onPress={() =>
-            Alert.alert('About', 'GlucoForager helps you find diabetes-friendly recipes from your ingredients.')
+            Alert.alert(
+              'About',
+              'GlucoForager is a diabetes-friendly food assistant for daily meal decisions. Scan ingredients, type what you have, get smarter food swaps, build meal plans, save favourites, and ask GlucoGuide AI for practical food guidance.'
+            )
           }
         >
           <View style={styles.menuItemLeft}>
