@@ -28,8 +28,8 @@ export default function ProfileScreen() {
   // Avoid double-counting `insets.bottom`, which creates extra white space below the footer.
   // In React Navigation, the tab bar typically takes its own layout space (not overlay),
   // so we anchor the footer to the bottom of the screen and only respect safe-area.
-  const versionFooterBottom = Math.max(insets.bottom, 0) + 4;
-  const versionFooterHeight = 38;
+  const versionFooterBottom = Math.max(insets.bottom - 2, 0);
+  const versionFooterHeight = 24;
   // Modal overlays the tab bar, so we only need to respect safe-area inset.
   const premiumModalBottomPadding = Math.max(insets.bottom, 14) + 14;
   const appStoreUrl = 'https://apps.apple.com/us/app/glucoforager/id6758808427?action=write-review';
@@ -864,7 +864,10 @@ export default function ProfileScreen() {
         <TouchableOpacity
           style={styles.menuItem}
           onPress={() =>
-            Alert.alert('About', 'GlucoForager helps you find diabetes-friendly recipes from your ingredients.')
+            Alert.alert(
+              'About',
+              'GlucoForager is a diabetes-friendly food assistant for daily meal decisions. Scan ingredients, type what you have, get smarter food swaps, build meal plans, save favourites, and ask GlucoGuide AI for practical food guidance.'
+            )
           }
         >
           <View style={styles.menuItemLeft}>
@@ -1238,7 +1241,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: 'center',
-    paddingVertical: 6,
+    paddingVertical: 2,
     paddingHorizontal: 18,
   },
   versionLine: {
