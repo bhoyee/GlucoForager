@@ -25,9 +25,26 @@ from ...models.user_daily_challenge import UserDailyChallenge
 from ...models.user_activity_event import UserActivityEvent
 from ..dependencies import check_user_access, get_current_user
 from ...services.subscription_service import get_effective_subscription_tier
+from ...services.trial_access_service import get_access_snapshot
 
 router = APIRouter(prefix="/user", tags=["user"])
 logger = logging.getLogger(__name__)
+
+
+def _access_payload(db: Session, user: User) -> dict:
+    effective_tier = get_effective_subscription_tier(db, user)
+    access = get_access_snapshot(db, user)
+    return {
+        "subscription_tier": effective_tier or "free",
+        "is_premium": effective_tier == "premium",
+        "has_feature_access": access.allowed,
+        "access_status": access.access_status,
+        "trial_active": access.trial_active,
+        "trial_ends_at": access.trial_ends_at,
+        "trial_grace_active": access.trial_grace_active,
+        "trial_grace_ends_at": access.trial_grace_ends_at,
+        "trial_days_left": access.trial_days_left,
+    }
 
 
 @router.get("/profile")
@@ -35,7 +52,6 @@ def profile(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    effective_tier = get_effective_subscription_tier(db, current_user)
     return {
         "id": current_user.id,
         "public_id": current_user.public_id,
@@ -53,8 +69,7 @@ def profile(
         "available_equipment": getattr(current_user, "available_equipment", None),
         "cook_time_preference": getattr(current_user, "cook_time_preference", None),
         "profile_completed": getattr(current_user, "profile_completed", None),
-        "subscription_tier": effective_tier,
-        "is_premium": effective_tier == "premium",
+        **_access_payload(db, current_user),
         "premium_access_blocked": bool(getattr(current_user, "premium_access_blocked_at", None)),
         "premium_access_blocked_until": getattr(current_user, "premium_access_blocked_until", None),
     }
@@ -160,7 +175,6 @@ def update_profile(
     db.add(current_user)
     db.commit()
     db.refresh(current_user)
-    effective_tier = get_effective_subscription_tier(db, current_user)
     return {
         "id": current_user.id,
         "public_id": current_user.public_id,
@@ -178,8 +192,7 @@ def update_profile(
         "available_equipment": getattr(current_user, "available_equipment", None),
         "cook_time_preference": getattr(current_user, "cook_time_preference", None),
         "profile_completed": getattr(current_user, "profile_completed", None),
-        "subscription_tier": effective_tier,
-        "is_premium": effective_tier == "premium",
+        **_access_payload(db, current_user),
         "premium_access_blocked": bool(getattr(current_user, "premium_access_blocked_at", None)),
         "premium_access_blocked_until": getattr(current_user, "premium_access_blocked_until", None),
     }
@@ -209,7 +222,6 @@ def scans_today(
         .count()
     )
     access = check_user_access(current_user, db, device_id)
-    effective_tier = get_effective_subscription_tier(db, current_user)
     response = {
         "ai_scans": ai_count,
         "text_searches": text_count,
@@ -218,8 +230,16 @@ def scans_today(
         "device_searches_left": access.get("device_searches_left"),
         "daily_limit": access.get("daily_limit"),
         "limit_window_days": access.get("limit_window_days", 1),
-        "subscription_tier": effective_tier or "free",
-        "is_premium": effective_tier == "premium",
+        "subscription_tier": access.get("subscription_tier") or "free",
+        "is_premium": bool(access.get("is_premium")),
+        "has_feature_access": bool(access.get("has_feature_access")),
+        "access_status": access.get("access_status"),
+        "trial_active": bool(access.get("trial_active")),
+        "trial_ends_at": access.get("trial_ends_at"),
+        "trial_grace_active": bool(access.get("trial_grace_active")),
+        "trial_grace_ends_at": access.get("trial_grace_ends_at"),
+        "trial_days_left": access.get("trial_days_left"),
+        "detail": access.get("detail"),
         "premium_access_blocked": bool(getattr(current_user, "premium_access_blocked_at", None)),
         "premium_access_blocked_until": getattr(current_user, "premium_access_blocked_until", None),
     }

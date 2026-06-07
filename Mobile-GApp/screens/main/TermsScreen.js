@@ -53,10 +53,11 @@ export default function TermsScreen({ navigation }) {
 
         <Text style={styles.sectionTitle}>4. Subscription Plans</Text>
         <Text style={styles.paragraph}>
-          Free Plan: 3 AI scans per day, basic recipe generation, contains advertisements. Premium Plan:
-          unlimited AI scans, advanced recipe features, no advertisements, recipe saving and organization.
-          Premium subscriptions automatically renew unless canceled at least 24 hours before the end of
-          the current period. You can cancel subscriptions through your app store account settings.
+          GlucoForager includes a 7-day free trial for new users. After the trial, Premium is required
+          to continue using AI-powered scans, ingredient recipe generation, GlucoGuide, meal planning,
+          and food swaps. Premium subscriptions automatically renew unless canceled at least 24 hours
+          before the end of the current period. You can cancel subscriptions through your app store
+          account settings.
         </Text>
 
         <Text style={styles.sectionTitle}>5. Intellectual Property</Text>

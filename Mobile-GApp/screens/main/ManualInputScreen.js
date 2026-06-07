@@ -50,12 +50,15 @@ export default function ManualInputScreen() {
   const [scanStatus, setScanStatus] = useState({
     remaining: null,
     isPremium: false,
+    hasAccess: true,
+    accessStatus: 'trial',
+    trialDaysLeft: null,
   });
   const lastPrefillTokenRef = useRef(null);
   const loadingPulse = useRef(new Animated.Value(0)).current;
   const loadingRotate = useRef(new Animated.Value(0)).current;
   const loadingSweep = useRef(new Animated.Value(0)).current;
-  const limitReached = !scanStatus.isPremium && scanStatus.remaining === 0;
+  const limitReached = scanStatus.hasAccess === false || scanStatus.accessStatus === 'expired';
   const allowedIngredientPattern = /^[A-Za-z0-9][A-Za-z0-9\s\-'/%%]*$/;
   const keyboardVisible = keyboardHeight > 0;
   const typingActive = activeIngredientIndex !== null || keyboardVisible;
@@ -140,7 +143,7 @@ export default function ManualInputScreen() {
       try {
         const token = await AsyncStorage.getItem('userToken');
         if (!token) {
-          setScanStatus({ remaining: null, isPremium: false });
+          setScanStatus({ remaining: null, isPremium: false, hasAccess: false, accessStatus: 'expired', trialDaysLeft: 0 });
           return;
         }
         const response = await apiFetch(
@@ -149,20 +152,27 @@ export default function ManualInputScreen() {
           { onUnauthorized: signOut }
         );
         if (response.status === 401) {
-          setScanStatus({ remaining: null, isPremium: false });
+          setScanStatus({ remaining: null, isPremium: false, hasAccess: false, accessStatus: 'expired', trialDaysLeft: 0 });
           return;
         }
       if (!response.ok) {
-        setScanStatus({ remaining: null, isPremium: false });
+        setScanStatus({ remaining: null, isPremium: false, hasAccess: false, accessStatus: 'expired', trialDaysLeft: 0 });
         return;
       }
         const data = await response.json();
         setScanStatus({
           remaining: data?.searches_left ?? null,
           isPremium: Boolean(data?.is_premium),
+          hasAccess:
+            data?.has_feature_access === true ||
+            data?.is_premium === true ||
+            ['premium', 'trial', 'grace'].includes(String(data?.access_status || '').toLowerCase()) ||
+            data?.searches_left === 'unlimited',
+          accessStatus: data?.access_status || (data?.is_premium ? 'premium' : 'trial'),
+          trialDaysLeft: data?.trial_days_left ?? null,
         });
       } catch (error) {
-        setScanStatus({ remaining: null, isPremium: false });
+        setScanStatus({ remaining: null, isPremium: false, hasAccess: true, accessStatus: 'trial', trialDaysLeft: null });
       }
     };
 
@@ -493,13 +503,25 @@ export default function ManualInputScreen() {
       const data = await response.json();
 
       if (!response.ok) {
-        if (response.status === 429) {
-          setScanStatus((prev) => ({ ...prev, remaining: 0 }));
+        if (response.status === 402 || data?.detail?.code === 'trial_expired') {
+          setScanStatus((prev) => ({ ...prev, hasAccess: false, accessStatus: 'expired', trialDaysLeft: 0 }));
         }
         const detail = data?.detail;
         const message = detail?.message || detail || 'Unable to generate recipes.';
-        const title = detail?.code === 'needs_clarification' ? 'Check ingredient' : 'Request failed';
-        Alert.alert(title, message);
+        const title =
+          detail?.code === 'trial_expired'
+            ? 'Trial ended'
+            : detail?.code === 'needs_clarification'
+              ? 'Check ingredient'
+              : 'Request failed';
+        const buttons =
+          detail?.code === 'trial_expired'
+            ? [
+                { text: 'Not now', style: 'cancel' },
+                { text: 'Start Premium', onPress: () => navigation.navigate('Profile', { openPremium: true }) },
+              ]
+            : undefined;
+        Alert.alert(title, message, buttons);
         setIsLoading(false);
         return;
       }
@@ -613,18 +635,20 @@ export default function ManualInputScreen() {
             Enter the ingredients you have available. We'll find diabetes-safe recipes you can make.
           </Text>
         </View>
-        {!scanStatus.isPremium && scanStatus.remaining !== null && (
+        {scanStatus.accessStatus === 'trial' || scanStatus.accessStatus === 'grace' ? (
           <View style={styles.scanBadge}>
-            <Ionicons name="camera-outline" size={16} color={Colors.primary} />
+            <Ionicons name="time-outline" size={16} color={Colors.primary} />
             <Text style={styles.scanBadgeText}>
-              {scanStatus.remaining} scans left today
+              {Number(scanStatus.trialDaysLeft) > 0
+                ? `${scanStatus.trialDaysLeft} trial day${Number(scanStatus.trialDaysLeft) === 1 ? '' : 's'} left`
+                : 'Trial active'}
             </Text>
           </View>
-        )}
+        ) : null}
         {scanStatus.isPremium && (
           <View style={styles.scanBadge}>
             <Ionicons name="infinite-outline" size={16} color={Colors.primary} />
-            <Text style={styles.scanBadgeText}>Unlimited scans</Text>
+            <Text style={styles.scanBadgeText}>Premium active</Text>
           </View>
         )}
 
@@ -726,7 +750,7 @@ export default function ManualInputScreen() {
                 <>
                   <Ionicons name="lock-closed-outline" size={20} color={Colors.textLight} />
                   <Text style={[styles.findButtonText, styles.findButtonTextLimit]}>
-                    Limit reached for today
+                    Trial ended - start Premium
                   </Text>
                 </>
               ) : (

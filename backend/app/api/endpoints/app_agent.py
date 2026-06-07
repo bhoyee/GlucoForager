@@ -10,7 +10,7 @@ from openai import OpenAI, OpenAIError
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from ...api.dependencies import get_current_user
+from ...api.dependencies import get_current_user, require_ai_feature_access
 from ...core.config import settings
 from ...database import get_db
 from ...models.favorite import Favorite
@@ -131,6 +131,7 @@ def _sse_event(event: str, data: dict) -> str:
 
 
 def _prepare_agent_chat(payload: AgentChatPayload, db: Session, current_user: User) -> dict:
+    require_ai_feature_access(current_user, db)
     tier = get_effective_subscription_tier(db, current_user) or "free"
     rl = check_ai_rate_limit(user_id=current_user.id, tier=tier, kind="text", db=db)
     if not rl.allowed:
