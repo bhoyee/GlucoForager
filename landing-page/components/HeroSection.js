@@ -131,7 +131,7 @@ export default function HeroSection({ onDownloadClick }) {
               Your <span className="text-teal-600">Daily Diabetes</span> Food Assistant
             </h1>
             <p className="text-lg md:text-xl text-gray-600 mb-10 max-w-2xl mx-auto lg:mx-0">
-              GlucoForager is your daily diabetes food assistant. Scan ingredients or type what you have to get meal ideas, smarter swaps, and a daily meal plan.
+              Turn what you already have into practical diabetes-aware meal ideas, smarter swaps, and a daily plan that feels easier to follow.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-10 max-w-2xl mx-auto lg:mx-0">
