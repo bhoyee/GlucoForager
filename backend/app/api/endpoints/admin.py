@@ -36,12 +36,23 @@ from ...services.redis_ai_queue import RedisAIQueue
 from ...services.recipe_upload_storage_service import store_recipe_image_upload
 from ...services.staff_rbac_service import StaffRBACService
 from ...services.subscription_service import is_subscription_active, is_premium_blocked, refresh_user_tier
+from ...services.trial_access_service import get_access_snapshot
 from ...services.cache_service import CacheService
 from ...services.settings_service import get_ai_guardrail_settings
 from ...services.ai_recipe_generator import AIRecipeGenerator
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 admin_cache = CacheService()
+
+
+ACCESS_STATUS_LABELS = {
+    "premium": "Premium",
+    "trial": "7-day trial",
+    "grace": "14-day grace",
+    "expired": "Trial expired",
+    "blocked": "Blocked",
+    "suspended": "Suspended",
+}
 
 
 class AdminLoginPayload(BaseModel):
@@ -659,6 +670,52 @@ def list_recipes(
     }
 
 
+def _admin_user_access_payload(db: Session, user: User, now: datetime | None = None) -> dict:
+    now = now or datetime.utcnow()
+    blocked = is_premium_blocked(user, now=now)
+
+    if user.suspended_at:
+        status_value = "suspended"
+        return {
+            "access_status": status_value,
+            "access_label": ACCESS_STATUS_LABELS[status_value],
+            "has_feature_access": False,
+            "trial_active": False,
+            "trial_started_at": user.trial_started_at,
+            "trial_ends_at": user.trial_ends_at,
+            "trial_grace_active": False,
+            "trial_grace_ends_at": user.trial_grace_ends_at,
+            "trial_days_left": 0,
+        }
+
+    if blocked:
+        status_value = "blocked"
+        return {
+            "access_status": status_value,
+            "access_label": ACCESS_STATUS_LABELS[status_value],
+            "has_feature_access": False,
+            "trial_active": False,
+            "trial_started_at": user.trial_started_at,
+            "trial_ends_at": user.trial_ends_at,
+            "trial_grace_active": False,
+            "trial_grace_ends_at": user.trial_grace_ends_at,
+            "trial_days_left": 0,
+        }
+
+    snapshot = get_access_snapshot(db, user, now=now)
+    return {
+        "access_status": snapshot.access_status,
+        "access_label": ACCESS_STATUS_LABELS.get(snapshot.access_status, snapshot.access_status),
+        "has_feature_access": snapshot.allowed,
+        "trial_active": snapshot.trial_active,
+        "trial_started_at": user.trial_started_at,
+        "trial_ends_at": snapshot.trial_ends_at,
+        "trial_grace_active": snapshot.trial_grace_active,
+        "trial_grace_ends_at": snapshot.trial_grace_ends_at,
+        "trial_days_left": snapshot.trial_days_left,
+    }
+
+
 @router.get("/users")
 def list_users(
     q: str | None = None,
@@ -753,12 +810,28 @@ def list_users(
         and_(User.premium_access_blocked_until.is_not(None), User.premium_access_blocked_until <= now),
     )
     effective_premium = and_(not_blocked, or_(billing_active, comp_active))
+    active_block = ~not_blocked
+    trial_active = and_(User.trial_ends_at.is_not(None), User.trial_ends_at > now)
+    grace_active = and_(User.trial_grace_ends_at.is_not(None), User.trial_grace_ends_at > now)
+    trial_inactive = or_(User.trial_ends_at.is_(None), User.trial_ends_at <= now)
+    grace_inactive = or_(User.trial_grace_ends_at.is_(None), User.trial_grace_ends_at <= now)
+    normal_non_premium = and_(~effective_premium, User.suspended_at.is_(None), not_blocked)
 
-    if tier in {"free", "premium"}:
+    if tier in {"free", "premium", "trial", "grace", "expired", "blocked", "suspended"}:
         if tier == "premium":
-            query = query.filter(effective_premium)
-        else:
+            query = query.filter(effective_premium, User.suspended_at.is_(None))
+        elif tier == "free":
             query = query.filter(~effective_premium)
+        elif tier == "trial":
+            query = query.filter(normal_non_premium, trial_active)
+        elif tier == "grace":
+            query = query.filter(normal_non_premium, trial_inactive, grace_active)
+        elif tier == "expired":
+            query = query.filter(normal_non_premium, trial_inactive, grace_inactive)
+        elif tier == "blocked":
+            query = query.filter(active_block, User.suspended_at.is_(None))
+        elif tier == "suspended":
+            query = query.filter(User.suspended_at.is_not(None))
 
     if status_filter in {"active", "inactive"}:
         if status_filter == "active":
@@ -806,6 +879,7 @@ def list_users(
         status_label = "active" if is_premium else "inactive"
         expires_at = billing_expires_value if billing_is_active else comp_expires_value if comp_is_active else None
         tier_source = "blocked" if blocked else "store" if billing_is_active else "admin_comp" if comp_is_active else "free"
+        access_payload = _admin_user_access_payload(db, user, now=now)
         items.append(
             {
                 "id": user.id,
@@ -834,6 +908,7 @@ def list_users(
                 "premium_access_blocked_reason": user.premium_access_blocked_reason,
                 "suspended_at": user.suspended_at,
                 "suspended_reason": user.suspended_reason,
+                **access_payload,
                 "last_active_at": user.last_active_at,
                 "created_at": user.created_at,
             }
@@ -853,6 +928,30 @@ def users_platform_summary(
     current_admin: AdminUser = Depends(get_current_admin),  # noqa: ARG001
 ):
     return _get_user_platform_counts(db)
+
+
+@router.get("/users/access-summary")
+def users_access_summary(
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),  # noqa: ARG001
+):
+    now = datetime.utcnow()
+    counts = {
+        "trial": 0,
+        "grace": 0,
+        "expired": 0,
+        "premium": 0,
+        "blocked": 0,
+        "suspended": 0,
+        "total": 0,
+    }
+    for user in db.query(User).all():
+        payload = _admin_user_access_payload(db, user, now=now)
+        status_value = payload.get("access_status")
+        if status_value in counts:
+            counts[status_value] += 1
+        counts["total"] += 1
+    return counts
 
 
 def _get_user_platform_counts(db: Session) -> dict:
@@ -1038,6 +1137,7 @@ def get_user_detail(
     status_label = "active" if effective_premium else "inactive"
     expires_at = billing.expires_at if billing_is_active and billing else comp.expires_at if comp_is_active and comp else None
     tier_source = "blocked" if blocked else "store" if billing_is_active else "admin_comp" if comp_is_active else "free"
+    access_payload = _admin_user_access_payload(db, user, now=now)
     return {
         "id": user.id,
         "public_id": user.public_id,
@@ -1093,6 +1193,7 @@ def get_user_detail(
         "premium_access_blocked_reason": user.premium_access_blocked_reason,
         "suspended_at": user.suspended_at,
         "suspended_reason": user.suspended_reason,
+        **access_payload,
         "last_active_at": user.last_active_at,
         "created_at": user.created_at,
         "subscriptions": [

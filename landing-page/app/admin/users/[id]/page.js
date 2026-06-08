@@ -5,6 +5,18 @@ import { useParams, useRouter } from 'next/navigation';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
+const ACCESS_META = {
+  premium: { label: 'Premium', tone: 'success' },
+  trial: { label: '7-day trial', tone: 'success' },
+  grace: { label: '14-day grace', tone: 'warning' },
+  expired: { label: 'Trial expired', tone: 'danger' },
+  blocked: { label: 'Blocked', tone: 'danger' },
+  suspended: { label: 'Suspended', tone: 'warning' },
+  free: { label: 'Free', tone: 'neutral' },
+};
+
+const getAccessMeta = (status) => ACCESS_META[String(status || 'free').toLowerCase()] || ACCESS_META.free;
+
 export default function AdminUserDetail() {
   const router = useRouter();
   const params = useParams();
@@ -427,6 +439,14 @@ export default function AdminUserDetail() {
   const isSuspended = Boolean(user.suspended_at);
   const isPremiumBlocked = Boolean(user.premium_access_blocked);
   const premiumAccessBadgeLabel = user.status === 'active' ? 'Premium: Active' : 'Premium: Inactive';
+  const accessMeta = getAccessMeta(user.access_status || user.subscription_tier);
+  const accessDaysLeft = Number(user.trial_days_left || 0);
+  const accessEndDate =
+    user.access_status === 'trial'
+      ? user.trial_ends_at
+      : user.access_status === 'grace'
+        ? user.trial_grace_ends_at
+        : user.expires_at;
 
   const initials = (() => {
     const raw = (user.full_name || user.email || 'U').trim();
@@ -532,8 +552,8 @@ export default function AdminUserDetail() {
             {userSubtitleParts.length ? <p className="admin-user-subline">{userSubtitleParts.join(' | ')}</p> : null}
           </div>
           <div className="admin-user-badges">
-            <Badge tone={isPremium ? 'success' : 'neutral'} title="Subscription tier">
-              {tierLabel}
+            <Badge tone={accessMeta.tone} title="Current app access status">
+              {user.access_label || accessMeta.label}
             </Badge>
             <Badge
               tone={String(user.status).toLowerCase() === 'active' ? 'success' : 'neutral'}
@@ -541,8 +561,11 @@ export default function AdminUserDetail() {
             >
               {premiumAccessBadgeLabel}
             </Badge>
-            {isSuspended ? <Badge tone="warning">Suspended</Badge> : null}
-            {isPremiumBlocked ? (
+            <Badge tone={isPremium ? 'success' : 'neutral'} title="Subscription tier">
+              {tierLabel}
+            </Badge>
+            {isSuspended && user.access_status !== 'suspended' ? <Badge tone="warning">Suspended</Badge> : null}
+            {isPremiumBlocked && user.access_status !== 'blocked' ? (
               <Badge
                 tone="danger"
                 title={
@@ -621,6 +644,10 @@ export default function AdminUserDetail() {
               <h3 className="admin-title admin-title--sm">Account</h3>
             <div className="admin-kv">
               <div className="admin-kv-row">
+                <div className="admin-kv-label">Access status</div>
+                <div className="admin-kv-value">{user.access_label || accessMeta.label}</div>
+              </div>
+              <div className="admin-kv-row">
                 <div className="admin-kv-label">Premium entitlement</div>
                 <div className="admin-kv-value">{user.status || '--'}</div>
               </div>
@@ -676,6 +703,36 @@ export default function AdminUserDetail() {
             <h3 className="admin-title admin-title--sm">Subscription & Access</h3>
             <p className="admin-subtitle admin-subtitle--sm">What tier the user is on, and why.</p>
             <div className="admin-kv">
+              <div className="admin-kv-row">
+                <div className="admin-kv-label">Access status</div>
+                <div className="admin-kv-value">{user.access_label || accessMeta.label}</div>
+              </div>
+              <div className="admin-kv-row">
+                <div className="admin-kv-label">Feature access</div>
+                <div className="admin-kv-value">{user.has_feature_access ? 'Allowed' : 'Blocked'}</div>
+              </div>
+              <div className="admin-kv-row">
+                <div className="admin-kv-label">Access until</div>
+                <div className="admin-kv-value">{formatDateTime(accessEndDate)}</div>
+              </div>
+              {accessDaysLeft > 0 ? (
+                <div className="admin-kv-row">
+                  <div className="admin-kv-label">Days left</div>
+                  <div className="admin-kv-value">{accessDaysLeft}</div>
+                </div>
+              ) : null}
+              <div className="admin-kv-row">
+                <div className="admin-kv-label">Trial started</div>
+                <div className="admin-kv-value">{formatDateTime(user.trial_started_at)}</div>
+              </div>
+              <div className="admin-kv-row">
+                <div className="admin-kv-label">Trial ends</div>
+                <div className="admin-kv-value">{formatDateTime(user.trial_ends_at)}</div>
+              </div>
+              <div className="admin-kv-row">
+                <div className="admin-kv-label">Grace ends</div>
+                <div className="admin-kv-value">{formatDateTime(user.trial_grace_ends_at)}</div>
+              </div>
               <div className="admin-kv-row">
                 <div className="admin-kv-label">Plan</div>
                 <div className="admin-kv-value">{user.subscription_tier || '--'}</div>
