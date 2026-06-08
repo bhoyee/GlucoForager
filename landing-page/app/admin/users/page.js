@@ -6,6 +6,32 @@ import { useRouter } from 'next/navigation';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 const PAGE_SIZE = 12;
 
+const ACCESS_META = {
+  premium: { label: 'Premium', badge: 'plan-premium' },
+  trial: { label: 'Trial', badge: 'success' },
+  grace: { label: 'Grace', badge: 'warning' },
+  expired: { label: 'Expired', badge: 'danger' },
+  blocked: { label: 'Blocked', badge: 'danger' },
+  suspended: { label: 'Suspended', badge: 'danger' },
+  free: { label: 'Free', badge: 'plan-free' },
+};
+
+const getAccessMeta = (status) => ACCESS_META[String(status || 'free').toLowerCase()] || ACCESS_META.free;
+
+const formatAccessDaysLeft = (user) => {
+  const status = String(user?.access_status || '').toLowerCase();
+  const days = Number(user?.trial_days_left || 0);
+  if (!['trial', 'grace'].includes(status) || days <= 0) return '';
+  return `${days} day${days === 1 ? '' : 's'} left`;
+};
+
+const getAccessEndDate = (user) => {
+  const status = String(user?.access_status || '').toLowerCase();
+  if (status === 'trial') return user?.trial_ends_at;
+  if (status === 'grace') return user?.trial_grace_ends_at;
+  return user?.expires_at;
+};
+
 export default function AdminUsersPage() {
   const router = useRouter();
   const token = useMemo(() => {
@@ -23,6 +49,15 @@ export default function AdminUsersPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const [platformSummary, setPlatformSummary] = useState({ ios: 0, android: 0, total: 0 });
+  const [accessSummary, setAccessSummary] = useState({
+    trial: 0,
+    grace: 0,
+    expired: 0,
+    premium: 0,
+    blocked: 0,
+    suspended: 0,
+    total: 0,
+  });
   const [platformUpdatedAt, setPlatformUpdatedAt] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [exportingUsers, setExportingUsers] = useState(false);
@@ -112,6 +147,33 @@ export default function AdminUsersPage() {
     }
   }, [token, router]);
 
+  const loadAccessSummary = useCallback(async () => {
+    if (!token) return;
+    try {
+      const response = await fetch(`${API_URL}/api/admin/users/access-summary`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error();
+      setAccessSummary({
+        trial: Number(data.trial || 0),
+        grace: Number(data.grace || 0),
+        expired: Number(data.expired || 0),
+        premium: Number(data.premium || 0),
+        blocked: Number(data.blocked || 0),
+        suspended: Number(data.suspended || 0),
+        total: Number(data.total || 0),
+      });
+    } catch {
+      // Keep the last good value; the table load handles visible error messaging.
+    }
+  }, [token, router]);
+
   useEffect(() => {
     if (!token) {
       router.push('/admin');
@@ -119,16 +181,18 @@ export default function AdminUsersPage() {
     }
     loadUsers();
     loadPlatformSummary();
-  }, [token, loadUsers, loadPlatformSummary]);
+    loadAccessSummary();
+  }, [token, loadUsers, loadPlatformSummary, loadAccessSummary]);
 
   useEffect(() => {
     if (!autoRefresh) return undefined;
     const timer = setInterval(() => {
       loadUsers({ silent: true });
       loadPlatformSummary();
+      loadAccessSummary();
     }, 20000);
     return () => clearInterval(timer);
-  }, [autoRefresh, loadUsers, loadPlatformSummary]);
+  }, [autoRefresh, loadUsers, loadPlatformSummary, loadAccessSummary]);
 
   const downloadUsersExcel = async () => {
     if (!token || exportingUsers) return;
@@ -277,6 +341,23 @@ export default function AdminUsersPage() {
     return value || '--';
   };
 
+  const renderAccessBadge = (user) => {
+    const meta = getAccessMeta(user.access_status || user.subscription_tier);
+    const daysLeft = formatAccessDaysLeft(user);
+    return (
+      <span>
+        <span className={`admin-badge ${meta.badge}`} title={user.tier_source ? `Source: ${user.tier_source}` : ''}>
+          {user.access_label || meta.label}
+        </span>
+        {daysLeft ? (
+          <span className="admin-help" style={{ display: 'block', marginTop: 6 }}>
+            {daysLeft}
+          </span>
+        ) : null}
+      </span>
+    );
+  };
+
   const IconEye = (props) => (
     <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false" {...props}>
       <path
@@ -343,6 +424,41 @@ export default function AdminUsersPage() {
         </div>
       </div>
 
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, margin: '0 0 18px' }}>
+        {[
+          ['trial', 'Trial users', accessSummary.trial, '#dcfce7', '#166534'],
+          ['grace', 'Grace period', accessSummary.grace, '#fffbeb', '#92400e'],
+          ['expired', 'Expired', accessSummary.expired, '#fef2f2', '#991b1b'],
+          ['premium', 'Premium', accessSummary.premium, '#fff7ed', '#9a3412'],
+          ['blocked', 'Blocked', accessSummary.blocked, '#f8fafc', '#334155'],
+          ['suspended', 'Suspended', accessSummary.suspended, '#f5f3ff', '#6d28d9'],
+        ].map(([key, label, value, bg, color]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => {
+              setTierFilter(key);
+              setPage(1);
+            }}
+            style={{
+              textAlign: 'left',
+              border: tierFilter === key ? `1px solid ${color}` : '1px solid #e2e8f0',
+              borderRadius: 14,
+              padding: 14,
+              background: bg,
+              cursor: 'pointer',
+            }}
+          >
+            <span style={{ display: 'block', fontSize: 12, fontWeight: 800, color, textTransform: 'uppercase', letterSpacing: 0 }}>
+              {label}
+            </span>
+            <span style={{ display: 'block', marginTop: 8, fontSize: 26, lineHeight: 1, fontWeight: 900, color: '#0f172a' }}>
+              {value}
+            </span>
+          </button>
+        ))}
+      </div>
+
       <div className="admin-toolbar">
         <input
           type="text"
@@ -369,11 +485,15 @@ export default function AdminUsersPage() {
             setPage(1);
           }}
           className="admin-filter-select"
-          aria-label="Filter by tier"
+          aria-label="Filter by access status"
         >
-          <option value="all">All plans</option>
-          <option value="free">Free</option>
+          <option value="all">All access</option>
+          <option value="trial">Trial</option>
+          <option value="grace">Grace</option>
+          <option value="expired">Expired</option>
           <option value="premium">Premium</option>
+          <option value="blocked">Blocked</option>
+          <option value="suspended">Suspended</option>
         </select>
         <select
           value={`${sortKey}:${sortOrder}`}
@@ -416,17 +536,7 @@ export default function AdminUsersPage() {
                           <div className="admin-mobile-user-email">{user.email}</div>
                         </div>
                         <div className="admin-mobile-user-badges">
-                          <span className={`admin-badge ${user.subscription_tier === 'premium' ? 'plan-premium' : 'plan-free'}`}>
-                            <span title={user.tier_source ? `Source: ${user.tier_source}` : ''}>
-                              {user.subscription_tier}
-                            </span>
-                          </span>
-                          {user.premium_access_blocked ? (
-                            <span className="admin-badge danger" title={user.premium_access_blocked_reason || 'Premium access blocked'}>
-                              blocked
-                            </span>
-                          ) : null}
-                          {isSuspended ? <span className="admin-badge danger">suspended</span> : null}
+                          {renderAccessBadge(user)}
                         </div>
                       </div>
                       
@@ -444,8 +554,8 @@ export default function AdminUsersPage() {
                           <span>{platformLabel}</span>
                         </div>
                         <div className="admin-mobile-user-detail">
-                          <span className="admin-mobile-detail-label">Expires:</span>
-                          <span>{user.expires_at ? new Date(user.expires_at).toLocaleDateString() : '--'}</span>
+                          <span className="admin-mobile-detail-label">Access until:</span>
+                          <span>{getAccessEndDate(user) ? new Date(getAccessEndDate(user)).toLocaleDateString() : '--'}</span>
                         </div>
                       </div>
                       
@@ -496,8 +606,8 @@ export default function AdminUsersPage() {
                       <th>User</th>
                       <th>Email</th>
                       <th>Platform</th>
-                      <th>Subscription</th>
-                      <th>Expires</th>
+                      <th>Access</th>
+                      <th>Access until</th>
                       <th>Joined</th>
                       <th>Actions</th>
                     </tr>
@@ -514,19 +624,9 @@ export default function AdminUsersPage() {
                           <td>{user.email}</td>
                           <td>{platformLabel}</td>
                           <td>
-                            <span className={`admin-badge ${user.subscription_tier === 'premium' ? 'plan-premium' : 'plan-free'}`}>
-                              <span title={user.tier_source ? `Source: ${user.tier_source}` : ''}>
-                                {user.subscription_tier}
-                              </span>
-                            </span>
-                            {user.premium_access_blocked ? (
-                              <span className="admin-badge danger" style={{ marginLeft: 8 }} title={user.premium_access_blocked_reason || 'Premium access blocked'}>
-                                blocked
-                              </span>
-                            ) : null}
-                            {isSuspended ? <span className="admin-badge danger" style={{ marginLeft: 8 }}>suspended</span> : null}
+                            {renderAccessBadge(user)}
                           </td>
-                          <td>{user.expires_at ? new Date(user.expires_at).toLocaleDateString() : '--'}</td>
+                          <td>{getAccessEndDate(user) ? new Date(getAccessEndDate(user)).toLocaleDateString() : '--'}</td>
                           <td>{user.created_at ? new Date(user.created_at).toLocaleDateString() : '--'}</td>
                           <td>
                             <div className="admin-action-buttons">
