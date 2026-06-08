@@ -5,7 +5,6 @@ import Header from './Header';
 import HeroSection from './HeroSection';
 import HowItWorks from './HowItWorks';
 import Features from './Features';
-import Screenshots from './Screenshots';
 import Testimonials from './Testimonials';
 import FAQ from './FAQ';
 import LatestBlogPosts from './LatestBlogPosts';
@@ -37,10 +36,10 @@ export default function HomePageClient({ latestPosts }) {
           <div className="container mx-auto px-4 sm:px-6 lg:px-12 xl:px-16">
             <div className="text-center max-w-4xl mx-auto mb-10 sm:mb-12 md:mb-16 lg:mb-20">
               <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4 sm:mb-6 bg-gradient-to-r from-teal-300 to-white bg-clip-text text-transparent">
-                How It Works in 60 Seconds
+                From fridge to food decision in 3 steps
               </h2>
               <p className="text-base sm:text-lg md:text-xl text-gray-300 px-2 sm:px-0">
-                Transform your fridge contents into diabetes-friendly meals in just 4 simple steps
+                A simple flow for turning what you have into a clearer diabetes-aware choice.
               </p>
             </div>
 
@@ -57,24 +56,25 @@ export default function HomePageClient({ latestPosts }) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
               </button>
-              <p className="text-gray-300 mt-3 sm:mt-4 text-xs sm:text-sm">No credit card required • 3 free AI scans daily</p>
             </div>
           </div>
         </section>
 
         {/* FEATURES - White */}
-        <section className="py-16 bg-white" id="features">
-          <div className="container mx-auto px-4">
-            <h2 className="text-3xl font-bold text-center mb-12">What you can do with GlucoForager</h2>
+        <section className="bg-white py-16 md:py-24" id="features">
+          <div className="container mx-auto px-4 sm:px-6 lg:px-12 xl:px-16">
+            <div className="mx-auto mb-12 max-w-3xl text-center md:mb-16">
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-teal-100 bg-teal-50 px-4 py-2 text-sm font-semibold text-teal-800">
+                App features
+              </div>
+              <h2 className="text-3xl font-extrabold tracking-tight text-gray-950 sm:text-4xl md:text-5xl">
+                Built for the food decisions people repeat every day
+              </h2>
+              <p className="mt-5 text-lg leading-8 text-gray-600">
+                Scan, ask, swap, plan, save, and reuse meals with practical diabetes-aware guidance in one place.
+              </p>
+            </div>
             <Features />
-          </div>
-        </section>
-
-        {/* SCREENSHOTS - 01404F color */}
-        <section className="py-16 bg-[#01404F] text-white" id="screenshots">
-          <div className="container mx-auto px-4">
-            <h2 className="text-3xl font-bold text-center mb-12">See It In Action</h2>
-            <Screenshots />
           </div>
         </section>
 
