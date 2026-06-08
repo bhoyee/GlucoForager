@@ -1,94 +1,170 @@
-export default function Features() {
-  const features = [
-    {
-      icon: "🍽️",
-      title: "Diabetes-friendly meal ideas",
-      description: "Recipes designed for balanced plates and practical portions you can stick to.",
-      color: "from-teal-400 to-emerald-500",
-      bgColor: "bg-teal-50",
-      shadowColor: "shadow-teal-100/50",
-    },
-    {
-      icon: "📊",
-      title: "Per-meal nutrition estimates",
-      description: "See calories, carbs, protein, and fibre estimates so you can compare options quickly.",
-      color: "from-blue-400 to-cyan-500",
-      bgColor: "bg-blue-50",
-      shadowColor: "shadow-blue-100/50",
-    },
-    {
-      icon: "🔁",
-      title: "Food swaps",
-      description: "Get smarter alternatives and portion tips to reduce carb load without losing taste.",
-      color: "from-purple-400 to-pink-500",
-      bgColor: "bg-purple-50",
-      shadowColor: "shadow-purple-100/50",
-    },
-    {
-      icon: "💾",
-      title: "Save favourites",
-      description: "Keep your best meals in one place and come back to them anytime.",
-      color: "from-amber-400 to-orange-500",
-      bgColor: "bg-amber-50",
-      shadowColor: "shadow-amber-100/50",
-    },
-    {
-      icon: "🗓️",
-      title: "Daily Meal Planner (Premium)",
-      description: "Generate a full-day plan: breakfast, lunch, dinner, and a snack.",
-      color: "from-green-400 to-lime-500",
-      bgColor: "bg-green-50",
-      shadowColor: "shadow-green-100/50",
-    },
-    {
-      icon: "💡",
-      title: "Daily tips & challenges",
-      description: "Small daily actions that support better routines over time.",
-      color: "from-indigo-400 to-violet-500",
-      bgColor: "bg-indigo-50",
-      shadowColor: "shadow-indigo-100/50",
-    },
-  ];
+'use client';
+
+import { useState } from 'react';
+import Image from 'next/image';
+
+const features = [
+  {
+    title: 'Ingredient scan',
+    eyebrow: 'Scan what you have',
+    description:
+      'Take a photo of your fridge or pantry and GlucoForager identifies usable ingredients for diabetes-friendly meals.',
+    image: '/screenshots/Scan-ingredients-(camera%20view).jpeg',
+    alt: 'GlucoForager camera screen for scanning ingredients',
+    points: ['Fridge and pantry scanning', 'Ingredient review before recipes', 'Manual edits when AI misses something'],
+    icon: 'scan',
+  },
+  {
+    title: 'Type ingredients',
+    eyebrow: 'No photo needed',
+    description:
+      'Type the foods you have and get recipe ideas without having to search, browse, or build a meal from scratch.',
+    image: '/screenshots/type-ingredients.png',
+    alt: 'Typed ingredient input screen in GlucoForager',
+    points: ['Fast typed input', 'Spelling cleanup', 'Clear guidance when more balance is needed'],
+    icon: 'keyboard',
+  },
+  {
+    title: 'GlucoGuide AI',
+    eyebrow: 'Ask food questions',
+    description:
+      'Use GlucoGuide AI for quick food questions, swaps, plate balance, and everyday guidance when you are unsure.',
+    image: '/screenshots/glucoguide-ai.png',
+    alt: 'GlucoForager home screen with guidance features',
+    points: ['Food questions', 'Profile-aware guidance', 'Practical next steps'],
+    icon: 'chat',
+  },
+  {
+    title: 'Food swaps',
+    eyebrow: 'Keep familiar foods',
+    description:
+      'Find smarter alternatives for snacks, drinks, and common foods without turning diabetes eating into restriction.',
+    image: '/screenshots/food-swaps.png',
+    alt: 'Ingredient and swap related screen in GlucoForager',
+    points: ['Lower-impact alternatives', 'Portion-aware suggestions', 'Useful everyday swaps'],
+    icon: 'swap',
+  },
+  {
+    title: 'Daily meal planner',
+    eyebrow: 'Structure the day',
+    description:
+      'Premium users can generate breakfast, lunch, dinner, and snack ideas that fit their profile and preferences.',
+    image: '/screenshots/daily-meal-planner.png',
+    alt: 'Recipe detail screen in GlucoForager',
+    points: ['Breakfast to snack planning', 'Personal preferences', 'Less decision fatigue'],
+    icon: 'calendar',
+  },
+  {
+    title: 'Favourites and history',
+    eyebrow: 'Reuse what works',
+    description:
+      'Save meals and revisit recent recipes so successful choices become easier to repeat over time.',
+    image: '/screenshots/favorites-history.jpg',
+    alt: 'Saved favourites screen in GlucoForager',
+    points: ['Saved meals', 'Recent recipe history', 'Personal safe-food library'],
+    icon: 'save',
+  },
+];
+
+function FeatureIcon({ type }) {
+  const paths = {
+    scan: <path d="M5 7V5a2 2 0 0 1 2-2h2m6 0h2a2 2 0 0 1 2 2v2M5 17v2a2 2 0 0 0 2 2h2m6 0h2a2 2 0 0 0 2-2v-2M8 12h8M12 8v8" />,
+    keyboard: <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5v-9Zm4 2h.01M11 9.5h.01M14 9.5h.01M17 9.5h.01M8 13h.01M11 13h6M8 16h8" />,
+    chat: <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v7A2.5 2.5 0 0 1 17.5 15H12l-5 4v-4h-.5A2.5 2.5 0 0 1 4 12.5v-7Z" />,
+    swap: <path d="M7 7h10m0 0-3-3m3 3-3 3M17 17H7m0 0 3 3m-3-3 3-3" />,
+    calendar: <path d="M7 3v3m10-3v3M4 8h16M6 12h4v4H6v-4Zm8 .5h4M14 16h3" />,
+    save: <path d="M6 4h10l2 2v14l-6-3-6 3V4Z" />,
+  };
 
   return (
-    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 max-w-6xl mx-auto">
-      {features.map((feature) => (
-        <div key={feature.title} className="group relative">
-          <div
-            className={`absolute inset-0 ${feature.bgColor} rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500`}
-          />
-
-          <div
-            className={`relative ${feature.bgColor} border border-white p-6 md:p-8 rounded-2xl shadow-lg ${feature.shadowColor} transition-all duration-300 group-hover:shadow-2xl group-hover:shadow-current/20 group-hover:-translate-y-2`}
-          >
-            <div className="relative mb-6">
-              <div
-                className={`absolute inset-0 bg-gradient-to-br ${feature.color} rounded-full opacity-20 blur-md group-hover:blur-lg transition-all duration-300`}
-              />
-              <div
-                className={`relative w-20 h-20 md:w-24 md:h-24 mx-auto rounded-full bg-gradient-to-br ${feature.color} flex items-center justify-center shadow-lg`}
-              >
-                <span className="text-4xl md:text-5xl">{feature.icon}</span>
-              </div>
-              <div className="absolute -top-2 -right-2 w-4 h-4 rounded-full bg-white/80 group-hover:bg-white transition-colors" />
-              <div className="absolute -bottom-2 -left-2 w-4 h-4 rounded-full bg-white/80 group-hover:bg-white transition-colors" />
-            </div>
-
-            <h3 className="text-xl md:text-2xl font-bold text-gray-900 mb-4 text-center">
-              {feature.title}
-            </h3>
-
-            <p className="text-gray-600 text-center leading-relaxed group-hover:text-gray-700 transition-colors">
-              {feature.description}
-            </p>
-
-            <div
-              className={`absolute bottom-0 left-1/2 transform -translate-x-1/2 h-1 w-16 bg-gradient-to-r ${feature.color} rounded-full opacity-0 group-hover:opacity-100 transition-all duration-500 group-hover:w-24`}
-            />
-          </div>
-        </div>
-      ))}
-    </div>
+    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <g stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        {paths[type]}
+      </g>
+    </svg>
   );
 }
 
+export default function Features() {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const active = features[activeIndex];
+  const selectFeature = (index) => {
+    setActiveIndex((current) => (current === index ? current : index));
+  };
+
+  return (
+    <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
+      <div className="rounded-[2rem] border border-gray-200 bg-[#F7FBF9] p-3 shadow-sm sm:p-4">
+        <div className="grid gap-2">
+          {features.map((feature, index) => {
+            const selected = index === activeIndex;
+            return (
+              <button
+                key={feature.title}
+                type="button"
+                onMouseEnter={() => selectFeature(index)}
+                onFocus={() => selectFeature(index)}
+                onClick={() => selectFeature(index)}
+                className={`group w-full rounded-2xl border p-4 text-left transition duration-200 ${
+                  selected
+                    ? 'border-teal-200 bg-white shadow-lg shadow-teal-900/10'
+                    : 'border-transparent bg-transparent hover:border-teal-100 hover:bg-white/70'
+                }`}
+              >
+                <div className="flex gap-4">
+                  <div
+                    className={`flex h-11 w-11 flex-none items-center justify-center rounded-2xl transition ${
+                      selected ? 'bg-teal-600 text-white' : 'bg-white text-teal-700 group-hover:bg-teal-50'
+                    }`}
+                  >
+                    <FeatureIcon type={feature.icon} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-teal-700">
+                      {feature.eyebrow}
+                    </p>
+                    <h3 className="mt-1 text-base font-extrabold text-gray-950">{feature.title}</h3>
+                    <p className={`mt-2 text-sm leading-6 ${selected ? 'text-gray-650' : 'text-gray-500'}`}>
+                      {feature.description}
+                    </p>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="rounded-[2rem] border border-gray-200 bg-white p-4 shadow-2xl shadow-teal-950/10 lg:sticky lg:top-1/2 lg:-translate-y-1/2 lg:self-start">
+        <div className="grid gap-5 overflow-hidden rounded-[1.5rem] bg-[#073f3a] p-5 text-white md:grid-cols-2 md:p-5 xl:p-6">
+          <div className="flex flex-col justify-between">
+            <div>
+              <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-teal-200">{active.eyebrow}</p>
+              <h3 className="mt-3 text-2xl font-extrabold leading-tight sm:text-3xl">{active.title}</h3>
+              <p className="mt-4 text-sm leading-7 text-teal-50/85">{active.description}</p>
+            </div>
+
+            <div className="mt-5 grid gap-2.5">
+              {active.points.map((point) => (
+                <div key={point} className="flex items-center gap-3 rounded-2xl bg-white/10 px-4 py-2.5 text-sm font-semibold text-teal-50">
+                  <span className="h-2 w-2 rounded-full bg-teal-300" />
+                  {point}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="relative mx-auto h-[clamp(420px,62vh,620px)] w-[280px] max-w-full overflow-hidden rounded-[2rem] border border-white/20 bg-black shadow-2xl shadow-black/40 xl:w-[300px]">
+            <Image
+              src={active.image}
+              alt={active.alt}
+              fill
+              sizes="300px"
+              className="object-cover"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
