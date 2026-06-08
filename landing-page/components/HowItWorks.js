@@ -1,96 +1,54 @@
+const steps = [
+  {
+    title: 'Start with your real ingredients',
+    description:
+      'Scan the fridge, pantry, or type what you have. You can review the list before anything is used.',
+    detail: 'Scan or type',
+  },
+  {
+    title: 'GlucoForager checks the food context',
+    description:
+      'The app looks for a more balanced direction, highlights better choices, and avoids ingredients that are less useful for steadier blood sugar.',
+    detail: 'Review guidance',
+  },
+  {
+    title: 'Choose a practical next step',
+    description:
+      'Get recipe ideas, food swaps, or a daily plan with clear cooking steps and food decisions you can act on.',
+    detail: 'Cook, swap, or plan',
+  },
+];
+
 export default function HowItWorks() {
-  const steps = [
-    {
-      number: "1",
-      title: "Snap Your Fridge",
-      description: "Take a clear photo of everything in your fridge or pantry",
-      icon: "\u{1F4F7}",
-      color: "from-blue-400 to-teal-400",
-      details: "Capture all your available ingredients",
-    },
-    {
-      number: "2",
-      title: "Select Ingredients",
-      description: "Choose which items you want to use in your recipes",
-      icon: "\u{1F446}",
-      color: "from-purple-400 to-pink-400",
-      details: "Pick your favorites to use first",
-    },
-    {
-      number: "3",
-      title: "AI Analysis",
-      description: "AI analyzes ingredients for diabetes safety",
-      icon: "\u{1F916}",
-      color: "from-teal-400 to-emerald-400",
-      details: "Checks glycemic index & nutrition",
-    },
-    {
-      number: "4",
-      title: "Get 3 Recipes",
-      description: "Instantly receive diabetes-friendly recipes",
-      icon: "\u{1F373}",
-      color: "from-amber-400 to-orange-400",
-      details: "Complete cooking instructions",
-    },
-  ];
-
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8">
-        {steps.map((step, index) => (
-          <div key={step.number} className="relative">
-            <div className="relative bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 sm:p-7 lg:p-8 text-center hover:bg-white/10 transition-all duration-300 hover:scale-[1.02]">
-              <div className="relative mx-auto mb-6 sm:mb-7 lg:mb-8">
-                <div className={`absolute inset-0 bg-gradient-to-br ${step.color} rounded-full opacity-20 blur-lg`} />
-                <div
-                  className={`relative w-28 h-28 sm:w-32 sm:h-32 lg:w-36 lg:h-36 mx-auto rounded-full bg-gradient-to-br ${step.color} flex items-center justify-center shadow-2xl shadow-current/20`}
-                >
-                  <span className="text-5xl sm:text-6xl lg:text-7xl">{step.icon}</span>
+    <div className="mx-auto max-w-6xl">
+      <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-5 sm:p-7 lg:p-9">
+        <div className="grid gap-0 lg:grid-cols-3">
+          {steps.map((step, index) => (
+            <article
+              key={step.title}
+              className={`group relative overflow-hidden px-0 py-7 transition duration-300 ease-out hover:-translate-y-1 sm:px-2 lg:px-7 lg:py-2 ${
+                index > 0 ? 'border-t border-white/10 lg:border-l lg:border-t-0' : ''
+              }`}
+              style={{ transitionDelay: `${index * 45}ms` }}
+            >
+              <div className="absolute inset-x-0 top-0 h-px origin-left scale-x-0 bg-gradient-to-r from-teal-200/0 via-teal-200/70 to-teal-200/0 transition-transform duration-500 group-hover:scale-x-100" />
+              <div className="mb-5 flex items-center gap-4">
+                <div className="flex h-10 w-10 flex-none items-center justify-center rounded-full border border-teal-200/30 bg-transparent text-sm font-bold text-teal-100 transition duration-300 group-hover:border-teal-200/70 group-hover:bg-teal-200/10">
+                  {index + 1}
                 </div>
-
-                <div className="absolute -top-3 -right-3 w-10 h-10 sm:w-11 sm:h-11 lg:w-12 lg:h-12 rounded-full bg-white text-gray-900 font-bold flex items-center justify-center shadow-xl">
-                  {step.number}
-                </div>
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-teal-200/80">{step.detail}</p>
               </div>
 
-              <div className="text-xs sm:text-sm font-semibold text-teal-300 mb-3 tracking-wider uppercase">
-                Step {step.number}
-              </div>
-
-              <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white mb-3 sm:mb-4">
+              <h3 className="text-xl font-bold leading-tight text-white transition-colors duration-300 group-hover:text-teal-50 sm:text-2xl">
                 {step.title}
               </h3>
-
-              <p className="text-gray-200 text-sm sm:text-base lg:text-lg mb-3 sm:mb-4 leading-relaxed">
+              <p className="mt-4 text-sm leading-7 text-teal-50/75 transition-colors duration-300 group-hover:text-teal-50/90">
                 {step.description}
               </p>
-
-              <p className="text-xs sm:text-sm text-gray-300 opacity-80 italic">{step.details}</p>
-            </div>
-
-            {index < steps.length - 1 && (
-              <div className="hidden xl:block absolute top-1/2 -right-6 transform -translate-y-1/2 text-teal-400/40 pointer-events-none">
-                <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                </svg>
-              </div>
-            )}
-
-            {index < steps.length - 1 && (
-              <div className="md:hidden flex flex-col items-center mt-4 text-teal-400/50">
-                <div className="w-0.5 h-6 bg-gradient-to-b from-teal-400/50 to-transparent" />
-                <svg className="w-7 h-7 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M19 14l-7 7m0 0l-7-7m7 7V3"
-                  />
-                </svg>
-              </div>
-            )}
-          </div>
-        ))}
+            </article>
+          ))}
+        </div>
       </div>
     </div>
   );
