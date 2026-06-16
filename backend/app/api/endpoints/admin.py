@@ -46,10 +46,13 @@ admin_cache = CacheService()
 
 
 ACCESS_STATUS_LABELS = {
-    "premium": "Premium",
-    "trial": "7-day trial",
-    "grace": "14-day grace",
-    "expired": "Trial expired",
+    "premium": "Premium active",
+    "trialing": "Store trial",
+    "trial": "Store trial",
+    "cancelled_active": "Cancelled - active until expiry",
+    "legacy_grace": "Legacy grace",
+    "grace": "Legacy grace",
+    "expired": "Expired / no active subscription",
     "blocked": "Blocked",
     "suspended": "Suspended",
 }
@@ -795,14 +798,27 @@ def list_users(
         )
 
     now = datetime.utcnow()
+    billing_status = func.lower(func.coalesce(billing_sub_join.c.status, ""))
+    comp_status = func.lower(func.coalesce(comp_sub_join.c.status, ""))
+    billing_has_access_status = billing_status.in_(["active", "trialing"])
+    billing_cancelled_active = and_(
+        billing_status.in_(["cancelled", "canceled"]),
+        billing_sub_join.c.expires_at.is_not(None),
+        billing_sub_join.c.expires_at > now,
+    )
     billing_active = and_(
         billing_sub_join.c.status.is_not(None),
-        billing_sub_join.c.status == "active",
+        or_(billing_has_access_status, billing_cancelled_active),
         or_(billing_sub_join.c.expires_at.is_(None), billing_sub_join.c.expires_at > now),
+    )
+    billing_trialing = and_(
+        billing_status == "trialing",
+        billing_sub_join.c.expires_at.is_not(None),
+        billing_sub_join.c.expires_at > now,
     )
     comp_active = and_(
         comp_sub_join.c.status.is_not(None),
-        comp_sub_join.c.status == "active",
+        comp_status == "active",
         or_(comp_sub_join.c.expires_at.is_(None), comp_sub_join.c.expires_at > now),
     )
     not_blocked = or_(
@@ -811,26 +827,32 @@ def list_users(
     )
     effective_premium = and_(not_blocked, or_(billing_active, comp_active))
     active_block = ~not_blocked
-    trial_active = and_(User.trial_ends_at.is_not(None), User.trial_ends_at > now)
-    grace_active = and_(User.trial_grace_ends_at.is_not(None), User.trial_grace_ends_at > now)
-    trial_inactive = or_(User.trial_ends_at.is_(None), User.trial_ends_at <= now)
-    grace_inactive = or_(User.trial_grace_ends_at.is_(None), User.trial_grace_ends_at <= now)
+    legacy_grace_active = and_(User.trial_grace_ends_at.is_not(None), User.trial_grace_ends_at > now)
+    legacy_grace_inactive = or_(User.trial_grace_ends_at.is_(None), User.trial_grace_ends_at <= now)
     normal_non_premium = and_(~effective_premium, User.suspended_at.is_(None), not_blocked)
 
-    if tier in {"free", "premium", "trial", "grace", "expired", "blocked", "suspended"}:
-        if tier == "premium":
+    tier_key = (tier or "").lower()
+    if tier_key == "trial":
+        tier_key = "trialing"
+    elif tier_key == "grace":
+        tier_key = "legacy_grace"
+
+    if tier_key in {"free", "premium", "trialing", "cancelled_active", "legacy_grace", "expired", "blocked", "suspended"}:
+        if tier_key == "premium":
             query = query.filter(effective_premium, User.suspended_at.is_(None))
-        elif tier == "free":
+        elif tier_key == "free":
             query = query.filter(~effective_premium)
-        elif tier == "trial":
-            query = query.filter(normal_non_premium, trial_active)
-        elif tier == "grace":
-            query = query.filter(normal_non_premium, trial_inactive, grace_active)
-        elif tier == "expired":
-            query = query.filter(normal_non_premium, trial_inactive, grace_inactive)
-        elif tier == "blocked":
+        elif tier_key == "trialing":
+            query = query.filter(effective_premium, billing_trialing, User.suspended_at.is_(None))
+        elif tier_key == "cancelled_active":
+            query = query.filter(effective_premium, billing_cancelled_active, User.suspended_at.is_(None))
+        elif tier_key == "legacy_grace":
+            query = query.filter(normal_non_premium, legacy_grace_active)
+        elif tier_key == "expired":
+            query = query.filter(normal_non_premium, legacy_grace_inactive)
+        elif tier_key == "blocked":
             query = query.filter(active_block, User.suspended_at.is_(None))
-        elif tier == "suspended":
+        elif tier_key == "suspended":
             query = query.filter(User.suspended_at.is_not(None))
 
     if status_filter in {"active", "inactive"}:
@@ -867,12 +889,21 @@ def list_users(
         comp_started_value,
     ) in rows:
         blocked = is_premium_blocked(user, now=now)
+        billing_status_key = (billing_status_value or "").lower()
+        comp_status_key = (comp_status_value or "").lower()
         billing_is_active = (
-            billing_status_value == "active"
+            (
+                billing_status_key in {"active", "trialing"}
+                or (
+                    billing_status_key in {"cancelled", "canceled"}
+                    and billing_expires_value is not None
+                    and billing_expires_value > now
+                )
+            )
             and (billing_expires_value is None or billing_expires_value > now)
         )
         comp_is_active = (
-            comp_status_value == "active"
+            comp_status_key == "active"
             and (comp_expires_value is None or comp_expires_value > now)
         )
         is_premium = (not blocked) and (billing_is_active or comp_is_active)
@@ -937,8 +968,9 @@ def users_access_summary(
 ):
     now = datetime.utcnow()
     counts = {
-        "trial": 0,
-        "grace": 0,
+        "trialing": 0,
+        "cancelled_active": 0,
+        "legacy_grace": 0,
         "expired": 0,
         "premium": 0,
         "blocked": 0,
@@ -950,6 +982,10 @@ def users_access_summary(
         status_value = payload.get("access_status")
         if status_value in counts:
             counts[status_value] += 1
+        elif status_value == "trial":
+            counts["trialing"] += 1
+        elif status_value == "grace":
+            counts["legacy_grace"] += 1
         counts["total"] += 1
     return counts
 

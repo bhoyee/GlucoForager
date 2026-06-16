@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime
 import logging
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
@@ -17,6 +17,7 @@ logger = logging.getLogger("glucoforager.revenuecat")
 ACTIVE_EVENTS = {
     "INITIAL_PURCHASE",
     "RENEWAL",
+    "TRIAL_STARTED",
     "PRODUCT_CHANGE",
     "UNCANCELLATION",
 }
@@ -33,7 +34,7 @@ def _parse_expiry(event: dict) -> datetime | None:
     if not expiry_ms:
         return None
     try:
-        return datetime.fromtimestamp(int(expiry_ms) / 1000, tz=timezone.utc)
+        return datetime.utcfromtimestamp(int(expiry_ms) / 1000)
     except (ValueError, TypeError):
         return None
 
@@ -41,7 +42,31 @@ def _parse_expiry(event: dict) -> datetime | None:
 def _is_active(expiry: datetime | None) -> bool:
     if not expiry:
         return False
-    return expiry > datetime.now(tz=timezone.utc)
+    return expiry > datetime.utcnow()
+
+
+def _subscription_state(event: dict, expiry: datetime | None) -> tuple[str, str]:
+    event_type = (event.get("type") or "").upper()
+    period_type = (event.get("period_type") or "").upper()
+    has_current_entitlement = _is_active(expiry)
+
+    if event_type == "REFUND":
+        return "free", "refunded"
+    if event_type == "EXPIRATION":
+        return "free", "expired"
+    if event_type == "BILLING_ISSUE":
+        return "free", "billing_issue"
+    if event_type == "CANCELLATION":
+        if has_current_entitlement:
+            return "premium", "cancelled"
+        return "free", "expired"
+    if event_type == "TRIAL_STARTED" or (period_type == "TRIAL" and has_current_entitlement):
+        return "premium", "trialing"
+    if event_type in ACTIVE_EVENTS and has_current_entitlement:
+        return "premium", "active"
+    if has_current_entitlement:
+        return "premium", "active"
+    return "free", "expired"
 
 
 @router.post("/webhook")
@@ -61,6 +86,7 @@ async def revenuecat_webhook(
     payload = await request.json()
     event = payload.get("event") or {}
     event_type = event.get("type")
+    event_type_upper = (event_type or "").upper()
     app_user_id = event.get("app_user_id")
     subscriber_attrs = event.get("subscriber_attributes") or {}
     email_attr = subscriber_attrs.get("$email") or {}
@@ -91,18 +117,12 @@ async def revenuecat_webhook(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User not found")
 
     expiry = _parse_expiry(event)
-    is_active = _is_active(expiry)
-    plan = "premium" if is_active else "free"
-    status_value = "active" if is_active else "inactive"
+    plan, status_value = _subscription_state(event, expiry)
     transaction_id = event.get("transaction_id")
     original_transaction_id = event.get("original_transaction_id")
     product_id = event.get("product_id")
     store = event.get("store")
     environment = event.get("environment")
-
-    if event_type in INACTIVE_EVENTS:
-        plan = "free"
-        status_value = "inactive"
 
     sub_query = db.query(Subscription).filter(Subscription.user_id == user.id)
     if store:
@@ -137,7 +157,7 @@ async def revenuecat_webhook(
     refresh_user_tier(db, user)
     db.commit()
 
-    if event_type == "INITIAL_PURCHASE":
+    if event_type_upper == "INITIAL_PURCHASE":
         try:
             send_premium_activated_email(user.email, user.full_name)
         except Exception:

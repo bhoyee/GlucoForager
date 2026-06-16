@@ -50,7 +50,7 @@ export default function ScanScreen() {
   const [userIsPremium, setUserIsPremium] = useState(false);
   const [remainingScans, setRemainingScans] = useState(0);
   const [hasFeatureAccess, setHasFeatureAccess] = useState(true);
-  const [accessStatus, setAccessStatus] = useState('trial');
+  const [accessStatus, setAccessStatus] = useState('expired');
   const [trialDaysLeft, setTrialDaysLeft] = useState(null);
   const [isScanning, setIsScanning] = useState(false);
   const [capturedImages, setCapturedImages] = useState([]);
@@ -103,11 +103,11 @@ export default function ScanScreen() {
     const allowed =
       data.has_feature_access === true ||
       isPremium ||
-      ['premium', 'trial', 'grace'].includes(String(data.access_status || '').toLowerCase()) ||
+      ['premium', 'trialing', 'trial', 'cancelled_active', 'legacy_grace', 'grace'].includes(String(data.access_status || '').toLowerCase()) ||
       data.searches_left === 'unlimited';
     setUserIsPremium(isPremium);
     setHasFeatureAccess(allowed);
-    setAccessStatus(data.access_status || (allowed ? 'trial' : 'expired'));
+    setAccessStatus(data.access_status || (allowed ? 'premium' : 'expired'));
     setTrialDaysLeft(data.trial_days_left ?? null);
     setRemainingScans(allowed ? 1 : 0);
   }, [signOut]);
@@ -166,11 +166,11 @@ export default function ScanScreen() {
       const allowed =
         data.has_feature_access === true ||
         isPremium ||
-        ['premium', 'trial', 'grace'].includes(String(data.access_status || '').toLowerCase()) ||
+        ['premium', 'trialing', 'trial', 'cancelled_active', 'legacy_grace', 'grace'].includes(String(data.access_status || '').toLowerCase()) ||
         data.searches_left === 'unlimited';
       setUserIsPremium(isPremium);
       setHasFeatureAccess(allowed);
-      setAccessStatus(data.access_status || (allowed ? 'trial' : 'expired'));
+      setAccessStatus(data.access_status || (allowed ? 'premium' : 'expired'));
       setTrialDaysLeft(data.trial_days_left ?? null);
       setRemainingScans(allowed ? 1 : 0);
       if (!allowed && capturedImages.length === 0) {

@@ -45,16 +45,55 @@ def _user(**kwargs):
 
 
 class TrialAccessServiceTest(unittest.TestCase):
-    def test_new_user_trial_is_account_based_and_allowed(self):
+    def test_backend_trial_no_longer_grants_new_user_access(self):
         now = datetime(2026, 6, 6, 12, 0, 0)
         user = _user()
 
         start_trial_for_new_user(user, now=now)
         snapshot = get_access_snapshot(_DB(), user, now=now)
 
+        self.assertFalse(snapshot.allowed)
+        self.assertEqual(snapshot.access_status, "expired")
+        self.assertIsNone(user.trial_started_at)
+        self.assertIsNone(user.trial_ends_at)
+
+    def test_store_trialing_subscription_is_allowed(self):
+        now = datetime(2026, 6, 6, 12, 0, 0)
+        user = _user()
+        subscription = Subscription(
+            user_id=user.id,
+            plan="premium",
+            status="trialing",
+            started_at=now,
+            expires_at=now + timedelta(days=7),
+            store="app_store",
+        )
+
+        snapshot = get_access_snapshot(_DB([subscription]), user, now=now)
+
         self.assertTrue(snapshot.allowed)
-        self.assertEqual(snapshot.access_status, "trial")
+        self.assertTrue(snapshot.is_premium)
+        self.assertEqual(snapshot.access_status, "trialing")
         self.assertEqual(snapshot.trial_days_left, 7)
+
+    def test_cancelled_store_subscription_remains_active_until_expiry(self):
+        now = datetime(2026, 6, 6, 12, 0, 0)
+        user = _user()
+        subscription = Subscription(
+            user_id=user.id,
+            plan="premium",
+            status="cancelled",
+            started_at=now - timedelta(days=1),
+            expires_at=now + timedelta(days=3),
+            store="play_store",
+        )
+
+        snapshot = get_access_snapshot(_DB([subscription]), user, now=now)
+
+        self.assertTrue(snapshot.allowed)
+        self.assertTrue(snapshot.is_premium)
+        self.assertEqual(snapshot.access_status, "cancelled_active")
+        self.assertEqual(snapshot.trial_days_left, 3)
 
     def test_expired_trial_stays_blocked_for_same_account(self):
         now = datetime(2026, 6, 20, 12, 0, 0)
@@ -78,7 +117,7 @@ class TrialAccessServiceTest(unittest.TestCase):
         snapshot = get_access_snapshot(_DB(), user, now=now)
 
         self.assertTrue(snapshot.allowed)
-        self.assertEqual(snapshot.access_status, "grace")
+        self.assertEqual(snapshot.access_status, "legacy_grace")
         self.assertEqual(snapshot.trial_days_left, 14)
 
     def test_premium_subscription_overrides_expired_trial(self):

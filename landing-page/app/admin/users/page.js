@@ -7,9 +7,12 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 const PAGE_SIZE = 12;
 
 const ACCESS_META = {
-  premium: { label: 'Premium', badge: 'plan-premium' },
-  trial: { label: 'Trial', badge: 'success' },
-  grace: { label: 'Grace', badge: 'warning' },
+  premium: { label: 'Premium active', badge: 'plan-premium' },
+  trialing: { label: 'Store trial', badge: 'success' },
+  trial: { label: 'Store trial', badge: 'success' },
+  cancelled_active: { label: 'Cancelled active', badge: 'warning' },
+  legacy_grace: { label: 'Legacy grace', badge: 'warning' },
+  grace: { label: 'Legacy grace', badge: 'warning' },
   expired: { label: 'Expired', badge: 'danger' },
   blocked: { label: 'Blocked', badge: 'danger' },
   suspended: { label: 'Suspended', badge: 'danger' },
@@ -21,14 +24,14 @@ const getAccessMeta = (status) => ACCESS_META[String(status || 'free').toLowerCa
 const formatAccessDaysLeft = (user) => {
   const status = String(user?.access_status || '').toLowerCase();
   const days = Number(user?.trial_days_left || 0);
-  if (!['trial', 'grace'].includes(status) || days <= 0) return '';
+  if (!['trialing', 'trial', 'cancelled_active', 'legacy_grace', 'grace'].includes(status) || days <= 0) return '';
   return `${days} day${days === 1 ? '' : 's'} left`;
 };
 
 const getAccessEndDate = (user) => {
   const status = String(user?.access_status || '').toLowerCase();
-  if (status === 'trial') return user?.trial_ends_at;
-  if (status === 'grace') return user?.trial_grace_ends_at;
+  if (['trialing', 'trial', 'cancelled_active'].includes(status)) return user?.trial_ends_at || user?.expires_at;
+  if (['legacy_grace', 'grace'].includes(status)) return user?.trial_grace_ends_at;
   return user?.expires_at;
 };
 
@@ -50,8 +53,9 @@ export default function AdminUsersPage() {
   const [totalItems, setTotalItems] = useState(0);
   const [platformSummary, setPlatformSummary] = useState({ ios: 0, android: 0, total: 0 });
   const [accessSummary, setAccessSummary] = useState({
-    trial: 0,
-    grace: 0,
+    trialing: 0,
+    cancelled_active: 0,
+    legacy_grace: 0,
     expired: 0,
     premium: 0,
     blocked: 0,
@@ -161,8 +165,9 @@ export default function AdminUsersPage() {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error();
       setAccessSummary({
-        trial: Number(data.trial || 0),
-        grace: Number(data.grace || 0),
+        trialing: Number(data.trialing || data.trial || 0),
+        cancelled_active: Number(data.cancelled_active || 0),
+        legacy_grace: Number(data.legacy_grace || data.grace || 0),
         expired: Number(data.expired || 0),
         premium: Number(data.premium || 0),
         blocked: Number(data.blocked || 0),
@@ -426,8 +431,9 @@ export default function AdminUsersPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, margin: '0 0 18px' }}>
         {[
-          ['trial', 'Trial users', accessSummary.trial, '#dcfce7', '#166534'],
-          ['grace', 'Grace period', accessSummary.grace, '#fffbeb', '#92400e'],
+          ['trialing', 'Store trials', accessSummary.trialing, '#dcfce7', '#166534'],
+          ['cancelled_active', 'Cancelled active', accessSummary.cancelled_active, '#fff7ed', '#9a3412'],
+          ['legacy_grace', 'Legacy grace', accessSummary.legacy_grace, '#fffbeb', '#92400e'],
           ['expired', 'Expired', accessSummary.expired, '#fef2f2', '#991b1b'],
           ['premium', 'Premium', accessSummary.premium, '#fff7ed', '#9a3412'],
           ['blocked', 'Blocked', accessSummary.blocked, '#f8fafc', '#334155'],
@@ -488,8 +494,9 @@ export default function AdminUsersPage() {
           aria-label="Filter by access status"
         >
           <option value="all">All access</option>
-          <option value="trial">Trial</option>
-          <option value="grace">Grace</option>
+          <option value="trialing">Store trial</option>
+          <option value="cancelled_active">Cancelled active</option>
+          <option value="legacy_grace">Legacy grace</option>
           <option value="expired">Expired</option>
           <option value="premium">Premium</option>
           <option value="blocked">Blocked</option>
