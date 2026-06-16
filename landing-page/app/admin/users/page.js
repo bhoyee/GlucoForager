@@ -281,11 +281,14 @@ export default function AdminUsersPage() {
         router.push('/admin');
         return;
       }
-      if (!response.ok) throw new Error();
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || 'Failed to delete user.');
+      }
       loadUsers({ silent: true });
       return true;
     } catch (error) {
-      setMessage('Failed to delete user.');
+      setMessage(error?.message || 'Failed to delete user.');
       return false;
     }
   };
@@ -333,7 +336,7 @@ export default function AdminUsersPage() {
       ok = await handleDelete(pendingAction.user);
     }
     setActionBusy(false);
-    if (ok) {
+    if (ok || pendingAction.type === 'delete') {
       setPendingAction(null);
     }
   };
