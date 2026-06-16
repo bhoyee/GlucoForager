@@ -63,6 +63,16 @@ export default function ScanScreen() {
   const [autoLaunched, setAutoLaunched] = useState(false);
   const maxReached = capturedImages.length >= MAX_IMAGES;
 
+  const openPremiumPaywall = useCallback(() => {
+    const params = { screen: 'ProfileMain', params: { openPremium: true } };
+    const parent = navigation.getParent?.();
+    if (parent) {
+      parent.navigate('Profile', params);
+      return;
+    }
+    navigation.navigate('Profile', params);
+  }, [navigation]);
+
   const getDeviceId = async () => {
     const existing = await AsyncStorage.getItem('deviceId');
     if (existing) return existing;
@@ -133,13 +143,13 @@ export default function ScanScreen() {
 
   const showUpgradeAlert = () => {
     Alert.alert(
-      'Trial ended',
-      'Your free trial has ended. Start Premium to continue using GlucoForager.',
+      'Start your 7-day free trial',
+      'Start your 7-day free trial to scan ingredients and generate recipes.',
       [
         { text: 'OK', style: 'cancel' },
         { 
-          text: 'Start Premium',
-          onPress: () => navigation.navigate('ProfileTab', { openPremium: true })
+          text: 'Start Trial',
+          onPress: openPremiumPaywall
         }
       ]
     );
@@ -404,9 +414,9 @@ export default function ScanScreen() {
               {userIsPremium || accessStatus === 'premium'
                 ? 'Premium active'
                 : accessStatus === 'expired'
-                  ? 'Trial ended'
+                  ? 'Start your 7-day free trial'
                   : Number(trialDaysLeft) > 0
-                    ? `${trialDaysLeft} trial day${Number(trialDaysLeft) === 1 ? '' : 's'} left`
+                    ? `${trialDaysLeft} day${Number(trialDaysLeft) === 1 ? '' : 's'} left`
                     : 'Trial active'}
             </Text>
           </View>
@@ -452,12 +462,12 @@ export default function ScanScreen() {
         {!hasFeatureAccess && capturedImages.length === 0 && (
           <TouchableOpacity 
             style={styles.upgradePrompt}
-            onPress={() => navigation.navigate('ProfileTab')}
+            onPress={openPremiumPaywall}
           >
             <View style={styles.upgradeContent}>
               <Ionicons name="diamond-outline" size={16} color={Colors.primary} />
               <Text style={styles.upgradeText}>
-                Start Premium to keep scanning
+                Start your 7-day free trial
               </Text>
             </View>
           </TouchableOpacity>
