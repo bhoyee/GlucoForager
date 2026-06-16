@@ -43,7 +43,7 @@ export default function HomeScreen() {
   const [todayScans, setTodayScans] = useState(0);
   const [remainingScans, setRemainingScans] = useState(0);
   const [dailyLimit, setDailyLimit] = useState(0);
-  const [accessStatus, setAccessStatus] = useState('trial');
+  const [accessStatus, setAccessStatus] = useState('expired');
   const [trialDaysLeft, setTrialDaysLeft] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [suggestedRecipes, setSuggestedRecipes] = useState([]);
@@ -314,7 +314,7 @@ export default function HomeScreen() {
     }
     const data = await response.json();
     const isPremium = data.is_premium === true || data.subscription_tier === 'premium';
-    const nextAccessStatus = data.access_status || (isPremium ? 'premium' : hasActiveAccess(data) ? 'trial' : 'expired');
+    const nextAccessStatus = data.access_status || (isPremium || hasActiveAccess(data) ? 'premium' : 'expired');
     setUserIsPremium(isPremium);
     setAccessStatus(nextAccessStatus);
     setTrialDaysLeft(data.trial_days_left ?? null);
@@ -441,16 +441,22 @@ export default function HomeScreen() {
   const hasActiveAccess = (data = {}) =>
     data.has_feature_access === true ||
     data.is_premium === true ||
-    ['premium', 'trial', 'grace'].includes(String(data.access_status || '').toLowerCase()) ||
+    ['premium', 'trialing', 'trial', 'cancelled_active', 'legacy_grace', 'grace'].includes(String(data.access_status || '').toLowerCase()) ||
     data.searches_left === 'unlimited';
 
   const getAccessLabel = () => {
     if (userIsPremium || accessStatus === 'premium') return 'Premium active';
-    if (accessStatus === 'trial' || accessStatus === 'grace') {
+    if (accessStatus === 'cancelled_active') {
+      const days = Number(trialDaysLeft);
+      return Number.isFinite(days) && days > 0 ? `${days} day${days === 1 ? '' : 's'} left` : 'Active until period ends';
+    }
+    if (['trialing', 'trial', 'legacy_grace', 'grace'].includes(accessStatus)) {
       const days = Number(trialDaysLeft);
       return Number.isFinite(days) && days > 0
         ? `${days} day${days === 1 ? '' : 's'} left`
-        : 'Trial active';
+        : accessStatus === 'legacy_grace' || accessStatus === 'grace'
+          ? 'Grace active'
+          : 'Trial active';
     }
     if (accessStatus === 'expired') return 'Trial ended';
     return 'Trial access';
@@ -584,7 +590,7 @@ export default function HomeScreen() {
       const isPremium = data.is_premium === true || data.subscription_tier === 'premium';
       const allowed = hasActiveAccess(data);
       setUserIsPremium(isPremium);
-      setAccessStatus(data.access_status || (allowed ? 'trial' : 'expired'));
+      setAccessStatus(data.access_status || (allowed ? 'premium' : 'expired'));
       setTrialDaysLeft(data.trial_days_left ?? null);
 
       if (allowed) {

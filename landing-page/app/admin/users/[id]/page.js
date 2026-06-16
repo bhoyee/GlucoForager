@@ -6,10 +6,13 @@ import { useParams, useRouter } from 'next/navigation';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
 const ACCESS_META = {
-  premium: { label: 'Premium', tone: 'success' },
-  trial: { label: '7-day trial', tone: 'success' },
-  grace: { label: '14-day grace', tone: 'warning' },
-  expired: { label: 'Trial expired', tone: 'danger' },
+  premium: { label: 'Premium active', tone: 'success' },
+  trialing: { label: 'Store trial', tone: 'success' },
+  trial: { label: 'Store trial', tone: 'success' },
+  cancelled_active: { label: 'Cancelled active', tone: 'warning' },
+  legacy_grace: { label: 'Legacy grace', tone: 'warning' },
+  grace: { label: 'Legacy grace', tone: 'warning' },
+  expired: { label: 'Expired', tone: 'danger' },
   blocked: { label: 'Blocked', tone: 'danger' },
   suspended: { label: 'Suspended', tone: 'warning' },
   free: { label: 'Free', tone: 'neutral' },
@@ -441,10 +444,11 @@ export default function AdminUserDetail() {
   const premiumAccessBadgeLabel = user.status === 'active' ? 'Premium: Active' : 'Premium: Inactive';
   const accessMeta = getAccessMeta(user.access_status || user.subscription_tier);
   const accessDaysLeft = Number(user.trial_days_left || 0);
+  const accessStatus = String(user.access_status || '').toLowerCase();
   const accessEndDate =
-    user.access_status === 'trial'
-      ? user.trial_ends_at
-      : user.access_status === 'grace'
+    ['trialing', 'trial', 'cancelled_active'].includes(accessStatus)
+      ? user.trial_ends_at || user.expires_at
+      : ['legacy_grace', 'grace'].includes(accessStatus)
         ? user.trial_grace_ends_at
         : user.expires_at;
 
@@ -722,15 +726,15 @@ export default function AdminUserDetail() {
                 </div>
               ) : null}
               <div className="admin-kv-row">
-                <div className="admin-kv-label">Trial started</div>
+                <div className="admin-kv-label">Legacy trial started</div>
                 <div className="admin-kv-value">{formatDateTime(user.trial_started_at)}</div>
               </div>
               <div className="admin-kv-row">
-                <div className="admin-kv-label">Trial ends</div>
+                <div className="admin-kv-label">Store/trial access ends</div>
                 <div className="admin-kv-value">{formatDateTime(user.trial_ends_at)}</div>
               </div>
               <div className="admin-kv-row">
-                <div className="admin-kv-label">Grace ends</div>
+                <div className="admin-kv-label">Legacy grace ends</div>
                 <div className="admin-kv-value">{formatDateTime(user.trial_grace_ends_at)}</div>
               </div>
               <div className="admin-kv-row">
