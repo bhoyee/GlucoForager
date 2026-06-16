@@ -51,7 +51,7 @@ export default function ManualInputScreen() {
     remaining: null,
     isPremium: false,
     hasAccess: true,
-    accessStatus: 'trial',
+    accessStatus: 'expired',
     trialDaysLeft: null,
   });
   const lastPrefillTokenRef = useRef(null);
@@ -166,13 +166,15 @@ export default function ManualInputScreen() {
           hasAccess:
             data?.has_feature_access === true ||
             data?.is_premium === true ||
-            ['premium', 'trial', 'grace'].includes(String(data?.access_status || '').toLowerCase()) ||
+            ['premium', 'trialing', 'trial', 'cancelled_active', 'legacy_grace', 'grace'].includes(
+              String(data?.access_status || '').toLowerCase()
+            ) ||
             data?.searches_left === 'unlimited',
-          accessStatus: data?.access_status || (data?.is_premium ? 'premium' : 'trial'),
+          accessStatus: data?.access_status || (data?.is_premium || data?.has_feature_access ? 'premium' : 'expired'),
           trialDaysLeft: data?.trial_days_left ?? null,
         });
       } catch (error) {
-        setScanStatus({ remaining: null, isPremium: false, hasAccess: true, accessStatus: 'trial', trialDaysLeft: null });
+        setScanStatus({ remaining: null, isPremium: false, hasAccess: true, accessStatus: 'expired', trialDaysLeft: null });
       }
     };
 
@@ -635,13 +637,17 @@ export default function ManualInputScreen() {
             Enter the ingredients you have available. We'll find diabetes-safe recipes you can make.
           </Text>
         </View>
-        {scanStatus.accessStatus === 'trial' || scanStatus.accessStatus === 'grace' ? (
+        {['trialing', 'trial', 'cancelled_active', 'legacy_grace', 'grace'].includes(scanStatus.accessStatus) ? (
           <View style={styles.scanBadge}>
             <Ionicons name="time-outline" size={16} color={Colors.primary} />
             <Text style={styles.scanBadgeText}>
               {Number(scanStatus.trialDaysLeft) > 0
-                ? `${scanStatus.trialDaysLeft} trial day${Number(scanStatus.trialDaysLeft) === 1 ? '' : 's'} left`
-                : 'Trial active'}
+                ? `${scanStatus.trialDaysLeft} day${Number(scanStatus.trialDaysLeft) === 1 ? '' : 's'} left`
+                : scanStatus.accessStatus === 'cancelled_active'
+                  ? 'Active until period ends'
+                  : scanStatus.accessStatus === 'legacy_grace' || scanStatus.accessStatus === 'grace'
+                    ? 'Grace active'
+                    : 'Trial active'}
             </Text>
           </View>
         ) : null}
