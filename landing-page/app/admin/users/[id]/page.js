@@ -258,7 +258,7 @@ export default function AdminUserDetail() {
   };
 
   const handleDelete = async () => {
-    if (!user) return;
+    if (!user) return false;
     try {
       const response = await fetch(`${API_URL}/api/admin/users/${userId}`, {
         method: 'DELETE',
@@ -267,15 +267,18 @@ export default function AdminUserDetail() {
       if (response.status === 401) {
         localStorage.removeItem('adminToken');
         router.push('/admin');
-        return;
+        return false;
       }
       if (!response.ok) {
-        setMessage('Failed to delete user.');
-        return;
+        const data = await response.json().catch(() => ({}));
+        setMessage(data.detail || 'Failed to delete user.');
+        return false;
       }
       router.push('/admin/users');
+      return true;
     } catch (error) {
-      setMessage('Failed to delete user.');
+      setMessage(error?.message || 'Failed to delete user.');
+      return false;
     }
   };
 
@@ -372,7 +375,10 @@ export default function AdminUserDetail() {
     } else if (pendingAction.type === 'unsuspend') {
       await handleUnsuspend();
     } else if (pendingAction.type === 'delete') {
-      await handleDelete();
+      const ok = await handleDelete();
+      setActionBusy(false);
+      setPendingAction(null);
+      return;
     }
     setActionBusy(false);
     setPendingAction(null);

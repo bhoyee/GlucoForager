@@ -12,6 +12,7 @@ from urllib import request as urlrequest
 from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
 from pydantic import BaseModel, EmailStr, Field, HttpUrl, field_validator
 from sqlalchemy import and_, func, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..admin_dependencies import get_current_admin, get_current_staff_user
@@ -22,9 +23,11 @@ from ...models.admin_user import AdminUser
 from ...models.staff_user import StaffUser
 from ...models.ai_job import AIJob
 from ...models.ai_request import AIRequest
+from ...models.admin_push_send import AdminPushSendFailure
 from ...models.favorite import Favorite
 from ...models.meal_plan import MealPlan
 from ...models.password_reset import PasswordResetToken
+from ...models.push_token import PushToken
 from ...models.recipe import Recipe
 from ...models.recipe_history import RecipeHistory
 from ...models.shopping_item import ShoppingItem
@@ -32,6 +35,7 @@ from ...models.refresh_token import RefreshToken
 from ...models.subscription import Subscription
 from ...models.user import SearchLog, User
 from ...models.user_activity_event import UserActivityEvent
+from ...models.user_daily_challenge import UserDailyChallenge
 from ...services.redis_ai_queue import RedisAIQueue
 from ...services.recipe_upload_storage_service import store_recipe_image_upload
 from ...services.staff_rbac_service import StaffRBACService
@@ -1417,19 +1421,40 @@ def delete_user(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-    db.query(AIJob).filter(AIJob.user_id == user.id).delete(synchronize_session=False)
-    db.query(AIRequest).filter(AIRequest.user_id == user.id).delete(synchronize_session=False)
-    db.query(Favorite).filter(Favorite.user_id == user.id).delete(synchronize_session=False)
-    db.query(MealPlan).filter(MealPlan.user_id == user.id).delete(synchronize_session=False)
-    db.query(PasswordResetToken).filter(PasswordResetToken.user_id == user.id).delete(synchronize_session=False)
-    db.query(RefreshToken).filter(RefreshToken.user_id == user.id).delete(synchronize_session=False)
-    db.query(RecipeHistory).filter(RecipeHistory.user_id == user.id).delete(synchronize_session=False)
-    db.query(ShoppingItem).filter(ShoppingItem.user_id == user.id).delete(synchronize_session=False)
-    db.query(Subscription).filter(Subscription.user_id == user.id).delete(synchronize_session=False)
-    db.query(SearchLog).filter(SearchLog.user_id == user.id).delete(synchronize_session=False)
-    db.query(UserActivityEvent).filter(UserActivityEvent.user_id == user.id).delete(synchronize_session=False)
-    db.delete(user)
-    db.commit()
+    try:
+        push_token_ids = [
+            row[0]
+            for row in db.query(PushToken.id).filter(PushToken.user_id == user.id).all()
+        ]
+        push_failure_filter = AdminPushSendFailure.user_id == user.id
+        if push_token_ids:
+            push_failure_filter = or_(
+                push_failure_filter,
+                AdminPushSendFailure.push_token_id.in_(push_token_ids),
+            )
+
+        db.query(AdminPushSendFailure).filter(push_failure_filter).delete(synchronize_session=False)
+        db.query(PushToken).filter(PushToken.user_id == user.id).delete(synchronize_session=False)
+        db.query(UserDailyChallenge).filter(UserDailyChallenge.user_id == user.id).delete(synchronize_session=False)
+        db.query(AIJob).filter(AIJob.user_id == user.id).delete(synchronize_session=False)
+        db.query(AIRequest).filter(AIRequest.user_id == user.id).delete(synchronize_session=False)
+        db.query(Favorite).filter(Favorite.user_id == user.id).delete(synchronize_session=False)
+        db.query(MealPlan).filter(MealPlan.user_id == user.id).delete(synchronize_session=False)
+        db.query(PasswordResetToken).filter(PasswordResetToken.user_id == user.id).delete(synchronize_session=False)
+        db.query(RefreshToken).filter(RefreshToken.user_id == user.id).delete(synchronize_session=False)
+        db.query(RecipeHistory).filter(RecipeHistory.user_id == user.id).delete(synchronize_session=False)
+        db.query(ShoppingItem).filter(ShoppingItem.user_id == user.id).delete(synchronize_session=False)
+        db.query(Subscription).filter(Subscription.user_id == user.id).delete(synchronize_session=False)
+        db.query(SearchLog).filter(SearchLog.user_id == user.id).delete(synchronize_session=False)
+        db.query(UserActivityEvent).filter(UserActivityEvent.user_id == user.id).delete(synchronize_session=False)
+        db.delete(user)
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="User could not be deleted because related records still exist.",
+        ) from exc
     return {"status": "deleted"}
 
 
