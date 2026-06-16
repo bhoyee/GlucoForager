@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from ...api.dependencies import get_current_user
@@ -45,7 +45,7 @@ def upgrade_to_premium(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    current_user.subscription_tier = "premium"
-    db.add(Subscription(user_id=current_user.id, plan="premium", status="active"))
-    db.commit()
-    return {"detail": "Upgraded to premium"}
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Premium is managed through App Store or Google Play. Start the 7-day trial in the app.",
+    )

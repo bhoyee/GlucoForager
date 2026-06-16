@@ -45,6 +45,7 @@ export default function ProfileScreen() {
     fullName: '',
     email: '',
     subscriptionTier: 'free',
+    accessStatus: 'expired',
   });
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -151,7 +152,7 @@ export default function ProfileScreen() {
       setLoadError('');
       const token = await AsyncStorage.getItem('userToken');
       if (!token) {
-        setProfile({ fullName: '', email: '', subscriptionTier: 'free' });
+        setProfile({ fullName: '', email: '', subscriptionTier: 'free', accessStatus: 'expired' });
         return;
       }
       const response = await apiFetch(
@@ -190,6 +191,7 @@ export default function ProfileScreen() {
         fullName: data.full_name || '',
         email: data.email || '',
         subscriptionTier: data.subscription_tier || 'free',
+        accessStatus: data.access_status || 'expired',
       };
       setProfile(nextProfile);
 
@@ -198,7 +200,7 @@ export default function ProfileScreen() {
         const hasPremium = isPremiumEntitled(info);
         if (hasPremium && nextProfile.subscriptionTier !== 'premium') {
           await syncSubscription();
-          setProfile((prev) => ({ ...prev, subscriptionTier: 'premium' }));
+          setProfile((prev) => ({ ...prev, subscriptionTier: 'premium', accessStatus: 'premium' }));
         }
       } catch (error) {
         // Ignore RevenueCat sync errors.
@@ -580,6 +582,15 @@ export default function ProfileScreen() {
     setDebugTapTimer(timer);
   };
 
+  const getProfileAccessLabel = () => {
+    const status = String(profile.accessStatus || '').toLowerCase();
+    if (profile.subscriptionTier === 'premium' || status === 'premium') return 'Premium Plan';
+    if (status === 'trialing' || status === 'trial') return 'Store Trial Active';
+    if (status === 'cancelled_active') return 'Active Until Period Ends';
+    if (status === 'legacy_grace' || status === 'grace') return 'Legacy Grace Access';
+    return 'Premium Required';
+  };
+
   return (
     <View style={styles.container}>
       <View style={{ flex: 1, paddingBottom: versionFooterBottom + versionFooterHeight }}>
@@ -730,7 +741,7 @@ export default function ProfileScreen() {
           <View style={styles.membershipBadge}>
             <Ionicons name="star" size={14} color={Colors.warning} />
             <Text style={styles.membershipText}>
-              {profile.subscriptionTier === 'premium' ? 'Premium Plan' : 'Trial Access'}
+              {getProfileAccessLabel()}
             </Text>
           </View>
         </View>

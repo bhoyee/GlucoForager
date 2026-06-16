@@ -1,17 +1,22 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from ..core.config import settings
 from ..models.user import User
-from ..services.subscription_service import get_effective_subscription_tier
+from ..services.subscription_service import (
+    get_latest_admin_comp,
+    get_latest_billing_subscription,
+    get_subscription_access_end,
+    get_subscription_access_status,
+    is_subscription_active,
+)
 
 
 TRIAL_EXPIRED_MESSAGE = (
-    "Your 7-day free trial has ended. Start Premium to continue using GlucoForager."
+    "Start your 7-day free trial with Premium to continue using GlucoForager."
 )
 
 
@@ -48,55 +53,74 @@ def _ceil_days_left(end: datetime | None, now: datetime) -> int:
     return max(1, int((seconds + 86399) // 86400))
 
 
+def _naive_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
 def start_trial_for_new_user(user: User, now: datetime | None = None) -> None:
-    now = now or datetime.utcnow()
-    if getattr(user, "trial_started_at", None) is None:
-        user.trial_started_at = now
-    if getattr(user, "trial_ends_at", None) is None:
-        days = max(1, int(getattr(settings, "trial_access_days", 7) or 7))
-        user.trial_ends_at = now + timedelta(days=days)
+    # Store-backed trials are granted only after RevenueCat confirms an
+    # App Store or Google Play entitlement. This no-op remains for old imports.
+    return None
 
 
 def get_access_snapshot(db: Session, user: User, now: datetime | None = None) -> AccessSnapshot:
-    now = now or datetime.utcnow()
-    tier = get_effective_subscription_tier(db, user, now=now) or "free"
-    is_premium = tier == "premium"
-    trial_end = getattr(user, "trial_ends_at", None)
-    grace_end = getattr(user, "trial_grace_ends_at", None)
-    trial_active = bool(trial_end and trial_end > now)
-    grace_active = bool(grace_end and grace_end > now)
+    now = _naive_utc(now) or datetime.utcnow()
+    billing = get_latest_billing_subscription(db, user.id)
+    comp = get_latest_admin_comp(db, user.id)
+    billing_access_status = get_subscription_access_status(billing, now=now)
+    billing_end = get_subscription_access_end(billing)
+    comp_active = is_subscription_active(comp, now=now)
+    comp_end = get_subscription_access_end(comp)
+    grace_end = _naive_utc(getattr(user, "trial_grace_ends_at", None))
+    legacy_grace_active = bool(grace_end and grace_end > now)
 
-    if is_premium:
+    if billing_access_status == "trialing":
+        return AccessSnapshot(
+            allowed=True,
+            access_status="trialing",
+            is_premium=True,
+            trial_active=True,
+            trial_ends_at=billing_end,
+            trial_grace_active=False,
+            trial_grace_ends_at=grace_end,
+            trial_days_left=_ceil_days_left(billing_end, now),
+        )
+
+    if billing_access_status == "cancelled_active":
+        return AccessSnapshot(
+            allowed=True,
+            access_status="cancelled_active",
+            is_premium=True,
+            trial_active=False,
+            trial_ends_at=billing_end,
+            trial_grace_active=False,
+            trial_grace_ends_at=grace_end,
+            trial_days_left=_ceil_days_left(billing_end, now),
+        )
+
+    if billing_access_status == "premium" or comp_active:
         return AccessSnapshot(
             allowed=True,
             access_status="premium",
             is_premium=True,
-            trial_active=trial_active,
-            trial_ends_at=trial_end,
-            trial_grace_active=grace_active,
+            trial_active=False,
+            trial_ends_at=billing_end if billing_access_status == "premium" else comp_end,
+            trial_grace_active=False,
             trial_grace_ends_at=grace_end,
             trial_days_left=0,
         )
 
-    if trial_active:
+    if legacy_grace_active:
         return AccessSnapshot(
             allowed=True,
-            access_status="trial",
-            is_premium=False,
-            trial_active=True,
-            trial_ends_at=trial_end,
-            trial_grace_active=False,
-            trial_grace_ends_at=grace_end,
-            trial_days_left=_ceil_days_left(trial_end, now),
-        )
-
-    if grace_active:
-        return AccessSnapshot(
-            allowed=True,
-            access_status="grace",
+            access_status="legacy_grace",
             is_premium=False,
             trial_active=False,
-            trial_ends_at=trial_end,
+            trial_ends_at=None,
             trial_grace_active=True,
             trial_grace_ends_at=grace_end,
             trial_days_left=_ceil_days_left(grace_end, now),
@@ -107,7 +131,7 @@ def get_access_snapshot(db: Session, user: User, now: datetime | None = None) ->
         access_status="expired",
         is_premium=False,
         trial_active=False,
-        trial_ends_at=trial_end,
+        trial_ends_at=None,
         trial_grace_active=False,
         trial_grace_ends_at=grace_end,
         trial_days_left=0,
