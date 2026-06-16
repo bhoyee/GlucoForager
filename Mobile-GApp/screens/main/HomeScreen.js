@@ -1,5 +1,5 @@
 ﻿// screens/main/HomeScreen.js - UPDATED PRODUCTION VERSION
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -58,6 +58,7 @@ export default function HomeScreen() {
     return getTodayTip(new Date(), { blockedTipIds });
   }, [blockedTipIds, serverTodayTip]);
   const [showSuggestions, setShowSuggestions] = useState(true);
+  const premiumPromptShownRef = useRef(false);
   const [networkError, setNetworkError] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
@@ -322,6 +323,13 @@ export default function HomeScreen() {
     setRemainingScans(hasActiveAccess(data) ? 1 : 0);
     setDailyLimit(0);
 
+    if (nextAccessStatus === 'expired' && !premiumPromptShownRef.current) {
+      premiumPromptShownRef.current = true;
+      setTimeout(() => {
+        openPremiumPaywall();
+      }, 500);
+    }
+
     await AsyncStorage.setItem(
       'home_scan_status',
       JSON.stringify({
@@ -458,9 +466,19 @@ export default function HomeScreen() {
           ? 'Grace active'
           : 'Trial active';
     }
-    if (accessStatus === 'expired') return 'Trial ended';
-    return 'Trial access';
+    if (accessStatus === 'expired') return 'Start your 7-day free trial';
+    return 'Premium required';
   };
+
+  const openPremiumPaywall = useCallback(() => {
+    const params = { screen: 'ProfileMain', params: { openPremium: true } };
+    const parent = navigation.getParent?.();
+    if (parent) {
+      parent.navigate('Profile', params);
+      return;
+    }
+    navigation.navigate('Profile', params);
+  }, [navigation]);
 
   const isPlaceholderRecipeImage = (recipe) => {
     const source = String(recipe?.image_source || recipe?.imageSource || '').toLowerCase();
@@ -602,13 +620,13 @@ export default function HomeScreen() {
         }
       } else {
         Alert.alert(
-          'Trial ended',
-          data?.detail?.message || 'Your free trial has ended. Start Premium to continue using GlucoForager.',
+          'Start your 7-day free trial',
+          data?.detail?.message || 'Start your 7-day free trial to use scan and recipe generation.',
           [
             { text: 'OK', style: 'cancel' },
             { 
-              text: 'Start Premium',
-              onPress: () => navigation.navigate('Profile', { openPremium: true })
+              text: 'Start Trial',
+              onPress: openPremiumPaywall
             }
           ]
         );
@@ -653,7 +671,7 @@ export default function HomeScreen() {
   };
 
   const handleUpgradePaywall = async () => {
-    navigation.navigate('Profile', { openPremium: true });
+    openPremiumPaywall();
   };
 
   const getDayGreeting = () => {
@@ -775,11 +793,11 @@ export default function HomeScreen() {
           {accessStatus === 'expired' ? (
             <View style={styles.heroUsageWrap}>
               <View style={styles.heroUsageTop}>
-                <Text style={styles.heroUsageLabel}>Trial access</Text>
-                <Text style={styles.heroUsageCount}>Ended</Text>
+                <Text style={styles.heroUsageLabel}>Premium trial</Text>
+                <Text style={styles.heroUsageCount}>Required</Text>
               </View>
               <TouchableOpacity style={styles.heroUpgradeButton} onPress={handleUpgradePaywall} activeOpacity={0.9}>
-                <Text style={styles.heroUpgradeText}>Start Premium</Text>
+                <Text style={styles.heroUpgradeText}>Start 7-day trial</Text>
                 <Ionicons name="arrow-forward" size={15} color="white" />
               </TouchableOpacity>
             </View>

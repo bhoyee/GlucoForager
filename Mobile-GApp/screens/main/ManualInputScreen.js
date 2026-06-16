@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -65,6 +65,16 @@ export default function ManualInputScreen() {
   const keyboardScrollPadding = typingActive
     ? (keyboardVisible ? keyboardHeight : Platform.OS === 'ios' ? 320 : 360) + 180
     : contentBottomPadding;
+
+  const openPremiumPaywall = useCallback(() => {
+    const params = { screen: 'ProfileMain', params: { openPremium: true } };
+    const parent = navigation.getParent?.();
+    if (parent) {
+      parent.navigate('Profile', params);
+      return;
+    }
+    navigation.navigate('Profile', params);
+  }, [navigation]);
 
   useEffect(() => {
     const pulseAnimation = Animated.loop(
@@ -512,7 +522,7 @@ export default function ManualInputScreen() {
         const message = detail?.message || detail || 'Unable to generate recipes.';
         const title =
           detail?.code === 'trial_expired'
-            ? 'Trial ended'
+            ? 'Start your 7-day free trial'
             : detail?.code === 'needs_clarification'
               ? 'Check ingredient'
               : 'Request failed';
@@ -520,7 +530,7 @@ export default function ManualInputScreen() {
           detail?.code === 'trial_expired'
             ? [
                 { text: 'Not now', style: 'cancel' },
-                { text: 'Start Premium', onPress: () => navigation.navigate('Profile', { openPremium: true }) },
+                { text: 'Start Trial', onPress: openPremiumPaywall },
               ]
             : undefined;
         Alert.alert(title, message, buttons);
@@ -756,7 +766,7 @@ export default function ManualInputScreen() {
                 <>
                   <Ionicons name="lock-closed-outline" size={20} color={Colors.textLight} />
                   <Text style={[styles.findButtonText, styles.findButtonTextLimit]}>
-                    Trial ended - start Premium
+                    Start your 7-day free trial
                   </Text>
                 </>
               ) : (

@@ -751,7 +751,7 @@ export default function ProfileScreen() {
       {profile.subscriptionTier !== 'premium' && (
         <TouchableOpacity style={styles.upgradeCard} onPress={handleUpgrade} disabled={isUpgrading}>
           <View>
-            <Text style={styles.upgradeTitle}>Start Premium</Text>
+            <Text style={styles.upgradeTitle}>Start 7-day free trial</Text>
             <Text style={styles.upgradeSubtitle}>7-day free trial, then monthly</Text>
           </View>
           {isUpgrading ? (
