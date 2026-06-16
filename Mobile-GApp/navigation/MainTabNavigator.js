@@ -137,7 +137,9 @@ export default function MainTabNavigator() {
         );
         if (!response.ok) return;
         const data = await response.json();
-        const premiumNow = data?.plan === 'premium' && data?.status === 'active';
+        const status = String(data?.status || '').toLowerCase();
+        const premiumNow =
+          data?.plan === 'premium' && ['active', 'trialing', 'cancelled', 'canceled'].includes(status);
         if (!cancelled) {
           setIsPremium(Boolean(premiumNow));
         }
