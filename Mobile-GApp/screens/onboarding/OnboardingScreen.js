@@ -17,13 +17,13 @@ const { width } = Dimensions.get('window');
 const onboardingData = [
   {
     id: '1',
-    icon: 'sparkles-outline',
-    title: 'Your daily diabetes food assistant',
-    description: 'Make better food decisions without guessing.',
+    icon: 'calendar-outline',
+    title: 'Plan your day with less guesswork',
+    description: 'Get diabetes-friendly meal ideas, tips, and daily challenges.',
     subDescription:
-      'GlucoForager brings recipes, swaps, meal planning, tips, and GlucoGuide AI into one simple app.',
+      'GlucoForager helps you decide what to eat for breakfast, lunch, dinner, and snacks.',
     color: Colors.primary,
-    chips: ['Recipes', 'Food swaps', 'Meal planner'],
+    chips: ['Meal planner', 'Daily tips', 'Challenges'],
   },
   {
     id: '2',
@@ -37,23 +37,23 @@ const onboardingData = [
   },
   {
     id: '3',
-    icon: 'options-outline',
-    title: 'Personalized around you',
-    description: 'Set your diabetes profile, goals, cuisine, and foods to avoid.',
+    icon: 'swap-horizontal-outline',
+    title: 'Swap foods with confidence',
+    description: 'Find better options for meals, snacks, and drinks.',
     subDescription:
-      'Suggestions adapt to your preferences so the guidance feels practical, not generic.',
-    color: Colors.primary,
-    chips: ['Goals', 'Cuisine', 'Dietary fit'],
+      'Keep familiar foods in your life while making choices that are easier on blood sugar.',
+    color: '#0EA5A4',
+    chips: ['Food swaps', 'Safer choices', 'Practical tips'],
   },
   {
     id: '4',
-    icon: 'card-outline',
-    title: 'Start with 7 days free',
-    description: 'Begin your Premium trial through the App Store or Google Play.',
+    icon: 'chatbubbles-outline',
+    title: 'Ask GlucoGuide AI',
+    description: 'Get simple guidance when you are unsure what to eat.',
     subDescription:
-      'Get scans, typed ingredient recipes, food swaps, meal planning, GlucoGuide AI, favorites, and history.',
+      'Start with a 7-day Premium trial for scans, typed ingredients, swaps, planning, favorites, and GlucoGuide AI.',
     color: '#ED8936',
-    chips: ['7-day trial', 'Premium access', 'Cancel anytime'],
+    chips: ['GlucoGuide AI', '7-day trial', 'Premium access'],
   },
 ];
 
