@@ -4,6 +4,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..dependencies import get_current_user
@@ -75,7 +76,28 @@ def upsert_push_token(
         source="mobile",
         metadata={"platform": platform, "enabled": bool(payload.enabled)},
     )
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        row = db.query(PushToken).filter(PushToken.token == token).first()
+        if not row:
+            raise
+        row.user_id = user.id
+        row.provider = provider
+        row.platform = platform
+        row.enabled = bool(payload.enabled)
+        row.updated_at = now
+        row.last_seen_at = now
+        add_user_activity(
+            db,
+            user_id=user.id,
+            event_type="push_token.updated",
+            label="Updated notification token",
+            source="mobile",
+            metadata={"platform": platform, "enabled": bool(payload.enabled), "retry": True},
+        )
+        db.commit()
     return {"status": "ok", "enabled": row.enabled}
 
 

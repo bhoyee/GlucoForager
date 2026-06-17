@@ -124,14 +124,11 @@ export default function ProfileScreen() {
   };
 
   const syncSubscription = async () => {
-    const token = await AsyncStorage.getItem('userToken');
-    if (!token) return false;
-    const response = await apiFetch(
-      `${API_URL}${API_ENDPOINTS.SUBSCRIPTION_UPGRADE}`,
-      { method: 'POST', headers: { Authorization: `Bearer ${token}` } },
-      { onUnauthorized: signOut }
+    const latestProfile = await refreshUserProfile?.();
+    return (
+      latestProfile?.has_feature_access === true ||
+      latestProfile?.subscription_tier === 'premium'
     );
-    return response.ok;
   };
 
   const getInitials = (name, email) => {
