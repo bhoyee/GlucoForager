@@ -40,9 +40,6 @@ export default function HomeScreen() {
   const [greetingName, setGreetingName] = useState('');
   
   const [userIsPremium, setUserIsPremium] = useState(false);
-  const [todayScans, setTodayScans] = useState(0);
-  const [remainingScans, setRemainingScans] = useState(0);
-  const [dailyLimit, setDailyLimit] = useState(0);
   const [accessStatus, setAccessStatus] = useState('expired');
   const [trialDaysLeft, setTrialDaysLeft] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -181,15 +178,6 @@ export default function HomeScreen() {
         if (typeof data.isPremium === 'boolean') {
           setUserIsPremium(data.isPremium);
         }
-        if (typeof data.todayScans === 'number') {
-          setTodayScans(data.todayScans);
-        }
-        if (typeof data.remainingScans === 'number') {
-          setRemainingScans(data.remainingScans);
-        }
-        if (typeof data.dailyLimit === 'number') {
-          setDailyLimit(data.dailyLimit);
-        }
         if (typeof data.accessStatus === 'string') {
           setAccessStatus(data.accessStatus);
         }
@@ -303,9 +291,6 @@ export default function HomeScreen() {
     );
     if (response.status === 401) {
       setUserIsPremium(false);
-      setTodayScans(0);
-      setRemainingScans(0);
-      setDailyLimit(0);
       setAccessStatus('expired');
       setTrialDaysLeft(0);
       return;
@@ -319,9 +304,6 @@ export default function HomeScreen() {
     setUserIsPremium(isPremium);
     setAccessStatus(nextAccessStatus);
     setTrialDaysLeft(data.trial_days_left ?? null);
-    setTodayScans(data.total || 0);
-    setRemainingScans(hasActiveAccess(data) ? 1 : 0);
-    setDailyLimit(0);
 
     if (nextAccessStatus === 'expired' && !premiumPromptShownRef.current) {
       premiumPromptShownRef.current = true;
@@ -334,9 +316,6 @@ export default function HomeScreen() {
       'home_scan_status',
       JSON.stringify({
         isPremium,
-        todayScans: data.total || 0,
-        remainingScans: hasActiveAccess(data) ? 1 : 0,
-        dailyLimit: 0,
         accessStatus: nextAccessStatus,
         trialDaysLeft: data.trial_days_left ?? null,
       })
@@ -452,21 +431,26 @@ export default function HomeScreen() {
     ['premium', 'trialing', 'trial', 'cancelled_active', 'legacy_grace', 'grace'].includes(String(data.access_status || '').toLowerCase()) ||
     data.searches_left === 'unlimited';
 
+  const currentAccessStatus = String(accessStatus || '').toLowerCase();
+  const hasCurrentFeatureAccess =
+    userIsPremium ||
+    ['premium', 'trialing', 'trial', 'cancelled_active', 'legacy_grace', 'grace'].includes(currentAccessStatus);
+
   const getAccessLabel = () => {
-    if (userIsPremium || accessStatus === 'premium') return 'Premium active';
-    if (accessStatus === 'cancelled_active') {
+    if (userIsPremium || currentAccessStatus === 'premium') return 'Premium active';
+    if (currentAccessStatus === 'cancelled_active') {
       const days = Number(trialDaysLeft);
       return Number.isFinite(days) && days > 0 ? `${days} day${days === 1 ? '' : 's'} left` : 'Active until period ends';
     }
-    if (['trialing', 'trial', 'legacy_grace', 'grace'].includes(accessStatus)) {
+    if (['trialing', 'trial', 'legacy_grace', 'grace'].includes(currentAccessStatus)) {
       const days = Number(trialDaysLeft);
       return Number.isFinite(days) && days > 0
         ? `${days} day${days === 1 ? '' : 's'} left`
-        : accessStatus === 'legacy_grace' || accessStatus === 'grace'
+        : currentAccessStatus === 'legacy_grace' || currentAccessStatus === 'grace'
           ? 'Grace active'
           : 'Trial active';
     }
-    if (accessStatus === 'expired') return 'Start your 7-day free trial';
+    if (currentAccessStatus === 'expired') return 'Start your 7-day free trial';
     return 'Premium required';
   };
 
@@ -699,7 +683,6 @@ export default function HomeScreen() {
     );
   }
 
-  const scanProgress = 0;
   const challengeCompleted = Number(dailyChallenge?.progress?.completed || 0);
   const challengeTotal = Number(dailyChallenge?.progress?.total || 0);
   const hasChallenge = Boolean(dailyChallenge?.tasks?.length);
@@ -790,12 +773,15 @@ export default function HomeScreen() {
             </View>
             <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
           </Pressable>
-          {accessStatus === 'expired' ? (
+          {!hasCurrentFeatureAccess ? (
             <View style={styles.heroUsageWrap}>
               <View style={styles.heroUsageTop}>
-                <Text style={styles.heroUsageLabel}>Premium trial</Text>
-                <Text style={styles.heroUsageCount}>Required</Text>
+                <Text style={styles.heroUsageLabel}>Access required</Text>
+                <Text style={styles.heroUsageCount}>7 days free</Text>
               </View>
+              <Text style={styles.heroUsageBody}>
+                Start your free trial to scan ingredients, type ingredients, and generate diabetes-friendly recipes.
+              </Text>
               <TouchableOpacity style={styles.heroUpgradeButton} onPress={handleUpgradePaywall} activeOpacity={0.9}>
                 <Text style={styles.heroUpgradeText}>Start 7-day trial</Text>
                 <Ionicons name="arrow-forward" size={15} color="white" />
@@ -1248,16 +1234,11 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: 'white',
   },
-  heroUsageBar: {
-    height: 6,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    overflow: 'hidden',
-  },
-  heroUsageFill: {
-    height: '100%',
-    borderRadius: 999,
-    backgroundColor: 'white',
+  heroUsageBody: {
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.88)',
   },
   heroUpgradeButton: {
     marginTop: 12,
