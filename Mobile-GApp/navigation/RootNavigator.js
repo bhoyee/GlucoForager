@@ -18,7 +18,13 @@ import MainTabNavigator from "./MainTabNavigator";
 import FoodPreferencesScreen from "../screens/main/FoodPreferencesScreen";
 
 export function RootNavigatorContent() {
-  const { userToken, isLoading, needsFoodProfileOnboarding, hasFeatureAccess } = useContext(AuthContext);
+  const {
+    userToken,
+    isLoading,
+    needsFoodProfileOnboarding,
+    hasFeatureAccess,
+    requiresStoreTrial,
+  } = useContext(AuthContext);
 
   const devLog = (...args) => {
     if (!__DEV__) return;
@@ -30,6 +36,7 @@ export function RootNavigatorContent() {
     isLoading,
     hasToken: Boolean(userToken),
     hasFeatureAccess,
+    requiresStoreTrial,
   });
   
   const [showOnboarding, setShowOnboarding] = useState(null);
@@ -89,7 +96,11 @@ export function RootNavigatorContent() {
     showOnboarding,
     needsFoodProfileOnboarding,
     hasFeatureAccess,
+    requiresStoreTrial,
   });
+
+  const shouldShowTrialGate =
+    hasFeatureAccess === false || (requiresStoreTrial === true && hasFeatureAccess !== true);
 
   return (
     <NavigationContainer>
@@ -102,7 +113,7 @@ export function RootNavigatorContent() {
               initialParams={{ forced: true }}
               options={{ headerShown: false }}
             />
-          ) : hasFeatureAccess === false ? (
+          ) : shouldShowTrialGate ? (
             <Stack.Screen
               name="TrialPaywall"
               component={TrialPaywallScreen}
