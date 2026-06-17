@@ -16,6 +16,9 @@ export function AuthProvider({ children }) {
   const [foodProfileCompleted, setFoodProfileCompleted] = useState(null); // true | false | null
   const [needsFoodProfileOnboarding, setNeedsFoodProfileOnboarding] = useState(false);
   const [foodProfileHasPreferences, setFoodProfileHasPreferences] = useState(null); // boolean | null
+  const [hasFeatureAccess, setHasFeatureAccess] = useState(null); // true | false | null
+  const [accessStatus, setAccessStatus] = useState(null);
+  const [trialDaysLeft, setTrialDaysLeft] = useState(null);
   const lastRefreshWasTransientRef = React.useRef(false);
   const refreshInFlightRef = React.useRef(null); // Promise<string | null> | null
 
@@ -52,6 +55,26 @@ export function AuthProvider({ children }) {
     setFoodProfileCompleted(completed === true ? true : completed === false ? false : null);
     setNeedsFoodProfileOnboarding(completed === false);
     setFoodProfileHasPreferences(hasMeaningfulFoodProfile(profile));
+  };
+
+  const applyAccessFlags = (profile) => {
+    if (!profile || typeof profile !== 'object') {
+      setHasFeatureAccess(null);
+      setAccessStatus(null);
+      setTrialDaysLeft(null);
+      return;
+    }
+
+    const status = typeof profile.access_status === 'string' ? profile.access_status.toLowerCase() : '';
+    const allowed =
+      profile.has_feature_access === true ||
+      profile.is_premium === true ||
+      profile.subscription_tier === 'premium' ||
+      ['premium', 'trialing', 'trial', 'cancelled_active', 'legacy_grace', 'grace'].includes(status);
+
+    setHasFeatureAccess(Boolean(allowed));
+    setAccessStatus(status || (allowed ? 'premium' : 'expired'));
+    setTrialDaysLeft(profile.trial_days_left ?? null);
   };
 
   const devLog = (...args) => {
@@ -93,6 +116,7 @@ export function AuthProvider({ children }) {
           resolvedEmail = profile?.email || null;
           resolvedName = profile?.full_name || null;
           applyFoodProfileFlags(profile);
+          applyAccessFlags(profile);
 
           setUserToken(token);
           await configureRevenueCat({
@@ -122,6 +146,9 @@ export function AuthProvider({ children }) {
     setFoodProfileCompleted(null);
     setNeedsFoodProfileOnboarding(false);
     setFoodProfileHasPreferences(null);
+    setHasFeatureAccess(null);
+    setAccessStatus(null);
+    setTrialDaysLeft(null);
     await configureRevenueCat({});
   };
 
@@ -171,6 +198,7 @@ export function AuthProvider({ children }) {
         } else {
           const profile = await fetchProfile(data.access_token);
           applyFoodProfileFlags(profile);
+          applyAccessFlags(profile);
         }
 
         setUserToken(data.access_token);
@@ -231,6 +259,17 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const refreshUserProfile = async () => {
+    const token = await AsyncStorage.getItem('userToken');
+    if (!token) return null;
+    const profile = await fetchProfile(token);
+    if (profile) {
+      applyFoodProfileFlags(profile);
+      applyAccessFlags(profile);
+    }
+    return profile;
+  };
+
   const signIn = async (token, publicId, refreshToken, profileCompletedHint) => {
     try {
       await AsyncStorage.setItem('userToken', token);
@@ -251,6 +290,7 @@ export function AuthProvider({ children }) {
       const profile = await fetchProfile(token);
       if (profile) {
         applyFoodProfileFlags(profile);
+        applyAccessFlags(profile);
       }
       setUserToken(token);
       await configureRevenueCat({
@@ -295,6 +335,9 @@ export function AuthProvider({ children }) {
       setFoodProfileCompleted(null);
       setNeedsFoodProfileOnboarding(false);
       setFoodProfileHasPreferences(null);
+      setHasFeatureAccess(null);
+      setAccessStatus(null);
+      setTrialDaysLeft(null);
     } catch (error) {
       console.warn('Local auth state reset failed (ignored):', error);
     }
@@ -333,11 +376,16 @@ export function AuthProvider({ children }) {
         foodProfileCompleted,
         foodProfileHasPreferences,
         needsFoodProfileOnboarding,
+        hasFeatureAccess,
+        accessStatus,
+        trialDaysLeft,
         signIn,
         signOut,
         completeOnboarding,
         completeFoodProfileOnboarding,
         applyFoodProfileFlags,
+        applyAccessFlags,
+        refreshUserProfile,
         checkAuthStatus,
       }}>
       {children}
