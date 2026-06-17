@@ -20,7 +20,8 @@ import { addDebugLog } from '../../utils/debugLogger';
 export default function ProfileScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-  const { signOut, foodProfileHasPreferences } = useContext(AuthContext);
+  const { signOut, foodProfileHasPreferences, hasFeatureAccess, requiresStoreTrial, refreshUserProfile } =
+    useContext(AuthContext);
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const headerPaddingTop = Math.max(insets.top, 16);
@@ -63,6 +64,7 @@ export default function ProfileScreen() {
   const debugTapThreshold = 7;
   const revenueCatReady = isRevenueCatConfigured();
   const premiumPriceCacheKey = 'premium_price_line_cache_v1';
+  const premiumModalDismissible = hasFeatureAccess === true && requiresStoreTrial !== true;
   const normalizeVersion = (value) => {
     if (typeof value !== 'string') return '';
     return value.trim().replace(/\.+$/, '');
@@ -199,8 +201,11 @@ export default function ProfileScreen() {
         const info = await getCustomerInfo();
         const hasPremium = isPremiumEntitled(info);
         if (hasPremium && nextProfile.subscriptionTier !== 'premium') {
-          await syncSubscription();
-          setProfile((prev) => ({ ...prev, subscriptionTier: 'premium', accessStatus: 'premium' }));
+          const synced = await syncSubscription();
+          if (synced) {
+            await refreshUserProfile?.();
+            setProfile((prev) => ({ ...prev, subscriptionTier: 'premium', accessStatus: 'premium' }));
+          }
         }
       } catch (error) {
         // Ignore RevenueCat sync errors.
@@ -445,8 +450,15 @@ export default function ProfileScreen() {
       if (hasPremium) {
         await syncSubscription();
         await loadProfile();
-        setPremiumModalVisible(false);
-        Alert.alert('Success', 'Premium unlocked.');
+        const latestProfile = await refreshUserProfile?.();
+        if (latestProfile?.has_feature_access === true || latestProfile?.subscription_tier === 'premium') {
+          setPremiumModalVisible(false);
+          Alert.alert('Success', 'Premium unlocked.');
+          return;
+        }
+        setPremiumModalError(
+          'Your trial is confirmed. We are still syncing access. Please try again in a moment.'
+        );
         return;
       }
 
@@ -476,8 +488,15 @@ export default function ProfileScreen() {
       if (hasPremium) {
         await syncSubscription();
         await loadProfile();
-        setPremiumModalVisible(false);
-        Alert.alert('Restored', 'Your Premium subscription has been restored.');
+        const latestProfile = await refreshUserProfile?.();
+        if (latestProfile?.has_feature_access === true || latestProfile?.subscription_tier === 'premium') {
+          setPremiumModalVisible(false);
+          Alert.alert('Restored', 'Your Premium subscription has been restored.');
+          return;
+        }
+        setPremiumModalError(
+          'Your subscription was found. We are still syncing access. Please try again in a moment.'
+        );
         return;
       }
 
@@ -613,7 +632,11 @@ export default function ProfileScreen() {
         visible={premiumModalVisible}
         animationType="slide"
         transparent
-        onRequestClose={() => setPremiumModalVisible(false)}
+        onRequestClose={() => {
+          if (premiumModalDismissible) {
+            setPremiumModalVisible(false);
+          }
+        }}
       >
         <View style={styles.premiumModalBackdrop}>
           <View style={styles.premiumModalCard}>
@@ -627,9 +650,13 @@ export default function ProfileScreen() {
             >
               <View style={styles.premiumModalHeader}>
                 <Text style={styles.premiumModalTitle}>GlucoForager Premium</Text>
-                <Pressable onPress={() => setPremiumModalVisible(false)} accessibilityLabel="Close">
-                  <Ionicons name="close" size={24} color={Colors.text} />
-                </Pressable>
+                {premiumModalDismissible ? (
+                  <Pressable onPress={() => setPremiumModalVisible(false)} accessibilityLabel="Close">
+                    <Ionicons name="close" size={24} color={Colors.text} />
+                  </Pressable>
+                ) : (
+                  <View style={styles.premiumModalHeaderSpacer} />
+                )}
               </View>
 
               <Text style={styles.premiumModalSubtitle}>7-day free trial, then monthly subscription</Text>
@@ -1061,6 +1088,10 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '800',
     color: Colors.text,
+  },
+  premiumModalHeaderSpacer: {
+    width: 24,
+    height: 24,
   },
   premiumModalSubtitle: {
     fontSize: 13,
