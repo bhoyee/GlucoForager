@@ -1,94 +1,135 @@
-// screens/onboarding/OnboardingScreen.js - UPDATED
-import React, { useState, useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
-  View,
-  Text,
-  StyleSheet,
   Dimensions,
   FlatList,
+  StyleSheet,
+  Text,
   TouchableOpacity,
+  View,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
-import { useAuth } from '../../context/authContext'; // ADD THIS IMPORT
 
 const { width } = Dimensions.get('window');
 
 const onboardingData = [
   {
     id: '1',
-    icon: '📸',
-    title: 'Scan Ingredients',
-    description: 'Take a photo of your fridge or pantry',
-    subDescription: 'AI automatically detects ingredients from your photo',
+    icon: 'calendar-outline',
+    title: 'Plan your day with less guesswork',
+    description: 'Get diabetes-friendly meal ideas, tips, and daily challenges.',
+    subDescription:
+      'GlucoForager helps you decide what to eat for breakfast, lunch, dinner, and snacks.',
     color: Colors.primary,
+    chips: ['Meal planner', 'Daily tips', 'Challenges'],
   },
   {
     id: '2',
-    icon: '✅',
-    title: 'Select from Scan List',
-    description: 'Review & customize detected ingredients',
-    subDescription: 'Toggle items on/off and add missing ingredients manually',
+    icon: 'camera-outline',
+    title: 'Use what you already have',
+    description: 'Scan your fridge or type ingredients by hand.',
+    subDescription:
+      'Review detected foods, add missing items, and let the app focus on diabetes-friendlier choices.',
     color: '#3182CE',
+    chips: ['Scan fridge', 'Type ingredients', 'Review foods'],
   },
   {
     id: '3',
-    icon: '🥗',
-    title: 'Diabetes-Safe Recipes',
-    description: 'Get AI-matched low-glycemic recipes',
-    subDescription: 'Filtered for diabetes-friendly ingredients and nutrition',
-    color: Colors.primary,
+    icon: 'swap-horizontal-outline',
+    title: 'Swap foods with confidence',
+    description: 'Find better options for meals, snacks, and drinks.',
+    subDescription:
+      'Keep familiar foods in your life while making choices that are easier on blood sugar.',
+    color: '#0EA5A4',
+    chips: ['Food swaps', 'Safer choices', 'Practical tips'],
   },
   {
     id: '4',
-    icon: '👨‍🍳',
-    title: 'Cook with Confidence',
-    description: 'Clear instructions & safety notes',
-    subDescription: 'Step-by-step guides with carb counts and safety alerts',
+    icon: 'chatbubbles-outline',
+    title: 'Ask GlucoGuide AI',
+    description: 'Get simple guidance when you are unsure what to eat.',
+    subDescription:
+      'Start with a 7-day Premium trial for scans, typed ingredients, swaps, planning, favorites, and GlucoGuide AI.',
     color: '#ED8936',
+    chips: ['GlucoGuide AI', '7-day trial', 'Premium access'],
   },
 ];
 
 export default function OnboardingScreen() {
   const navigation = useNavigation();
-  const { completeOnboarding } = useAuth(); // ADD THIS
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef(null);
 
+  const markOnboardingComplete = async () => {
+    await AsyncStorage.setItem('hasCompletedOnboarding', 'true');
+    await AsyncStorage.setItem('hasSeenOnboarding', 'true');
+  };
+
+  const goToLogin = async () => {
+    try {
+      await markOnboardingComplete();
+    } catch (error) {
+      console.error('Error completing onboarding:', error);
+    } finally {
+      navigation.navigate('Login');
+    }
+  };
+
+  const goToNext = () => {
+    if (currentIndex < onboardingData.length - 1) {
+      const nextIndex = currentIndex + 1;
+      flatListRef.current?.scrollToIndex({ index: nextIndex });
+      setCurrentIndex(nextIndex);
+      return;
+    }
+    goToLogin();
+  };
+
+  const goToPrevious = () => {
+    if (currentIndex <= 0) return;
+    const previousIndex = currentIndex - 1;
+    flatListRef.current?.scrollToIndex({ index: previousIndex });
+    setCurrentIndex(previousIndex);
+  };
+
   const renderItem = ({ item }) => (
     <View style={[styles.slide, { width }]}>
-      {/* Image/Icon */}
-      <View style={styles.imageContainer}>
-        <View style={[styles.iconCircle, { backgroundColor: `${item.color}20` }]}>
-          <Text style={styles.icon}>{item.icon}</Text>
-        </View>
+      <View style={[styles.iconCircle, { backgroundColor: `${item.color}18`, borderColor: `${item.color}22` }]}>
+        <Ionicons name={item.icon} size={46} color={item.color} />
       </View>
-      
-      {/* Content */}
+
       <View style={styles.content}>
-        <Text style={styles.slideNumber}>
-          Step {parseInt(item.id)} of {onboardingData.length}
-        </Text>
-        
+        <Text style={styles.kicker}>GlucoForager</Text>
         <Text style={styles.slideTitle}>{item.title}</Text>
-        
         <Text style={styles.slideDescription}>{item.description}</Text>
-        
         <Text style={styles.slideSubDescription}>{item.subDescription}</Text>
-        
-        {/* Feature Dots */}
+
+        <View style={styles.chipRow}>
+          {item.chips.map((chip) => (
+            <View
+              key={chip}
+              style={[
+                styles.chip,
+                { borderColor: `${item.color}35`, backgroundColor: `${item.color}10` },
+              ]}
+            >
+              <Text style={[styles.chipText, { color: item.color }]}>{chip}</Text>
+            </View>
+          ))}
+        </View>
+
         <View style={styles.featureDots}>
           {onboardingData.map((_, idx) => (
             <View
               key={idx}
               style={[
                 styles.featureDot,
-                { 
+                {
                   backgroundColor: idx === currentIndex ? item.color : '#E2E8F0',
                   width: idx === currentIndex ? 24 : 8,
-                }
+                },
               ]}
             />
           ))}
@@ -96,54 +137,13 @@ export default function OnboardingScreen() {
       </View>
     </View>
   );
-// In your OnboardingScreen.js, update the skip and get started handlers:
-const skipToLogin = async () => {
-  try {
-    await AsyncStorage.setItem('hasCompletedOnboarding', 'true');
-    navigation.navigate('Login');
-  } catch (error) {
-    console.error('Error skipping onboarding:', error);
-    navigation.navigate('Login');
-  }
-};
-
-const handleComplete = async () => {
-  try {
-    await AsyncStorage.setItem('hasCompletedOnboarding', 'true');
-    navigation.navigate('Login');
-  } catch (error) {
-    console.error('Error completing onboarding:', error);
-    navigation.navigate('Login');
-  }
-};
-  const goToNext = () => {
-    if (currentIndex < onboardingData.length - 1) {
-      flatListRef.current.scrollToIndex({ index: currentIndex + 1 });
-      setCurrentIndex(currentIndex + 1);
-    } else {
-      handleComplete();
-    }
-  };
-
-  const goToPrevious = () => {
-    if (currentIndex > 0) {
-      flatListRef.current.scrollToIndex({ index: currentIndex - 1 });
-      setCurrentIndex(currentIndex - 1);
-    }
-  };
-
-//   const skipToLogin = () => {
-//     handleComplete();
-//   };
 
   return (
     <View style={styles.container}>
-      {/* Skip Button */}
-      <TouchableOpacity style={styles.skipButton} onPress={skipToLogin}>
+      <TouchableOpacity style={styles.skipButton} onPress={goToLogin} activeOpacity={0.85}>
         <Text style={styles.skipText}>Skip</Text>
       </TouchableOpacity>
 
-      {/* Slides */}
       <FlatList
         ref={flatListRef}
         data={onboardingData}
@@ -152,48 +152,47 @@ const handleComplete = async () => {
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         scrollEventThrottle={16}
-        onScroll={(e) => {
-          const index = Math.round(e.nativeEvent.contentOffset.x / width);
+        keyExtractor={(item) => item.id}
+        onScroll={(event) => {
+          const index = Math.round(event.nativeEvent.contentOffset.x / width);
           setCurrentIndex(index);
         }}
       />
 
-      {/* Navigation Buttons */}
       <View style={styles.navigation}>
         <View style={styles.buttonContainer}>
           {currentIndex > 0 ? (
-            <TouchableOpacity style={styles.backButton} onPress={goToPrevious}>
+            <TouchableOpacity style={styles.backButton} onPress={goToPrevious} activeOpacity={0.85}>
               <Ionicons name="arrow-back" size={20} color={Colors.primary} />
               <Text style={styles.backButtonText}>Back</Text>
             </TouchableOpacity>
           ) : (
             <View style={styles.placeholder} />
           )}
-          
-          <TouchableOpacity style={styles.nextButton} onPress={goToNext}>
+
+          <TouchableOpacity style={styles.nextButton} onPress={goToNext} activeOpacity={0.88}>
             <Text style={styles.nextButtonText}>
               {currentIndex === onboardingData.length - 1 ? 'Get Started' : 'Next'}
             </Text>
-            <Ionicons 
-              name={currentIndex === onboardingData.length - 1 ? "checkmark-circle" : "arrow-forward"} 
-              size={20} 
-              color="white" 
-              style={{ marginLeft: 8 }}
+            <Ionicons
+              name={currentIndex === onboardingData.length - 1 ? 'checkmark-circle' : 'arrow-forward'}
+              size={20}
+              color="white"
+              style={styles.nextButtonIcon}
             />
           </TouchableOpacity>
         </View>
 
-        {/* Progress Bar */}
         <View style={styles.progressContainer}>
           <View style={styles.progressBar}>
-            <View 
+            <View
               style={[
                 styles.progressFill,
-                { 
+                {
                   width: `${((currentIndex + 1) / onboardingData.length) * 100}%`,
                   backgroundColor: onboardingData[currentIndex]?.color || Colors.primary,
-                }
-              ]} 
+                },
+              ]}
             />
           </View>
           <Text style={styles.progressText}>
@@ -201,11 +200,7 @@ const handleComplete = async () => {
           </Text>
         </View>
 
-        {/* Login Link */}
-        <TouchableOpacity 
-          style={styles.loginLink}
-          onPress={skipToLogin}
-        >
+        <TouchableOpacity style={styles.loginLink} onPress={goToLogin} activeOpacity={0.85}>
           <Text style={styles.loginText}>Already have an account? </Text>
           <Text style={styles.loginLinkText}>Sign In</Text>
         </TouchableOpacity>
@@ -213,6 +208,7 @@ const handleComplete = async () => {
         <TouchableOpacity
           style={styles.premiumDetailsLink}
           onPress={() => navigation.navigate('PremiumDetails')}
+          activeOpacity={0.85}
         >
           <Text style={styles.premiumDetailsText}>See Premium details</Text>
         </TouchableOpacity>
@@ -234,69 +230,86 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   skipText: {
     color: Colors.textLight,
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '700',
   },
   slide: {
     justifyContent: 'flex-start',
     alignItems: 'center',
-    paddingTop: 100,
-  },
-  imageContainer: {
-    marginBottom: 40,
+    paddingTop: 96,
   },
   iconCircle: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 112,
+    height: 112,
+    borderRadius: 36,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  icon: {
-    fontSize: 50,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+    marginBottom: 34,
   },
   content: {
-    paddingHorizontal: 30,
+    paddingHorizontal: 28,
     alignItems: 'center',
   },
-  slideNumber: {
-    fontSize: 14,
-    color: Colors.textLight,
-    marginBottom: 8,
-    fontWeight: '500',
+  kicker: {
+    fontSize: 12,
+    color: Colors.primary,
+    marginBottom: 10,
+    fontWeight: '900',
+    letterSpacing: 0,
+    textTransform: 'uppercase',
   },
   slideTitle: {
-    fontSize: 32,
-    fontWeight: 'bold',
+    fontSize: 30,
+    fontWeight: '900',
     color: Colors.text,
     textAlign: 'center',
-    marginBottom: 16,
-    lineHeight: 38,
+    marginBottom: 14,
+    lineHeight: 36,
   },
   slideDescription: {
-    fontSize: 20,
+    fontSize: 18,
     color: Colors.text,
     textAlign: 'center',
-    marginBottom: 12,
-    fontWeight: '600',
-    lineHeight: 28,
+    marginBottom: 10,
+    fontWeight: '800',
+    lineHeight: 25,
   },
   slideSubDescription: {
-    fontSize: 16,
+    fontSize: 15,
     color: Colors.textLight,
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: 22,
     paddingHorizontal: 10,
-    marginBottom: 30,
+    marginBottom: 22,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  chip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+  },
+  chipText: {
+    fontSize: 12,
+    fontWeight: '800',
   },
   featureDots: {
     flexDirection: 'row',
@@ -308,7 +321,6 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     marginHorizontal: 4,
-    transition: 'all 0.3s ease',
   },
   navigation: {
     paddingHorizontal: 20,
@@ -326,7 +338,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 14,
     paddingHorizontal: 20,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: Colors.border,
     backgroundColor: Colors.surface,
@@ -334,16 +346,17 @@ const styles = StyleSheet.create({
   backButtonText: {
     color: Colors.primary,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     marginLeft: 8,
   },
   nextButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: Colors.primary,
     paddingVertical: 16,
     paddingHorizontal: 28,
-    borderRadius: 12,
+    borderRadius: 14,
     minWidth: 150,
     shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 4 },
@@ -354,7 +367,10 @@ const styles = StyleSheet.create({
   nextButtonText: {
     color: 'white',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '800',
+  },
+  nextButtonIcon: {
+    marginLeft: 8,
   },
   placeholder: {
     width: 80,
@@ -379,7 +395,7 @@ const styles = StyleSheet.create({
   progressText: {
     fontSize: 14,
     color: Colors.textLight,
-    fontWeight: '500',
+    fontWeight: '600',
     minWidth: 40,
   },
   loginLink: {
@@ -394,7 +410,7 @@ const styles = StyleSheet.create({
   loginLinkText: {
     color: Colors.primary,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '800',
   },
   premiumDetailsLink: {
     marginTop: 10,
@@ -404,6 +420,6 @@ const styles = StyleSheet.create({
   premiumDetailsText: {
     color: Colors.primary,
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
   },
 });
