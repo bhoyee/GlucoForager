@@ -283,7 +283,6 @@ export default function FoodPreferencesScreen({ navigation }) {
     const ok = await saveProfile(true);
     if (!ok) return;
     if (forced) {
-      navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
       return;
     }
     // If the user opened Food Preferences from another tab (e.g., Home),
@@ -305,7 +304,6 @@ export default function FoodPreferencesScreen({ navigation }) {
     const ok = await saveProfile(true);
     if (!ok) return;
     if (forced) {
-      navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
       return;
     }
     try {

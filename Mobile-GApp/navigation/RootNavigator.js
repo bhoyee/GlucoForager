@@ -10,6 +10,7 @@ import SplashScreen from "../screens/SplashScreen";
 import OnboardingScreen from "../screens/onboarding/OnboardingScreen";
 import LoginScreen from "../screens/auth/LoginScreen";
 import SignUpScreen from "../screens/auth/SignUpScreen";
+import TrialPaywallScreen from "../screens/auth/TrialPaywallScreen";
 import ForgotPasswordScreen from "../screens/auth/ForgotPasswordScreen";
 import TermsScreen from "../screens/main/TermsScreen";
 import PrivacyPolicyScreen from "../screens/main/PrivacyPolicyScreen";
@@ -17,7 +18,7 @@ import MainTabNavigator from "./MainTabNavigator";
 import FoodPreferencesScreen from "../screens/main/FoodPreferencesScreen";
 
 export function RootNavigatorContent() {
-  const { userToken, isLoading, needsFoodProfileOnboarding } = useContext(AuthContext);
+  const { userToken, isLoading, needsFoodProfileOnboarding, hasFeatureAccess } = useContext(AuthContext);
 
   const devLog = (...args) => {
     if (!__DEV__) return;
@@ -28,6 +29,7 @@ export function RootNavigatorContent() {
   devLog('RootNavigator render', {
     isLoading,
     hasToken: Boolean(userToken),
+    hasFeatureAccess,
   });
   
   const [showOnboarding, setShowOnboarding] = useState(null);
@@ -85,6 +87,8 @@ export function RootNavigatorContent() {
   devLog('Navigation decision', {
     hasToken: Boolean(userToken),
     showOnboarding,
+    needsFoodProfileOnboarding,
+    hasFeatureAccess,
   });
 
   return (
@@ -96,6 +100,12 @@ export function RootNavigatorContent() {
               name="FoodPreferencesOnboarding"
               component={FoodPreferencesScreen}
               initialParams={{ forced: true }}
+              options={{ headerShown: false }}
+            />
+          ) : hasFeatureAccess === false ? (
+            <Stack.Screen
+              name="TrialPaywall"
+              component={TrialPaywallScreen}
               options={{ headerShown: false }}
             />
           ) : (

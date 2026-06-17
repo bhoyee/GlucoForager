@@ -85,7 +85,6 @@ export default function SignUpScreen() {
       }
 
       await signIn(data.access_token, data.public_id, data.refresh_token, data.profile_completed);
-      Alert.alert("Success!", data.message || "Account created successfully!");
     } catch (error) {
       Alert.alert("Error", error.message || "Signup failed. Please try again.");
     } finally {
@@ -129,7 +128,7 @@ export default function SignUpScreen() {
           />
           <Text style={styles.kicker}>Create your account</Text>
           <Text style={styles.title}>GlucoForager</Text>
-          <Text style={styles.subtitle}>Your daily diabetes food assistant.</Text>
+          <Text style={styles.subtitle}>Set your food preferences, then start your 7-day free trial.</Text>
         </View>
 
         {/* Form */}
@@ -137,7 +136,7 @@ export default function SignUpScreen() {
           <View style={styles.formCard}>
             <View style={styles.formHeader}>
               <Text style={styles.formTitle}>Account details</Text>
-              <Text style={styles.formSubtitle}>It takes about a minute.</Text>
+              <Text style={styles.formSubtitle}>Your trial is linked securely to this account.</Text>
             </View>
           {/* Full Name */}
           <View style={styles.inputContainer}>
