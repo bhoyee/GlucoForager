@@ -23,7 +23,7 @@ import { getClientInfo } from "../../utils/clientInfo";
 
 export default function SignUpScreen() {
   const navigation = useNavigation();
-  const { signIn } = useAuth();
+  const { signIn, markStoreTrialRequired } = useAuth();
   const insets = useSafeAreaInsets();
   const headerPaddingTop = Math.max(insets.top, 16);
   const contentBottomPadding = Math.max(insets.bottom, 16) + 24;
@@ -84,6 +84,7 @@ export default function SignUpScreen() {
         throw new Error(data?.detail || data?.message || 'Signup failed. Please try again.');
       }
 
+      await markStoreTrialRequired();
       await signIn(data.access_token, data.public_id, data.refresh_token, data.profile_completed);
     } catch (error) {
       Alert.alert("Error", error.message || "Signup failed. Please try again.");
