@@ -17,7 +17,7 @@ const { width } = Dimensions.get('window');
 const onboardingData = [
   {
     id: '1',
-    icon: 'calendar-outline',
+    icon: 'calendar',
     title: 'Plan your day with less guesswork',
     description: 'Get diabetes-friendly meal ideas, tips, and daily challenges.',
     subDescription:
@@ -27,7 +27,7 @@ const onboardingData = [
   },
   {
     id: '2',
-    icon: 'camera-outline',
+    icon: 'scan',
     title: 'Use what you already have',
     description: 'Scan your fridge or type ingredients by hand.',
     subDescription:
@@ -37,7 +37,7 @@ const onboardingData = [
   },
   {
     id: '3',
-    icon: 'swap-horizontal-outline',
+    icon: 'swap-horizontal',
     title: 'Swap foods with confidence',
     description: 'Find better options for meals, snacks, and drinks.',
     subDescription:
@@ -47,7 +47,7 @@ const onboardingData = [
   },
   {
     id: '4',
-    icon: 'chatbubbles-outline',
+    icon: 'sparkles',
     title: 'Ask GlucoGuide AI',
     description: 'Get simple guidance when you are unsure what to eat.',
     subDescription:
@@ -96,8 +96,17 @@ export default function OnboardingScreen() {
 
   const renderItem = ({ item }) => (
     <View style={[styles.slide, { width }]}>
-      <View style={[styles.iconCircle, { backgroundColor: `${item.color}18`, borderColor: `${item.color}22` }]}>
-        <Ionicons name={item.icon} size={46} color={item.color} />
+      <View
+        style={[
+          styles.visualCard,
+          { borderColor: `${item.color}25`, shadowColor: item.color },
+        ]}
+      >
+        <View style={[styles.visualAccent, { backgroundColor: `${item.color}12` }]} />
+        <View style={[styles.visualRing, { borderColor: `${item.color}20` }]} />
+        <View style={[styles.iconCircle, { backgroundColor: item.color }]}>
+          <Ionicons name={item.icon} size={38} color="white" />
+        </View>
       </View>
 
       <View style={styles.content}>
@@ -242,21 +251,49 @@ const styles = StyleSheet.create({
   slide: {
     justifyContent: 'flex-start',
     alignItems: 'center',
-    paddingTop: 96,
+    paddingTop: 92,
   },
-  iconCircle: {
-    width: 112,
-    height: 112,
-    borderRadius: 36,
+  visualCard: {
+    width: 136,
+    height: 136,
+    borderRadius: 34,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    shadowColor: '#000',
+    overflow: 'hidden',
     shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
     elevation: 4,
-    marginBottom: 34,
+    marginBottom: 30,
+  },
+  visualAccent: {
+    position: 'absolute',
+    top: -44,
+    right: -42,
+    width: 124,
+    height: 124,
+    borderRadius: 62,
+  },
+  visualRing: {
+    position: 'absolute',
+    width: 108,
+    height: 108,
+    borderRadius: 32,
+    borderWidth: 1,
+  },
+  iconCircle: {
+    width: 78,
+    height: 78,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    elevation: 6,
   },
   content: {
     paddingHorizontal: 28,
