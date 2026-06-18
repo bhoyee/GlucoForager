@@ -102,12 +102,13 @@ def send_welcome_email(to_email: str, full_name: str | None = None) -> None:
         <div style="max-width:520px; margin:0 auto; border:1px solid #e5e7eb; border-radius:12px; padding:20px;">
           <h2 style="color:#0FB7A5; margin-top:0;">Welcome to GlucoForager</h2>
           <p>Hi {greeting_name},</p>
-          <p>Welcome to GlucoForager. Your account is ready, and you can now explore diabetes-friendly recipes tailored to the ingredients in your kitchen.</p>
+          <p>Welcome to GlucoForager. Your account is ready, and your next step is to start your 7-day free trial in the app.</p>
           <ul>
-            <li>Free tier includes 3 recipes per day (camera ingredient scan + ingredient search)</li>
-            <li>Upgrade anytime for unlimited recipes (camera ingredient scan + ingredient search)</li>
+            <li>Scan your fridge or type ingredients to get diabetes-friendly meal ideas</li>
+            <li>Use food swaps, daily meal planning, GlucoGuide AI, favourites, and recipe history</li>
+            <li>Trial and billing are handled securely through the App Store or Google Play</li>
           </ul>
-          <p style="margin-top:16px;">Open the app to start planning your next meal in just a few taps.</p>
+          <p style="margin-top:16px;">Open the app to start your trial and make daily food decisions simpler.</p>
           <p style="margin-top:24px; color:#6b7280;">Stay steady, eat well.<br/>The GlucoForager team</p>
         </div>
       </body>
