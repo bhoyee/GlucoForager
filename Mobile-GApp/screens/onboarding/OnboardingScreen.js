@@ -18,7 +18,6 @@ const onboardingData = [
   {
     id: '1',
     icon: 'calendar',
-    supportIcons: ['restaurant-outline', 'trophy-outline'],
     title: 'Plan your day with less guesswork',
     description: 'Get diabetes-friendly meal ideas, tips, and daily challenges.',
     subDescription:
@@ -29,7 +28,6 @@ const onboardingData = [
   {
     id: '2',
     icon: 'scan',
-    supportIcons: ['create-outline', 'checkmark-done-outline'],
     title: 'Use what you already have',
     description: 'Scan your fridge or type ingredients by hand.',
     subDescription:
@@ -40,7 +38,6 @@ const onboardingData = [
   {
     id: '3',
     icon: 'swap-horizontal',
-    supportIcons: ['shield-checkmark-outline', 'cafe-outline'],
     title: 'Swap foods with confidence',
     description: 'Find better options for meals, snacks, and drinks.',
     subDescription:
@@ -51,7 +48,6 @@ const onboardingData = [
   {
     id: '4',
     icon: 'sparkles',
-    supportIcons: ['chatbubble-ellipses-outline', 'card-outline'],
     title: 'Ask GlucoGuide AI',
     description: 'Get simple guidance when you are unsure what to eat.',
     subDescription:
@@ -107,18 +103,9 @@ export default function OnboardingScreen() {
         ]}
       >
         <View style={[styles.visualAccent, { backgroundColor: `${item.color}12` }]} />
+        <View style={[styles.visualRing, { borderColor: `${item.color}20` }]} />
         <View style={[styles.iconCircle, { backgroundColor: item.color }]}>
           <Ionicons name={item.icon} size={38} color="white" />
-        </View>
-        <View style={[styles.supportTile, styles.supportTileLeft, { borderColor: `${item.color}28` }]}>
-          <Ionicons name={item.supportIcons[0]} size={22} color={item.color} />
-        </View>
-        <View style={[styles.supportTile, styles.supportTileRight, { borderColor: `${item.color}28` }]}>
-          <Ionicons name={item.supportIcons[1]} size={22} color={item.color} />
-        </View>
-        <View style={[styles.statusPill, { backgroundColor: `${item.color}14` }]}>
-          <Ionicons name="checkmark-circle" size={14} color={item.color} />
-          <Text style={[styles.statusPillText, { color: item.color }]}>Premium ready</Text>
         </View>
       </View>
 
@@ -264,35 +251,42 @@ const styles = StyleSheet.create({
   slide: {
     justifyContent: 'flex-start',
     alignItems: 'center',
-    paddingTop: 90,
+    paddingTop: 92,
   },
   visualCard: {
-    width: Math.min(width - 72, 300),
-    height: 166,
-    borderRadius: 30,
+    width: 136,
+    height: 136,
+    borderRadius: 34,
     backgroundColor: Colors.surface,
     borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
     shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.12,
-    shadowRadius: 18,
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
     elevation: 4,
-    marginBottom: 32,
+    marginBottom: 30,
   },
   visualAccent: {
     position: 'absolute',
-    top: -54,
+    top: -44,
     right: -42,
-    width: 150,
-    height: 150,
-    borderRadius: 75,
+    width: 124,
+    height: 124,
+    borderRadius: 62,
+  },
+  visualRing: {
+    position: 'absolute',
+    width: 108,
+    height: 108,
+    borderRadius: 32,
+    borderWidth: 1,
   },
   iconCircle: {
-    width: 82,
-    height: 82,
-    borderRadius: 26,
+    width: 78,
+    height: 78,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -300,38 +294,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.18,
     shadowRadius: 18,
     elevation: 6,
-  },
-  supportTile: {
-    position: 'absolute',
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.94)',
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  supportTileLeft: {
-    left: 34,
-    top: 36,
-  },
-  supportTileRight: {
-    right: 34,
-    top: 78,
-  },
-  statusPill: {
-    position: 'absolute',
-    bottom: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  statusPillText: {
-    fontSize: 12,
-    fontWeight: '900',
   },
   content: {
     paddingHorizontal: 28,
