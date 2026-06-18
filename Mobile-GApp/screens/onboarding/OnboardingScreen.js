@@ -17,7 +17,8 @@ const { width } = Dimensions.get('window');
 const onboardingData = [
   {
     id: '1',
-    icon: 'calendar-outline',
+    icon: 'calendar',
+    supportIcons: ['restaurant-outline', 'trophy-outline'],
     title: 'Plan your day with less guesswork',
     description: 'Get diabetes-friendly meal ideas, tips, and daily challenges.',
     subDescription:
@@ -27,7 +28,8 @@ const onboardingData = [
   },
   {
     id: '2',
-    icon: 'camera-outline',
+    icon: 'scan',
+    supportIcons: ['create-outline', 'checkmark-done-outline'],
     title: 'Use what you already have',
     description: 'Scan your fridge or type ingredients by hand.',
     subDescription:
@@ -37,7 +39,8 @@ const onboardingData = [
   },
   {
     id: '3',
-    icon: 'swap-horizontal-outline',
+    icon: 'swap-horizontal',
+    supportIcons: ['shield-checkmark-outline', 'cafe-outline'],
     title: 'Swap foods with confidence',
     description: 'Find better options for meals, snacks, and drinks.',
     subDescription:
@@ -47,7 +50,8 @@ const onboardingData = [
   },
   {
     id: '4',
-    icon: 'chatbubbles-outline',
+    icon: 'sparkles',
+    supportIcons: ['chatbubble-ellipses-outline', 'card-outline'],
     title: 'Ask GlucoGuide AI',
     description: 'Get simple guidance when you are unsure what to eat.',
     subDescription:
@@ -96,8 +100,26 @@ export default function OnboardingScreen() {
 
   const renderItem = ({ item }) => (
     <View style={[styles.slide, { width }]}>
-      <View style={[styles.iconCircle, { backgroundColor: `${item.color}18`, borderColor: `${item.color}22` }]}>
-        <Ionicons name={item.icon} size={46} color={item.color} />
+      <View
+        style={[
+          styles.visualCard,
+          { borderColor: `${item.color}25`, shadowColor: item.color },
+        ]}
+      >
+        <View style={[styles.visualAccent, { backgroundColor: `${item.color}12` }]} />
+        <View style={[styles.iconCircle, { backgroundColor: item.color }]}>
+          <Ionicons name={item.icon} size={38} color="white" />
+        </View>
+        <View style={[styles.supportTile, styles.supportTileLeft, { borderColor: `${item.color}28` }]}>
+          <Ionicons name={item.supportIcons[0]} size={22} color={item.color} />
+        </View>
+        <View style={[styles.supportTile, styles.supportTileRight, { borderColor: `${item.color}28` }]}>
+          <Ionicons name={item.supportIcons[1]} size={22} color={item.color} />
+        </View>
+        <View style={[styles.statusPill, { backgroundColor: `${item.color}14` }]}>
+          <Ionicons name="checkmark-circle" size={14} color={item.color} />
+          <Text style={[styles.statusPillText, { color: item.color }]}>Premium ready</Text>
+        </View>
       </View>
 
       <View style={styles.content}>
@@ -242,21 +264,74 @@ const styles = StyleSheet.create({
   slide: {
     justifyContent: 'flex-start',
     alignItems: 'center',
-    paddingTop: 96,
+    paddingTop: 90,
   },
-  iconCircle: {
-    width: 112,
-    height: 112,
-    borderRadius: 36,
+  visualCard: {
+    width: Math.min(width - 72, 300),
+    height: 166,
+    borderRadius: 30,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    shadowColor: '#000',
+    overflow: 'hidden',
     shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
     elevation: 4,
-    marginBottom: 34,
+    marginBottom: 32,
+  },
+  visualAccent: {
+    position: 'absolute',
+    top: -54,
+    right: -42,
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+  },
+  iconCircle: {
+    width: 82,
+    height: 82,
+    borderRadius: 26,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    elevation: 6,
+  },
+  supportTile: {
+    position: 'absolute',
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  supportTileLeft: {
+    left: 34,
+    top: 36,
+  },
+  supportTileRight: {
+    right: 34,
+    top: 78,
+  },
+  statusPill: {
+    position: 'absolute',
+    bottom: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  statusPillText: {
+    fontSize: 12,
+    fontWeight: '900',
   },
   content: {
     paddingHorizontal: 28,
