@@ -57,6 +57,7 @@ class TextRecipeRequest(BaseModel):
     filters: list[str] | None = None
     exclude_titles: list[str] | None = Field(default=None, max_length=20)
     variety_mode: bool = False
+    ingredient_review_approved: bool = False
     mode: Literal["ingredients", "surprise", "quick"] = "ingredients"
 
     @model_validator(mode="after")
@@ -110,7 +111,7 @@ def _ensure_images(recipes: list[dict], tier: str, ingredients: list[str]) -> li
     return recipes
 
 
-def _precheck_ingredient_input(raw_ingredients: list[str], *, mode: str, tier: str) -> dict:
+def _precheck_ingredient_input(raw_ingredients: list[str], *, mode: str, tier: str, user: User | None = None, review_approved: bool = False) -> dict:
     if mode in ("surprise", "quick"):
         return {"food": [], "non_food": [], "source": "mode", "normalization": {"corrections": []}}
 
@@ -137,6 +138,8 @@ def _precheck_ingredient_input(raw_ingredients: list[str], *, mode: str, tier: s
         classified["risk_filtered_out"] = risk_filtered_out
         classified["risk_by_name"] = risk_by_name
     pipeline._ensure_diabetes_friendly_or_raise(classified["food"], mode=mode, tier=tier)
+    if not review_approved:
+        classified["ingredient_review"] = _build_ingredient_review(raw_ingredients, classified["food"], user)
     classified["normalization"] = normalized
     classified["source"] = ",".join(
         label
@@ -148,6 +151,170 @@ def _precheck_ingredient_input(raw_ingredients: list[str], *, mode: str, tier: s
     )
     return classified
 
+def _clean_profile_list(value) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip().lower() for item in value if isinstance(item, str) and str(item).strip()]
+
+
+def _ingredient_review_profile(user: User | None) -> dict:
+    if not user:
+        return {}
+    return {
+        "blood_sugar_profile": (getattr(user, "blood_sugar_profile", None) or "").strip(),
+        "dietary_pattern": (getattr(user, "dietary_pattern", None) or "").strip(),
+        "meal_goals": _clean_profile_list(getattr(user, "meal_goals", None)),
+        "preferred_cuisines": _clean_profile_list(getattr(user, "preferred_cuisines", None)),
+        "allergens": _clean_profile_list(getattr(user, "allergens", None)),
+        "food_exclusions": _clean_profile_list(getattr(user, "food_exclusions", None)),
+    }
+
+
+def _profile_allows_suggestion(suggestion: str, profile: dict) -> bool:
+    text = str(suggestion or "").strip().lower()
+    if not text:
+        return False
+    dietary = str(profile.get("dietary_pattern") or "").strip().lower()
+    allergens = set(profile.get("allergens") or [])
+    exclusions = set(profile.get("food_exclusions") or [])
+    blocked_keywords: dict[str, list[str]] = {
+        "dairy": ["milk", "cheese", "yogurt", "butter"],
+        "eggs": ["egg"],
+        "fish": ["fish", "salmon", "tuna", "cod", "sardine"],
+        "shellfish": ["shrimp", "prawn", "crab", "lobster", "shellfish"],
+        "peanuts": ["peanut"],
+        "tree_nuts": ["almond", "cashew", "walnut", "hazelnut", "nut"],
+        "soy": ["soy", "tofu", "tempeh"],
+        "wheat_gluten": ["wheat", "bread", "pasta", "gluten"],
+        "sesame": ["sesame", "tahini"],
+    }
+    food_blocks: dict[str, list[str]] = {
+        "pork": ["pork", "bacon", "ham", "sausage"],
+        "beef": ["beef", "steak"],
+        "chicken": ["chicken"],
+        "seafood": ["fish", "salmon", "tuna", "shrimp", "prawn", "seafood"],
+        "onion_garlic": ["onion", "garlic"],
+        "spicy_food": ["chilli", "chili", "cayenne", "hot pepper"],
+        "mushrooms": ["mushroom"],
+        "alcohol": ["wine", "beer", "alcohol"],
+        "caffeine": ["coffee", "espresso", "caffeine"],
+    }
+    for allergen in allergens:
+        if any(keyword in text for keyword in blocked_keywords.get(allergen, [])):
+            return False
+    for exclusion in exclusions:
+        if any(keyword in text for keyword in food_blocks.get(exclusion, [exclusion])):
+            return False
+    animal_keywords = ["beef", "chicken", "turkey", "pork", "fish", "salmon", "tuna", "egg", "milk", "cheese", "yogurt"]
+    if dietary == "vegan" and any(keyword in text for keyword in animal_keywords):
+        return False
+    if dietary == "vegetarian" and any(keyword in text for keyword in ["beef", "chicken", "turkey", "pork", "fish", "salmon", "tuna"]):
+        return False
+    if dietary in {"halal", "kosher"} and any(keyword in text for keyword in ["pork", "bacon", "ham"]):
+        return False
+    return True
+
+
+def _fallback_review_suggestion(item: str, profile: dict) -> str:
+    key = " ".join(str(item or "").strip().lower().replace("-", " ").split())
+    candidates: list[str] = []
+    if key in {"porridge", "oatmeal"}:
+        candidates = ["porridge oats", "rolled oats"]
+    elif key in {"bread", "white bread"}:
+        candidates = ["wholegrain bread", "brown bread"]
+    elif key in {"oil", "cooking oil", "vegetable oil"}:
+        candidates = ["olive oil", "rapeseed oil"]
+    elif key in {"rice", "white rice"}:
+        candidates = ["brown rice", "cauliflower rice"]
+    elif key in {"pasta", "spaghetti", "noodles"}:
+        candidates = ["wholewheat pasta", "courgette noodles"]
+    elif key in {"meat", "protein"}:
+        dietary = str(profile.get("dietary_pattern") or "").strip().lower()
+        if dietary == "vegan":
+            candidates = ["tofu", "beans"]
+        elif dietary == "vegetarian":
+            candidates = ["eggs", "tofu", "beans"]
+        elif dietary == "pescatarian":
+            candidates = ["fish", "eggs", "beans"]
+        else:
+            candidates = ["lean chicken", "lean beef", "fish", "beans"]
+    for candidate in candidates:
+        if _profile_allows_suggestion(candidate, profile):
+            return candidate
+    return str(item or "").strip()
+
+
+def _build_ingredient_review(raw_ingredients: list[str], food_ingredients: list[str], user: User | None) -> dict | None:
+    profile = _ingredient_review_profile(user)
+    items: list[dict] = []
+    final_ingredients: list[str] = []
+    changed = False
+    ai_suggestions: dict[str, dict] = {}
+
+    if food_ingredients and normalizer.client:
+        prompt = (
+            "Review typed ingredients before diabetes-friendly recipe generation. Suggest a clearer or more "
+            "diabetes-friendly equivalent only when the user's term is vague, refined, or a common food-form name. "
+            "Respect the user's profile: dietary pattern, allergens, foods to avoid, goals, cuisines, and diabetes profile. "
+            "Do not add unrelated ingredients. Do not suggest anything that conflicts with allergies, exclusions, vegan, "
+            "vegetarian, pescatarian, halal, or kosher. If unsure, keep the original. Return ONLY JSON in this format: "
+            '{"items":[{"input":"<exact input>","suggested":"<ingredient>","reason":"<short reason>"}]}'
+        )
+        try:
+            params = {
+                "model": normalizer.model,
+                "messages": [
+                    {"role": "system", "content": "You safely review food ingredients for a diabetes food app."},
+                    {"role": "user", "content": prompt},
+                    {"role": "user", "content": json.dumps({"ingredients": food_ingredients, "profile": profile})},
+                ],
+                "temperature": 0,
+            }
+            if "openai" in normalizer.base_url or normalizer.base_url in ("", "None"):
+                params["response_format"] = {"type": "json_object"}
+            resp = normalizer.client.chat.completions.create(**params, timeout=6.0)
+            payload = json.loads(resp.choices[0].message.content or "{}")
+            for entry in payload.get("items", []):
+                raw = str(entry.get("input") or "").strip()
+                suggested = str(entry.get("suggested") or "").strip()
+                reason = str(entry.get("reason") or "").strip()
+                if raw and suggested:
+                    ai_suggestions[raw.lower()] = {"suggested": suggested, "reason": reason}
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Ingredient review suggestion failed: %s", exc)
+
+    raw_list = [str(item or "").strip() for item in raw_ingredients or [] if str(item or "").strip()]
+    for index, original in enumerate(food_ingredients or []):
+        ingredient_text = str(original or "").strip()
+        if not ingredient_text:
+            continue
+        display_original = raw_list[index] if index < len(raw_list) else ingredient_text
+        suggestion = ai_suggestions.get(ingredient_text.lower()) or {}
+        suggested = str(suggestion.get("suggested") or "").strip() or _fallback_review_suggestion(ingredient_text, profile)
+        if not _profile_allows_suggestion(suggested, profile):
+            suggested = ingredient_text
+        reason = str(suggestion.get("reason") or "").strip()
+        if not reason and suggested.lower() != display_original.lower():
+            reason = "Better fit for diabetes-friendly recipe generation."
+        final_ingredients.append(suggested or ingredient_text)
+        item = {"original": display_original, "suggested": suggested or ingredient_text, "reason": reason}
+        if item["suggested"].strip().lower() != display_original.lower():
+            changed = True
+            item["changed"] = True
+        else:
+            item["changed"] = False
+        items.append(item)
+
+    if not changed:
+        return None
+    return {
+        "code": "ingredient_review_required",
+        "message": "We found a few profile-safe ingredient matches for more diabetes-friendly recipes. Please review before generating.",
+        "items": items,
+        "changes": [item for item in items if item.get("changed")],
+        "final_ingredients": final_ingredients,
+        "original_ingredients": raw_ingredients,
+    }
 
 def _filtered_items_for_response(classified: dict) -> list[str]:
     items = []
@@ -299,7 +466,7 @@ def _run_text_job(job_id: str) -> None:
 
         if mode not in ("surprise", "quick"):
             try:
-                classified = _precheck_ingredient_input(ingredients, mode=mode, tier=tier)
+                classified = _precheck_ingredient_input(ingredients, mode=mode, tier=tier, user=user, review_approved=True)
             except IngredientValidationError as exc:
                 job.status = "failed"
                 job.error = exc.message
@@ -611,7 +778,7 @@ def generate_from_text(
     mode = payload.mode
     if mode == "ingredients":
         try:
-            classified = _precheck_ingredient_input(payload.ingredients, mode=mode, tier=tier)
+            classified = _precheck_ingredient_input(payload.ingredients, mode=mode, tier=tier, user=current_user, review_approved=True)
         except IngredientValidationError as exc:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -759,12 +926,30 @@ def generate_from_text_async(
         )
 
     try:
-        classified = _precheck_ingredient_input(payload.ingredients, mode=payload.mode, tier=tier)
+        classified = _precheck_ingredient_input(
+            payload.ingredients,
+            mode=payload.mode,
+            tier=tier,
+            user=current_user,
+            review_approved=payload.ingredient_review_approved,
+        )
     except IngredientValidationError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"code": exc.code, "message": exc.message},
         ) from exc
+
+    ingredient_review = classified.get("ingredient_review")
+    if payload.mode == "ingredients" and ingredient_review and not payload.ingredient_review_approved:
+        return {
+            "status": "review_required",
+            "access": access,
+            "review": ingredient_review,
+            "detected": classified.get("food") or [],
+            "filtered_out": _filtered_items_for_response(classified),
+            "warning": _warning_for_classified_ingredients(classified),
+            "normalization": classified.get("normalization") or {"corrections": []},
+        }
 
     queued_ingredients = classified.get("food") if payload.mode == "ingredients" else payload.ingredients
     precheck_filtered_out = _filtered_items_for_response(classified)
@@ -782,6 +967,7 @@ def generate_from_text_async(
             "normalization": classified.get("normalization") or {"corrections": []},
             "precheck_filtered_out": precheck_filtered_out,
             "precheck_warning": precheck_warning,
+            "ingredient_review_approved": payload.ingredient_review_approved,
             "filters": payload.filters or [],
             "exclude_titles": payload.exclude_titles or [],
             "variety_mode": payload.variety_mode,
