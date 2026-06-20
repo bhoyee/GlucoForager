@@ -57,7 +57,12 @@ class DiabetesFriendlyClassifier:
             "lentil",
             "quinoa",
             "oats",
+            "porridge",
+            "porridge oats",
+            "rolled oats",
+            "oatmeal",
             "nuts",
+            "peanut butter",
             "avocado",
             "olive oil",
             "tomato",
@@ -72,6 +77,8 @@ class DiabetesFriendlyClassifier:
             "brown rice",
             "chickpea",
             "greek yogurt",
+            "lactose-free milk",
+            "lactose free milk",
         ]
         avoid_keywords = [
             "candy",
