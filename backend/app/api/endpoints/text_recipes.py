@@ -215,30 +215,32 @@ def _profile_allows_suggestion(suggestion: str, profile: dict) -> bool:
     return True
 
 
-def _fallback_review_suggestion(item: str, profile: dict) -> str:
+def _review_candidates(item: str, profile: dict) -> list[str]:
     key = " ".join(str(item or "").strip().lower().replace("-", " ").split())
-    candidates: list[str] = []
-    if key in {"porridge", "oatmeal"}:
-        candidates = ["porridge oats", "rolled oats"]
-    elif key in {"bread", "white bread"}:
-        candidates = ["wholegrain bread", "brown bread"]
-    elif key in {"oil", "cooking oil", "vegetable oil"}:
-        candidates = ["olive oil", "rapeseed oil"]
-    elif key in {"rice", "white rice"}:
-        candidates = ["brown rice", "cauliflower rice"]
-    elif key in {"pasta", "spaghetti", "noodles"}:
-        candidates = ["wholewheat pasta", "courgette noodles"]
-    elif key in {"meat", "protein"}:
+    if key in {"porridge", "porridge oats", "rolled oats", "oatmeal"}:
+        return ["porridge oats", "rolled oats"]
+    if key in {"bread", "white bread"}:
+        return ["wholegrain bread", "brown bread"]
+    if key in {"oil", "cooking oil", "vegetable oil"}:
+        return ["olive oil", "rapeseed oil"]
+    if key in {"rice", "white rice"}:
+        return ["brown rice", "cauliflower rice"]
+    if key in {"pasta", "spaghetti", "noodles"}:
+        return ["wholewheat pasta", "courgette noodles"]
+    if key in {"meat", "protein"}:
         dietary = str(profile.get("dietary_pattern") or "").strip().lower()
         if dietary == "vegan":
-            candidates = ["tofu", "beans"]
-        elif dietary == "vegetarian":
-            candidates = ["eggs", "tofu", "beans"]
-        elif dietary == "pescatarian":
-            candidates = ["fish", "eggs", "beans"]
-        else:
-            candidates = ["lean chicken", "lean beef", "fish", "beans"]
-    for candidate in candidates:
+            return ["tofu", "beans"]
+        if dietary == "vegetarian":
+            return ["eggs", "tofu", "beans"]
+        if dietary == "pescatarian":
+            return ["fish", "eggs", "beans"]
+        return ["lean chicken", "lean beef", "fish", "beans"]
+    return []
+
+
+def _fallback_review_suggestion(item: str, profile: dict) -> str:
+    for candidate in _review_candidates(item, profile):
         if _profile_allows_suggestion(candidate, profile):
             return candidate
     return str(item or "").strip()
@@ -289,8 +291,13 @@ def _build_ingredient_review(raw_ingredients: list[str], food_ingredients: list[
         if not ingredient_text:
             continue
         display_original = raw_list[index] if index < len(raw_list) else ingredient_text
-        suggestion = ai_suggestions.get(ingredient_text.lower()) or {}
-        suggested = str(suggestion.get("suggested") or "").strip() or _fallback_review_suggestion(ingredient_text, profile)
+        deterministic_candidates = _review_candidates(display_original, profile) or _review_candidates(ingredient_text, profile)
+        if deterministic_candidates:
+            suggested = next((candidate for candidate in deterministic_candidates if _profile_allows_suggestion(candidate, profile)), ingredient_text)
+            suggestion = {}
+        else:
+            suggestion = ai_suggestions.get(ingredient_text.lower()) or ai_suggestions.get(display_original.lower()) or {}
+            suggested = str(suggestion.get("suggested") or "").strip() or ingredient_text
         if not _profile_allows_suggestion(suggested, profile):
             suggested = ingredient_text
         reason = str(suggestion.get("reason") or "").strip()
