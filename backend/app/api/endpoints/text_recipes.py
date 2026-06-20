@@ -127,20 +127,35 @@ def _precheck_ingredient_input(raw_ingredients: list[str], *, mode: str, tier: s
     risk_by_name = risks.get("risk_by_name") or {}
     safe_food = []
     risk_filtered_out = []
+    needs_clarification = []
     for item in classified["food"]:
-        key = str(item or "").strip().lower()
+        key = _review_key(item)
         risk = (risk_by_name.get(key) or {}).get("risk") or "ok"
-        if risk in {"avoid", "needs_clarification"}:
+        if risk == "avoid":
             risk_filtered_out.append(item)
         else:
             safe_food.append(item)
+            if risk == "needs_clarification":
+                needs_clarification.append(item)
     if safe_food:
         classified["food"] = safe_food
         classified["risk_filtered_out"] = risk_filtered_out
+        classified["needs_clarification"] = needs_clarification
         classified["risk_by_name"] = risk_by_name
-    pipeline._ensure_diabetes_friendly_or_raise(classified["food"], mode=mode, tier=tier)
     if not review_approved:
-        classified["ingredient_review"] = _build_ingredient_review(review_pairs, classified["food"], user)
+        classified["ingredient_review"] = _build_ingredient_review(review_pairs, classified["food"], user, risk_by_name)
+        if classified.get("ingredient_review"):
+            classified["normalization"] = normalized
+            classified["source"] = ",".join(
+                label
+                for label in (
+                    f"normalizer:{normalized.get('source')}" if normalized.get("source") else "",
+                    f"classifier:{classified.get('source')}" if classified.get("source") else "",
+                )
+                if label
+            )
+            return classified
+    pipeline._ensure_diabetes_friendly_or_raise(classified["food"], mode=mode, tier=tier)
     classified["normalization"] = normalized
     classified["source"] = ",".join(
         label
@@ -262,6 +277,12 @@ def _review_candidates(item: str, profile: dict) -> list[str]:
         return ["brown rice", "cauliflower rice"]
     if key in {"pasta", "spaghetti", "noodles"}:
         return ["wholewheat pasta", "courgette noodles"]
+    if key == "cereal":
+        return ["unsweetened bran cereal", "rolled oats"]
+    if key in {"potato", "potatoes"}:
+        return ["small new potatoes", "sweet potato"]
+    if key == "flour":
+        return ["almond flour", "wholemeal flour"]
     if key in {"meat", "protein"}:
         dietary = str(profile.get("dietary_pattern") or "").strip().lower()
         if dietary == "vegan":
@@ -281,7 +302,7 @@ def _fallback_review_suggestion(item: str, profile: dict) -> str:
     return str(item or "").strip()
 
 
-def _build_ingredient_review(review_pairs: list[dict], food_ingredients: list[str], user: User | None) -> dict | None:
+def _build_ingredient_review(review_pairs: list[dict], food_ingredients: list[str], user: User | None, risk_by_name: dict | None = None) -> dict | None:
     profile = _ingredient_review_profile(user)
     items: list[dict] = []
     final_ingredients: list[str] = []
@@ -333,8 +354,29 @@ def _build_ingredient_review(review_pairs: list[dict], food_ingredients: list[st
         ingredient_text = pair["ingredient"]
         display_original = pair["original"] or ingredient_text
         deterministic_candidates = _review_candidates(display_original, profile) or _review_candidates(ingredient_text, profile)
+        options = [candidate for candidate in deterministic_candidates if _profile_allows_suggestion(candidate, profile)]
+        risk = ((risk_by_name or {}).get(_review_key(ingredient_text)) or {}).get("risk") or "ok"
+        needs_choice = risk == "needs_clarification" or _review_key(display_original) in {"meat", "protein"}
+        review_index = len(items)
+        if needs_choice and options:
+            suggested = options[0]
+            reason = ((risk_by_name or {}).get(_review_key(ingredient_text)) or {}).get("reason") or "Choose the best profile-safe option."
+            final_ingredients.append(suggested)
+            item = {
+                "type": "choice",
+                "original": display_original,
+                "suggested": suggested,
+                "options": options[:5],
+                "reason": reason,
+                "changed": True,
+                "review_index": review_index,
+            }
+            changed = True
+            items.append(item)
+            continue
+
         if deterministic_candidates:
-            suggested = next((candidate for candidate in deterministic_candidates if _profile_allows_suggestion(candidate, profile)), ingredient_text)
+            suggested = options[0] if options else ingredient_text
             suggestion = {}
         else:
             suggestion = ai_suggestions.get(ingredient_text.lower()) or ai_suggestions.get(display_original.lower()) or {}
@@ -345,7 +387,7 @@ def _build_ingredient_review(review_pairs: list[dict], food_ingredients: list[st
         if not reason and suggested.lower() != display_original.lower():
             reason = "Better fit for diabetes-friendly recipe generation."
         final_ingredients.append(suggested or ingredient_text)
-        item = {"original": display_original, "suggested": suggested or ingredient_text, "reason": reason}
+        item = {"type": "adjustment", "original": display_original, "suggested": suggested or ingredient_text, "reason": reason, "review_index": review_index}
         if item["suggested"].strip().lower() != display_original.lower():
             changed = True
             item["changed"] = True
@@ -357,7 +399,7 @@ def _build_ingredient_review(review_pairs: list[dict], food_ingredients: list[st
         return None
     return {
         "code": "ingredient_review_required",
-        "message": "We found a few profile-safe ingredient matches for more diabetes-friendly recipes. Please review before generating.",
+        "message": "Review these profile-safe ingredient matches before generating recipes.",
         "items": items,
         "changes": [item for item in items if item.get("changed")],
         "final_ingredients": final_ingredients,

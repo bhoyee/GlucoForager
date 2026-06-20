@@ -36,7 +36,7 @@ class IngredientRiskClassifier:
 
     def _cache_key(self, tier: str, items: List[str]) -> str:
         normalized = sorted({self._normalize(i) for i in (items or []) if self._normalize(i)})
-        raw = json.dumps({"version": 4, "tier": tier, "items": normalized}, sort_keys=True)
+        raw = json.dumps({"version": 5, "tier": tier, "items": normalized}, sort_keys=True)
         return f"ingrisk:{hashlib.sha256(raw.encode()).hexdigest()}"
 
     def _ruleset_check(self, items: List[str]) -> Dict[str, Dict[str, str]]:
@@ -77,6 +77,11 @@ class IngredientRiskClassifier:
             "high fiber pasta",
             "high fibre pasta",
             "wholegrain noodles",
+            "oats",
+            "porridge",
+            "porridge oats",
+            "rolled oats",
+            "oatmeal",
         }
         result: Dict[str, Dict[str, str]] = {}
         for item in items:
