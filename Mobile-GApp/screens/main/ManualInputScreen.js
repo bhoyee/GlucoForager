@@ -837,9 +837,9 @@ export default function ManualInputScreen() {
             <View style={styles.reviewList}>
               {(ingredientReview?.changes || []).slice(0, 6).map((item, index) => (
                 <View key={(item.original || 'item') + '-' + (item.suggested || index)} style={styles.reviewRow}>
-                  <Text style={styles.reviewOriginal} numberOfLines={1}>{item.original}</Text>
+                  <Text style={styles.reviewOriginal}>{item.original}</Text>
                   <Ionicons name="arrow-forward" size={15} color={Colors.textMuted} />
-                  <Text style={styles.reviewSuggested} numberOfLines={1}>{item.suggested}</Text>
+                  <Text style={styles.reviewSuggested}>{item.suggested}</Text>
                 </View>
               ))}
             </View>
@@ -1046,22 +1046,26 @@ const styles = StyleSheet.create({
   },
   reviewRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     paddingHorizontal: 12,
-    paddingVertical: 11,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F5E7BD',
     gap: 8,
   },
   reviewOriginal: {
     flex: 1,
+    minWidth: 0,
     fontSize: 13,
+    lineHeight: 18,
     color: Colors.textLight,
     textDecorationLine: 'line-through',
   },
   reviewSuggested: {
     flex: 1,
+    minWidth: 0,
     fontSize: 13,
+    lineHeight: 18,
     color: Colors.text,
     fontWeight: '800',
   },
