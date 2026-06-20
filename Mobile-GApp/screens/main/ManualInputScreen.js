@@ -47,6 +47,7 @@ export default function ManualInputScreen() {
   const phaseRef = useRef(null);
   const [activeJobId, setActiveJobId] = useState(null);
   const [statusLine, setStatusLine] = useState('');
+  const [ingredientReview, setIngredientReview] = useState(null);
   const [scanStatus, setScanStatus] = useState({
     remaining: null,
     isPremium: false,
@@ -334,7 +335,7 @@ export default function ManualInputScreen() {
     };
   }, [isLoading, isEatNow]);
 
-  const handleJobResult = (result, normalized) => {
+  const handleJobResult = (result, normalized, reviewWarning = null) => {
     const recipes = result?.results || [];
     if (!recipes.length) {
       Alert.alert('No recipes found', 'Try different ingredients and try again.');
@@ -346,11 +347,11 @@ export default function ManualInputScreen() {
       source: 'text',
       detectedIngredients: result?.detected || [],
       filteredOut: result?.filtered_out || [],
-      warning: result?.warning || null,
+      warning: result?.warning || reviewWarning || null,
     });
   };
 
-  const pollJob = async (jobId, normalized) => {
+  const pollJob = async (jobId, normalized, reviewWarning = null) => {
     try {
       const token = await AsyncStorage.getItem('userToken');
       if (!token) {
@@ -371,7 +372,7 @@ export default function ManualInputScreen() {
         stopPolling();
         setIsLoading(false);
         setActiveJobId(null);
-        handleJobResult(data.result, normalized);
+        handleJobResult(data.result, normalized, reviewWarning);
       } else if (data.status === 'failed') {
         stopPolling();
         setIsLoading(false);
@@ -387,7 +388,7 @@ export default function ManualInputScreen() {
     }
   };
 
-  const handleFindRecipes = async (overrideIngredients) => {
+  const handleFindRecipes = async (overrideIngredients, options = {}) => {
     if (isLoading) return;
     const mode = route.params?.mode;
     const sourceIngredients = Array.isArray(overrideIngredients) ? overrideIngredients : ingredients;
@@ -504,6 +505,7 @@ export default function ManualInputScreen() {
           mode: mode || undefined,
           exclude_titles: excludeTitles,
           variety_mode: varietyMode || undefined,
+          ingredient_review_approved: Boolean(options.reviewApproved),
         }),
         signal: controller.signal,
         },
@@ -537,6 +539,11 @@ export default function ManualInputScreen() {
         setIsLoading(false);
         return;
       }
+      if (data?.status === 'review_required' && data?.review) {
+        setIngredientReview(data.review);
+        setIsLoading(false);
+        return;
+      }
       if (!data?.job_id) {
         Alert.alert('Request failed', 'Unable to start recipe generation.');
         setIsLoading(false);
@@ -544,9 +551,10 @@ export default function ManualInputScreen() {
       }
       const jobId = data.job_id;
       setActiveJobId(jobId);
-      await pollJob(jobId, normalizedUnique);
+      const reviewWarning = options.reviewWarning || null;
+      await pollJob(jobId, normalizedUnique, reviewWarning);
       pollingRef.current = setInterval(() => {
-        pollJob(jobId, normalizedUnique);
+        pollJob(jobId, normalizedUnique, reviewWarning);
       }, 3000);
       scheduleLongWaitNotice();
     } catch (error) {
@@ -568,6 +576,39 @@ export default function ManualInputScreen() {
     stopPolling();
     setActiveJobId(null);
     setIsLoading(false);
+  };
+
+
+  const handleApproveIngredientReview = () => {
+    const finalIngredients = Array.isArray(ingredientReview?.final_ingredients)
+      ? ingredientReview.final_ingredients.map((item) => `${item || ''}`.trim()).filter(Boolean)
+      : [];
+    if (!finalIngredients.length) {
+      setIngredientReview(null);
+      return;
+    }
+    const reviewWarning = {
+      code: 'ingredient_adjustments_applied',
+      message: 'Some ingredients were adjusted to better fit diabetes-friendly recipes.',
+      excluded: [],
+      changes: ingredientReview?.changes || [],
+      source: 'ingredient_review',
+    };
+    setIngredientReview(null);
+    setIngredients(finalIngredients);
+    setTimeout(() => {
+      handleFindRecipes(finalIngredients, { reviewApproved: true, reviewWarning });
+    }, 120);
+  };
+
+  const handleEditIngredientReview = () => {
+    const finalIngredients = Array.isArray(ingredientReview?.final_ingredients)
+      ? ingredientReview.final_ingredients.map((item) => `${item || ''}`.trim()).filter(Boolean)
+      : [];
+    setIngredientReview(null);
+    if (finalIngredients.length) {
+      setIngredients(finalIngredients);
+    }
   };
 
   const modeParam = route.params?.mode;
@@ -781,6 +822,38 @@ export default function ManualInputScreen() {
           </TouchableOpacity>
         </View>
       ) : null}
+
+      <Modal transparent visible={Boolean(ingredientReview)} animationType="fade">
+        <View style={styles.reviewOverlay}>
+          <View style={styles.reviewCard}>
+            <View style={styles.reviewIconWrap}>
+              <Ionicons name="shield-checkmark-outline" size={28} color={Colors.warning} />
+            </View>
+            <Text style={styles.reviewTitle}>Review ingredient matches</Text>
+            <Text style={styles.reviewText}>
+              We found profile-safe matches that may work better for diabetes-friendly recipes. Please approve before generating.
+            </Text>
+
+            <View style={styles.reviewList}>
+              {(ingredientReview?.changes || []).slice(0, 6).map((item, index) => (
+                <View key={(item.original || 'item') + '-' + (item.suggested || index)} style={styles.reviewRow}>
+                  <Text style={styles.reviewOriginal} numberOfLines={1}>{item.original}</Text>
+                  <Ionicons name="arrow-forward" size={15} color={Colors.textMuted} />
+                  <Text style={styles.reviewSuggested} numberOfLines={1}>{item.suggested}</Text>
+                </View>
+              ))}
+            </View>
+
+            <TouchableOpacity style={styles.reviewPrimaryButton} onPress={handleApproveIngredientReview}>
+              <Ionicons name="checkmark-circle-outline" size={19} color="white" />
+              <Text style={styles.reviewPrimaryText}>Generate with suggestions</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.reviewSecondaryButton} onPress={handleEditIngredientReview}>
+              <Text style={styles.reviewSecondaryText}>Edit ingredients first</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
       <Modal transparent visible={isLoading} animationType="fade">
         <View style={styles.loadingOverlay}>
           <View style={styles.loadingTopBadge}>
@@ -922,6 +995,105 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
+  },
+
+  reviewOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(7, 29, 24, 0.72)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 22,
+  },
+  reviewCard: {
+    width: '100%',
+    maxWidth: 390,
+    backgroundColor: Colors.surface,
+    borderRadius: 24,
+    padding: 22,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowOffset: { width: 0, height: 18 },
+    shadowRadius: 28,
+    elevation: 10,
+  },
+  reviewIconWrap: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: '#FFF8E6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  reviewTitle: {
+    fontSize: 21,
+    fontWeight: '800',
+    color: Colors.text,
+  },
+  reviewText: {
+    marginTop: 8,
+    fontSize: 14,
+    lineHeight: 21,
+    color: Colors.textLight,
+  },
+  reviewList: {
+    marginTop: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#F2DCA2',
+    backgroundColor: '#FFFBF0',
+    overflow: 'hidden',
+  },
+  reviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F5E7BD',
+    gap: 8,
+  },
+  reviewOriginal: {
+    flex: 1,
+    fontSize: 13,
+    color: Colors.textLight,
+    textDecorationLine: 'line-through',
+  },
+  reviewSuggested: {
+    flex: 1,
+    fontSize: 13,
+    color: Colors.text,
+    fontWeight: '800',
+  },
+  reviewPrimaryButton: {
+    marginTop: 18,
+    height: 50,
+    borderRadius: 16,
+    backgroundColor: Colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  reviewPrimaryText: {
+    color: 'white',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  reviewSecondaryButton: {
+    marginTop: 10,
+    height: 46,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surface,
+  },
+  reviewSecondaryText: {
+    color: Colors.text,
+    fontSize: 14,
+    fontWeight: '800',
   },
   loadingOverlay: {
     flex: 1,
