@@ -254,9 +254,10 @@ class IngredientNormalizer:
 
         if to_normalize and self.client:
             prompt = (
-                "Normalize typed food ingredient names for recipe generation. Correct only obvious spelling, "
-                "spacing, and singular/plural issues. Do not replace one food with a different food, do not add "
-                "new ingredients, and do not make diabetes judgments here. If the intended food is unclear, keep "
+                "Normalize typed food ingredient names for recipe generation. Correct obvious spelling, spacing, "
+                "singular/plural issues, and clear food-form names into the usual recipe ingredient name. "
+                "Do not replace one food with a different unrelated food, do not add extra ingredients, "
+                "and do not make diabetes judgments here. If the intended food is unclear, keep "
                 "the original text. Return ONLY JSON in this format: "
                 '{"items":[{"input":"<exact input>","normalized":"<normalized ingredient>"}]}. '
                 "Use the exact input strings from the input list."
