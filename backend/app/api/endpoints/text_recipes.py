@@ -116,6 +116,7 @@ def _precheck_ingredient_input(raw_ingredients: list[str], *, mode: str, tier: s
         return {"food": [], "non_food": [], "source": "mode", "normalization": {"corrections": []}}
 
     normalized = normalizer.normalize(raw_ingredients)
+    review_pairs = _ingredient_review_pairs(raw_ingredients, normalized.get("ingredients") or [])
     classified = classifier.classify(normalized["ingredients"])
     if not classified["food"]:
         raise IngredientValidationError(
@@ -139,7 +140,7 @@ def _precheck_ingredient_input(raw_ingredients: list[str], *, mode: str, tier: s
         classified["risk_by_name"] = risk_by_name
     pipeline._ensure_diabetes_friendly_or_raise(classified["food"], mode=mode, tier=tier)
     if not review_approved:
-        classified["ingredient_review"] = _build_ingredient_review(raw_ingredients, classified["food"], user)
+        classified["ingredient_review"] = _build_ingredient_review(review_pairs, classified["food"], user)
     classified["normalization"] = normalized
     classified["source"] = ",".join(
         label
@@ -150,6 +151,40 @@ def _precheck_ingredient_input(raw_ingredients: list[str], *, mode: str, tier: s
         if label
     )
     return classified
+
+def _review_key(value: str) -> str:
+    return " ".join(str(value or "").strip().lower().replace("-", " ").split())
+
+
+def _ingredient_review_pairs(raw_ingredients: list[str], normalized_ingredients: list[str]) -> list[dict]:
+    raw_items = [str(item or "").strip() for item in raw_ingredients or [] if str(item or "").strip()]
+    normalized_items = [str(item or "").strip() for item in normalized_ingredients or [] if str(item or "").strip()]
+    pairs: list[dict] = []
+    used_indexes: set[int] = set()
+
+    for raw in raw_items:
+        raw_key = _review_key(raw)
+        match_index = next(
+            (
+                index
+                for index, normalized in enumerate(normalized_items)
+                if index not in used_indexes and _review_key(normalized) == raw_key
+            ),
+            None,
+        )
+        if match_index is None and len(normalized_items) == len(raw_items):
+            candidate_index = len(pairs)
+            if candidate_index < len(normalized_items) and candidate_index not in used_indexes:
+                match_index = candidate_index
+        if match_index is None:
+            continue
+        used_indexes.add(match_index)
+        pairs.append({"original": raw, "ingredient": normalized_items[match_index]})
+
+    for index, normalized in enumerate(normalized_items):
+        if index not in used_indexes:
+            pairs.append({"original": normalized, "ingredient": normalized})
+    return pairs
 
 def _clean_profile_list(value) -> list[str]:
     if not isinstance(value, list):
@@ -246,14 +281,23 @@ def _fallback_review_suggestion(item: str, profile: dict) -> str:
     return str(item or "").strip()
 
 
-def _build_ingredient_review(raw_ingredients: list[str], food_ingredients: list[str], user: User | None) -> dict | None:
+def _build_ingredient_review(review_pairs: list[dict], food_ingredients: list[str], user: User | None) -> dict | None:
     profile = _ingredient_review_profile(user)
     items: list[dict] = []
     final_ingredients: list[str] = []
     changed = False
     ai_suggestions: dict[str, dict] = {}
+    allowed_food_keys = {_review_key(item) for item in food_ingredients or [] if str(item or "").strip()}
+    review_items = [
+        {
+            "original": str(pair.get("original") or "").strip(),
+            "ingredient": str(pair.get("ingredient") or "").strip(),
+        }
+        for pair in review_pairs or []
+        if str(pair.get("ingredient") or "").strip() and _review_key(str(pair.get("ingredient") or "")) in allowed_food_keys
+    ]
 
-    if food_ingredients and normalizer.client:
+    if review_items and normalizer.client:
         prompt = (
             "Review typed ingredients before diabetes-friendly recipe generation. Suggest a clearer or more "
             "diabetes-friendly equivalent only when the user's term is vague, refined, or a common food-form name. "
@@ -268,7 +312,7 @@ def _build_ingredient_review(raw_ingredients: list[str], food_ingredients: list[
                 "messages": [
                     {"role": "system", "content": "You safely review food ingredients for a diabetes food app."},
                     {"role": "user", "content": prompt},
-                    {"role": "user", "content": json.dumps({"ingredients": food_ingredients, "profile": profile})},
+                    {"role": "user", "content": json.dumps({"ingredients": [item["ingredient"] for item in review_items], "profile": profile})},
                 ],
                 "temperature": 0,
             }
@@ -285,12 +329,9 @@ def _build_ingredient_review(raw_ingredients: list[str], food_ingredients: list[
         except Exception as exc:  # noqa: BLE001
             logger.warning("Ingredient review suggestion failed: %s", exc)
 
-    raw_list = [str(item or "").strip() for item in raw_ingredients or [] if str(item or "").strip()]
-    for index, original in enumerate(food_ingredients or []):
-        ingredient_text = str(original or "").strip()
-        if not ingredient_text:
-            continue
-        display_original = raw_list[index] if index < len(raw_list) else ingredient_text
+    for pair in review_items:
+        ingredient_text = pair["ingredient"]
+        display_original = pair["original"] or ingredient_text
         deterministic_candidates = _review_candidates(display_original, profile) or _review_candidates(ingredient_text, profile)
         if deterministic_candidates:
             suggested = next((candidate for candidate in deterministic_candidates if _profile_allows_suggestion(candidate, profile)), ingredient_text)
@@ -320,7 +361,7 @@ def _build_ingredient_review(raw_ingredients: list[str], food_ingredients: list[
         "items": items,
         "changes": [item for item in items if item.get("changed")],
         "final_ingredients": final_ingredients,
-        "original_ingredients": raw_ingredients,
+        "original_ingredients": [item.get("original") for item in review_pairs or [] if item.get("original")],
     }
 
 def _filtered_items_for_response(classified: dict) -> list[str]:
