@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 import time
 from typing import Any, Dict, List
 
@@ -58,10 +58,18 @@ class AIPipeline:
             "too_few_recipes",
             "empty_or_not_list",
         )
+        if reason_text.startswith("insufficient_source_ingredient_match"):
+            return RecipeGenerationError(
+                "I couldn't use enough of the ingredients you typed to make reliable diabetes-friendly recipes. "
+                "Please reword one item or add one more ingredient you have.",
+                code="recipe_validation_failed",
+                internal_message=f"{internal_prefix}: {reason_text}",
+                error_type="invalid_input",
+            )
         if any(reason_text.startswith(prefix) for prefix in actionable_reasons):
             return RecipeGenerationError(
-                "We need a little more balance to build diabetes-friendly recipes. "
-                "Add a protein like eggs, chicken, fish, tofu, or beans, plus one non-starchy vegetable.",
+                "I couldn't build reliable diabetes-friendly recipes from those ingredients yet. "
+                "Please reword one item or add one more ingredient you have.",
                 code="recipe_validation_failed",
                 internal_message=f"{internal_prefix}: {reason_text}",
                 error_type="invalid_input",
@@ -204,73 +212,21 @@ class AIPipeline:
                     f"{reason or 'Please choose a lower-sugar or less refined option.'}",
                 )
 
-            starchy_keywords = [
-                "yam",
-                "potato",
-                "cassava",
-                "plantain",
-                "rice",
-                "pasta",
-                "noodle",
-                "bread",
-                "flour",
-                "semolina",
-                "garri",
-                "fufu",
-            ]
-            protein_keywords = [
-                "chicken",
-                "turkey",
-                "beef",
-                "pork",
-                "fish",
-                "salmon",
-                "tuna",
-                "egg",
-                "eggs",
-                "tofu",
-                "beans",
-                "lentil",
-                "lentils",
-                "chickpea",
-                "chickpeas",
-            ]
-            nonstarchy_veg_keywords = [
-                "spinach",
-                "broccoli",
-                "kale",
-                "cabbage",
-                "zucchini",
-                "cauliflower",
-                "mushroom",
-                "pepper",
-                "tomato",
-                "cucumber",
-                "salad",
-                "lettuce",
-            ]
-            sugary_condiments = ["ketchup", "tomato ketchup", "syrup", "sugar", "honey", "jam"]
-
-            has_starch = any(any(k in item for k in starchy_keywords) for item in lowered)
-            has_protein = any(any(k in item for k in protein_keywords) for item in lowered)
-            has_nonstarchy_veg = any(any(k in item for k in nonstarchy_veg_keywords) for item in lowered)
-            has_sugary_condiment = any(any(k in item for k in sugary_condiments) for item in lowered)
-
-            # Hard stop: starchy/sugary sets without any protein or non-starchy veg cannot be made truly diabetes-friendly
-            # without inventing ingredients.
-            if (has_starch or has_sugary_condiment) and not (has_protein or has_nonstarchy_veg):
-                raise IngredientValidationError(
-                    "not_diabetes_friendly",
-                    "These ingredients can't reliably make a diabetes-friendly meal. Add at least one protein (eggs/fish/chicken/beans/tofu) "
-                    "and one non-starchy veg (spinach/broccoli/salad), then try again.",
-                )
         verdict = self.classifier.classify(ingredients or [])
         if verdict.get("diabetes_friendly"):
             return
         reason = verdict.get("reason") or "Ingredients may not be diabetes-friendly."
+        risk_level = str(verdict.get("risk_level") or "").strip().lower()
+        if risk_level != "high":
+            logger.info(
+                "AI diabetes classifier returned non-friendly but non-high risk; allowing generation mode=%s reason=%s",
+                mode,
+                reason,
+            )
+            return
         raise IngredientValidationError(
             "not_diabetes_friendly",
-            f"{reason} Add at least one protein (eggs/fish/chicken/beans) and one non-starchy veg (spinach/broccoli/salad), then try again.",
+            f"{reason} Please remove high-sugar or highly refined items, or add another diabetes-friendly ingredient you have.",
         )
 
     def _cap_recipe_ingredients(self, ingredients: list[str], *, limit: int = 18) -> list[str]:
@@ -643,6 +599,17 @@ class AIPipeline:
                 out.add(singular)
             return out
 
+        def _semantic_variants(text: str) -> set[str]:
+            out = set(_variants(text))
+            base = _norm(text)
+            # Ingredient-form synonyms only. This keeps matching grounded in what the user typed
+            # while allowing normal recipe wording such as "porridge" -> "oats".
+            if base in {"porridge", "oatmeal"} or "porridge oat" in base or "rolled oat" in base:
+                out.update({"oat", "oats", "oatmeal", "porridge", "porridge oats", "rolled oats"})
+            if base in {"lactose free milk", "lactose-free milk"}:
+                out.update({"lactose free milk", "lactose-free milk", "milk"})
+            return {_norm(item) for item in out if _norm(item)}
+
         def _source_terms(items: list[str] | None) -> list[str]:
             terms: list[str] = []
             seen: set[str] = set()
@@ -674,7 +641,7 @@ class AIPipeline:
             src_set = {x for x in src_norm if x}
             for src_item in expanded_source_ingredients:
                 if isinstance(src_item, str) and src_item.strip():
-                    src_variants.update(_variants(src_item))
+                    src_variants.update(_semantic_variants(src_item))
 
         def _matches_source(ingredient_name: str) -> bool:
             n = _norm(ingredient_name)
@@ -682,7 +649,7 @@ class AIPipeline:
                 return True
             if n in pantry_staples:
                 return True
-            ingredient_variants = _variants(n)
+            ingredient_variants = _semantic_variants(n)
             if n in src_set or bool(ingredient_variants & src_variants):
                 return True
             # Substring match (bounded) to handle simple variants like "ketchup" vs "tomato ketchup".
@@ -748,7 +715,7 @@ class AIPipeline:
                     for s in src:
                         if not s:
                             continue
-                        if any(f" {variant} " in f" {hay} " for variant in _variants(s)):
+                        if any(f" {variant} " in f" {hay} " for variant in _semantic_variants(s)):
                             used_sources.add(s)
                     original_source_count = len(
                         [x for x in source_ingredients if isinstance(x, str) and str(x).strip()]
@@ -811,3 +778,4 @@ class AIPipeline:
             cleaned.append(recipe)
 
         return cleaned
+
