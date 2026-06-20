@@ -834,15 +834,20 @@ export default function ManualInputScreen() {
               We found profile-safe matches that may work better for diabetes-friendly recipes. Please approve before generating.
             </Text>
 
-            <View style={styles.reviewList}>
-              {(ingredientReview?.changes || []).slice(0, 6).map((item, index) => (
+            <ScrollView
+              style={styles.reviewList}
+              contentContainerStyle={styles.reviewListContent}
+              nestedScrollEnabled
+              showsVerticalScrollIndicator={(ingredientReview?.changes || []).length > 4}
+            >
+              {(ingredientReview?.changes || []).map((item, index) => (
                 <View key={(item.original || 'item') + '-' + (item.suggested || index)} style={styles.reviewRow}>
                   <Text style={styles.reviewOriginal}>{item.original}</Text>
                   <Ionicons name="arrow-forward" size={15} color={Colors.textMuted} />
                   <Text style={styles.reviewSuggested}>{item.suggested}</Text>
                 </View>
               ))}
-            </View>
+            </ScrollView>
 
             <TouchableOpacity style={styles.reviewPrimaryButton} onPress={handleApproveIngredientReview}>
               <Ionicons name="checkmark-circle-outline" size={19} color="white" />
@@ -1007,6 +1012,7 @@ const styles = StyleSheet.create({
   reviewCard: {
     width: '100%',
     maxWidth: 390,
+    maxHeight: '86%',
     backgroundColor: Colors.surface,
     borderRadius: 24,
     padding: 22,
@@ -1038,10 +1044,13 @@ const styles = StyleSheet.create({
   },
   reviewList: {
     marginTop: 16,
+    maxHeight: 230,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#F2DCA2',
     backgroundColor: '#FFFBF0',
+  },
+  reviewListContent: {
     overflow: 'hidden',
   },
   reviewRow: {
