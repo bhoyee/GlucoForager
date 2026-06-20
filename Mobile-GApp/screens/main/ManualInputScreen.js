@@ -48,6 +48,7 @@ export default function ManualInputScreen() {
   const [activeJobId, setActiveJobId] = useState(null);
   const [statusLine, setStatusLine] = useState('');
   const [ingredientReview, setIngredientReview] = useState(null);
+  const [ingredientReviewChoices, setIngredientReviewChoices] = useState({});
   const [scanStatus, setScanStatus] = useState({
     remaining: null,
     isPremium: false,
@@ -540,6 +541,14 @@ export default function ManualInputScreen() {
         return;
       }
       if (data?.status === 'review_required' && data?.review) {
+        const defaults = {};
+        (data.review?.items || []).forEach((item, index) => {
+          if (item?.type === 'choice') {
+            const options = Array.isArray(item.options) ? item.options.filter(Boolean) : [];
+            defaults[index] = item.suggested || options[0] || '';
+          }
+        });
+        setIngredientReviewChoices(defaults);
         setIngredientReview(data.review);
         setIsLoading(false);
         return;
@@ -579,12 +588,28 @@ export default function ManualInputScreen() {
   };
 
 
-  const handleApproveIngredientReview = () => {
-    const finalIngredients = Array.isArray(ingredientReview?.final_ingredients)
+  const getReviewedIngredients = () => {
+    const items = Array.isArray(ingredientReview?.items) ? ingredientReview.items : [];
+    if (items.length) {
+      return items
+        .map((item, index) => {
+          if (item?.type === 'choice') {
+            return `${ingredientReviewChoices[index] || item.suggested || ''}`.trim();
+          }
+          return `${item?.suggested || item?.ingredient || item?.original || ''}`.trim();
+        })
+        .filter(Boolean);
+    }
+    return Array.isArray(ingredientReview?.final_ingredients)
       ? ingredientReview.final_ingredients.map((item) => `${item || ''}`.trim()).filter(Boolean)
       : [];
+  };
+
+  const handleApproveIngredientReview = () => {
+    const finalIngredients = getReviewedIngredients();
     if (!finalIngredients.length) {
       setIngredientReview(null);
+      setIngredientReviewChoices({});
       return;
     }
     const reviewWarning = {
@@ -595,6 +620,7 @@ export default function ManualInputScreen() {
       source: 'ingredient_review',
     };
     setIngredientReview(null);
+    setIngredientReviewChoices({});
     setIngredients(finalIngredients);
     setTimeout(() => {
       handleFindRecipes(finalIngredients, { reviewApproved: true, reviewWarning });
@@ -606,6 +632,7 @@ export default function ManualInputScreen() {
       ? ingredientReview.final_ingredients.map((item) => `${item || ''}`.trim()).filter(Boolean)
       : [];
     setIngredientReview(null);
+    setIngredientReviewChoices({});
     if (finalIngredients.length) {
       setIngredients(finalIngredients);
     }
@@ -831,7 +858,7 @@ export default function ManualInputScreen() {
             </View>
             <Text style={styles.reviewTitle}>Review ingredient matches</Text>
             <Text style={styles.reviewText}>
-              We found profile-safe matches that may work better for diabetes-friendly recipes. Please approve before generating.
+              Choose or approve profile-safe matches before generating recipes.
             </Text>
 
             <ScrollView
@@ -842,9 +869,29 @@ export default function ManualInputScreen() {
             >
               {(ingredientReview?.changes || []).map((item, index) => (
                 <View key={(item.original || 'item') + '-' + (item.suggested || index)} style={styles.reviewRow}>
-                  <Text style={styles.reviewOriginal}>{item.original}</Text>
-                  <Ionicons name="arrow-forward" size={15} color={Colors.textMuted} />
-                  <Text style={styles.reviewSuggested}>{item.suggested}</Text>
+                  <View style={styles.reviewRowHeader}>
+                    <Text style={styles.reviewOriginal}>{item.original}</Text>
+                    <Ionicons name="arrow-forward" size={15} color={Colors.textMuted} />
+                    <Text style={styles.reviewSuggested}>{item.suggested}</Text>
+                  </View>
+                  {item?.type === 'choice' && Array.isArray(item.options) ? (
+                    <View style={styles.reviewOptionRow}>
+                      {item.options.map((option) => {
+                        const choiceIndex = Number.isFinite(Number(item.review_index)) ? Number(item.review_index) : index;
+                        const active = (ingredientReviewChoices[choiceIndex] || item.suggested) === option;
+                        return (
+                          <TouchableOpacity
+                            key={option}
+                            style={[styles.reviewOptionChip, active && styles.reviewOptionChipActive]}
+                            onPress={() => setIngredientReviewChoices((prev) => ({ ...prev, [choiceIndex]: option }))}
+                            activeOpacity={0.85}
+                          >
+                            <Text style={[styles.reviewOptionText, active && styles.reviewOptionTextActive]}>{option}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  ) : null}
                 </View>
               ))}
             </ScrollView>
@@ -1054,13 +1101,43 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   reviewRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
     paddingHorizontal: 12,
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F5E7BD',
+    gap: 10,
+  },
+  reviewRowHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: 8,
+  },
+  reviewOptionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingLeft: 2,
+  },
+  reviewOptionChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#E6D4A5',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  reviewOptionChipActive: {
+    borderColor: Colors.primary,
+    backgroundColor: '#E7F6EF',
+  },
+  reviewOptionText: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: Colors.textLight,
+    fontWeight: '700',
+  },
+  reviewOptionTextActive: {
+    color: Colors.primaryDark,
   },
   reviewOriginal: {
     flex: 1,
