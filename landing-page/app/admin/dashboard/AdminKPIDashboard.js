@@ -97,6 +97,11 @@ export default function AdminKPIDashboard() {
     totalUsers: 0,
     freeUsers: 0,
     premiumUsers: 0,
+    trialUsers: 0,
+    cancelledActiveUsers: 0,
+    legacyGraceUsers: 0,
+    blockedUsers: 0,
+    suspendedUsers: 0,
     totalRecipes: 0,
     totalBlogPosts: 0,
   });
@@ -322,8 +327,7 @@ export default function AdminKPIDashboard() {
     try {
       const [
         totalUsers,
-        freeUsers,
-        premiumUsers,
+        accessSummaryData,
         totalRecipes,
         totalBlogPosts,
         salesData,
@@ -339,8 +343,7 @@ export default function AdminKPIDashboard() {
         healthData,
       ] = await Promise.all([
         fetchCount(),
-        fetchCount('free'),
-        fetchCount('premium'),
+        safeDashboardFetch('/api/admin/users/access-summary', { total: 0 }),
         fetch(`${API_URL}/api/admin/recipes?page=1&page_size=${PAGE_SIZE}`, {
           headers: { Authorization: `Bearer ${token}` },
         })
@@ -370,8 +373,6 @@ export default function AdminKPIDashboard() {
 
       if (
         totalUsers === null ||
-        freeUsers === null ||
-        premiumUsers === null ||
         totalBlogPosts === null ||
         salesData === null ||
         imageUsageData === null ||
@@ -381,10 +382,25 @@ export default function AdminKPIDashboard() {
         return;
       }
 
+      const accessSummary = accessSummaryData && typeof accessSummaryData === 'object' ? accessSummaryData : {};
+      const premiumUsers = Number(accessSummary.premium || 0) || 0;
+      const trialUsers = Number(accessSummary.trialing || accessSummary.trial || 0) || 0;
+      const cancelledActiveUsers = Number(accessSummary.cancelled_active || 0) || 0;
+      const legacyGraceUsers = Number(accessSummary.legacy_grace || accessSummary.grace || 0) || 0;
+      const blockedUsers = Number(accessSummary.blocked || 0) || 0;
+      const suspendedUsers = Number(accessSummary.suspended || 0) || 0;
+      const countedUsers = premiumUsers + trialUsers + cancelledActiveUsers + legacyGraceUsers + blockedUsers + suspendedUsers;
+      const freeUsers = Math.max(0, Number(totalUsers || 0) - countedUsers);
+
       setStats({
         totalUsers,
         freeUsers,
         premiumUsers,
+        trialUsers,
+        cancelledActiveUsers,
+        legacyGraceUsers,
+        blockedUsers,
+        suspendedUsers,
         totalRecipes: totalRecipes || 0,
         totalBlogPosts,
       });
@@ -408,6 +424,11 @@ export default function AdminKPIDashboard() {
         totalUsers: 0,
         freeUsers: 0,
         premiumUsers: 0,
+        trialUsers: 0,
+        cancelledActiveUsers: 0,
+        legacyGraceUsers: 0,
+        blockedUsers: 0,
+        suspendedUsers: 0,
         totalRecipes: 0,
         totalBlogPosts: 0,
       });
@@ -466,7 +487,16 @@ export default function AdminKPIDashboard() {
   }, [loadStats]);
 
   const premiumRate = stats.totalUsers ? (stats.premiumUsers / stats.totalUsers) * 100 : 0;
+  const trialRate = stats.totalUsers ? (stats.trialUsers / stats.totalUsers) * 100 : 0;
+  const cancelledActiveRate = stats.totalUsers ? (stats.cancelledActiveUsers / stats.totalUsers) * 100 : 0;
+  const legacyGraceRate = stats.totalUsers ? (stats.legacyGraceUsers / stats.totalUsers) * 100 : 0;
   const freeRate = stats.totalUsers ? (stats.freeUsers / stats.totalUsers) * 100 : 0;
+  const activeAccessUsers = stats.premiumUsers + stats.trialUsers + stats.cancelledActiveUsers + stats.legacyGraceUsers;
+  const activeAccessRate = stats.totalUsers ? (activeAccessUsers / stats.totalUsers) * 100 : 0;
+  const premiumEnd = clampPercent(premiumRate);
+  const trialEnd = clampPercent(premiumRate + trialRate);
+  const cancelledActiveEnd = clampPercent(premiumRate + trialRate + cancelledActiveRate);
+  const legacyGraceEnd = clampPercent(premiumRate + trialRate + cancelledActiveRate + legacyGraceRate);
   const contentTotal = stats.totalRecipes + stats.totalBlogPosts;
   const recipeRate = contentTotal ? (stats.totalRecipes / contentTotal) * 100 : 0;
   const textQueueLength = queueMetrics.redis?.streams?.text?.length ?? 0;
@@ -578,7 +608,7 @@ export default function AdminKPIDashboard() {
         <KpiTile
           label="Total users"
           value={formatNumber(stats.totalUsers)}
-          detail={`${formatNumber(stats.premiumUsers)} premium accounts`}
+          detail={`${formatNumber(activeAccessUsers)} currently have access`}
           href="/admin/users"
           actionLabel="Users"
         />
@@ -589,6 +619,14 @@ export default function AdminKPIDashboard() {
           tone="blue"
           href="/admin/users"
           actionLabel="Review"
+        />
+        <KpiTile
+          label="Store trials"
+          value={formatNumber(stats.trialUsers)}
+          detail={`${Math.round(clampPercent(trialRate))}% of total users`}
+          tone="orange"
+          href="/admin/users?tier=trialing"
+          actionLabel="Trials"
         />
         <KpiTile
           label="Revenue window"
@@ -612,19 +650,24 @@ export default function AdminKPIDashboard() {
             <div
               className="admin-kpi-donut"
               style={{
-                '--premium': `${clampPercent(premiumRate)}%`,
-                '--free': `${clampPercent(freeRate)}%`,
+                '--premium-end': `${premiumEnd}%`,
+                '--trial-end': `${trialEnd}%`,
+                '--cancelled-end': `${cancelledActiveEnd}%`,
+                '--grace-end': `${legacyGraceEnd}%`,
               }}
-              aria-label={`Premium users ${Math.round(clampPercent(premiumRate))} percent`}
+              aria-label={`Active access users ${Math.round(clampPercent(activeAccessRate))} percent`}
             >
               <div>
-                <strong>{Math.round(clampPercent(premiumRate))}%</strong>
-                <span>Premium</span>
+                <strong>{Math.round(clampPercent(activeAccessRate))}%</strong>
+                <span>Active access</span>
               </div>
             </div>
             <div className="admin-kpi-stack">
-              <ProgressBar label="Free users" value={freeRate} meta={formatNumber(stats.freeUsers)} />
-              <ProgressBar label="Premium users" value={premiumRate} meta={formatNumber(stats.premiumUsers)} tone="blue" />
+              <ProgressBar label="Premium active" value={premiumRate} meta={formatNumber(stats.premiumUsers)} tone="blue" />
+              <ProgressBar label="Store trials" value={trialRate} meta={formatNumber(stats.trialUsers)} tone="orange" />
+              <ProgressBar label="Cancelled, still active" value={cancelledActiveRate} meta={formatNumber(stats.cancelledActiveUsers)} tone="gold" />
+              <ProgressBar label="Grace access" value={legacyGraceRate} meta={formatNumber(stats.legacyGraceUsers)} tone="green" />
+              <ProgressBar label="Expired / no active access" value={freeRate} meta={formatNumber(stats.freeUsers)} />
             </div>
           </div>
         </SectionCard>
