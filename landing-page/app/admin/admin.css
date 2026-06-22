@@ -4948,7 +4948,7 @@
 
 .admin-kpi-tiles {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 14px;
 }
 
@@ -5073,7 +5073,13 @@
   border-radius: 50%;
   background:
     radial-gradient(circle at center, #ffffff 0 56%, transparent 57%),
-    conic-gradient(#2563eb 0 var(--premium), #dbe9e1 var(--premium) 100%);
+    conic-gradient(
+      #2563eb 0 var(--premium-end),
+      #ea580c var(--premium-end) var(--trial-end),
+      #b45309 var(--trial-end) var(--cancelled-end),
+      #2e7d32 var(--cancelled-end) var(--grace-end),
+      #dbe9e1 var(--grace-end) 100%
+    );
   display: grid;
   place-items: center;
   box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.05), 0 14px 34px rgba(15, 23, 42, 0.08);
@@ -5403,6 +5409,10 @@
 
 .admin-kpi-progress-fill.tone-gold {
   background: linear-gradient(90deg, #b45309, #eab308);
+}
+
+.admin-kpi-progress-fill.tone-orange {
+  background: linear-gradient(90deg, #ea580c, #f59e0b);
 }
 
 .admin-kpi-content-grid,
