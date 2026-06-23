@@ -32,11 +32,17 @@ export default function TrialPaywallScreen() {
   const revenueCatReady = isRevenueCatConfigured();
 
   const refreshAccessWithRetry = useCallback(async () => {
+    const accessStatuses = ['premium', 'trialing', 'trial', 'cancelled_active', 'legacy_grace', 'grace'];
     const delays = [0, 1200, 2500, 4000];
     for (const delay of delays) {
       if (delay) await wait(delay);
       const profile = await refreshUserProfile();
-      if (profile?.has_feature_access === true || profile?.subscription_tier === 'premium') {
+      const status = typeof profile?.access_status === 'string' ? profile.access_status.toLowerCase() : '';
+      if (
+        profile?.has_feature_access === true ||
+        profile?.subscription_tier === 'premium' ||
+        accessStatuses.includes(status)
+      ) {
         return true;
       }
     }
@@ -348,3 +354,4 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 });
+
