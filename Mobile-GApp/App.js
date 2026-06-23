@@ -26,6 +26,7 @@ import LoginScreen from './screens/auth/LoginScreen';
 import SignUpScreen from './screens/auth/SignUpScreen';
 import ForgotPasswordScreen from './screens/auth/ForgotPasswordScreen';
 import PremiumDetailsScreen from './screens/auth/PremiumDetailsScreen';
+import TrialPaywallScreen from './screens/auth/TrialPaywallScreen';
 import TermsScreen from './screens/main/TermsScreen';
 import PrivacyPolicyScreen from './screens/main/PrivacyPolicyScreen';
 import FoodPreferencesScreen from './screens/main/FoodPreferencesScreen';
@@ -79,7 +80,14 @@ function AppNavigator() {
     );
   }
 
-  const { userToken, isLoading, needsFoodProfileOnboarding } = authContext || {};
+  const {
+    userToken,
+    isLoading,
+    needsFoodProfileOnboarding,
+    hasFeatureAccess,
+    accessStatus,
+    requiresStoreTrial,
+  } = authContext || {};
   const [minimumSplashDone, setMinimumSplashDone] = useState(false);
   const [updatePrompt, setUpdatePrompt] = useState(null);
   const [mealPromptVisible, setMealPromptVisible] = useState(false);
@@ -116,6 +124,7 @@ function AppNavigator() {
   useEffect(() => {
     if (isLoading || !minimumSplashDone) return;
     if (!userToken) return;
+    if (hasFeatureAccess !== true) return;
     if (updatePrompt?.available) return;
     let cancelled = false;
 
@@ -137,7 +146,7 @@ function AppNavigator() {
     return () => {
       cancelled = true;
     };
-  }, [isLoading, minimumSplashDone, updatePrompt?.available, userToken]);
+  }, [hasFeatureAccess, isLoading, minimumSplashDone, updatePrompt?.available, userToken]);
 
   devLog('AppNavigator state:', { isLoading, hasToken: Boolean(userToken), hasAuthContext: !!authContext });
 
@@ -146,7 +155,20 @@ function AppNavigator() {
     return <SplashScreen />;
   }
 
-  devLog('Showing main navigation. User token:', userToken ? 'Present' : 'None');
+  const normalizedAccessStatus = typeof accessStatus === 'string' ? accessStatus.toLowerCase() : '';
+  const hasStoreBackedAccess =
+    hasFeatureAccess === true ||
+    ['premium', 'trialing', 'trial', 'cancelled_active', 'legacy_grace', 'grace'].includes(normalizedAccessStatus);
+  const shouldRequireTrialPaywall =
+    Boolean(userToken) &&
+    !needsFoodProfileOnboarding &&
+    (requiresStoreTrial === true || hasStoreBackedAccess !== true);
+
+  devLog('Showing main navigation. User token:', userToken ? 'Present' : 'None', {
+    hasStoreBackedAccess,
+    accessStatus: normalizedAccessStatus,
+    shouldRequireTrialPaywall,
+  });
 
   return (
     <NavigationContainer>
@@ -329,7 +351,12 @@ function AppNavigator() {
                 component={FoodPreferencesScreen}
                 initialParams={{ forced: true }}
               />
-              <Stack.Screen name="MainTabs" component={MainTabNavigator} />
+              <Stack.Screen name="Terms" component={TermsScreen} />
+              <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
+            </>
+          ) : shouldRequireTrialPaywall ? (
+            <>
+              <Stack.Screen name="TrialPaywall" component={TrialPaywallScreen} />
               <Stack.Screen name="Terms" component={TermsScreen} />
               <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
             </>
@@ -407,3 +434,5 @@ export default function App() {
     </SafeAreaProvider>
   );
 }
+
+
