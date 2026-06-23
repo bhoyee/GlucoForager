@@ -19,15 +19,23 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "../../context/authContext"; // Use the hook instead of useContext directly
 import { API_ENDPOINTS, API_URL } from "../../config/api";
 import { getClientInfo } from "../../utils/clientInfo";
+import {
+  configureRevenueCat,
+  getCustomerInfo,
+  isPremiumEntitled,
+  isRevenueCatConfigured,
+  presentPaywall,
+} from "../../utils/revenuecat";
 
 export default function LoginScreen() {
   const navigation = useNavigation();
-  const { signIn } = useAuth(); // Use the hook
+  const { signIn, markStoreTrialRequired } = useAuth(); // Use the hook
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingLabel, setLoadingLabel] = useState('Signing In...');
   const [focusedField, setFocusedField] = useState(null);
 
   const inputWrapperStyleFor = useMemo(() => {
@@ -47,6 +55,7 @@ export default function LoginScreen() {
     }
 
     setIsLoading(true);
+    setLoadingLabel('Signing In...');
     
     try {
       const response = await fetch(`${API_URL}${API_ENDPOINTS.LOGIN}`, {
@@ -60,14 +69,40 @@ export default function LoginScreen() {
         throw new Error(data?.detail || data?.message || 'Login failed. Please try again.');
       }
 
-      await signIn(data.access_token, data.public_id, data.refresh_token, data.profile_completed);
+      if (!isRevenueCatConfigured()) {
+        throw new Error('Payments are temporarily unavailable in this build. Please update the app or contact support.');
+      }
 
-      Alert.alert('Success', data.message || 'Login successful!', [
-        { text: 'OK' },
-      ]);
+      setLoadingLabel('Checking trial access...');
+      await configureRevenueCat({
+        token: data.access_token,
+        publicId: data.public_id,
+        email,
+        fullName: data.full_name || data.name || null,
+      });
+
+      let customerInfo = await getCustomerInfo();
+      if (!isPremiumEntitled(customerInfo)) {
+        setLoadingLabel('Opening 7-day trial...');
+        const result = await presentPaywall();
+        customerInfo = result?.customerInfo ? result.customerInfo : await getCustomerInfo();
+      }
+
+      if (!isPremiumEntitled(customerInfo)) {
+        Alert.alert(
+          'Trial required',
+          'Please start or restore your 7-day free trial to continue into GlucoForager.'
+        );
+        return;
+      }
+
+      setLoadingLabel('Confirming access...');
+      await markStoreTrialRequired();
+      await signIn(data.access_token, data.public_id, data.refresh_token, data.profile_completed);
     } catch (error) {
       Alert.alert('Error', error.message || 'Login failed. Please try again.');
     } finally {
+      setLoadingLabel('Signing In...');
       setIsLoading(false);
     }
   };
@@ -205,7 +240,7 @@ export default function LoginScreen() {
               {isLoading ? (
                 <View style={styles.loadingContainer}>
                   <Ionicons name="refresh" size={20} color="white" style={styles.loadingIcon} />
-                  <Text style={styles.loginButtonText}>Signing In...</Text>
+                  <Text style={styles.loginButtonText}>{loadingLabel}</Text>
                 </View>
               ) : (
                 <>
@@ -443,3 +478,4 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
 });
+
