@@ -20,6 +20,13 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "../../context/authContext";
 import { API_ENDPOINTS, API_URL } from "../../config/api";
 import { getClientInfo } from "../../utils/clientInfo";
+import {
+  configureRevenueCat,
+  getCustomerInfo,
+  isPremiumEntitled,
+  isRevenueCatConfigured,
+  presentPaywall,
+} from "../../utils/revenuecat";
 
 export default function SignUpScreen() {
   const navigation = useNavigation();
@@ -38,6 +45,7 @@ export default function SignUpScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingLabel, setLoadingLabel] = useState("Creating Account...");
 
   const handleChange = (field, value) => {
     setFormData({ ...formData, [field]: value });
@@ -72,6 +80,7 @@ export default function SignUpScreen() {
     }
 
     setIsLoading(true);
+    setLoadingLabel("Creating Account...");
 
     try {
       const response = await fetch(`${API_URL}${API_ENDPOINTS.SIGNUP}`, {
@@ -84,11 +93,35 @@ export default function SignUpScreen() {
         throw new Error(data?.detail || data?.message || 'Signup failed. Please try again.');
       }
 
+      if (!isRevenueCatConfigured()) {
+        throw new Error('Payments are temporarily unavailable in this build. Please update the app or contact support.');
+      }
+
+      setLoadingLabel("Opening 7-day trial...");
+      await configureRevenueCat({
+        token: data.access_token,
+        publicId: data.public_id,
+        email,
+        fullName,
+      });
+
+      const result = await presentPaywall();
+      const customerInfo = result?.customerInfo ? result.customerInfo : await getCustomerInfo();
+      if (!isPremiumEntitled(customerInfo)) {
+        Alert.alert(
+          'Trial required',
+          'Please complete the 7-day free trial confirmation to finish creating your GlucoForager account.'
+        );
+        return;
+      }
+
+      setLoadingLabel("Confirming access...");
       await markStoreTrialRequired();
       await signIn(data.access_token, data.public_id, data.refresh_token, data.profile_completed);
     } catch (error) {
       Alert.alert("Error", error.message || "Signup failed. Please try again.");
     } finally {
+      setLoadingLabel("Creating Account...");
       setIsLoading(false);
     }
   };
@@ -275,7 +308,7 @@ export default function SignUpScreen() {
               {isLoading ? (
                 <View style={styles.loadingContainer}>
                   <Ionicons name="refresh" size={20} color="white" style={styles.loadingIcon} />
-                  <Text style={styles.signUpButtonText}>Creating Account...</Text>
+                  <Text style={styles.signUpButtonText}>{loadingLabel}</Text>
                 </View>
               ) : (
                 <>
@@ -506,3 +539,4 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 });
+
