@@ -27,7 +27,7 @@ def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload")
 
     user = db.query(User).filter(User.id == int(user_id)).first()
-    if not user:
+    if not user or getattr(user, "deleted_at", None):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     if user.suspended_at:
         raise HTTPException(

@@ -16,6 +16,7 @@ const ACCESS_META = {
   expired: { label: 'Expired', badge: 'danger' },
   blocked: { label: 'Blocked', badge: 'danger' },
   suspended: { label: 'Suspended', badge: 'danger' },
+  deleted: { label: 'Deleted', badge: 'danger' },
   free: { label: 'Free', badge: 'plan-free' },
 };
 
@@ -49,6 +50,7 @@ export default function AdminUsersPage() {
   const [sortOrder, setSortOrder] = useState('desc');
   const [page, setPage] = useState(1);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [includeDeleted, setIncludeDeleted] = useState(false);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const [platformSummary, setPlatformSummary] = useState({ ios: 0, android: 0, total: 0 });
@@ -60,6 +62,7 @@ export default function AdminUsersPage() {
     premium: 0,
     blocked: 0,
     suspended: 0,
+    deleted: 0,
     total: 0,
   });
   const [platformUpdatedAt, setPlatformUpdatedAt] = useState(null);
@@ -89,6 +92,7 @@ export default function AdminUsersPage() {
     params.set('order', sortOrder);
     if (search.trim()) params.set('q', search.trim());
     if (tierFilter !== 'all') params.set('tier', tierFilter);
+    if (includeDeleted) params.set('include_deleted', '1');
     return params.toString();
   };
 
@@ -125,7 +129,7 @@ export default function AdminUsersPage() {
         setIsLoading(false);
       }
     }
-  }, [token, page, sortKey, sortOrder, search, tierFilter, router]);
+  }, [token, page, sortKey, sortOrder, search, tierFilter, includeDeleted, router]);
 
   const loadPlatformSummary = useCallback(async () => {
     if (!token) return;
@@ -172,6 +176,7 @@ export default function AdminUsersPage() {
         premium: Number(data.premium || 0),
         blocked: Number(data.blocked || 0),
         suspended: Number(data.suspended || 0),
+        deleted: Number(data.deleted || 0),
         total: Number(data.total || 0),
       });
     } catch {
@@ -286,6 +291,8 @@ export default function AdminUsersPage() {
         throw new Error(data.detail || 'Failed to delete user.');
       }
       loadUsers({ silent: true });
+      loadAccessSummary();
+      loadPlatformSummary();
       return true;
     } catch (error) {
       setMessage(error?.message || 'Failed to delete user.');
@@ -293,6 +300,55 @@ export default function AdminUsersPage() {
     }
   };
 
+  const handleRestore = async (user) => {
+    try {
+      const response = await fetch(`${API_URL}/api/admin/users/${user.id}/restore`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return false;
+      }
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || 'Failed to restore user.');
+      }
+      loadUsers({ silent: true });
+      loadAccessSummary();
+      loadPlatformSummary();
+      return true;
+    } catch (error) {
+      setMessage(error?.message || 'Failed to restore user.');
+      return false;
+    }
+  };
+
+  const handlePermanentDelete = async (user) => {
+    try {
+      const response = await fetch(`${API_URL}/api/admin/users/${user.id}/permanent`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return false;
+      }
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || 'Failed to permanently delete user.');
+      }
+      loadUsers({ silent: true });
+      loadAccessSummary();
+      loadPlatformSummary();
+      return true;
+    } catch (error) {
+      setMessage(error?.message || 'Failed to permanently delete user.');
+      return false;
+    }
+  };
   const requestAction = (type, user) => {
     setPendingAction({ type, user });
   };
@@ -316,9 +372,25 @@ export default function AdminUsersPage() {
         tone: 'secondary',
       };
     }
+    if (type === 'restore') {
+      return {
+        title: 'Restore deleted user',
+        message: `Restore ${user.email}? They will be able to sign in again if their subscription access allows it.`,
+        confirmLabel: 'Restore',
+        tone: 'secondary',
+      };
+    }
+    if (type === 'permanent_delete') {
+      return {
+        title: 'Delete forever',
+        message: `Permanently delete ${user.email}? This cannot be undone and all linked user data will be removed.`,
+        confirmLabel: 'Delete forever',
+        tone: 'danger',
+      };
+    }
     return {
       title: 'Delete user',
-      message: `Delete ${user.email} permanently? This cannot be undone.`,
+      message: `Move ${user.email} to deleted users? They will be blocked from signing in, but the record will remain visible when Include deleted is enabled.`,
       confirmLabel: 'Delete',
       tone: 'danger',
     };
@@ -334,9 +406,13 @@ export default function AdminUsersPage() {
       ok = await handleUnsuspend(pendingAction.user);
     } else if (pendingAction.type === 'delete') {
       ok = await handleDelete(pendingAction.user);
+    } else if (pendingAction.type === 'restore') {
+      ok = await handleRestore(pendingAction.user);
+    } else if (pendingAction.type === 'permanent_delete') {
+      ok = await handlePermanentDelete(pendingAction.user);
     }
     setActionBusy(false);
-    if (ok || pendingAction.type === 'delete') {
+    if (ok) {
       setPendingAction(null);
     }
   };
@@ -441,6 +517,7 @@ export default function AdminUsersPage() {
           ['premium', 'Premium', accessSummary.premium, '#fff7ed', '#9a3412'],
           ['blocked', 'Blocked', accessSummary.blocked, '#f8fafc', '#334155'],
           ['suspended', 'Suspended', accessSummary.suspended, '#f5f3ff', '#6d28d9'],
+          ['deleted', 'Deleted', accessSummary.deleted, '#fef2f2', '#991b1b'],
         ].map(([key, label, value, bg, color]) => (
           <button
             key={key}
@@ -487,6 +564,17 @@ export default function AdminUsersPage() {
           />
           {!isMobile ? 'Auto-refresh' : 'Auto'}
         </label>
+        <label className="admin-inline-toggle">
+          <input
+            type="checkbox"
+            checked={includeDeleted}
+            onChange={(event) => {
+              setIncludeDeleted(event.target.checked);
+              setPage(1);
+            }}
+          />
+          {!isMobile ? 'Include deleted' : 'Deleted'}
+        </label>
         <select
           value={tierFilter}
           onChange={(event) => {
@@ -504,6 +592,7 @@ export default function AdminUsersPage() {
           <option value="premium">Premium</option>
           <option value="blocked">Blocked</option>
           <option value="suspended">Suspended</option>
+          <option value="deleted">Deleted</option>
         </select>
         <select
           value={`${sortKey}:${sortOrder}`}
@@ -536,10 +625,11 @@ export default function AdminUsersPage() {
               <div className="admin-mobile-user-list">
                 {users.map((user) => {
                   const isSuspended = Boolean(user.suspended_at);
+                  const isDeleted = Boolean(user.deleted_at);
                   const platformLabel = getPlatformLabel(user.registered_platform);
                   
                   return (
-                    <div key={user.id} className={`admin-mobile-user-card ${isSuspended ? 'suspended' : ''}`}>
+                    <div key={user.id} className={`admin-mobile-user-card ${isSuspended ? 'suspended' : ''} ${isDeleted ? 'deleted' : ''}`}>
                       <div className="admin-mobile-user-header">
                         <div className="admin-mobile-user-info">
                           <div className="admin-mobile-user-name">{user.full_name || '--'}</div>
@@ -577,7 +667,24 @@ export default function AdminUsersPage() {
                         >
                           Details
                         </button>
-                        {isSuspended ? (
+                        {isDeleted ? (
+                          <>
+                            <button
+                              type="button"
+                              className="admin-button secondary admin-mobile-action-button"
+                              onClick={() => requestAction('restore', user)}
+                            >
+                              Restore
+                            </button>
+                            <button
+                              type="button"
+                              className="admin-button danger admin-mobile-action-button"
+                              onClick={() => requestAction('permanent_delete', user)}
+                            >
+                              Delete forever
+                            </button>
+                          </>
+                        ) : isSuspended ? (
                           <button
                             type="button"
                             className="admin-button secondary admin-mobile-action-button"
@@ -594,13 +701,15 @@ export default function AdminUsersPage() {
                             Suspend
                           </button>
                         )}
-                        <button
-                          type="button"
-                          className="admin-button danger admin-mobile-action-button"
-                          onClick={() => requestAction('delete', user)}
-                        >
-                          Delete
-                        </button>
+                        {!isDeleted ? (
+                          <button
+                            type="button"
+                            className="admin-button danger admin-mobile-action-button"
+                            onClick={() => requestAction('delete', user)}
+                          >
+                            Delete
+                          </button>
+                        ) : null}
                       </div>
                     </div>
                   );
@@ -625,10 +734,11 @@ export default function AdminUsersPage() {
                   <tbody>
                     {users.map((user) => {
                       const isSuspended = Boolean(user.suspended_at);
+                      const isDeleted = Boolean(user.deleted_at);
                       const platformLabel = getPlatformLabel(user.registered_platform);
 
                       return (
-                        <tr key={user.id} className={isSuspended ? 'admin-row-suspended' : undefined}>
+                        <tr key={user.id} className={isDeleted ? 'admin-row-deleted' : isSuspended ? 'admin-row-suspended' : undefined}>
                           <td>{user.id}</td>
                           <td>{user.full_name || '--'}</td>
                           <td>{user.email}</td>
@@ -649,7 +759,28 @@ export default function AdminUsersPage() {
                               >
                                 <IconEye />
                               </button>
-                              {isSuspended ? (
+                              {isDeleted ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="admin-icon-button"
+                                    onClick={() => requestAction('restore', user)}
+                                    title="Restore"
+                                    aria-label="Restore user"
+                                  >
+                                    <IconUnlock />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="admin-icon-button danger"
+                                    onClick={() => requestAction('permanent_delete', user)}
+                                    title="Delete forever"
+                                    aria-label="Permanently delete user"
+                                  >
+                                    <IconTrash />
+                                  </button>
+                                </>
+                              ) : isSuspended ? (
                                 <button
                                   type="button"
                                   className="admin-icon-button"
@@ -670,15 +801,17 @@ export default function AdminUsersPage() {
                                   <IconLock />
                                 </button>
                               )}
-                              <button
-                                type="button"
-                                className="admin-icon-button danger"
-                                onClick={() => requestAction('delete', user)}
-                                title="Delete"
-                                aria-label="Delete user"
-                              >
-                                <IconTrash />
-                              </button>
+                              {!isDeleted ? (
+                                <button
+                                  type="button"
+                                  className="admin-icon-button danger"
+                                  onClick={() => requestAction('delete', user)}
+                                  title="Delete"
+                                  aria-label="Delete user"
+                                >
+                                  <IconTrash />
+                                </button>
+                              ) : null}
                             </div>
                           </td>
                         </tr>
