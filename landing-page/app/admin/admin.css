@@ -1762,6 +1762,27 @@
   text-decoration: line-through;
 }
 
+
+.admin-row-deleted td {
+  color: #991b1b;
+  background: #fef2f2;
+}
+
+.admin-row-deleted td:first-child,
+.admin-row-deleted td:nth-child(2) {
+  text-decoration: line-through;
+}
+
+.admin-mobile-user-card.deleted {
+  border-color: #fecaca;
+  background: #fff7f7;
+}
+
+.admin-mobile-user-card.deleted .admin-mobile-user-name,
+.admin-mobile-user-card.deleted .admin-mobile-user-email {
+  color: #991b1b;
+  text-decoration: line-through;
+}
 .admin-inline {
   display: flex;
   gap: 12px;
@@ -2730,7 +2751,8 @@
     width: 100%;
   }
 
-  .admin-inline {
+
+.admin-inline {
     flex-direction: column;
   }
 
@@ -3018,7 +3040,7 @@
   .admin-toolbar {
     grid-template-columns: repeat(2, 1fr);
   }
-  
+
   .admin-search-input {
     grid-column: span 2;
   }
@@ -3117,11 +3139,11 @@
   .admin-mobile-actions {
     grid-template-columns: 1fr;
   }
-  
+
   .admin-mobile-user-details {
     grid-template-columns: 1fr;
   }
-  
+
   .admin-pagination-button {
     min-width: 80px;
     padding: 10px 16px;
@@ -3178,7 +3200,7 @@
     margin: 20px;
     padding: 20px;
   }
-  
+
   .admin-modal-backdrop {
     padding: 20px;
   }
@@ -3520,7 +3542,7 @@
   .admin-form-actions {
     flex-direction: column;
   }
-  
+
   .admin-form-cancel,
   .admin-form-submit {
     width: 100%;
@@ -3539,7 +3561,7 @@
   .admin-field {
     margin-bottom: 4px;
   }
-  
+
   /* Make inputs more touch-friendly */
   .admin-form-input,
   .admin-form-select,
@@ -3547,27 +3569,27 @@
     font-size: 16px; /* Prevents iOS zoom */
     padding: 14px 16px;
   }
-  
+
   .admin-form-textarea {
     min-height: 150px;
   }
-  
+
   /* Stack image upload components */
   .admin-image-upload-wrapper {
     flex-direction: column;
     align-items: stretch;
   }
-  
+
   .admin-image-upload-button {
     text-align: center;
     padding: 14px;
   }
-  
+
   /* Adjust ingredient cards */
   .admin-ingredients-grid {
     grid-template-columns: 1fr;
   }
-  
+
   /* Better spacing for nutrition grid */
   .admin-nutrition-grid {
     grid-template-columns: 1fr;
@@ -3579,7 +3601,7 @@
   .admin-ingredient-quantity-row {
     grid-template-columns: 1fr;
   }
-  
+
   .admin-button-icon {
     width: 40px;
     height: 40px;
@@ -3596,16 +3618,16 @@
   .admin-image-upload-button {
     min-height: 44px; /* Minimum touch target size */
   }
-  
+
   .admin-button-small {
     min-height: 36px;
   }
-  
+
   .admin-button-icon {
     min-height: 44px;
     min-width: 44px;
   }
-  
+
   /* Increase spacing for better touch accuracy */
   .admin-ingredient-fields {
     gap: 16px;
@@ -3835,7 +3857,7 @@
   .admin-toolbar-filters {
     grid-template-columns: 1fr;
   }
-  
+
   .admin-toolbar-actions .admin-add-button {
     width: 100%;
     text-align: center;
@@ -4263,17 +4285,17 @@
   .admin-recipe-card-header {
     flex-direction: column;
   }
-  
+
   .admin-recipe-card-image,
   .admin-recipe-card-image-placeholder {
     width: 100%;
     height: 120px;
   }
-  
+
   .admin-recipe-card-actions {
     grid-template-columns: 1fr;
   }
-  
+
   .admin-pagination-btn {
     width: 100%;
   }
@@ -4288,7 +4310,7 @@
   .admin-search-input {
     min-height: 44px;
   }
-  
+
   .admin-recipe-card-actions .admin-button {
     min-height: 44px;
     display: flex;
