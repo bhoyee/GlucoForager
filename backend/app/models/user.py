@@ -30,6 +30,9 @@ class User(Base):
     premium_access_blocked_reason = Column(String, nullable=True)
     suspended_at = Column(DateTime, nullable=True)
     suspended_reason = Column(String, nullable=True)
+    deleted_at = Column(DateTime, nullable=True, index=True)
+    deleted_by_admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True, index=True)
+    delete_reason = Column(String, nullable=True)
     last_active_at = Column(DateTime, nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 

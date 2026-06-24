@@ -15,6 +15,7 @@ const ACCESS_META = {
   expired: { label: 'Expired', tone: 'danger' },
   blocked: { label: 'Blocked', tone: 'danger' },
   suspended: { label: 'Suspended', tone: 'warning' },
+  deleted: { label: 'Deleted', tone: 'danger' },
   free: { label: 'Free', tone: 'neutral' },
 };
 
@@ -282,6 +283,55 @@ export default function AdminUserDetail() {
     }
   };
 
+  const handleRestore = async () => {
+    if (!user) return false;
+    try {
+      const response = await fetch(`${API_URL}/api/admin/users/${userId}/restore`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return false;
+      }
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        setMessage(data.detail || 'Failed to restore user.');
+        return false;
+      }
+      loadUser();
+      return true;
+    } catch (error) {
+      setMessage(error?.message || 'Failed to restore user.');
+      return false;
+    }
+  };
+
+  const handlePermanentDelete = async () => {
+    if (!user) return false;
+    try {
+      const response = await fetch(`${API_URL}/api/admin/users/${userId}/permanent`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return false;
+      }
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        setMessage(data.detail || 'Failed to permanently delete user.');
+        return false;
+      }
+      router.push('/admin/users?include_deleted=1&tier=deleted');
+      return true;
+    } catch (error) {
+      setMessage(error?.message || 'Failed to permanently delete user.');
+      return false;
+    }
+  };
   if (isLoading) {
     return <div className="admin-card">Loading user...</div>;
   }
@@ -351,9 +401,25 @@ export default function AdminUserDetail() {
         tone: 'secondary',
       };
     }
+    if (action.type === 'restore') {
+      return {
+        title: 'Restore deleted user',
+        message: `Restore ${user.email}? They will be able to sign in again if their subscription access allows it.`,
+        confirmLabel: 'Restore',
+        tone: 'secondary',
+      };
+    }
+    if (action.type === 'permanent_delete') {
+      return {
+        title: 'Delete forever',
+        message: `Permanently delete ${user.email}? This cannot be undone and all linked user data will be removed.`,
+        confirmLabel: 'Delete forever',
+        tone: 'danger',
+      };
+    }
     return {
       title: 'Delete user',
-      message: `Delete ${user.email} permanently? This cannot be undone.`,
+      message: `Move ${user.email} to deleted users? They will be blocked from signing in, but the record will remain visible in admin.`,
       confirmLabel: 'Delete',
       tone: 'danger',
     };
@@ -377,7 +443,17 @@ export default function AdminUserDetail() {
     } else if (pendingAction.type === 'delete') {
       const ok = await handleDelete();
       setActionBusy(false);
-      setPendingAction(null);
+      if (ok) setPendingAction(null);
+      return;
+    } else if (pendingAction.type === 'restore') {
+      const ok = await handleRestore();
+      setActionBusy(false);
+      if (ok) setPendingAction(null);
+      return;
+    } else if (pendingAction.type === 'permanent_delete') {
+      const ok = await handlePermanentDelete();
+      setActionBusy(false);
+      if (ok) setPendingAction(null);
       return;
     }
     setActionBusy(false);
@@ -446,6 +522,7 @@ export default function AdminUserDetail() {
   const tierLabel = displayTier.toLowerCase() === 'premium' ? 'Premium' : displayTier;
   const isPremium = displayTier.toLowerCase() === 'premium';
   const isSuspended = Boolean(user.suspended_at);
+  const isDeleted = Boolean(user.deleted_at);
   const isPremiumBlocked = Boolean(user.premium_access_blocked);
   const premiumAccessBadgeLabel = user.status === 'active' ? 'Premium: Active' : 'Premium: Inactive';
   const accessMeta = getAccessMeta(user.access_status || user.subscription_tier);
@@ -498,57 +575,70 @@ export default function AdminUserDetail() {
           </button>
 
           <div className="admin-user-hero-actions">
-            <button className="admin-button" type="button" onClick={() => requestAction('grant_premium')}>
-              Grant Premium
-            </button>
-
-            <details className="admin-action-menu">
-              <summary className="admin-button secondary">More actions</summary>
-              <div className="admin-action-menu-panel">
-                {adminComp?.status === 'active' ? (
-                  <button
-                    className="admin-action-menu-item danger"
-                    type="button"
-                    onClick={() => requestAction('revoke_comp')}
-                  >
-                    Revoke comp
-                  </button>
-                ) : null}
-                {isPremiumBlocked ? (
-                  <button
-                    className="admin-action-menu-item"
-                    type="button"
-                    onClick={() => requestAction('unblock_premium')}
-                  >
-                    Unblock Premium
-                  </button>
-                ) : (
-                  <button
-                    className="admin-action-menu-item danger"
-                    type="button"
-                    onClick={() => requestAction('block_premium')}
-                  >
-                    Block Premium
-                  </button>
-                )}
-                {isSuspended ? (
-                  <button className="admin-action-menu-item" type="button" onClick={() => requestAction('unsuspend')}>
-                    Unsuspend
-                  </button>
-                ) : (
-                  <button
-                    className="admin-action-menu-item danger"
-                    type="button"
-                    onClick={() => requestAction('suspend')}
-                  >
-                    Suspend
-                  </button>
-                )}
-                <button className="admin-action-menu-item danger" type="button" onClick={() => requestAction('delete')}>
-                  Delete user
+            {!isDeleted ? (
+              <>
+                <button className="admin-button" type="button" onClick={() => requestAction('grant_premium')}>
+                  Grant Premium
                 </button>
-              </div>
-            </details>
+
+                <details className="admin-action-menu">
+                  <summary className="admin-button secondary">More actions</summary>
+                  <div className="admin-action-menu-panel">
+                    {adminComp?.status === 'active' ? (
+                      <button
+                        className="admin-action-menu-item danger"
+                        type="button"
+                        onClick={() => requestAction('revoke_comp')}
+                      >
+                        Revoke comp
+                      </button>
+                    ) : null}
+                    {isPremiumBlocked ? (
+                      <button
+                        className="admin-action-menu-item"
+                        type="button"
+                        onClick={() => requestAction('unblock_premium')}
+                      >
+                        Unblock Premium
+                      </button>
+                    ) : (
+                      <button
+                        className="admin-action-menu-item danger"
+                        type="button"
+                        onClick={() => requestAction('block_premium')}
+                      >
+                        Block Premium
+                      </button>
+                    )}
+                    {isSuspended ? (
+                      <button className="admin-action-menu-item" type="button" onClick={() => requestAction('unsuspend')}>
+                        Unsuspend
+                      </button>
+                    ) : (
+                      <button
+                        className="admin-action-menu-item danger"
+                        type="button"
+                        onClick={() => requestAction('suspend')}
+                      >
+                        Suspend
+                      </button>
+                    )}
+                    <button className="admin-action-menu-item danger" type="button" onClick={() => requestAction('delete')}>
+                      Delete user
+                    </button>
+                  </div>
+                </details>
+              </>
+            ) : (
+              <>
+                <button className="admin-button secondary" type="button" onClick={() => requestAction('restore')}>
+                  Restore user
+                </button>
+                <button className="admin-button danger" type="button" onClick={() => requestAction('permanent_delete')}>
+                  Delete forever
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -574,7 +664,8 @@ export default function AdminUserDetail() {
             <Badge tone={isPremium ? 'success' : 'neutral'} title="Subscription tier">
               {tierLabel}
             </Badge>
-            {isSuspended && user.access_status !== 'suspended' ? <Badge tone="warning">Suspended</Badge> : null}
+            {isDeleted && user.access_status !== 'deleted' ? <Badge tone="danger">Deleted</Badge> : null}
+            {isSuspended && !isDeleted && user.access_status !== 'suspended' ? <Badge tone="warning">Suspended</Badge> : null}
             {isPremiumBlocked && user.access_status !== 'blocked' ? (
               <Badge
                 tone="danger"
@@ -665,6 +756,22 @@ export default function AdminUserDetail() {
                 <div className="admin-kv-label">Suspended</div>
                 <div className="admin-kv-value">{isSuspended ? formatDateTime(user.suspended_at) : 'No'}</div>
               </div>
+              <div className="admin-kv-row">
+                <div className="admin-kv-label">Deleted</div>
+                <div className="admin-kv-value">{isDeleted ? formatDateTime(user.deleted_at) : 'No'}</div>
+              </div>
+              {isDeleted ? (
+                <>
+                  <div className="admin-kv-row">
+                    <div className="admin-kv-label">Delete reason</div>
+                    <div className="admin-kv-value">{user.delete_reason || '--'}</div>
+                  </div>
+                  <div className="admin-kv-row">
+                    <div className="admin-kv-label">Permanent delete after</div>
+                    <div className="admin-kv-value">{user.permanent_delete_at ? formatDateTime(user.permanent_delete_at) : '--'}</div>
+                  </div>
+                </>
+              ) : null}
                 <div className="admin-kv-row">
                   <div className="admin-kv-label">Premium blocked</div>
                   <div className="admin-kv-value">
