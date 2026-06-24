@@ -44,6 +44,7 @@ from ...services.trial_access_service import get_access_snapshot
 from ...services.cache_service import CacheService
 from ...services.settings_service import get_ai_guardrail_settings
 from ...services.ai_recipe_generator import AIRecipeGenerator
+from ...services.user_deletion_service import hard_delete_user, permanent_delete_at
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 admin_cache = CacheService()
@@ -59,6 +60,7 @@ ACCESS_STATUS_LABELS = {
     "expired": "Expired / no active subscription",
     "blocked": "Blocked",
     "suspended": "Suspended",
+    "deleted": "Deleted",
 }
 
 
@@ -679,6 +681,20 @@ def list_recipes(
 
 def _admin_user_access_payload(db: Session, user: User, now: datetime | None = None) -> dict:
     now = now or datetime.utcnow()
+    if getattr(user, "deleted_at", None):
+        status_value = "deleted"
+        return {
+            "access_status": status_value,
+            "access_label": ACCESS_STATUS_LABELS[status_value],
+            "has_feature_access": False,
+            "trial_active": False,
+            "trial_started_at": user.trial_started_at,
+            "trial_ends_at": user.trial_ends_at,
+            "trial_grace_active": False,
+            "trial_grace_ends_at": user.trial_grace_ends_at,
+            "trial_days_left": 0,
+        }
+
     blocked = is_premium_blocked(user, now=now)
 
     if user.suspended_at:
@@ -732,6 +748,7 @@ def list_users(
     order: str | None = None,
     page: int = 1,
     page_size: int = 20,
+    include_deleted: bool = False,
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin),
 ):
@@ -794,6 +811,15 @@ def list_users(
         .outerjoin(comp_sub_join, User.id == comp_sub_join.c.user_id)
     )
 
+    tier_key = (tier or "").lower()
+    if tier_key == "trial":
+        tier_key = "trialing"
+    elif tier_key == "grace":
+        tier_key = "legacy_grace"
+
+    if not include_deleted and tier_key != "deleted":
+        query = query.filter(User.deleted_at.is_(None))
+
     if q:
         search = f"%{q.strip().lower()}%"
         query = query.filter(
@@ -835,14 +861,10 @@ def list_users(
     legacy_grace_inactive = or_(User.trial_grace_ends_at.is_(None), User.trial_grace_ends_at <= now)
     normal_non_premium = and_(~effective_premium, User.suspended_at.is_(None), not_blocked)
 
-    tier_key = (tier or "").lower()
-    if tier_key == "trial":
-        tier_key = "trialing"
-    elif tier_key == "grace":
-        tier_key = "legacy_grace"
-
-    if tier_key in {"free", "premium", "trialing", "cancelled_active", "legacy_grace", "expired", "blocked", "suspended"}:
-        if tier_key == "premium":
+    if tier_key in {"free", "premium", "trialing", "cancelled_active", "legacy_grace", "expired", "blocked", "suspended", "deleted"}:
+        if tier_key == "deleted":
+            query = query.filter(User.deleted_at.is_not(None))
+        elif tier_key == "premium":
             query = query.filter(effective_premium, User.suspended_at.is_(None))
         elif tier_key == "free":
             query = query.filter(~effective_premium)
@@ -943,6 +965,10 @@ def list_users(
                 "premium_access_blocked_reason": user.premium_access_blocked_reason,
                 "suspended_at": user.suspended_at,
                 "suspended_reason": user.suspended_reason,
+                "deleted_at": user.deleted_at,
+                "deleted_by_admin_id": user.deleted_by_admin_id,
+                "delete_reason": user.delete_reason,
+                "permanent_delete_at": permanent_delete_at(user),
                 **access_payload,
                 "last_active_at": user.last_active_at,
                 "created_at": user.created_at,
@@ -979,6 +1005,7 @@ def users_access_summary(
         "premium": 0,
         "blocked": 0,
         "suspended": 0,
+        "deleted": 0,
         "total": 0,
     }
     for user in db.query(User).all():
@@ -997,6 +1024,7 @@ def users_access_summary(
 def _get_user_platform_counts(db: Session) -> dict:
     rows = (
         db.query(func.lower(func.coalesce(User.registered_platform, "unknown")).label("platform"), func.count(User.id).label("total"))
+        .filter(User.deleted_at.is_(None))
         .group_by(func.lower(func.coalesce(User.registered_platform, "unknown")))
         .all()
     )
@@ -1056,7 +1084,7 @@ def _build_user_growth_payload(db: Session) -> dict:
     query_start = min(week_start, year_start)
     users = (
         db.query(User)
-        .filter(User.created_at >= query_start, User.created_at < year_end)
+        .filter(User.deleted_at.is_(None), User.created_at >= query_start, User.created_at < year_end)
         .all()
     )
 
@@ -1126,7 +1154,7 @@ def export_users_excel(
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin),  # noqa: ARG001
 ):
-    users = db.query(User).order_by(User.created_at.desc(), User.id.desc()).all()
+    users = db.query(User).filter(User.deleted_at.is_(None)).order_by(User.created_at.desc(), User.id.desc()).all()
     rows = [
         "<tr><th>User name</th><th>Email</th><th>Date joined</th></tr>",
     ]
@@ -1233,6 +1261,10 @@ def get_user_detail(
         "premium_access_blocked_reason": user.premium_access_blocked_reason,
         "suspended_at": user.suspended_at,
         "suspended_reason": user.suspended_reason,
+        "deleted_at": user.deleted_at,
+        "deleted_by_admin_id": user.deleted_by_admin_id,
+        "delete_reason": user.delete_reason,
+        "permanent_delete_at": permanent_delete_at(user),
         **access_payload,
         "last_active_at": user.last_active_at,
         "created_at": user.created_at,
@@ -1421,43 +1453,63 @@ def delete_user(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-    try:
-        push_token_ids = [
-            row[0]
-            for row in db.query(PushToken.id).filter(PushToken.user_id == user.id).all()
-        ]
-        push_failure_filter = AdminPushSendFailure.user_id == user.id
-        if push_token_ids:
-            push_failure_filter = or_(
-                push_failure_filter,
-                AdminPushSendFailure.push_token_id.in_(push_token_ids),
-            )
+    now = datetime.utcnow()
+    if user.deleted_at:
+        return {"status": "deleted", "soft_deleted": True}
 
-        db.query(AdminPushSendFailure).filter(push_failure_filter).delete(synchronize_session=False)
-        db.query(PushToken).filter(PushToken.user_id == user.id).delete(synchronize_session=False)
-        db.query(UserDailyChallenge).filter(UserDailyChallenge.user_id == user.id).delete(synchronize_session=False)
-        db.query(AIJob).filter(AIJob.user_id == user.id).delete(synchronize_session=False)
-        db.query(AIRequest).filter(AIRequest.user_id == user.id).delete(synchronize_session=False)
-        db.query(Favorite).filter(Favorite.user_id == user.id).delete(synchronize_session=False)
-        db.query(MealPlan).filter(MealPlan.user_id == user.id).delete(synchronize_session=False)
-        db.query(PasswordResetToken).filter(PasswordResetToken.user_id == user.id).delete(synchronize_session=False)
-        db.query(RefreshToken).filter(RefreshToken.user_id == user.id).delete(synchronize_session=False)
-        db.query(RecipeHistory).filter(RecipeHistory.user_id == user.id).delete(synchronize_session=False)
-        db.query(ShoppingItem).filter(ShoppingItem.user_id == user.id).delete(synchronize_session=False)
-        db.query(Subscription).filter(Subscription.user_id == user.id).delete(synchronize_session=False)
-        db.query(SearchLog).filter(SearchLog.user_id == user.id).delete(synchronize_session=False)
-        db.query(UserActivityEvent).filter(UserActivityEvent.user_id == user.id).delete(synchronize_session=False)
-        db.delete(user)
-        db.commit()
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="User could not be deleted because related records still exist.",
-        ) from exc
-    return {"status": "deleted"}
+    db.query(PushToken).filter(PushToken.user_id == user.id).delete(synchronize_session=False)
+    db.query(PasswordResetToken).filter(PasswordResetToken.user_id == user.id).delete(synchronize_session=False)
+    db.query(RefreshToken).filter(RefreshToken.user_id == user.id).update(
+        {RefreshToken.revoked_at: now},
+        synchronize_session=False,
+    )
+    user.deleted_at = now
+    user.deleted_by_admin_id = current_admin.id
+    user.delete_reason = "Deleted by admin"
+    if not user.suspended_at:
+        user.suspended_at = now
+        user.suspended_reason = "Deleted by admin"
+    db.commit()
+    return {"status": "deleted", "soft_deleted": True}
 
 
+@router.post("/users/{user_id}/restore")
+def restore_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),  # noqa: ARG001
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if not user.deleted_at:
+        return {"status": "active", "restored": False}
+
+    user.deleted_at = None
+    user.deleted_by_admin_id = None
+    user.delete_reason = None
+    if user.suspended_reason == "Deleted by admin":
+        user.suspended_at = None
+        user.suspended_reason = None
+    db.commit()
+    return {"status": "restored", "restored": True}
+
+
+@router.delete("/users/{user_id}/permanent")
+def permanently_delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),  # noqa: ARG001
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if not user.deleted_at:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Soft delete the user before permanently deleting them.")
+
+    hard_delete_user(db, user)
+    db.commit()
+    return {"status": "permanently_deleted"}
 @router.post("/recipes/generate-drafts")
 def generate_recipe_drafts(
     payload: RecipeGenerateDraftsPayload,

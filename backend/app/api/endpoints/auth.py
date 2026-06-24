@@ -231,7 +231,7 @@ def login(
             # Avoid account enumeration; do not reveal whether email exists.
             detail="Invalid email or password.",
         )
-    if user.suspended_at:
+    if user.suspended_at or getattr(user, "deleted_at", None):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account locked. Contact support: hello@glucoforager.com",
@@ -295,7 +295,7 @@ def login_alias(
             # Avoid account enumeration; do not reveal whether email exists.
             detail="Invalid email or password.",
         )
-    if user.suspended_at:
+    if user.suspended_at or getattr(user, "deleted_at", None):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account locked. Contact support: hello@glucoforager.com",
@@ -353,7 +353,7 @@ def refresh_token(payload: RefreshTokenPayload, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == token.user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
-    if user.suspended_at:
+    if user.suspended_at or getattr(user, "deleted_at", None):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account locked. Contact support: hello@glucoforager.com",
