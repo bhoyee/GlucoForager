@@ -1,4 +1,4 @@
-﻿// screens/main/HomeScreen.js - UPDATED PRODUCTION VERSION
+// screens/main/HomeScreen.js - UPDATED PRODUCTION VERSION
 import React, { useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
@@ -658,12 +658,12 @@ export default function HomeScreen() {
     openPremiumPaywall();
   };
 
-  const getDayGreeting = () => {
+  const getDayPeriod = () => {
     const hour = new Date().getHours();
-    if (hour >= 5 && hour <= 11) return 'Good morning';
-    if (hour >= 12 && hour <= 16) return 'Good afternoon';
-    if (hour >= 17 && hour <= 21) return 'Good evening';
-    return 'Good night';
+    if (hour >= 5 && hour <= 11) return 'morning';
+    if (hour >= 12 && hour <= 16) return 'afternoon';
+    if (hour >= 17 && hour <= 21) return 'evening';
+    return 'night';
   };
 
   const getMealLabel = () => {
@@ -672,6 +672,17 @@ export default function HomeScreen() {
     if (t === 'lunch') return 'Lunch';
     if (t === 'dinner') return 'Dinner';
     return 'Snack';
+  };
+
+  const getAccessBadgeLabel = () => {
+    if (userIsPremium || currentAccessStatus === 'premium') return 'Premium';
+    const days = Number(trialDaysLeft);
+    if (['trialing', 'trial', 'legacy_grace', 'grace', 'cancelled_active'].includes(currentAccessStatus) && Number.isFinite(days) && days > 0) {
+      return `${days} day${days === 1 ? '' : 's'} trial left`;
+    }
+    if (['trialing', 'trial', 'legacy_grace', 'grace'].includes(currentAccessStatus)) return 'Trial active';
+    if (currentAccessStatus === 'cancelled_active') return 'Active until expiry';
+    return 'Start trial';
   };
 
   if (isLoading && isInitialLoad) {
@@ -696,19 +707,22 @@ export default function HomeScreen() {
       >
       <LinearGradient colors={[Colors.primaryDark, Colors.primary, Colors.primaryLight]} style={[styles.heroHeader, { paddingTop: headerPaddingTop }]}>
         <View style={styles.heroTopRow}>
-          <View>
+          <View style={styles.heroGreetingBlock}>
             <Text style={styles.greeting} numberOfLines={1} ellipsizeMode="tail">
-              {getDayGreeting()}
-              {greetingName ? (
-                <>
-                  {', '}
-                  <Text style={styles.greetingName}>{greetingName}</Text>
-                </>
-              ) : null}
+              <Text style={styles.greetingHey}>Hey</Text>
+              {greetingName ? ` ${greetingName}` : ''}
+              {`, ${getDayPeriod()}`}
             </Text>
-            <Text style={styles.subGreeting}>
-              {`It's ${getMealLabel()} time • ${getAccessLabel()}`}
-            </Text>
+            <View style={styles.subGreetingRow}>
+              <Text style={styles.subGreeting} numberOfLines={1} ellipsizeMode="tail">
+                {`${getMealLabel()} time`}
+              </Text>
+              <View style={styles.accessBadge}>
+                <Text style={styles.accessBadgeText} numberOfLines={1} ellipsizeMode="tail">
+                  {getAccessBadgeLabel()}
+                </Text>
+              </View>
+            </View>
           </View>
           <TouchableOpacity style={styles.notificationButton} onPress={() => navigation.navigate('Profile')}>
             <Ionicons name="person-outline" size={22} color="white" />
@@ -1284,20 +1298,49 @@ const styles = StyleSheet.create({
     color: Colors.textLight,
     fontWeight: '500',
   },
-  greeting: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: 'white',
+  heroGreetingBlock: {
+    flex: 1,
+    paddingRight: 12,
   },
-  greetingName: {
-    fontSize: 16,
+  greeting: {
+    fontSize: 23,
+    lineHeight: 29,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.96)',
+    letterSpacing: 0,
+  },
+  greetingHey: {
+    fontSize: 24,
     fontWeight: '900',
     color: 'white',
   },
+  subGreetingRow: {
+    marginTop: 5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
   subGreeting: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.78)',
-    marginTop: 4,
+    fontSize: 14,
+    lineHeight: 19,
+    fontWeight: '800',
+    color: 'rgba(255,255,255,0.84)',
+  },
+  accessBadge: {
+    maxWidth: '62%',
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.24)',
+  },
+  accessBadgeText: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '900',
+    color: 'white',
   },
   notificationButton: {
     width: 44,
@@ -2013,4 +2056,3 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
 });
-
