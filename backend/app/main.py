@@ -74,7 +74,7 @@ from .api.endpoints import (
 )
 from .core.config import settings
 from .core.security import decode_access_token
-from .database import Base, engine
+from .database import Base, engine, SessionLocal
 from .models import (  # ensure models are registered with SQLAlchemy
     subscription,
     user as user_model,
@@ -103,8 +103,11 @@ from .models import (  # ensure models are registered with SQLAlchemy
     staff_milestone_progress,
     staff_inbox_message,
     staff_request,
+    staff_user,
 )
 from .services.cache_service import CacheService
+from .services.demo_admin_data import get_demo_admin_response
+from .services.staff_rbac_service import StaffRBACService
 from .services.system_log_service import log_system_event
 from .services.backup_scheduler import start_backup_scheduler
 from .services.user_activity_maintenance import start_user_activity_cleanup_scheduler
@@ -347,6 +350,70 @@ def on_startup():
     except Exception as exc:  # noqa: BLE001
         logger.warning("AI job runner start failed: %s", exc)
 
+
+
+def _authorization_bearer(request: Request) -> str | None:
+    value = request.headers.get("authorization") or ""
+    if not value.lower().startswith("bearer "):
+        return None
+    token = value.split(" ", 1)[1].strip()
+    return token or None
+
+
+def _request_uses_demo_staff_token(request: Request) -> bool:
+    token = _authorization_bearer(request)
+    if not token:
+        return False
+    try:
+        payload = decode_access_token(token)
+    except Exception:
+        return False
+    if payload.get("kind") != "staff" or not payload.get("sub"):
+        return False
+    db = SessionLocal()
+    try:
+        user = db.query(staff_user.StaffUser).filter(staff_user.StaffUser.id == int(payload.get("sub"))).first()
+        if not StaffRBACService.is_active_staff(user):
+            return False
+        role_keys = {str(key).strip().lower() for key in StaffRBACService.get_user_role_keys(db, int(user.id))}
+        return bool(role_keys.intersection({"demo_admin", "demo"}))
+    except Exception:
+        return False
+    finally:
+        db.close()
+
+
+@app.middleware("http")
+async def demo_admin_data_guard(request: Request, call_next):
+    path = request.url.path or ""
+    if not path.startswith("/api/admin/"):
+        return await call_next(request)
+
+    # Let auth/session routes run normally. Demo sessions still need a real token and /me response.
+    passthrough_prefixes = (
+        "/api/admin/status",
+        "/api/admin/login",
+        "/api/admin/bootstrap",
+        "/api/admin/me",
+        "/api/admin/staff/login",
+        "/api/admin/staff/refresh",
+        "/api/admin/staff/logout",
+        "/api/admin/staff/mfa/",
+        "/api/admin/staff/password-reset/",
+    )
+    if path == "/api/admin/me" or any(path.startswith(prefix) for prefix in passthrough_prefixes):
+        return await call_next(request)
+
+    if not _request_uses_demo_staff_token(request):
+        return await call_next(request)
+
+    response = get_demo_admin_response(path, request.query_params, request.method)
+    if response is not None:
+        return response
+    return JSONResponse(
+        status_code=403,
+        content={"detail": "This demo account only uses seeded portfolio data."},
+    )
 
 @app.middleware("http")
 async def abuse_guard(request: Request, call_next):
