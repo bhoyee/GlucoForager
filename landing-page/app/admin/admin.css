@@ -6115,3 +6115,21 @@
     justify-content: space-between;
   }
 }
+
+.admin-shell.is-demo .admin-demo-header-note {
+  margin: 4px 0 0;
+  color: #476152;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.admin-demo-banner {
+  margin: 0 0 16px;
+  border-color: rgba(25, 118, 210, 0.24);
+  background: linear-gradient(135deg, rgba(25, 118, 210, 0.10), rgba(46, 125, 50, 0.08));
+  color: #153c63;
+}
+
+.admin-shell.is-demo .admin-account-dropdown-item[href="/admin/profile"] {
+  display: none;
+}

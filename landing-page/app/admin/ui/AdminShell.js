@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -720,6 +720,7 @@ export default function AdminShell({ children }) {
   const permissions = Array.isArray(session?.permissions) ? session.permissions : [];
   const roles = Array.isArray(session?.roles) ? session.roles : [];
   const isAdmin = permissions.includes('*') || permissions.includes('admin.manage') || roles.includes('admin');
+  const isDemo = Boolean(session?.is_demo) || roles.includes('demo_admin') || roles.includes('demo');
   const isMarketer = roles.includes('marketer');
   const canSeeUpdatesMenu = isAdmin || roles.includes('hr');
   const canSeeStandupNotesMenu = permissions.includes('*') || permissions.includes('dashboard_notes.manage');
@@ -730,11 +731,16 @@ export default function AdminShell({ children }) {
     if (sessionLoading) return;
     if (!session?.email) return;
 
+    if (isDemo && (pathname === '/admin/admin-dashboard' || pathname === '/admin/dashboard')) {
+      router.replace('/admin/users');
+      return;
+    }
+
     // Guard admin-only routes from non-admin staff to avoid exposing partial admin screens.
     if (!isAdmin && pathname === '/admin/admin-dashboard') {
       router.replace('/admin/dashboard');
     }
-  }, [hydrated, isAdmin, isPublicRoute, pathname, router, session?.email, sessionLoading]);
+  }, [hydrated, isAdmin, isDemo, isPublicRoute, pathname, router, session?.email, sessionLoading]);
 
   useEffect(() => {
     if (isPublicRoute) return;
@@ -779,6 +785,50 @@ export default function AdminShell({ children }) {
       if (Array.isArray(required)) return required.some((r) => permissions.includes(r));
       return permissions.includes(required);
     };
+
+    if (isDemo) {
+      return [
+        {
+          id: 'content',
+          label: 'Content',
+          defaultOpen: true,
+          items: [
+            { href: '/admin/users', label: 'Users', icon: 'users' },
+            { href: '/admin/recipes', label: 'Recipes', icon: 'recipes' },
+            { href: '/admin/recipes/ai-generator', label: 'AI Recipe Studio', icon: 'ai' },
+            { href: '/admin/recipes/new', label: 'New Recipe', icon: 'upload' },
+            { href: '/admin/tips', label: 'Daily Tips', icon: 'tips' },
+            { href: '/admin/challenge', label: 'Daily Challenge', icon: 'challenge' },
+            { href: '/admin/blog', label: 'Blog', icon: 'blog' },
+            { href: '/admin/blog/new', label: 'New Post', icon: 'upload' },
+            { href: '/admin/blog/comments', label: 'Comments', icon: 'comments' },
+          ],
+        },
+        {
+          id: 'marketing',
+          label: 'Marketing',
+          defaultOpen: true,
+          items: [
+            { href: '/admin/newsletter', label: 'Newsletter', icon: 'newsletter' },
+            { href: '/admin/newsletter/send', label: 'Send Email', icon: 'send' },
+            { href: '/admin/user-email', label: 'User Email', icon: 'email' },
+            { href: '/admin/notifications', label: 'Notifications', icon: 'notifications' },
+            { href: '/admin/push-campaigns', label: 'Push Campaigns', icon: 'push' },
+          ],
+        },
+        {
+          id: 'engineering',
+          label: 'Engineering',
+          defaultOpen: true,
+          items: [
+            { href: '/admin/system-health', label: 'System Health', icon: 'health' },
+            { href: '/admin/system-logs', label: 'System Logs', icon: 'logs' },
+            { href: '/admin/mobile-logs', label: 'Mobile Logs', icon: 'mobile' },
+            { href: '/admin/db-backups', label: 'Database Backups', icon: 'database' },
+          ],
+        },
+      ];
+    }
 
     const sections = [
       {
@@ -870,19 +920,23 @@ export default function AdminShell({ children }) {
       .filter((s) => (s.items || []).length > 0);
 
     return cleaned;
-  }, [canSeeStandupNotesMenu, canSeeUpdatesMenu, isAdmin, isMarketer, permissions, session]);
+  }, [canSeeStandupNotesMenu, canSeeUpdatesMenu, isAdmin, isDemo, isMarketer, permissions, session]);
 
-  const portalTitle = isAdmin ? 'GlucoForager Admin' : 'GlucoForager Staff Portal';
+  const portalTitle = isDemo ? 'GlucoForager Demo' : isAdmin ? 'GlucoForager Admin' : 'GlucoForager Staff Portal';
   const signedInLabel = useMemo(() => {
     if (sessionLoading) return 'Loading staff session...';
     if (!session?.email) return 'Manage recipes, blog posts, and moderation.';
+    if (isDemo) {
+      if (firstName) return `Demo walkthrough as ${firstName}`;
+      return 'Read-only demo walkthrough';
+    }
     if (isAdmin) {
       if (firstName) return `Signed in as ${firstName} (${session.email})`;
       return `Signed in as ${session.email}`;
     }
     if (firstName) return `Welcome ${firstName}`;
     return `Welcome ${session.email}`;
-  }, [firstName, isAdmin, session?.email, sessionLoading]);
+  }, [firstName, isAdmin, isDemo, session?.email, sessionLoading]);
 
   const primaryRoleLabel = useMemo(() => {
     const r = Array.isArray(roles) ? roles[0] : null;
@@ -890,6 +944,7 @@ export default function AdminShell({ children }) {
     if (!key) return '';
     if (key === 'hr') return 'HR';
     if (key === 'admin') return 'Admin';
+    if (key === 'demo_admin' || key === 'demo') return 'Demo';
     return key.charAt(0).toUpperCase() + key.slice(1);
   }, [roles]);
 
@@ -946,7 +1001,7 @@ export default function AdminShell({ children }) {
   // While loading the session, render a minimal shell without navigation to avoid content flashes.
   if (sessionLoading) {
     return (
-      <div className="admin-shell">
+      <div className={`admin-shell${isDemo ? ' is-demo' : ''}`}>
         <div className="admin-container admin-layout">
           <main className="admin-main w-full">
             <div className="admin-card">
@@ -988,7 +1043,7 @@ export default function AdminShell({ children }) {
   }
 
   return (
-    <div className="admin-shell">
+    <div className={`admin-shell${isDemo ? ' is-demo' : ''}`}>
       <div className={`admin-container admin-layout${sidebarCollapsed ? ' is-collapsed' : ''}`}>
         <div
           className={`admin-backdrop${sidebarOpen ? ' is-open' : ''}`}
@@ -1006,7 +1061,7 @@ export default function AdminShell({ children }) {
             </span>
             <div>
               <p className="admin-brand-title">GlucoForager</p>
-              <p className="admin-brand-subtitle">{isAdmin ? 'Admin Console' : 'Staff Portal'}</p>
+              <p className="admin-brand-subtitle">{isDemo ? 'Demo Portal' : isAdmin ? 'Admin Console' : 'Staff Portal'}</p>
             </div>
             <button
               className="admin-collapse-toggle"
@@ -1154,6 +1209,7 @@ export default function AdminShell({ children }) {
             <div className="admin-header-topline">
               <div>
                 <h1>{portalTitle}</h1>
+                {isDemo ? <p className="admin-demo-header-note">Read-only portfolio walkthrough. Write actions are disabled.</p> : null}
               </div>
               <div className="admin-account-menu" ref={profileMenuRef}>
                 <button
@@ -1205,7 +1261,7 @@ export default function AdminShell({ children }) {
                 </span>
               ) : null}
             </p>
-            {!sessionLoading && session?.email && profileIncomplete ? (
+            {!sessionLoading && session?.email && !isDemo && profileIncomplete ? (
               <div className="admin-alert warning" style={{ marginTop: 10 }}>
                 Your profile is incomplete — please update it now (urgent).{' '}
                 <Link className="admin-link" href="/admin/profile">
@@ -1214,6 +1270,11 @@ export default function AdminShell({ children }) {
               </div>
             ) : null}
           </header>
+          {isDemo ? (
+            <div className="admin-alert info admin-demo-banner">
+              Demo mode: this account can view selected Content, Marketing, and Engineering screens only. Data-changing actions are blocked.
+            </div>
+          ) : null}
           {children}
           {!sessionLoading && session?.email && !isAdmin ? (
             <footer className="admin-footer" role="contentinfo">
@@ -1235,4 +1296,3 @@ export default function AdminShell({ children }) {
     </div>
   );
 }
-

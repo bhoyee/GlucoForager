@@ -65,6 +65,7 @@ class StaffMeResponse(BaseModel):
     avatar_url: str | None = None
     roles: list[str]
     permissions: list[str]
+    is_demo: bool = False
 
 
 class StaffUserCreate(BaseModel):
@@ -154,6 +155,7 @@ def admin_me(
         avatar_url=getattr(current_staff, "avatar_url", None),
         roles=roles,
         permissions=perms,
+        is_demo=any(str(role).lower() in {"demo", "demo_admin"} for role in roles),
     )
 
 
