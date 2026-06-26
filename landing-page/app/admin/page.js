@@ -91,7 +91,7 @@ export default function AdminLoginPage() {
   const useDemoCredentials = () => {
     setEmail(DEMO_ADMIN_EMAIL);
     setPassword(DEMO_ADMIN_PASSWORD);
-    setMessage('Demo credentials added. Sign in to open the read-only portfolio walkthrough.');
+    setMessage('Demo credentials added. Sign in to open the read-only demo account.');
     setMessageTone('info');
   };
 
@@ -197,9 +197,6 @@ export default function AdminLoginPage() {
             </div>
           </div>
 
-          <div className="admin-auth-side-note">
-            Secure access for authorised team members and read-only portfolio reviewers.
-          </div>
         </section>
 
         <section className="admin-card admin-auth-form-card">
@@ -305,7 +302,7 @@ export default function AdminLoginPage() {
           {SHOW_DEMO_ADMIN_LOGIN && hasAdmin && !mfaRequired ? (
             <div className="admin-demo-login-card">
               <div>
-                <p className="admin-demo-login-eyebrow">Portfolio demo</p>
+                <p className="admin-demo-login-eyebrow">Demo account</p>
                 <h3>Try the read-only dashboard</h3>
                 <p>
                   Use seeded demo data to explore users, recipes, AI jobs, logs, newsletters, and engineering screens without changing live records.
