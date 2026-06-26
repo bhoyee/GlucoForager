@@ -73,7 +73,7 @@ export default function AdminLoginPage() {
         const roles = Array.isArray(me?.roles) ? me.roles : [];
         const isAdmin = perms.includes('*') || perms.includes('admin.manage') || roles.includes('admin');
         const isDemo = Boolean(me?.is_demo) || roles.includes('demo_admin') || roles.includes('demo');
-        router.push(isDemo ? '/admin/users' : isAdmin ? '/admin/admin-dashboard' : '/admin/dashboard');
+        router.push(isDemo || isAdmin ? '/admin/admin-dashboard' : '/admin/dashboard');
         return;
       }
     } catch {
