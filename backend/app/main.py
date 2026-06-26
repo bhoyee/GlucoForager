@@ -360,6 +360,21 @@ def _authorization_bearer(request: Request) -> str | None:
     return token or None
 
 
+def _apply_demo_cors_headers(request: Request, response: JSONResponse):
+    origin = request.headers.get("origin")
+    if not origin:
+        return response
+    allowed_origins = [str(item).strip() for item in (settings.cors_origins or [])]
+    if "*" not in allowed_origins and origin not in allowed_origins:
+        return response
+    response.headers["Access-Control-Allow-Origin"] = origin
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Allow-Methods"] = "GET, HEAD, OPTIONS"
+    requested_headers = request.headers.get("access-control-request-headers")
+    response.headers["Access-Control-Allow-Headers"] = requested_headers or "Authorization, Content-Type"
+    response.headers["Vary"] = "Origin"
+    return response
+
 def _request_uses_demo_staff_token(request: Request) -> bool:
     token = _authorization_bearer(request)
     if not token:
@@ -416,10 +431,13 @@ async def demo_admin_data_guard(request: Request, call_next):
 
     response = get_demo_admin_response(path, request.query_params, request.method)
     if response is not None:
-        return response
-    return JSONResponse(
-        status_code=403,
-        content={"detail": "This demo account only uses seeded portfolio data."},
+        return _apply_demo_cors_headers(request, response)
+    return _apply_demo_cors_headers(
+        request,
+        JSONResponse(
+            status_code=403,
+            content={"detail": "This demo account only uses seeded portfolio data."},
+        ),
     )
 
 @app.middleware("http")
