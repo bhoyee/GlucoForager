@@ -5,11 +5,24 @@ import { useRouter } from 'next/navigation';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
+const stringifyValue = (value) => {
+  if (value === null || value === undefined || value === '') return '';
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch (error) {
+    return String(value);
+  }
+};
+
 const parseLine = (line) => {
+  if (line && typeof line === 'object' && !Array.isArray(line)) {
+    return line;
+  }
   try {
     return JSON.parse(line);
   } catch (error) {
-    return { message: line };
+    return { message: stringifyValue(line) || 'Log entry' };
   }
 };
 
