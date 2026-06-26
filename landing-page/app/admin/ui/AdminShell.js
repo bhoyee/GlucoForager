@@ -928,10 +928,7 @@ export default function AdminShell({ children }) {
   const signedInLabel = useMemo(() => {
     if (sessionLoading) return 'Loading staff session...';
     if (!session?.email) return 'Manage recipes, blog posts, and moderation.';
-    if (isDemo) {
-      if (firstName) return `Demo walkthrough as ${firstName}`;
-      return 'Read-only demo walkthrough';
-    }
+    if (isDemo) return '';
     if (isAdmin) {
       if (firstName) return `Signed in as ${firstName} (${session.email})`;
       return `Signed in as ${session.email}`;
@@ -1211,7 +1208,6 @@ export default function AdminShell({ children }) {
             <div className="admin-header-topline">
               <div>
                 <h1>{portalTitle}</h1>
-                {isDemo ? <p className="admin-demo-header-note">Read-only portfolio walkthrough. Write actions are disabled.</p> : null}
               </div>
               <div className="admin-account-menu" ref={profileMenuRef}>
                 <button
@@ -1250,19 +1246,21 @@ export default function AdminShell({ children }) {
                 ) : null}
               </div>
             </div>
-            <p className="admin-signed-in-pill" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <span>{signedInLabel}</span>
-              {!sessionLoading && session?.email && !isAdmin && primaryRoleLabel ? (
-                <span className="admin-badge info" style={{ marginLeft: 6 }}>
-                  Role: {primaryRoleLabel}
-                </span>
-              ) : null}
-              {!sessionLoading && session?.email && !isAdmin && employeeCode ? (
-                <span className="admin-badge secondary" style={{ marginLeft: 6 }}>
-                  Employee ID: {employeeCode}
-                </span>
-              ) : null}
-            </p>
+            {!isDemo ? (
+              <p className="admin-signed-in-pill" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <span>{signedInLabel}</span>
+                {!sessionLoading && session?.email && !isAdmin && primaryRoleLabel ? (
+                  <span className="admin-badge info" style={{ marginLeft: 6 }}>
+                    Role: {primaryRoleLabel}
+                  </span>
+                ) : null}
+                {!sessionLoading && session?.email && !isAdmin && employeeCode ? (
+                  <span className="admin-badge secondary" style={{ marginLeft: 6 }}>
+                    Employee ID: {employeeCode}
+                  </span>
+                ) : null}
+              </p>
+            ) : null}
             {!sessionLoading && session?.email && !isDemo && profileIncomplete ? (
               <div className="admin-alert warning" style={{ marginTop: 10 }}>
                 Your profile is incomplete — please update it now (urgent).{' '}
@@ -1272,11 +1270,6 @@ export default function AdminShell({ children }) {
               </div>
             ) : null}
           </header>
-          {isDemo ? (
-            <div className="admin-alert info admin-demo-banner">
-              Demo mode: this account can view selected Content, Marketing, and Engineering screens only. Data-changing actions are blocked.
-            </div>
-          ) : null}
           {children}
           {!sessionLoading && session?.email && !isAdmin ? (
             <footer className="admin-footer" role="contentinfo">
