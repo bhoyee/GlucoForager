@@ -6,10 +6,13 @@ import { useRouter } from 'next/navigation';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
 const parseLine = (line) => {
+  if (line && typeof line === 'object' && !Array.isArray(line)) {
+    return normalizeLog(line, stringifyValue(line));
+  }
   try {
     return normalizeLog(JSON.parse(line), line);
   } catch (error) {
-    return { message: line, raw: line };
+    return { message: stringifyValue(line) || 'Log entry', raw: stringifyValue(line) };
   }
 };
 
