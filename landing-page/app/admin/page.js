@@ -92,7 +92,7 @@ export default function AdminLoginPage() {
     setEmail(DEMO_ADMIN_EMAIL);
     setPassword(DEMO_ADMIN_PASSWORD);
     setMessage('Demo credentials added. Sign in to open the read-only demo account.');
-    setMessageTone('info');
+    setMessageTone('warning');
   };
 
   const handleSubmit = async (event) => {
