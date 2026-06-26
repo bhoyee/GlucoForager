@@ -8,6 +8,9 @@ import { adminFetch, clearAdminTokens, setAdminTokens } from './lib/adminAuth';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 const ENABLE_BOOTSTRAP = process.env.NEXT_PUBLIC_ENABLE_ADMIN_BOOTSTRAP === 'true';
+const DEMO_ADMIN_EMAIL = process.env.NEXT_PUBLIC_DEMO_ADMIN_EMAIL || 'demo@glucoforager.com';
+const DEMO_ADMIN_PASSWORD = process.env.NEXT_PUBLIC_DEMO_ADMIN_PASSWORD || 'DemoAccess2026!';
+const SHOW_DEMO_ADMIN_LOGIN = process.env.NEXT_PUBLIC_SHOW_DEMO_ADMIN_LOGIN !== 'false';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -82,6 +85,13 @@ export default function AdminLoginPage() {
 
   const dismissMessage = () => {
     setMessage('');
+    setMessageTone('info');
+  };
+
+  const useDemoCredentials = () => {
+    setEmail(DEMO_ADMIN_EMAIL);
+    setPassword(DEMO_ADMIN_PASSWORD);
+    setMessage('Demo credentials added. Sign in to open the read-only portfolio walkthrough.');
     setMessageTone('info');
   };
 
@@ -311,6 +321,33 @@ export default function AdminLoginPage() {
               ) : null}
             </form>
           )}
+
+          {SHOW_DEMO_ADMIN_LOGIN && hasAdmin && !mfaRequired ? (
+            <div className="admin-demo-login-card">
+              <div>
+                <p className="admin-demo-login-eyebrow">Portfolio demo</p>
+                <h3>Try the read-only dashboard</h3>
+                <p>
+                  Use seeded demo data to explore users, recipes, AI jobs, logs, newsletters, and engineering screens without changing live records.
+                </p>
+              </div>
+
+              <div className="admin-demo-login-credentials" aria-label="Demo login credentials">
+                <div>
+                  <span>Email</span>
+                  <strong>{DEMO_ADMIN_EMAIL}</strong>
+                </div>
+                <div>
+                  <span>Password</span>
+                  <strong>{DEMO_ADMIN_PASSWORD}</strong>
+                </div>
+              </div>
+
+              <button className="admin-button secondary" type="button" onClick={useDemoCredentials} disabled={statusLoading || isSubmitting}>
+                Use demo login
+              </button>
+            </div>
+          ) : null}
         </section>
       </div>
     </div>
