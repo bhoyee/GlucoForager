@@ -16,6 +16,7 @@ export default function AdminDashboardPage() {
   const roles = Array.isArray(session?.roles) ? session.roles : [];
   const perms = Array.isArray(session?.permissions) ? session.permissions : [];
   const isAdmin = perms.includes('*') || perms.includes('admin.manage') || roles.includes('admin');
+  const isDemo = Boolean(session?.is_demo) || roles.includes('demo_admin') || roles.includes('demo');
 
   useEffect(() => {
     let cancelled = false;
@@ -45,9 +46,9 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     if (loading) return;
     if (!session) return;
-    if (isAdmin) return;
+    if (isAdmin || isDemo) return;
     router.replace('/admin/dashboard');
-  }, [isAdmin, loading, router, session]);
+  }, [isAdmin, isDemo, loading, router, session]);
 
   if (loading) {
     return (
@@ -56,10 +57,10 @@ export default function AdminDashboardPage() {
       </div>
     );
   }
-  if (!isAdmin) {
+  if (!isAdmin && !isDemo) {
     return (
       <div className="admin-card">
-        <EmptyState title="Admin only" body="This dashboard is only available to admin users.">
+        <EmptyState title="Admin only" body="This dashboard is available to admins and read-only demo accounts.">
           <button className="admin-button secondary" type="button" onClick={() => router.push('/admin/dashboard')}>
             Go to staff dashboard
           </button>
