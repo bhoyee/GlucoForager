@@ -6257,14 +6257,6 @@
   font-size: 15px;
 }
 
-.admin-auth-side-note {
-  border-top: 1px solid rgba(255, 255, 255, 0.14);
-  padding-top: 16px;
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 13px;
-  line-height: 1.45;
-}
-
 .admin-auth-form-card {
   padding: 28px !important;
   border-radius: 12px;
