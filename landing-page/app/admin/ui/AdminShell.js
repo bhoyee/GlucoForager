@@ -794,6 +794,7 @@ export default function AdminShell({ children }) {
           defaultOpen: true,
           items: [
             { href: '/admin/admin-dashboard', label: 'Dashboard', icon: 'dashboard' },
+            { href: '/admin/profile', label: 'Profile', icon: 'staff' },
             { href: '/admin/users', label: 'Users', icon: 'users' },
             { href: '/admin/recipes', label: 'Recipes', icon: 'recipes' },
             { href: '/admin/recipes/ai-generator', label: 'AI Recipe Studio', icon: 'ai' },

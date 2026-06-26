@@ -6129,11 +6129,6 @@
   background: linear-gradient(135deg, rgba(25, 118, 210, 0.10), rgba(46, 125, 50, 0.08));
   color: #153c63;
 }
-
-.admin-shell.is-demo .admin-account-dropdown-item[href="/admin/profile"] {
-  display: none;
-}
-
 .admin-demo-login-card {
   margin-top: 18px;
   border-radius: 16px;
@@ -6143,14 +6138,12 @@
   display: grid;
   gap: 12px;
 }
-
 .admin-demo-login-card h3 {
   margin: 2px 0 0;
   color: #0f172a;
   font-size: 16px;
   font-weight: 900;
 }
-
 .admin-demo-login-card p {
   margin: 6px 0 0;
   color: #475569;
