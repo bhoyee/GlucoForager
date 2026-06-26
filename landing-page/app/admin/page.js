@@ -188,41 +188,21 @@ export default function AdminLoginPage() {
     <div className="admin-container admin-auth-container">
       <div className="admin-auth-layout">
         <section className="admin-auth-panel">
-          <div>
-            <div className="admin-auth-brand">
-              <div className="admin-auth-mark">GF</div>
-              <div style={{ minWidth: 0 }}>
-                <h1 className="admin-auth-title">GlucoForager Portal</h1>
-                <p className="admin-auth-subtitle">Staff & admin workspace for operations, content, and support.</p>
-              </div>
-            </div>
-
-            <div className="admin-auth-kpis">
-              <div className="admin-auth-kpi">
-                <div className="admin-auth-kpi-label">Access</div>
-                <div className="admin-auth-kpi-value">Role-based permissions</div>
-              </div>
-              <div className="admin-auth-kpi">
-                <div className="admin-auth-kpi-label">Security</div>
-                <div className="admin-auth-kpi-value">MFA + expiring sessions</div>
-              </div>
-              <div className="admin-auth-kpi">
-                <div className="admin-auth-kpi-label">HR</div>
-                <div className="admin-auth-kpi-value">Attendance & payroll</div>
-              </div>
-              <div className="admin-auth-kpi">
-                <div className="admin-auth-kpi-label">Content</div>
-                <div className="admin-auth-kpi-value">Blog + newsletter</div>
-              </div>
+          <div className="admin-auth-brand-block">
+            <img className="admin-auth-logo" src="/images/logo.png" alt="GlucoForager" />
+            <div>
+              <p className="admin-auth-eyebrow">Private admin portal</p>
+              <h1 className="admin-auth-title">GlucoForager Admin</h1>
+              <p className="admin-auth-subtitle">Sign in to manage content, users, support, and platform operations.</p>
             </div>
           </div>
 
-          <div className="admin-auth-footer">
-            Tip: Use your staff email. If you don’t have access, contact an admin to create a staff account.
+          <div className="admin-auth-side-note">
+            Secure access for authorised team members and read-only portfolio reviewers.
           </div>
         </section>
 
-        <section className="admin-card" style={{ padding: 22 }}>
+        <section className="admin-card admin-auth-form-card">
           <h2 className="admin-title" style={{ marginBottom: 6 }}>
             {title}
           </h2>
