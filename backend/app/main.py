@@ -368,14 +368,21 @@ def _request_uses_demo_staff_token(request: Request) -> bool:
         payload = decode_access_token(token)
     except Exception:
         return False
-    if payload.get("kind") != "staff" or not payload.get("sub"):
-        return False
+
     db = SessionLocal()
     try:
-        user = db.query(staff_user.StaffUser).filter(staff_user.StaffUser.id == int(payload.get("sub"))).first()
-        if not StaffRBACService.is_active_staff(user):
+        staff = None
+        sub = payload.get("sub")
+        if payload.get("kind") == "staff" and sub:
+            staff = db.query(staff_user.StaffUser).filter(staff_user.StaffUser.id == int(sub)).first()
+        elif payload.get("role") == "admin" and sub:
+            admin = db.query(admin_user.AdminUser).filter(admin_user.AdminUser.id == int(sub)).first()
+            if admin and getattr(admin, "email", None):
+                staff = db.query(staff_user.StaffUser).filter(staff_user.StaffUser.email == str(admin.email).lower()).first()
+
+        if not StaffRBACService.is_active_staff(staff):
             return False
-        role_keys = {str(key).strip().lower() for key in StaffRBACService.get_user_role_keys(db, int(user.id))}
+        role_keys = {str(key).strip().lower() for key in StaffRBACService.get_user_role_keys(db, int(staff.id))}
         return bool(role_keys.intersection({"demo_admin", "demo"}))
     except Exception:
         return False
