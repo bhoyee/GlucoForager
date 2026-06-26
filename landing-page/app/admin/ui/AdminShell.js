@@ -731,13 +731,13 @@ export default function AdminShell({ children }) {
     if (sessionLoading) return;
     if (!session?.email) return;
 
-    if (isDemo && (pathname === '/admin/admin-dashboard' || pathname === '/admin/dashboard')) {
-      router.replace('/admin/users');
+    if (isDemo && pathname === '/admin/dashboard') {
+      router.replace('/admin/admin-dashboard');
       return;
     }
 
     // Guard admin-only routes from non-admin staff to avoid exposing partial admin screens.
-    if (!isAdmin && pathname === '/admin/admin-dashboard') {
+    if (!isAdmin && !isDemo && pathname === '/admin/admin-dashboard') {
       router.replace('/admin/dashboard');
     }
   }, [hydrated, isAdmin, isDemo, isPublicRoute, pathname, router, session?.email, sessionLoading]);
@@ -793,6 +793,7 @@ export default function AdminShell({ children }) {
           label: 'Content',
           defaultOpen: true,
           items: [
+            { href: '/admin/admin-dashboard', label: 'Dashboard', icon: 'dashboard' },
             { href: '/admin/users', label: 'Users', icon: 'users' },
             { href: '/admin/recipes', label: 'Recipes', icon: 'recipes' },
             { href: '/admin/recipes/ai-generator', label: 'AI Recipe Studio', icon: 'ai' },
