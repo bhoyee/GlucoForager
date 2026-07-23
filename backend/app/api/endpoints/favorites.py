@@ -8,6 +8,8 @@ from ...models.favorite import Favorite
 from ...models.user import User
 from ...services.user_activity_service import add_user_activity
 from ..dependencies import get_current_user
+from .app_recipe_checkins import get_latest_feelings
+from .recipes import _ai_recipe_fingerprint
 
 router = APIRouter(prefix="/favorites", tags=["favorites"])
 
@@ -23,9 +25,20 @@ def list_favorites(
     current_user: User = Depends(get_current_user),
 ):
     favorites = db.query(Favorite).filter(Favorite.user_id == current_user.id).order_by(Favorite.created_at.desc()).all()
+    fingerprints_by_id = {
+        f.id: _ai_recipe_fingerprint({"title": f.title, "ingredients": (f.recipe or {}).get("ingredients") or []})
+        for f in favorites
+    }
+    feelings = get_latest_feelings(db, current_user.id, list(fingerprints_by_id.values()))
     return {
         "items": [
-            {"id": f.id, "title": f.title, "recipe": f.recipe, "created_at": f.created_at}
+            {
+                "id": f.id,
+                "title": f.title,
+                "recipe": f.recipe,
+                "created_at": f.created_at,
+                "last_feeling": feelings.get(fingerprints_by_id[f.id]),
+            }
             for f in favorites
         ]
     }

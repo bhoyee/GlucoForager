@@ -19,17 +19,10 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "../../context/authContext"; // Use the hook instead of useContext directly
 import { API_ENDPOINTS, API_URL } from "../../config/api";
 import { getClientInfo } from "../../utils/clientInfo";
-import {
-  configureRevenueCat,
-  getCustomerInfo,
-  isPremiumEntitled,
-  isRevenueCatConfigured,
-  presentPaywall,
-} from "../../utils/revenuecat";
 
 export default function LoginScreen() {
   const navigation = useNavigation();
-  const { signIn, markStoreTrialRequired } = useAuth(); // Use the hook
+  const { signIn } = useAuth(); // Use the hook
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -69,35 +62,6 @@ export default function LoginScreen() {
         throw new Error(data?.detail || data?.message || 'Login failed. Please try again.');
       }
 
-      if (!isRevenueCatConfigured()) {
-        throw new Error('Payments are temporarily unavailable in this build. Please update the app or contact support.');
-      }
-
-      setLoadingLabel('Checking trial access...');
-      await configureRevenueCat({
-        token: data.access_token,
-        publicId: data.public_id,
-        email,
-        fullName: data.full_name || data.name || null,
-      });
-
-      let customerInfo = await getCustomerInfo();
-      if (!isPremiumEntitled(customerInfo)) {
-        setLoadingLabel('Opening 7-day trial...');
-        const result = await presentPaywall();
-        customerInfo = result?.customerInfo ? result.customerInfo : await getCustomerInfo();
-      }
-
-      if (!isPremiumEntitled(customerInfo)) {
-        Alert.alert(
-          'Trial required',
-          'Please start or restore your 7-day free trial to continue into GlucoForager.'
-        );
-        return;
-      }
-
-      setLoadingLabel('Confirming access...');
-      await markStoreTrialRequired();
       await signIn(data.access_token, data.public_id, data.refresh_token, data.profile_completed);
     } catch (error) {
       Alert.alert('Error', error.message || 'Login failed. Please try again.');
