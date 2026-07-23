@@ -45,6 +45,8 @@ from .api.endpoints import (
     admin_email_campaigns,
     app_public,
     app_challenge,
+    app_recipe_checkins,
+    app_recap,
     ingredients,
     recipes,
     subscriptions,
@@ -659,6 +661,8 @@ app.include_router(admin_email_campaigns.router, prefix="/api")
 app.include_router(admin_push_campaigns.router, prefix="/api")
 app.include_router(app_public.router, prefix="/api")
 app.include_router(app_challenge.router, prefix="/api")
+app.include_router(app_recipe_checkins.router, prefix="/api")
+app.include_router(app_recap.router, prefix="/api")
 app.include_router(app_swaps.router, prefix="/api")
 app.include_router(app_daily_plan.router, prefix="/api")
 app.include_router(app_agent.router, prefix="/api")

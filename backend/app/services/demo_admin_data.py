@@ -520,6 +520,28 @@ def get_demo_admin_response(path: str, query: QueryParams, method: str) -> Respo
     if not subpath or subpath in {"me", "status"} or subpath.startswith("staff/login") or subpath.startswith("staff/refresh"):
         return None
 
+    if subpath == "staff/profile/me":
+        return _json(
+            {
+                "id": 9000,
+                "email": "demo@glucoforager.com",
+                "timezone": "Europe/London",
+                "full_name": "Demo Account",
+                "country": "GB",
+                "address": "Read-only demo workspace",
+                "phone_number": "+44 20 0000 0000",
+                "gender": "other",
+                "next_of_kin_name": "Demo Contact",
+                "next_of_kin_contact": "hello@glucoforager.com",
+                "next_of_kin_relationship": "other",
+                "next_of_kin_address": "GlucoForager demo environment",
+                "avatar_url": None,
+                "bank_name": "Demo Bank",
+                "bank_account_number": "00000000",
+                "bank_account_name": "Demo Account",
+                "is_demo": True,
+            }
+        )
     if subpath == "users/platform-summary":
         return _json(_demo_platform_summary())
     if subpath == "users/access-summary":

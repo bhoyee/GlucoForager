@@ -8,6 +8,9 @@ import { adminFetch, clearAdminTokens, setAdminTokens } from './lib/adminAuth';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 const ENABLE_BOOTSTRAP = process.env.NEXT_PUBLIC_ENABLE_ADMIN_BOOTSTRAP === 'true';
+const DEMO_ADMIN_EMAIL = process.env.NEXT_PUBLIC_DEMO_ADMIN_EMAIL || 'demo@glucoforager.com';
+const DEMO_ADMIN_PASSWORD = process.env.NEXT_PUBLIC_DEMO_ADMIN_PASSWORD || 'DemoAccess2026!';
+const SHOW_DEMO_ADMIN_LOGIN = process.env.NEXT_PUBLIC_SHOW_DEMO_ADMIN_LOGIN !== 'false';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -70,7 +73,7 @@ export default function AdminLoginPage() {
         const roles = Array.isArray(me?.roles) ? me.roles : [];
         const isAdmin = perms.includes('*') || perms.includes('admin.manage') || roles.includes('admin');
         const isDemo = Boolean(me?.is_demo) || roles.includes('demo_admin') || roles.includes('demo');
-        router.push(isDemo ? '/admin/users' : isAdmin ? '/admin/admin-dashboard' : '/admin/dashboard');
+        router.push(isDemo || isAdmin ? '/admin/admin-dashboard' : '/admin/dashboard');
         return;
       }
     } catch {
@@ -83,6 +86,13 @@ export default function AdminLoginPage() {
   const dismissMessage = () => {
     setMessage('');
     setMessageTone('info');
+  };
+
+  const useDemoCredentials = () => {
+    setEmail(DEMO_ADMIN_EMAIL);
+    setPassword(DEMO_ADMIN_PASSWORD);
+    setMessage('Demo credentials added. Sign in to open the read-only demo account.');
+    setMessageTone('warning');
   };
 
   const handleSubmit = async (event) => {
@@ -178,41 +188,18 @@ export default function AdminLoginPage() {
     <div className="admin-container admin-auth-container">
       <div className="admin-auth-layout">
         <section className="admin-auth-panel">
-          <div>
-            <div className="admin-auth-brand">
-              <div className="admin-auth-mark">GF</div>
-              <div style={{ minWidth: 0 }}>
-                <h1 className="admin-auth-title">GlucoForager Portal</h1>
-                <p className="admin-auth-subtitle">Staff & admin workspace for operations, content, and support.</p>
-              </div>
-            </div>
-
-            <div className="admin-auth-kpis">
-              <div className="admin-auth-kpi">
-                <div className="admin-auth-kpi-label">Access</div>
-                <div className="admin-auth-kpi-value">Role-based permissions</div>
-              </div>
-              <div className="admin-auth-kpi">
-                <div className="admin-auth-kpi-label">Security</div>
-                <div className="admin-auth-kpi-value">MFA + expiring sessions</div>
-              </div>
-              <div className="admin-auth-kpi">
-                <div className="admin-auth-kpi-label">HR</div>
-                <div className="admin-auth-kpi-value">Attendance & payroll</div>
-              </div>
-              <div className="admin-auth-kpi">
-                <div className="admin-auth-kpi-label">Content</div>
-                <div className="admin-auth-kpi-value">Blog + newsletter</div>
-              </div>
+          <div className="admin-auth-brand-block">
+            <img className="admin-auth-logo" src="/images/logo.png" alt="GlucoForager" />
+            <div>
+              <p className="admin-auth-eyebrow">Private admin portal</p>
+              <h1 className="admin-auth-title">GlucoForager Admin</h1>
+              <p className="admin-auth-subtitle">Sign in to manage content, users, support, and platform operations.</p>
             </div>
           </div>
 
-          <div className="admin-auth-footer">
-            Tip: Use your staff email. If you don’t have access, contact an admin to create a staff account.
-          </div>
         </section>
 
-        <section className="admin-card" style={{ padding: 22 }}>
+        <section className="admin-card admin-auth-form-card">
           <h2 className="admin-title" style={{ marginBottom: 6 }}>
             {title}
           </h2>
@@ -311,6 +298,33 @@ export default function AdminLoginPage() {
               ) : null}
             </form>
           )}
+
+          {SHOW_DEMO_ADMIN_LOGIN && hasAdmin && !mfaRequired ? (
+            <div className="admin-demo-login-card">
+              <div>
+                <p className="admin-demo-login-eyebrow">Demo account</p>
+                <h3>Try the read-only dashboard</h3>
+                <p>
+                  Use seeded demo data to explore users, recipes, AI jobs, logs, newsletters, and engineering screens without changing live records.
+                </p>
+              </div>
+
+              <div className="admin-demo-login-credentials" aria-label="Demo login credentials">
+                <div>
+                  <span>Email</span>
+                  <strong>{DEMO_ADMIN_EMAIL}</strong>
+                </div>
+                <div>
+                  <span>Password</span>
+                  <strong>{DEMO_ADMIN_PASSWORD}</strong>
+                </div>
+              </div>
+
+              <button className="admin-button secondary" type="button" onClick={useDemoCredentials} disabled={statusLoading || isSubmitting}>
+                Use demo login
+              </button>
+            </div>
+          ) : null}
         </section>
       </div>
     </div>

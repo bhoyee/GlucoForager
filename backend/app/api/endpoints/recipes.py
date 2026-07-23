@@ -14,6 +14,7 @@ from ...services.cache_service import CacheService
 from ...services.food_profile_service import extract_food_profile
 from ...services.recipe_fingerprint import recipe_fingerprint as stable_recipe_fingerprint
 from ...services.recipe_image_attach_service import attach_recipe_images
+from .app_recipe_checkins import get_latest_feelings
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
 cache = CacheService()
@@ -32,6 +33,20 @@ def _ai_recipe_fingerprint(item: dict) -> str:
                 if name:
                     names.append(name)
     return stable_recipe_fingerprint(title=title, ingredients=names)
+
+
+def _curated_recipe_fingerprint(recipe: Recipe) -> str:
+    names: list[str] = []
+    raw_ingredients = getattr(recipe, "ingredients", None) or []
+    if isinstance(raw_ingredients, list):
+        for ing in raw_ingredients:
+            if isinstance(ing, str) and ing.strip():
+                names.append(ing.strip())
+            elif isinstance(ing, dict):
+                name = str(ing.get("name") or ing.get("title") or "").strip()
+                if name:
+                    names.append(name)
+    return stable_recipe_fingerprint(title=str(getattr(recipe, "name", "") or ""), ingredients=names)
 
 
 def _is_placeholder_image_url(url: str | None) -> bool:
@@ -314,8 +329,22 @@ def recipe_suggestions(
     if profile and has_hard_constraints:
         filtered = [r for r in items if _profile_hard_allows(r, profile=profile)]
 
+    # Fold in past check-in feelings: soft-deprioritize recipes the user marked "not
+    # great" and favor ones marked "great", without hard-excluding either (a disliked
+    # recipe can still show if nothing else fits; it just won't be favored).
+    fingerprints_by_recipe = {r.id: _curated_recipe_fingerprint(r) for r in filtered}
+    feelings = get_latest_feelings(db, current_user.id, list(fingerprints_by_recipe.values()))
+    sentiment_bonus = {"great": 5, "not_great": -8}
+
     # Score (soft ranking) then sample from the top pool for variety.
-    scored = [(int(_profile_score(r, profile=profile)), r) for r in filtered]
+    scored = [
+        (
+            int(_profile_score(r, profile=profile))
+            + sentiment_bonus.get(feelings.get(fingerprints_by_recipe[r.id]), 0),
+            r,
+        )
+        for r in filtered
+    ]
     random.shuffle(scored)
     scored.sort(key=lambda x: x[0], reverse=True)
     pool_size = min(len(scored), max(30, limit * 10))
@@ -338,6 +367,7 @@ def recipe_suggestions(
                 "servings": r.servings,
                 "image_url": r.image_url,
                 "nutrition": r.nutrition,
+                "last_feeling": feelings.get(fingerprints_by_recipe[r.id]),
                 **_recipe_metadata_payload(r),
             }
             for r in selection
@@ -364,10 +394,16 @@ def recent_recipes(
     # Overlay generated images (if any) using our cache mapping from image generation.
     # This makes the client "Recent recipes" reflect images even if the stored JSON still contains placeholders.
     if isinstance(recipes, list):
+        feelings = get_latest_feelings(
+            db,
+            current_user.id,
+            [_ai_recipe_fingerprint(recipe) for recipe in recipes if isinstance(recipe, dict)],
+        )
         for recipe in recipes:
             if not isinstance(recipe, dict):
                 continue
             fingerprint = _ai_recipe_fingerprint(recipe)
+            recipe["last_feeling"] = feelings.get(fingerprint)
             cache_key = f"recipeimg:{fingerprint}:url"
             url = cache.get(cache_key)
             if url and isinstance(url, str):

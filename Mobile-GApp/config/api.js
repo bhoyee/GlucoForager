@@ -48,6 +48,10 @@ export const API_ENDPOINTS = {
   DAILY_PLAN_TODAY: '/api/app/daily-plan/today',
   DAILY_PLAN_BY_DATE: '/api/app/daily-plan/date',
   DAILY_PLAN_GENERATE: '/api/app/daily-plan/generate',
+  RECIPE_CHECK_IN: '/api/app/recipes/check-in',
+  RECIPE_CHECK_IN_TODAY: '/api/app/recipes/check-in/today',
+  SHOPPING_LIST: '/api/shopping-list',
+  RECAP_WEEKLY: '/api/app/recap/weekly',
   AGENT_CHAT: '/api/agent/chat',
   AGENT_CHAT_STREAM: '/api/agent/chat/stream',
 };
