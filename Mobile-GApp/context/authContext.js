@@ -107,7 +107,7 @@ export function AuthProvider({ children }) {
           let resolvedEmail = null;
           let resolvedName = null;
 
-          // Fetch profile BEFORE setting `userToken` so RootNavigator can route correctly on first render.
+          // Fetch profile BEFORE setting `userToken` so App.js's navigator can route correctly on first render.
           const profile = await fetchProfile(token);
           if (!resolvedPublicId && profile?.public_id) {
             resolvedPublicId = profile.public_id;
@@ -286,7 +286,7 @@ export function AuthProvider({ children }) {
         setNeedsFoodProfileOnboarding(profileCompletedHint === false);
       }
 
-      // Fetch profile BEFORE setting `userToken` (best-effort) so RootNavigator can route correctly.
+      // Fetch profile BEFORE setting `userToken` (best-effort) so App.js's navigator can route correctly.
       const profile = await fetchProfile(token);
       if (profile) {
         applyFoodProfileFlags(profile);
