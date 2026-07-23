@@ -73,6 +73,12 @@ export default function FavoritesScreen() {
     return `${value}`.includes(suffix.trim()) ? `${value}` : `${value} ${suffix}`.trim();
   };
 
+  const getFeelingBadge = (lastFeeling) => {
+    if (lastFeeling === 'great') return { emoji: '🙂', label: 'You liked this' };
+    if (lastFeeling === 'not_great') return { emoji: '🙁', label: "Wasn't great" };
+    return null;
+  };
+
   const normalizeFavorite = (item, index) => {
     const recipe = item.recipe || {};
     const nutrition = recipe.nutrition || recipe.nutrition_per_serving || {};
@@ -81,6 +87,7 @@ export default function FavoritesScreen() {
       favoriteId: item.id || `${index}`,
       recipeId: recipe.id || null,
       recipe,
+      lastFeeling: item.last_feeling || null,
       name: recipe.title || recipe.name || item.title || 'Recipe',
       description: recipe.description || 'Diabetes-friendly recipe.',
       image: recipe.image_url || recipe.image || '',
@@ -265,6 +272,11 @@ export default function FavoritesScreen() {
             <View style={styles.recipeInfo}>
               <View style={styles.recipeHeader}>
                 <Text style={styles.recipeName} numberOfLines={1}>{item.name}</Text>
+                {getFeelingBadge(item.lastFeeling) ? (
+                  <View style={styles.feelingBadge}>
+                    <Text style={styles.feelingBadgeText}>{getFeelingBadge(item.lastFeeling).emoji}</Text>
+                  </View>
+                ) : null}
               </View>
               
               <Text style={styles.recipeDescription} numberOfLines={2}>
@@ -505,6 +517,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
+  },
+  feelingBadge: {
+    marginLeft: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: `${Colors.accent}15`,
+  },
+  feelingBadgeText: {
+    fontSize: 12,
   },
   recipeName: {
     fontSize: 18,

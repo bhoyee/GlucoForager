@@ -108,6 +108,9 @@ const RecipeDetailsScreen = () => {
   const [imageLoadError, setImageLoadError] = useState(false);
   const [recipeImagesEnabled, setRecipeImagesEnabled] = useState(true);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [checkInFeeling, setCheckInFeeling] = useState(null);
+  const [isSubmittingCheckIn, setIsSubmittingCheckIn] = useState(false);
+  const [isAddingToShoppingList, setIsAddingToShoppingList] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -156,6 +159,40 @@ const RecipeDetailsScreen = () => {
       }
     };
     hydrateFromCache();
+    return () => {
+      cancelled = true;
+    };
+  }, [recipe?.title, recipe?.ingredients?.length]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadTodayCheckIn = async () => {
+      if (!route.params?.recipe || !recipe?.title) return;
+      try {
+        const token = await AsyncStorage.getItem('userToken');
+        if (!token) return;
+        const ingredientNames = Array.isArray(recipe.ingredients)
+          ? recipe.ingredients.map((item) => (typeof item === 'string' ? item : item?.name)).filter(Boolean)
+          : [];
+        const queryParts = [
+          `title=${encodeURIComponent(recipe.title)}`,
+          ...ingredientNames.map((name) => `ingredients=${encodeURIComponent(name)}`),
+        ];
+        const response = await apiFetch(
+          `${API_URL}${API_ENDPOINTS.RECIPE_CHECK_IN_TODAY}?${queryParts.join('&')}`,
+          { headers: { Authorization: `Bearer ${token}` } },
+          { onUnauthorized: signOut, timeoutMs: 8000 }
+        );
+        if (cancelled || !response.ok) return;
+        const data = await response.json().catch(() => ({}));
+        if (data?.feeling) {
+          setCheckInFeeling(data.feeling);
+        }
+      } catch (error) {
+        // Non-critical: check-in card just falls back to showing the picker.
+      }
+    };
+    loadTodayCheckIn();
     return () => {
       cancelled = true;
     };
@@ -387,7 +424,6 @@ const RecipeDetailsScreen = () => {
       },
       ingredients,
       instructions,
-      tips: item.tips || mockRecipe.tips,
     };
   };
 
@@ -623,6 +659,43 @@ const RecipeDetailsScreen = () => {
     }
   };
 
+  const handleCheckIn = async (feeling) => {
+    if (isSubmittingCheckIn || checkInFeeling) return;
+    try {
+      setIsSubmittingCheckIn(true);
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        Alert.alert('Sign in required', 'Please sign in to log how a recipe made you feel.');
+        return;
+      }
+      const ingredientNames = Array.isArray(recipe.ingredients)
+        ? recipe.ingredients.map((item) => (typeof item === 'string' ? item : item?.name)).filter(Boolean)
+        : [];
+      const response = await apiFetch(
+        `${API_URL}${API_ENDPOINTS.RECIPE_CHECK_IN}`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: recipe.title,
+            ingredients: ingredientNames,
+            feeling,
+          }),
+        },
+        { onUnauthorized: signOut }
+      );
+      if (!response.ok) {
+        Alert.alert('Error', 'Unable to log this right now. Please try again.');
+        return;
+      }
+      setCheckInFeeling(feeling);
+    } catch (error) {
+      Alert.alert('Error', 'Unable to log this right now. Please try again.');
+    } finally {
+      setIsSubmittingCheckIn(false);
+    }
+  };
+
   const handleShare = async () => {
     try {
       const messageParts = [
@@ -635,6 +708,49 @@ const RecipeDetailsScreen = () => {
       });
     } catch (error) {
       Alert.alert('Error', 'Unable to open share sheet.');
+    }
+  };
+
+  const handleAddToShoppingList = async () => {
+    if (isAddingToShoppingList) return;
+    try {
+      setIsAddingToShoppingList(true);
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        Alert.alert('Sign in required', 'Please sign in to save a shopping list.');
+        return;
+      }
+      const ingredientNames = Array.isArray(recipe.ingredients)
+        ? recipe.ingredients.map((item) => (typeof item === 'string' ? item : item?.name)).filter(Boolean)
+        : [];
+      if (!ingredientNames.length) {
+        Alert.alert('No ingredients', 'This recipe has no ingredients to add yet.');
+        return;
+      }
+      const response = await apiFetch(
+        `${API_URL}${API_ENDPOINTS.SHOPPING_LIST}`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: recipe.title, items: ingredientNames }),
+        },
+        { onUnauthorized: signOut }
+      );
+      if (!response.ok) {
+        Alert.alert('Error', 'Unable to save shopping list right now.');
+        return;
+      }
+      Alert.alert('Added', 'Ingredients saved to your shopping list.', [
+        { text: 'OK', style: 'cancel' },
+        {
+          text: 'View list',
+          onPress: () => navigation.navigate('Profile', { screen: 'ShoppingList' }),
+        },
+      ]);
+    } catch (error) {
+      Alert.alert('Error', 'Unable to save shopping list right now.');
+    } finally {
+      setIsAddingToShoppingList(false);
     }
   };
 
@@ -915,9 +1031,9 @@ const RecipeDetailsScreen = () => {
                 </View>
                 <Text style={styles.tipTitle}>Tip {index + 1}</Text>
                 <Ionicons 
-                  name={expandedTip === index ? "chevron-up" : "chevron-down"} 
-                  size={18} 
-                  color="#666" 
+                  name={expandedTip === index ? "chevron-up" : "chevron-down"}
+                  size={18}
+                  color={Colors.textLight}
                 />
               </View>
               {expandedTip === index && (
@@ -957,8 +1073,47 @@ const RecipeDetailsScreen = () => {
     );
   };
 
+  const renderCheckInSection = () => {
+    const options = [
+      { key: 'great', emoji: '🙂', label: 'Great' },
+      { key: 'ok', emoji: '😐', label: 'OK' },
+      { key: 'not_great', emoji: '🙁', label: 'Not great' },
+    ];
+    return (
+      <View style={styles.checkInCard}>
+        {checkInFeeling ? (
+          <View style={styles.checkInThanksRow}>
+            <Ionicons name="checkmark-circle" size={20} color={Colors.primary} />
+            <Text style={styles.checkInThanksText}>
+              Thanks — logged as {options.find((o) => o.key === checkInFeeling)?.label || checkInFeeling}
+            </Text>
+          </View>
+        ) : (
+          <>
+            <Text style={styles.checkInTitle}>Cooked this? How did it make you feel?</Text>
+            <View style={styles.checkInOptionsRow}>
+              {options.map((option) => (
+                <TouchableOpacity
+                  key={option.key}
+                  style={styles.checkInOption}
+                  onPress={() => handleCheckIn(option.key)}
+                  disabled={isSubmittingCheckIn}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.checkInEmoji}>{option.emoji}</Text>
+                  <Text style={styles.checkInOptionLabel}>{option.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        )}
+      </View>
+    );
+  };
+
   const renderActionsSection = () => (
     <View style={[styles.section, styles.sectionLast]}>
+      {renderCheckInSection()}
       <View style={styles.recipeActions}>
         <TouchableOpacity style={styles.secondaryActionButton} onPress={handleShare}>
           <Ionicons name="share-social-outline" size={18} color={Colors.primary} />
@@ -979,6 +1134,17 @@ const RecipeDetailsScreen = () => {
           </Text>
         </TouchableOpacity>
       </View>
+      <TouchableOpacity
+        style={styles.shoppingListButton}
+        onPress={handleAddToShoppingList}
+        disabled={isAddingToShoppingList}
+        activeOpacity={0.85}
+      >
+        <Ionicons name="cart-outline" size={18} color={Colors.primary} />
+        <Text style={styles.shoppingListButtonText}>
+          {isAddingToShoppingList ? 'Adding...' : 'Add to shopping list'}
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 
@@ -996,7 +1162,7 @@ const RecipeDetailsScreen = () => {
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Diabetes Safety Guide</Text>
             <TouchableOpacity onPress={() => setShowSafetyModal(false)}>
-              <Ionicons name="close" size={24} color="#333" />
+              <Ionicons name="close" size={24} color={Colors.text} />
             </TouchableOpacity>
           </View>
           
@@ -1039,7 +1205,7 @@ const RecipeDetailsScreen = () => {
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>All Ingredients</Text>
             <TouchableOpacity onPress={() => setShowIngredientsModal(false)}>
-              <Ionicons name="close" size={24} color="#333" />
+              <Ionicons name="close" size={24} color={Colors.text} />
             </TouchableOpacity>
           </View>
           
@@ -1110,13 +1276,14 @@ const RecipeDetailsScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFF',
+    backgroundColor: Colors.background,
   },
   detailsTabs: {
     flexDirection: 'row',
     gap: 6,
     paddingHorizontal: 16,
     marginTop: 14,
+    marginBottom: 20,
   },
   detailsTab: {
     flex: 1,
@@ -1128,25 +1295,25 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 4,
     borderRadius: 14,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: Colors.background,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: Colors.border,
   },
   detailsTabActive: {
-    backgroundColor: '#111827',
-    borderColor: '#111827',
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
   },
   detailsTabActivePressed: {
-    backgroundColor: '#0B1220',
-    borderColor: '#0B1220',
+    backgroundColor: Colors.primaryDark,
+    borderColor: Colors.primaryDark,
   },
   detailsTabPressed: {
-    backgroundColor: '#EEF2F7',
+    backgroundColor: Colors.background,
   },
   detailsTabText: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#111827',
+    color: Colors.text,
     textAlign: 'center',
     includeFontPadding: false,
   },
@@ -1223,7 +1390,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   generateImageButtonText: {
-    color: '#0C1824',
+    color: Colors.text,
     fontWeight: '700',
     fontSize: 13,
   },
@@ -1234,7 +1401,7 @@ const styles = StyleSheet.create({
   recipeImagePlaceholder: {
     width: '100%',
     height: '100%',
-    backgroundColor: '#F5F5F5',
+    backgroundColor: Colors.background,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1243,7 +1410,7 @@ const styles = StyleSheet.create({
   },
   statsBar: {
     flexDirection: 'row',
-    backgroundColor: '#F8FDF9',
+    backgroundColor: `${Colors.primary}08`,
     marginHorizontal: 20,
     marginTop: -20,
     borderRadius: 16,
@@ -1264,13 +1431,13 @@ const styles = StyleSheet.create({
   statText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#2E7D32',
+    color: Colors.primary,
     marginLeft: 6,
   },
   statDivider: {
     width: 1,
     height: '100%',
-    backgroundColor: '#E8F5E9',
+    backgroundColor: `${Colors.primary}14`,
   },
   titleSection: {
     paddingHorizontal: 20,
@@ -1279,13 +1446,13 @@ const styles = StyleSheet.create({
   recipeTitle: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#1B5E20',
+    color: Colors.text,
     marginBottom: 8,
     lineHeight: 34,
   },
   recipeDescription: {
     fontSize: 16,
-    color: '#666',
+    color: Colors.textLight,
     lineHeight: 24,
     marginBottom: 20,
   },
@@ -1302,7 +1469,7 @@ const styles = StyleSheet.create({
   authorName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: Colors.text,
     marginBottom: 2,
   },
   authorRole: {
@@ -1320,22 +1487,22 @@ const styles = StyleSheet.create({
   ratingText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#333',
+    color: Colors.text,
     marginLeft: 4,
     marginRight: 4,
   },
   reviewCount: {
     fontSize: 12,
-    color: '#666',
+    color: Colors.textLight,
   },
   safetyCard: {
-    backgroundColor: '#F8FDF9',
+    backgroundColor: `${Colors.primary}08`,
     marginHorizontal: 20,
     marginBottom: 24,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#E8F5E9',
+    borderColor: `${Colors.primary}14`,
   },
   safetyHeader: {
     flexDirection: 'row',
@@ -1357,12 +1524,12 @@ const styles = StyleSheet.create({
   safetyTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1B5E20',
+    color: Colors.text,
     marginBottom: 2,
   },
   safetySubtitle: {
     fontSize: 14,
-    color: '#666',
+    color: Colors.textLight,
   },
   safetyHighlights: {
     flexDirection: 'row',
@@ -1393,10 +1560,10 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#1B5E20',
+    color: Colors.text,
   },
   viewAllButton: {
-    backgroundColor: '#E8F5E9',
+    backgroundColor: `${Colors.primary}14`,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
@@ -1410,7 +1577,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   progressContainer: {
-    backgroundColor: '#F5F5F5',
+    backgroundColor: Colors.background,
     borderRadius: 12,
     padding: 16,
   },
@@ -1421,12 +1588,12 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontSize: 14,
-    color: '#666',
+    color: Colors.textLight,
     fontWeight: '500',
   },
   progressBar: {
     height: 6,
-    backgroundColor: '#E0E0E0',
+    backgroundColor: Colors.border,
     borderRadius: 3,
     overflow: 'hidden',
   },
@@ -1442,12 +1609,12 @@ const styles = StyleSheet.create({
   },
   ingredientCard: {
     width: '48%',
-    backgroundColor: '#FFF',
+    backgroundColor: Colors.surface,
     borderRadius: 12,
     padding: 12,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#F0F0F0',
+    borderColor: Colors.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
@@ -1469,13 +1636,13 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#FF9800',
+    backgroundColor: Colors.accent,
   },
   ingredientName: {
     flex: 1,
     fontSize: 14,
     fontWeight: '500',
-    color: '#333',
+    color: Colors.text,
   },
   ingredientAmount: {
     fontSize: 13,
@@ -1484,14 +1651,14 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    color: '#666',
+    color: Colors.textLight,
     paddingVertical: 8,
   },
   instructionStep: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     marginBottom: 20,
-    backgroundColor: '#F8FDF9',
+    backgroundColor: `${Colors.primary}08`,
     padding: 16,
     borderRadius: 12,
     borderLeftWidth: 3,
@@ -1519,19 +1686,19 @@ const styles = StyleSheet.create({
     flex: 1,
     flexShrink: 1,
     fontSize: 15,
-    color: '#333',
+    color: Colors.text,
     lineHeight: 22,
   },
   tipsContainer: {
     marginTop: 8,
   },
   tipCard: {
-    backgroundColor: '#FFF',
+    backgroundColor: Colors.surface,
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#E8F5E9',
+    borderColor: `${Colors.primary}14`,
   },
   tipHeader: {
     flexDirection: 'row',
@@ -1542,7 +1709,7 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: '#E8F5E9',
+    backgroundColor: `${Colors.primary}14`,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
@@ -1551,15 +1718,15 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: Colors.text,
   },
   tipContent: {
     fontSize: 14,
-    color: '#666',
+    color: Colors.textLight,
     lineHeight: 20,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
+    borderTopColor: Colors.border,
   },
   nutritionGrid: {
     flexDirection: 'row',
@@ -1569,32 +1736,96 @@ const styles = StyleSheet.create({
   },
   nutritionCard: {
     width: '31%',
-    backgroundColor: '#F8FDF9',
+    backgroundColor: `${Colors.primary}08`,
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 10,
     marginBottom: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E8F5E9',
+    borderColor: `${Colors.primary}14`,
   },
   nutritionValue: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1B5E20',
+    color: Colors.text,
     marginBottom: 4,
   },
   nutritionLabel: {
     fontSize: 12,
-    color: '#666',
+    color: Colors.textLight,
     marginBottom: 2,
     textAlign: 'center',
     width: '100%',
+  },
+  checkInCard: {
+    backgroundColor: `${Colors.accent}12`,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: `${Colors.accent}40`,
+  },
+  checkInTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.text,
+    marginBottom: 12,
+  },
+  checkInOptionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  checkInOption: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: `${Colors.accent}30`,
+  },
+  checkInEmoji: {
+    fontSize: 22,
+    marginBottom: 4,
+  },
+  checkInOptionLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textLight,
+  },
+  checkInThanksRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  checkInThanksText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.text,
   },
   recipeActions: {
     flexDirection: 'row',
     marginTop: 16,
     gap: 12,
+  },
+  shoppingListButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 12,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+  },
+  shoppingListButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.primary,
   },
   secondaryActionButton: {
     flex: 1,
@@ -1605,7 +1836,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: Colors.primary,
-    backgroundColor: '#F1F8E9',
+    backgroundColor: `${Colors.primary}10`,
   },
   secondaryActionText: {
     marginLeft: 8,
@@ -1637,7 +1868,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#FFF',
+    backgroundColor: Colors.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: '85%',
@@ -1649,12 +1880,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: Colors.border,
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1B5E20',
+    color: Colors.text,
   },
   modalBody: {
     paddingHorizontal: 20,
@@ -1667,7 +1898,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#E8F5E9',
+    backgroundColor: `${Colors.primary}14`,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
@@ -1675,17 +1906,17 @@ const styles = StyleSheet.create({
   modalSectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#333',
+    color: Colors.text,
     marginBottom: 8,
   },
   modalSectionText: {
     fontSize: 15,
-    color: '#666',
+    color: Colors.textLight,
     lineHeight: 22,
   },
   modalDivider: {
     height: 1,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: Colors.border,
     marginVertical: 20,
   },
   modalButton: {
@@ -1707,7 +1938,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F5F5F5',
+    borderBottomColor: Colors.background,
   },
   modalIngredientInfo: {
     flexDirection: 'row',
@@ -1719,7 +1950,7 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 11,
     borderWidth: 2,
-    borderColor: '#FF9800',
+    borderColor: Colors.accent,
   },
   modalIngredientText: {
     marginLeft: 12,
@@ -1727,12 +1958,12 @@ const styles = StyleSheet.create({
   },
   modalIngredientName: {
     fontSize: 16,
-    color: '#333',
+    color: Colors.text,
     marginBottom: 2,
   },
   modalIngredientAmount: {
     fontSize: 14,
-    color: '#666',
+    color: Colors.textLight,
   },
   ownershipBadge: {
     paddingHorizontal: 12,
@@ -1741,10 +1972,10 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   ownedBadge: {
-    backgroundColor: '#E8F5E9',
+    backgroundColor: `${Colors.primary}14`,
   },
   neededBadge: {
-    backgroundColor: '#FFF3E0',
+    backgroundColor: `${Colors.accent}14`,
   },
   ownershipText: {
     fontSize: 12,
@@ -1754,7 +1985,7 @@ const styles = StyleSheet.create({
     color: Colors.primary,
   },
   neededText: {
-    color: '#FF9800',
+    color: Colors.accent,
   },
 });
 

@@ -80,6 +80,11 @@ export default function StaffProfilePage() {
 
   const saveProfile = async (event) => {
     event.preventDefault();
+    if (profile?.is_demo) {
+      setMessageTone('warning');
+      setMessage('Demo profile is read-only. Changes are disabled for this account.');
+      return;
+    }
     if (!token || !profile) return;
     setSaving(true);
     setMessage('');
@@ -126,6 +131,11 @@ export default function StaffProfilePage() {
   };
 
   const uploadAvatar = async (file) => {
+    if (profile?.is_demo) {
+      setMessageTone('warning');
+      setMessage('Demo profile is read-only. Photo uploads are disabled for this account.');
+      return;
+    }
     if (!file) return;
     setAvatarUploading(true);
     setMessage('');
@@ -161,6 +171,10 @@ export default function StaffProfilePage() {
 
   const changePassword = async (event) => {
     event.preventDefault();
+    if (profile?.is_demo) {
+      setPwdMessage('Demo profile is read-only. Password changes are disabled for this account.');
+      return;
+    }
     if (!token) return;
     setPwdMessage('');
     if (!pwdNew || pwdNew.length < 8) {
@@ -218,6 +232,7 @@ export default function StaffProfilePage() {
   }
 
   const initials = initialsFromEmail(profile.email);
+  const isDemoProfile = Boolean(profile.is_demo);
 
   return (
     <div className="admin-page">
@@ -275,17 +290,23 @@ export default function StaffProfilePage() {
           </div>
           <div className="admin-profile-header-actions">
             <label className={`admin-button info${avatarUploading ? ' is-loading' : ''}`} style={{ cursor: avatarUploading ? 'not-allowed' : 'pointer' }}>
-              {avatarUploading ? 'Uploading…' : 'Upload photo'}
+              {isDemoProfile ? 'Read-only' : avatarUploading ? 'Uploading…' : 'Upload photo'}
               <input
                 type="file"
                 accept="image/*"
                 style={{ display: 'none' }}
-                disabled={avatarUploading}
+                disabled={avatarUploading || isDemoProfile}
                 onChange={(e) => uploadAvatar(e.target.files?.[0] || null)}
               />
             </label>
           </div>
         </div>
+
+        {isDemoProfile ? (
+          <div className="admin-alert warning" style={{ marginTop: 12, marginBottom: 12 }}>
+            Demo account profile is read-only. You can view the page, but editing, uploads, and password changes are disabled.
+          </div>
+        ) : null}
 
         {message ? (
           <div className={`admin-alert admin-alert--dismissible ${messageTone || 'info'}`} style={{ marginTop: 12, marginBottom: 12 }}>
@@ -353,7 +374,7 @@ export default function StaffProfilePage() {
                 <label>Address</label>
                 <textarea value={profile.address || ''} onChange={(e) => updateField('address', e.target.value)} rows={3} required />
               </div>
-              <button className="admin-button" type="submit" disabled={saving}>
+              <button className="admin-button" type="submit" disabled={saving || isDemoProfile}>
                 {saving ? 'Saving…' : 'Save profile'}
               </button>
             </form>
@@ -386,7 +407,7 @@ export default function StaffProfilePage() {
                 <label>Address</label>
                 <textarea value={profile.next_of_kin_address || ''} onChange={(e) => updateField('next_of_kin_address', e.target.value)} rows={3} />
               </div>
-              <button className="admin-button info" type="submit" disabled={saving}>
+              <button className="admin-button info" type="submit" disabled={saving || isDemoProfile}>
                 {saving ? 'Saving…' : 'Save next of kin'}
               </button>
             </form>
@@ -413,7 +434,7 @@ export default function StaffProfilePage() {
                   placeholder="e.g. 0123456789"
                 />
               </div>
-              <button className="admin-button warning" type="submit" disabled={saving}>
+              <button className="admin-button warning" type="submit" disabled={saving || isDemoProfile}>
                 {saving ? 'Saving...' : 'Save bank details'}
               </button>
             </form>
@@ -436,7 +457,7 @@ export default function StaffProfilePage() {
                 <label>Confirm new password</label>
                 <input type="password" value={pwdConfirm} onChange={(e) => setPwdConfirm(e.target.value)} required />
               </div>
-              <button className="admin-button" type="submit" disabled={pwdSaving}>
+              <button className="admin-button" type="submit" disabled={pwdSaving || isDemoProfile}>
                 {pwdSaving ? 'Updating…' : 'Update password'}
               </button>
             </form>

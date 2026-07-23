@@ -16,6 +16,7 @@ export default function EatNowScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const headerPaddingTop = Math.max(insets.top, 16);
+  const contentBottomPadding = Math.max(insets.bottom + 24, 40);
   const { signOut } = useAuth();
 
   const cards = useMemo(
@@ -106,7 +107,7 @@ export default function EatNowScreen() {
         },
       },
     ],
-    [navigation]
+    [navigation, signOut]
   );
 
   return (
