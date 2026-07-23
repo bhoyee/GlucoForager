@@ -361,8 +361,15 @@ export default function GlucoGuideScreen({ navigation }) {
       );
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        const detail = data?.detail?.message || data?.detail || 'GlucoGuide is unavailable right now. Please try again.';
+        const detailObj = data?.detail;
+        const needsUpgrade = Boolean(
+          detailObj && typeof detailObj === 'object' && (detailObj.upgrade || detailObj.code === 'trial_expired')
+        );
+        const detail = detailObj?.message || detailObj || 'GlucoGuide is unavailable right now. Please try again.';
         replaceAssistant(String(detail));
+        if (needsUpgrade) {
+          setLatestActions([{ label: 'Start free trial', target: 'Profile', kind: 'premium' }]);
+        }
         return;
       }
       setLatestActions(Array.isArray(data?.actions) ? data.actions : []);
@@ -382,6 +389,10 @@ export default function GlucoGuideScreen({ navigation }) {
       setTimeout(() => {
         inputRef.current?.focus?.();
       }, 80);
+      return;
+    }
+    if (action.kind === 'premium') {
+      navigation.navigate('Profile', { screen: 'ProfileMain', params: { openPremium: true } });
       return;
     }
     if (action.kind === 'tab' && action.target === 'DailyPlan') {

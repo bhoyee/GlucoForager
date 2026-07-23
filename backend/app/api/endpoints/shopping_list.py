@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -13,6 +13,10 @@ router = APIRouter(prefix="/shopping-list", tags=["shopping-list"])
 
 class ShoppingListPayload(BaseModel):
     title: str
+    items: list[str]
+
+
+class ShoppingListItemsPayload(BaseModel):
     items: list[str]
 
 
@@ -49,3 +53,57 @@ def create_shopping_list(
     )
     db.commit()
     return {"detail": "Created", "id": row.id}
+
+
+@router.patch("/{shopping_list_id}")
+def update_shopping_list(
+    shopping_list_id: int,
+    payload: ShoppingListItemsPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    row = (
+        db.query(ShoppingItem)
+        .filter(ShoppingItem.user_id == current_user.id, ShoppingItem.id == shopping_list_id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shopping list not found")
+    row.items = payload.items
+    add_user_activity(
+        db,
+        user_id=current_user.id,
+        event_type="shopping_list.updated",
+        label="Updated a shopping list",
+        source="mobile",
+        metadata={"title": row.title, "item_count": len(payload.items or [])},
+    )
+    db.commit()
+    return {"detail": "Updated"}
+
+
+@router.delete("/{shopping_list_id}")
+def delete_shopping_list(
+    shopping_list_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    row = (
+        db.query(ShoppingItem)
+        .filter(ShoppingItem.user_id == current_user.id, ShoppingItem.id == shopping_list_id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shopping list not found")
+    title = row.title
+    db.delete(row)
+    add_user_activity(
+        db,
+        user_id=current_user.id,
+        event_type="shopping_list.deleted",
+        label="Removed a shopping list",
+        source="mobile",
+        metadata={"title": title},
+    )
+    db.commit()
+    return {"detail": "Deleted"}

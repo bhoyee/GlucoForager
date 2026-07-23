@@ -425,7 +425,11 @@ export default function CarbSwapsScreen() {
               {shouldUpgrade ? (
                 <TouchableOpacity
                   style={styles.upgradeButton}
-                  onPress={() => navigation.getParent()?.navigate('Profile')}
+                  onPress={() =>
+                    navigation
+                      .getParent()
+                      ?.navigate('Profile', { screen: 'ProfileMain', params: { openPremium: true } })
+                  }
                   activeOpacity={0.85}
                 >
                   <Text style={styles.upgradeButtonText}>Upgrade to Premium</Text>

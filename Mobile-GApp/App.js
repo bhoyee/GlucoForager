@@ -26,7 +26,6 @@ import LoginScreen from './screens/auth/LoginScreen';
 import SignUpScreen from './screens/auth/SignUpScreen';
 import ForgotPasswordScreen from './screens/auth/ForgotPasswordScreen';
 import PremiumDetailsScreen from './screens/auth/PremiumDetailsScreen';
-import TrialPaywallScreen from './screens/auth/TrialPaywallScreen';
 import TermsScreen from './screens/main/TermsScreen';
 import PrivacyPolicyScreen from './screens/main/PrivacyPolicyScreen';
 import FoodPreferencesScreen from './screens/main/FoodPreferencesScreen';
@@ -85,8 +84,6 @@ function AppNavigator() {
     isLoading,
     needsFoodProfileOnboarding,
     hasFeatureAccess,
-    accessStatus,
-    requiresStoreTrial,
   } = authContext || {};
   const [minimumSplashDone, setMinimumSplashDone] = useState(false);
   const [updatePrompt, setUpdatePrompt] = useState(null);
@@ -155,20 +152,7 @@ function AppNavigator() {
     return <SplashScreen />;
   }
 
-  const normalizedAccessStatus = typeof accessStatus === 'string' ? accessStatus.toLowerCase() : '';
-  const hasStoreBackedAccess =
-    hasFeatureAccess === true ||
-    ['premium', 'trialing', 'trial', 'cancelled_active', 'legacy_grace', 'grace'].includes(normalizedAccessStatus);
-  const shouldRequireTrialPaywall =
-    Boolean(userToken) &&
-    !needsFoodProfileOnboarding &&
-    (requiresStoreTrial === true || hasStoreBackedAccess !== true);
-
-  devLog('Showing main navigation. User token:', userToken ? 'Present' : 'None', {
-    hasStoreBackedAccess,
-    accessStatus: normalizedAccessStatus,
-    shouldRequireTrialPaywall,
-  });
+  devLog('Showing main navigation. User token:', userToken ? 'Present' : 'None');
 
   return (
     <NavigationContainer>
@@ -351,12 +335,6 @@ function AppNavigator() {
                 component={FoodPreferencesScreen}
                 initialParams={{ forced: true }}
               />
-              <Stack.Screen name="Terms" component={TermsScreen} />
-              <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
-            </>
-          ) : shouldRequireTrialPaywall ? (
-            <>
-              <Stack.Screen name="TrialPaywall" component={TrialPaywallScreen} />
               <Stack.Screen name="Terms" component={TermsScreen} />
               <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
             </>

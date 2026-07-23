@@ -8,7 +8,6 @@ import { addDebugLog } from '../utils/debugLogger';
 
 // Create the context
 const AuthContext = createContext({});
-const STORE_TRIAL_REQUIRED_KEY = 'store_trial_required_v1';
 
 export function AuthProvider({ children }) {
   const [userToken, setUserToken] = useState(null);
@@ -20,7 +19,6 @@ export function AuthProvider({ children }) {
   const [hasFeatureAccess, setHasFeatureAccess] = useState(null); // true | false | null
   const [accessStatus, setAccessStatus] = useState(null);
   const [trialDaysLeft, setTrialDaysLeft] = useState(null);
-  const [requiresStoreTrial, setRequiresStoreTrial] = useState(false);
   const lastRefreshWasTransientRef = React.useRef(false);
   const refreshInFlightRef = React.useRef(null); // Promise<string | null> | null
 
@@ -77,11 +75,6 @@ export function AuthProvider({ children }) {
     setHasFeatureAccess(Boolean(allowed));
     setAccessStatus(status || (allowed ? 'premium' : 'expired'));
     setTrialDaysLeft(profile.trial_days_left ?? null);
-
-    if (allowed) {
-      setRequiresStoreTrial(false);
-      AsyncStorage.removeItem(STORE_TRIAL_REQUIRED_KEY).catch(() => {});
-    }
   };
 
   const devLog = (...args) => {
@@ -103,12 +96,10 @@ export function AuthProvider({ children }) {
       // Check login status
       const token = await AsyncStorage.getItem('userToken');
       const publicId = await AsyncStorage.getItem('publicUserId');
-      const trialRequired = await AsyncStorage.getItem(STORE_TRIAL_REQUIRED_KEY);
-      
+
       devLog('Auth check:', { onboarded, hasToken: Boolean(token) });
-      
+
       setHasCompletedOnboarding(onboarded === 'true');
-      setRequiresStoreTrial(trialRequired === 'true');
       if (token) {
         const isValid = await validateToken(token);
         if (isValid) {
@@ -151,7 +142,6 @@ export function AuthProvider({ children }) {
     await AsyncStorage.removeItem('userToken');
     await AsyncStorage.removeItem('refreshToken');
     await AsyncStorage.removeItem('publicUserId');
-    await AsyncStorage.removeItem(STORE_TRIAL_REQUIRED_KEY);
     setUserToken(null);
     setFoodProfileCompleted(null);
     setNeedsFoodProfileOnboarding(false);
@@ -159,7 +149,6 @@ export function AuthProvider({ children }) {
     setHasFeatureAccess(null);
     setAccessStatus(null);
     setTrialDaysLeft(null);
-    setRequiresStoreTrial(false);
     await configureRevenueCat({});
   };
 
@@ -281,14 +270,6 @@ export function AuthProvider({ children }) {
     return profile;
   };
 
-  const markStoreTrialRequired = async () => {
-    await AsyncStorage.setItem(STORE_TRIAL_REQUIRED_KEY, 'true');
-    setRequiresStoreTrial(true);
-    setHasFeatureAccess(false);
-    setAccessStatus('expired');
-    setTrialDaysLeft(0);
-  };
-
   const signIn = async (token, publicId, refreshToken, profileCompletedHint) => {
     try {
       await AsyncStorage.setItem('userToken', token);
@@ -345,7 +326,6 @@ export function AuthProvider({ children }) {
       await AsyncStorage.removeItem('userToken');
       await AsyncStorage.removeItem('refreshToken');
       await AsyncStorage.removeItem('publicUserId');
-      await AsyncStorage.removeItem(STORE_TRIAL_REQUIRED_KEY);
     } catch (error) {
       console.warn('AsyncStorage sign-out cleanup failed (ignored):', error);
     }
@@ -358,7 +338,6 @@ export function AuthProvider({ children }) {
       setHasFeatureAccess(null);
       setAccessStatus(null);
       setTrialDaysLeft(null);
-      setRequiresStoreTrial(false);
     } catch (error) {
       console.warn('Local auth state reset failed (ignored):', error);
     }
@@ -400,10 +379,8 @@ export function AuthProvider({ children }) {
         hasFeatureAccess,
         accessStatus,
         trialDaysLeft,
-        requiresStoreTrial,
         signIn,
         signOut,
-        markStoreTrialRequired,
         completeOnboarding,
         completeFoodProfileOnboarding,
         applyFoodProfileFlags,

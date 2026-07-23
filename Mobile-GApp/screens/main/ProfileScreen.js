@@ -20,8 +20,7 @@ import { addDebugLog } from '../../utils/debugLogger';
 export default function ProfileScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-  const { signOut, foodProfileHasPreferences, hasFeatureAccess, requiresStoreTrial, refreshUserProfile } =
-    useContext(AuthContext);
+  const { signOut, foodProfileHasPreferences, refreshUserProfile } = useContext(AuthContext);
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const headerPaddingTop = Math.max(insets.top, 16);
@@ -64,7 +63,8 @@ export default function ProfileScreen() {
   const debugTapThreshold = 7;
   const revenueCatReady = isRevenueCatConfigured();
   const premiumPriceCacheKey = 'premium_price_line_cache_v1';
-  const premiumModalDismissible = hasFeatureAccess === true && requiresStoreTrial !== true;
+  // Under the free-browse model this modal is always opened contextually (never forced), so it's always closable.
+  const premiumModalDismissible = true;
   const normalizeVersion = (value) => {
     if (typeof value !== 'string') return '';
     return value.trim().replace(/\.+$/, '');
@@ -815,6 +815,27 @@ export default function ProfileScreen() {
           <View style={styles.menuItemLeft}>
             <Ionicons name="card-outline" size={22} color={Colors.text} />
             <Text style={styles.menuText}>Manage Subscription</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
+        </TouchableOpacity>
+
+      </View>
+
+      <View style={styles.menuSection}>
+        <Text style={styles.sectionTitle}>My Progress</Text>
+
+        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('WeeklyRecap')}>
+          <View style={styles.menuItemLeft}>
+            <Ionicons name="stats-chart-outline" size={22} color={Colors.text} />
+            <Text style={styles.menuText}>Weekly Recap</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('ShoppingList')}>
+          <View style={styles.menuItemLeft}>
+            <Ionicons name="cart-outline" size={22} color={Colors.text} />
+            <Text style={styles.menuText}>Shopping List</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
         </TouchableOpacity>
