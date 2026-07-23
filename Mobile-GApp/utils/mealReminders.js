@@ -378,6 +378,41 @@ async function cancelOrphanedDailyGuidanceNotifications() {
   }
 }
 
+export async function cancelTodaysDailyGuidanceNotification() {
+  try {
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    if (!Array.isArray(scheduled) || scheduled.length === 0) return;
+
+    const todayKey = new Date().toDateString();
+    const todaysIds = scheduled
+      .filter((item) => item?.content?.data?.kind === 'daily_guidance')
+      .filter((item) => {
+        const scheduledFor = item?.content?.data?.scheduledFor;
+        if (!scheduledFor) return false;
+        const date = new Date(scheduledFor);
+        return !Number.isNaN(date.getTime()) && date.toDateString() === todayKey;
+      })
+      .map((item) => item?.identifier)
+      .filter(Boolean);
+
+    if (!todaysIds.length) return;
+
+    await Promise.allSettled(todaysIds.map((id) => Notifications.cancelScheduledNotificationAsync(id)));
+
+    const storedIds = await readJson(STORAGE_KEYS.dailyGuidanceScheduledIds, []);
+    if (Array.isArray(storedIds) && storedIds.length) {
+      await writeJson(
+        STORAGE_KEYS.dailyGuidanceScheduledIds,
+        storedIds.filter((id) => !todaysIds.includes(id))
+      );
+    }
+
+    debugLog("Cancelled today's daily guidance notification", { count: todaysIds.length, ids: todaysIds });
+  } catch {
+    // Ignore.
+  }
+}
+
 async function cancelScheduledDailyPlanNotifications() {
   const ids = await readJson(STORAGE_KEYS.dailyPlanScheduledIds, []);
   if (!Array.isArray(ids) || ids.length === 0) return;
