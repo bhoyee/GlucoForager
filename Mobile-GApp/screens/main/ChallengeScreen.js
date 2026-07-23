@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Modal } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +17,25 @@ export default function ChallengeScreen() {
   const [challenge, setChallenge] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [milestoneStreak, setMilestoneStreak] = useState(null);
+
+  const STREAK_MILESTONES = [7, 30, 100];
+  const MILESTONE_STORAGE_KEY = 'highest_streak_milestone_v1';
+
+  const maybeCelebrateStreak = useCallback(async (challengeData) => {
+    const streak = Number(challengeData?.streak_days || 0);
+    if (!challengeData?.completed_today || !STREAK_MILESTONES.includes(streak)) return;
+    try {
+      const stored = await AsyncStorage.getItem(MILESTONE_STORAGE_KEY);
+      const highest = stored ? Number(stored) || 0 : 0;
+      if (streak > highest) {
+        await AsyncStorage.setItem(MILESTONE_STORAGE_KEY, String(streak));
+        setMilestoneStreak(streak);
+      }
+    } catch {
+      // Ignore storage errors - celebration just won't show this time.
+    }
+  }, []);
 
   const progress = useMemo(() => {
     const completed = Number(challenge?.progress?.completed || 0);
@@ -79,10 +98,11 @@ export default function ChallengeScreen() {
       }
       const data = await response.json();
       setChallenge(data?.challenge || null);
+      void maybeCelebrateStreak(data?.challenge);
     } catch {
       Alert.alert('Daily Challenge', 'Network request failed. Please check your connection.');
     }
-  }, []);
+  }, [maybeCelebrateStreak]);
 
   const streakDays = Number(challenge?.streak_days || 0);
 
@@ -195,6 +215,32 @@ export default function ChallengeScreen() {
         ) : null}
         </View>
       </ScrollView>
+
+      <Modal
+        visible={Boolean(milestoneStreak)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMilestoneStreak(null)}
+      >
+        <View style={styles.milestoneOverlay}>
+          <View style={styles.milestoneCard}>
+            <View style={styles.milestoneIcon}>
+              <Ionicons name="flame" size={32} color="white" />
+            </View>
+            <Text style={styles.milestoneTitle}>{milestoneStreak}-day streak!</Text>
+            <Text style={styles.milestoneSub}>
+              You've completed your daily challenge {milestoneStreak} days in a row. Keep it going.
+            </Text>
+            <TouchableOpacity
+              style={styles.milestoneButton}
+              onPress={() => setMilestoneStreak(null)}
+              activeOpacity={0.9}
+            >
+              <Text style={styles.milestoneButtonText}>Nice!</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -311,4 +357,61 @@ const styles = StyleSheet.create({
   },
   completeTitle: { fontSize: 14, fontWeight: '900', color: Colors.success },
   completeSub: { marginTop: 4, fontSize: 12, lineHeight: 18, color: Colors.textLight, fontWeight: '700' },
+  milestoneOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(7, 29, 24, 0.72)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 28,
+  },
+  milestoneCard: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: Colors.surface,
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 18 },
+    shadowRadius: 28,
+    elevation: 10,
+  },
+  milestoneIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: Colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  milestoneTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: Colors.text,
+    textAlign: 'center',
+  },
+  milestoneSub: {
+    marginTop: 10,
+    fontSize: 14,
+    lineHeight: 20,
+    color: Colors.textLight,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  milestoneButton: {
+    marginTop: 20,
+    minWidth: 160,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  milestoneButtonText: {
+    color: 'white',
+    fontSize: 15,
+    fontWeight: '800',
+  },
 });

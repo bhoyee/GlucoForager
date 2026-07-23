@@ -430,7 +430,7 @@ export async function scheduleDailyGuidanceNotifications() {
       const id = await Notifications.scheduleNotificationAsync({
         content: {
           title: 'Daily Guidance',
-          body: "Your daily tip + challenge are ready. Tap to start.",
+          body: "Keep your streak alive - today's challenge is waiting. Tap to finish it.",
           ...(Platform.OS === 'android' ? { channelId: DAILY_GUIDANCE_ANDROID_CHANNEL_ID } : {}),
           data: {
             kind: 'daily_guidance',
