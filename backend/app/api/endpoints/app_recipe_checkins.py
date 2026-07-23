@@ -83,6 +83,28 @@ def get_latest_feelings(db: Session, user_id: int, fingerprints: list[str]) -> d
     return result
 
 
+def get_disliked_recipe_names(db: Session, user_id: int, limit: int = 15) -> list[str]:
+    """Recent recipe names the user marked "not_great", for steering future generations away from them."""
+    rows = (
+        db.query(RecipeCheckIn)
+        .filter(RecipeCheckIn.user_id == user_id, RecipeCheckIn.feeling == "not_great")
+        .order_by(RecipeCheckIn.check_in_date.desc())
+        .all()
+    )
+    names: list[str] = []
+    seen: set[str] = set()
+    for row in rows:
+        name = (row.recipe_name or "").strip()
+        key = name.lower()
+        if not name or key in seen:
+            continue
+        seen.add(key)
+        names.append(name)
+        if len(names) >= limit:
+            break
+    return names
+
+
 @router.get("/recipes/check-in/today")
 def get_recipe_check_in_today(
     title: str,
