@@ -1,5 +1,5 @@
 // screens/main/HomeScreen.js - UPDATED PRODUCTION VERSION
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -63,6 +63,25 @@ export default function HomeScreen() {
     scansToday: 0,
     favoritesSaved: 0,
   });
+  const [showShoppingListNewDot, setShowShoppingListNewDot] = useState(false);
+  const [showWeeklyRecapNewDot, setShowWeeklyRecapNewDot] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadNewFeatureFlags = async () => {
+      const [shoppingListSeen, weeklyRecapSeen] = await Promise.all([
+        AsyncStorage.getItem('seen_feature_shopping_list_v1'),
+        AsyncStorage.getItem('seen_feature_weekly_recap_v1'),
+      ]);
+      if (cancelled) return;
+      setShowShoppingListNewDot(shoppingListSeen !== 'true');
+      setShowWeeklyRecapNewDot(weeklyRecapSeen !== 'true');
+    };
+    loadNewFeatureFlags().catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const loadTipConfig = async () => {
     try {
       const cached = await AsyncStorage.getItem('tips_blocked_ids_v1');
@@ -503,8 +522,16 @@ export default function HomeScreen() {
 
   const handleOpenEatNow = () => navigation.navigate('EatNow');
   const handleOpenSwaps = () => navigation.navigate('CarbSwaps');
-  const handleOpenShoppingList = () => navigation.navigate('Profile', { screen: 'ShoppingList' });
-  const handleOpenWeeklyRecap = () => navigation.navigate('Profile', { screen: 'WeeklyRecap' });
+  const handleOpenShoppingList = () => {
+    setShowShoppingListNewDot(false);
+    AsyncStorage.setItem('seen_feature_shopping_list_v1', 'true').catch(() => {});
+    navigation.navigate('Profile', { screen: 'ShoppingList' });
+  };
+  const handleOpenWeeklyRecap = () => {
+    setShowWeeklyRecapNewDot(false);
+    AsyncStorage.setItem('seen_feature_weekly_recap_v1', 'true').catch(() => {});
+    navigation.navigate('Profile', { screen: 'WeeklyRecap' });
+  };
   const handleOpenChallenge = () => navigation.navigate('Challenge');
   const handleOpenTip = () => navigation.navigate('TodayTip', { tip: todayTip });
 
@@ -872,6 +899,7 @@ export default function HomeScreen() {
               <TouchableOpacity style={styles.streakBadge} onPress={handleOpenWeeklyRecap} activeOpacity={0.8}>
                 <Ionicons name="flame" size={13} color={Colors.accent} />
                 <Text style={styles.streakBadgeText}>{streakDays} day streak</Text>
+                {showWeeklyRecapNewDot ? <View style={styles.newDot} /> : null}
               </TouchableOpacity>
             ) : null}
           </View>
@@ -947,6 +975,7 @@ export default function HomeScreen() {
             >
               <View style={[styles.toolTileIcon, { backgroundColor: Colors.primary }]}>
                 <Ionicons name="cart-outline" size={20} color="white" />
+                {showShoppingListNewDot ? <View style={styles.newDot} /> : null}
               </View>
               <Text style={styles.toolTileLabel}>Shopping list</Text>
             </Pressable>
@@ -1507,6 +1536,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   streakBadge: {
+    position: 'relative',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -1710,6 +1740,17 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
+  },
+  newDot: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: Colors.danger,
+    borderWidth: 1.5,
+    borderColor: Colors.surface,
   },
   toolTileIcon: {
     width: 40,
