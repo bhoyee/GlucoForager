@@ -841,7 +841,8 @@ export default function HomeScreen() {
                 <Text style={styles.heroUsageCount}>7 days free</Text>
               </View>
               <Text style={styles.heroUsageBody}>
-                Start your free trial to scan ingredients, type ingredients, and generate diabetes-friendly recipes.
+                Start your free trial to unlock recipes (scan, type, or auto-generate), your meal planner,
+                GlucoGuide AI, and food swaps.
               </Text>
               <TouchableOpacity style={styles.heroUpgradeButton} onPress={handleUpgradePaywall} activeOpacity={0.9}>
                 <Text style={styles.heroUpgradeText}>Start 7-day trial</Text>
