@@ -13,6 +13,7 @@ from .ingredient_classifier import IngredientClassifier
 from .cost_tracker import record_ai_request
 from .food_profile_service import extract_food_profile
 from .ingredient_risk_classifier import IngredientRiskClassifier
+from ..api.endpoints.app_recipe_checkins import get_disliked_recipe_names
 
 
 logger = logging.getLogger(__name__)
@@ -245,6 +246,24 @@ class AIPipeline:
             return ingredients
         return list(ingredients[:n])
 
+    def _merge_disliked_titles(
+        self, db: Session, user_id: int, exclude_titles: list[str] | None
+    ) -> list[str]:
+        """Fold in recipes the user has previously marked "not_great" so future
+        generations steer away from them, on top of whatever the caller already excludes."""
+        merged = list(exclude_titles or [])
+        try:
+            disliked = get_disliked_recipe_names(db, user_id)
+        except Exception:  # noqa: BLE001
+            disliked = []
+        seen = {t.strip().lower() for t in merged if t}
+        for name in disliked:
+            key = name.strip().lower()
+            if key and key not in seen:
+                seen.add(key)
+                merged.append(name)
+        return merged
+
     def fridge_to_recipes(
         self,
         db: Session,
@@ -257,6 +276,7 @@ class AIPipeline:
     ) -> Dict[str, Any]:
         user = db.query(User).filter(User.id == user_id).first()
         food_profile = extract_food_profile(user) if user else None
+        exclude_titles = self._merge_disliked_titles(db, user_id, None)
         analysis = self.ai.analyze_vision(image_base64, tier)
         ingredients = self._clean_ingredients(analysis.get("ingredients", []))
         self._validate_ingredients(ingredients)
@@ -305,6 +325,7 @@ class AIPipeline:
                 selected_food_only,
                 tier,
                 filters=filters,
+                exclude_titles=exclude_titles,
                 timeout_seconds=55,
                 generate_images=False,
                 food_profile=food_profile,
@@ -315,6 +336,7 @@ class AIPipeline:
                     selected_food_only,
                     tier,
                     filters=filters,
+                    exclude_titles=exclude_titles,
                     variety_mode=True,
                     timeout_seconds=55,
                     generate_images=False,
@@ -349,6 +371,7 @@ class AIPipeline:
     ) -> Dict[str, Any]:
         user = db.query(User).filter(User.id == user_id).first()
         food_profile = extract_food_profile(user) if user else None
+        exclude_titles = self._merge_disliked_titles(db, user_id, None)
         all_ingredients: list[str] = []
         images_base64 = [img for img in (images_base64 or []) if isinstance(img, str) and img.strip()]
         analysis = self.ai.analyze_vision_batch(images_base64, tier) if images_base64 else {"ingredients": []}
@@ -415,6 +438,7 @@ class AIPipeline:
                 selected_food_only,
                 tier,
                 filters=filters,
+                exclude_titles=exclude_titles,
                 timeout_seconds=55,
                 generate_images=False,
                 food_profile=food_profile,
@@ -425,6 +449,7 @@ class AIPipeline:
                     selected_food_only,
                     tier,
                     filters=filters,
+                    exclude_titles=exclude_titles,
                     variety_mode=True,
                     timeout_seconds=55,
                     generate_images=False,
@@ -460,6 +485,7 @@ class AIPipeline:
     ) -> List[Dict[str, Any]]:
         user = db.query(User).filter(User.id == user_id).first()
         food_profile = extract_food_profile(user) if user else None
+        exclude_titles = self._merge_disliked_titles(db, user_id, exclude_titles)
         if settings.ai_debug_logging and mode in ("surprise", "quick") and food_profile:
             try:
                 logger.info(
