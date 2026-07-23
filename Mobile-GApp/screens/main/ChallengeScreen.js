@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/Colors';
 import { apiFetch } from '../../utils/api';
 import { API_URL } from '../../config/api';
+import { cancelTodaysDailyGuidanceNotification } from '../../utils/mealReminders';
 
 export default function ChallengeScreen() {
   const navigation = useNavigation();
@@ -99,6 +100,9 @@ export default function ChallengeScreen() {
       const data = await response.json();
       setChallenge(data?.challenge || null);
       void maybeCelebrateStreak(data?.challenge);
+      if (data?.challenge?.completed_today) {
+        void cancelTodaysDailyGuidanceNotification();
+      }
     } catch {
       Alert.alert('Daily Challenge', 'Network request failed. Please check your connection.');
     }
