@@ -210,12 +210,18 @@ export async function generateMetadata({ params }) {
 export default async function BlogPostPage({ params }) {
   const slug = params.slug;
 
-  const [postRes, commentsRes] = await Promise.all([
-    fetch(`${API_URL}/api/blog/posts/${encodeURIComponent(slug)}`, { next: { revalidate: 10 } }),
-    fetch(`${API_URL}/api/blog/posts/${encodeURIComponent(slug)}/comments`, { next: { revalidate: 10 } }),
-  ]);
+  let postRes;
+  let commentsRes;
+  try {
+    [postRes, commentsRes] = await Promise.all([
+      fetch(`${API_URL}/api/blog/posts/${encodeURIComponent(slug)}`, { next: { revalidate: 10 } }),
+      fetch(`${API_URL}/api/blog/posts/${encodeURIComponent(slug)}/comments`, { next: { revalidate: 10 } }),
+    ]);
+  } catch {
+    postRes = null;
+  }
 
-  if (!postRes.ok) {
+  if (!postRes || !postRes.ok) {
     return (
       <main className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
         <BlogTopBar rightHref="/blog" rightLabel="Back to blog" />
