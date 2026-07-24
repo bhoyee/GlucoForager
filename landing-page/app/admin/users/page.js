@@ -57,7 +57,7 @@ export default function AdminUsersPage() {
   const [accessSummary, setAccessSummary] = useState({
     trialing: 0,
     cancelled_active: 0,
-    legacy_grace: 0,
+    free: 0,
     expired: 0,
     premium: 0,
     blocked: 0,
@@ -171,7 +171,7 @@ export default function AdminUsersPage() {
       setAccessSummary({
         trialing: Number(data.trialing || data.trial || 0),
         cancelled_active: Number(data.cancelled_active || 0),
-        legacy_grace: Number(data.legacy_grace || data.grace || 0),
+        free: Number(data.free || 0),
         expired: Number(data.expired || 0),
         premium: Number(data.premium || 0),
         blocked: Number(data.blocked || 0),
@@ -512,7 +512,7 @@ export default function AdminUsersPage() {
         {[
           ['trialing', 'Store trials', accessSummary.trialing, '#dcfce7', '#166534'],
           ['cancelled_active', 'Cancelled active', accessSummary.cancelled_active, '#fff7ed', '#9a3412'],
-          ['legacy_grace', 'Legacy grace', accessSummary.legacy_grace, '#fffbeb', '#92400e'],
+          ['free', 'Free', accessSummary.free, '#f1f5f9', '#334155'],
           ['expired', 'Expired', accessSummary.expired, '#fef2f2', '#991b1b'],
           ['premium', 'Premium', accessSummary.premium, '#fff7ed', '#9a3412'],
           ['blocked', 'Blocked', accessSummary.blocked, '#f8fafc', '#334155'],
@@ -587,6 +587,7 @@ export default function AdminUsersPage() {
           <option value="all">All access</option>
           <option value="trialing">Store trial</option>
           <option value="cancelled_active">Cancelled active</option>
+          <option value="free">Free</option>
           <option value="legacy_grace">Legacy grace</option>
           <option value="expired">Expired</option>
           <option value="premium">Premium</option>
