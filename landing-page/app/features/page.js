@@ -1,5 +1,22 @@
 import FeatureGrid from "../../components/FeatureGrid";
 
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.glucoforager.com").replace(/\/+$/, "");
+
+export const metadata = {
+  title: "Features",
+  description:
+    "See what GlucoForager can do: scan or type ingredients for diabetes-friendly meal ideas, get food swaps, daily tips and challenges, and a Premium daily meal planner.",
+  alternates: { canonical: "/features" },
+  openGraph: {
+    title: "GlucoForager Features — Meal Ideas, Swaps & Daily Planning",
+    description:
+      "Scan ingredients, get diabetes-aware meal ideas, smarter food swaps, and a Premium daily meal planner built around your blood sugar goals.",
+    url: `${SITE_URL}/features`,
+    type: "website",
+  },
+  robots: { index: true, follow: true },
+};
+
 export default function FeaturesPage() {
   return (
     <main className="min-h-screen bg-white">

@@ -1,6 +1,11 @@
 import HomePageClient from "../components/HomePageClient";
+import { faqs } from "../lib/faqData";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || "http://localhost:8010";
+
+export const metadata = {
+  alternates: { canonical: "/" },
+};
 
 async function fetchLatestBlogPosts() {
   const controller = new AbortController();
@@ -23,5 +28,28 @@ async function fetchLatestBlogPosts() {
 
 export default async function HomePage() {
   const latestPosts = await fetchLatestBlogPosts();
-  return <HomePageClient latestPosts={latestPosts} />;
+
+  const faqJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: faqs.map((faq) => ({
+      "@type": "Question",
+      name: faq.question,
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: faq.answer,
+      },
+    })),
+  };
+
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+      />
+      <HomePageClient latestPosts={latestPosts} />
+    </>
+  );
 }
