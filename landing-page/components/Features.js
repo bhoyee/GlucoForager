@@ -154,14 +154,21 @@ export default function Features() {
             </div>
           </div>
 
-          <div className="relative mx-auto h-[clamp(420px,62vh,620px)] w-[280px] max-w-full overflow-hidden rounded-[2rem] border border-white/20 bg-black shadow-2xl shadow-black/40 xl:w-[300px]">
-            <Image
-              src={active.image}
-              alt={active.alt}
-              fill
-              sizes="300px"
-              className="object-cover"
-            />
+          <div className="relative mx-auto w-[220px] sm:w-[240px] md:w-[220px] lg:w-[240px] xl:w-[260px] aspect-[9/19.5]">
+            {/* Outer frame / bezel */}
+            <div className="absolute inset-0 rounded-[2.5rem] bg-white shadow-2xl ring-1 ring-black/10"></div>
+            {/* Screen */}
+            <div className="absolute inset-[10px] rounded-[2rem] overflow-hidden bg-black ring-1 ring-black/5">
+              <Image
+                src={active.image}
+                alt={active.alt}
+                fill
+                sizes="260px"
+                className="object-cover"
+              />
+            </div>
+            {/* Dynamic Island notch */}
+            <div className="absolute left-1/2 top-[24px] h-[20px] w-[80px] -translate-x-1/2 rounded-full bg-black z-10"></div>
           </div>
         </div>
       </div>

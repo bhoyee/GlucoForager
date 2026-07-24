@@ -3,10 +3,9 @@ const tiers = [
     name: 'Free',
     price: '$0',
     bullets: [
-      'Ingredient scan + typed ingredients',
-      'Daily tips & challenges',
+      'Browse recipes, tips & the daily challenge',
       'Save favourites and view recent recipes',
-      'Limited AI generations',
+      '7-day free trial for AI recipe generation',
     ],
   },
   {

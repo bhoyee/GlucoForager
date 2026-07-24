@@ -9,6 +9,7 @@ export default async function sitemap() {
     '/features',
     '/pricing',
     '/download',
+    '/careers',
     '/blog',
     '/privacy-policy',
     '/terms',

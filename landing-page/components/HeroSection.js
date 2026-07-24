@@ -3,127 +3,9 @@
 export default function HeroSection({ onDownloadClick }) {
   return (
     <section className="container mx-auto px-4 py-4 md:py-10 relative overflow-hidden bg-gradient-to-br from-white via-teal-50/30 to-purple-50/20">
-      {/* Scattered Food Images Background - BRIGHTER */}
-      <div className="absolute inset-0 z-0 opacity-20">
-        {/* Top Left - Salad */}
-        <div className="absolute top-10 left-10 w-32 h-32 md:w-40 md:h-40 animate-float-slow">
-          <div className="relative w-full h-full">
-            <div className="absolute inset-0 bg-emerald-400 rounded-full opacity-60 blur-lg"></div>
-            <div className="absolute inset-4 bg-emerald-300 rounded-full shadow-lg shadow-emerald-200/50"></div>
-            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white text-3xl md:text-4xl font-bold">
-              🥗
-            </div>
-          </div>
-        </div>
+      {/* Subtle premium gradient mesh backdrop */}
+      <div className="absolute inset-0 z-0 hero-pattern" aria-hidden="true"></div>
 
-        {/* Top Right - Avocado */}
-        <div className="absolute top-20 right-20 w-28 h-28 md:w-36 md:h-36 animate-float">
-          <div className="relative w-full h-full">
-            <div className="absolute inset-0 bg-green-500 rounded-full opacity-60 blur-lg"></div>
-            <div className="absolute inset-4 bg-green-400 rounded-full shadow-lg shadow-green-200/50"></div>
-            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white text-2xl md:text-3xl font-bold">
-              🥑
-            </div>
-          </div>
-        </div>
-
-        {/* Middle Left - Fish */}
-        <div className="absolute top-1/2 left-20 w-36 h-36 md:w-44 md:h-44 animate-float-slow">
-          <div className="relative w-full h-full">
-            <div className="absolute inset-0 bg-blue-500 rounded-full opacity-60 blur-lg"></div>
-            <div className="absolute inset-4 bg-blue-400 rounded-full shadow-lg shadow-blue-200/50"></div>
-            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white text-3xl md:text-4xl font-bold">
-              🐟
-            </div>
-          </div>
-        </div>
-
-        {/* Middle Right - Berries */}
-        <div className="absolute top-1/3 right-32 w-40 h-40 md:w-48 md:h-48 animate-float-delayed">
-          <div className="relative w-full h-full">
-            <div className="absolute inset-0 bg-purple-500 rounded-full opacity-60 blur-lg"></div>
-            <div className="absolute inset-4 bg-purple-400 rounded-full shadow-lg shadow-purple-200/50"></div>
-            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white text-3xl md:text-4xl font-bold">
-              🫐
-            </div>
-          </div>
-        </div>
-
-        {/* Bottom Left - Broccoli */}
-        <div className="absolute bottom-20 left-32 w-28 h-28 md:w-36 md:h-36 animate-float">
-          <div className="relative w-full h-full">
-            <div className="absolute inset-0 bg-emerald-600 rounded-full opacity-60 blur-lg"></div>
-            <div className="absolute inset-4 bg-emerald-500 rounded-full shadow-lg shadow-emerald-200/50"></div>
-            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white text-2xl md:text-3xl font-bold">
-              🥦
-            </div>
-          </div>
-        </div>
-
-        {/* Bottom Right - Chicken */}
-        <div className="absolute bottom-32 right-10 w-32 h-32 md:w-40 md:h-40 animate-float-slow">
-          <div className="relative w-full h-full">
-            <div className="absolute inset-0 bg-amber-600 rounded-full opacity-60 blur-lg"></div>
-            <div className="absolute inset-4 bg-amber-500 rounded-full shadow-lg shadow-amber-200/50"></div>
-            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white text-2xl md:text-3xl font-bold">
-              🍗
-            </div>
-          </div>
-        </div>
-
-        {/* Center Top - Apple */}
-        <div className="absolute top-40 left-1/2 transform -translate-x-1/2 w-24 h-24 md:w-32 md:h-32 animate-float-delayed">
-          <div className="relative w-full h-full">
-            <div className="absolute inset-0 bg-red-500 rounded-full opacity-60 blur-lg"></div>
-            <div className="absolute inset-4 bg-red-400 rounded-full shadow-lg shadow-red-200/50"></div>
-            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white text-2xl md:text-3xl font-bold">
-              🍎
-            </div>
-          </div>
-        </div>
-
-        {/* Center Bottom - Nuts */}
-        <div className="absolute bottom-40 left-1/2 transform -translate-x-1/2 w-28 h-28 md:w-36 md:h-36 animate-float">
-          <div className="relative w-full h-full">
-            <div className="absolute inset-0 bg-yellow-700 rounded-full opacity-60 blur-lg"></div>
-            <div className="absolute inset-4 bg-yellow-600 rounded-full shadow-lg shadow-yellow-200/50"></div>
-            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white text-2xl md:text-3xl font-bold">
-              🌰
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Additional BRIGHT food icons scattered */}
-      <div className="absolute inset-0 z-0 opacity-20">
-        {[
-          {emoji: '🥒', color: 'bg-green-400', size: 'text-xl', top: '15%', left: '5%'},
-          {emoji: '🥕', color: 'bg-orange-400', size: 'text-xl', top: '25%', left: '85%'},
-          {emoji: '🍅', color: 'bg-red-400', size: 'text-xl', top: '70%', left: '10%'},
-          {emoji: '🫑', color: 'bg-green-500', size: 'text-xl', top: '80%', left: '80%'},
-          {emoji: '🥬', color: 'bg-emerald-400', size: 'text-xl', top: '10%', left: '40%'},
-          {emoji: '🍓', color: 'bg-red-300', size: 'text-xl', top: '85%', left: '40%'},
-          {emoji: '🥝', color: 'bg-green-300', size: 'text-xl', top: '30%', left: '60%'},
-          {emoji: '🥭', color: 'bg-yellow-500', size: 'text-xl', top: '60%', left: '90%'},
-          {emoji: '🍠', color: 'bg-orange-300', size: 'text-xl', top: '90%', left: '60%'},
-          {emoji: '🥚', color: 'bg-amber-100', size: 'text-xl', top: '20%', left: '30%'},
-          {emoji: '🧀', color: 'bg-yellow-300', size: 'text-xl', top: '75%', left: '20%'},
-          {emoji: '🥛', color: 'bg-blue-100', size: 'text-xl', top: '40%', left: '15%'},
-        ].map((item, index) => (
-          <div 
-            key={index}
-            className={`absolute ${item.size} ${item.color} rounded-full p-2 shadow-lg animate-float-random`}
-            style={{
-              top: item.top,
-              left: item.left,
-              animationDelay: `${index * 0.5}s`,
-            }}
-          >
-            {item.emoji}
-          </div>
-        ))}
-      </div>
-      
       <div className="max-w-7xl mx-auto relative z-10">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
           <div className="text-center lg:text-left">
@@ -138,25 +20,25 @@ export default function HeroSection({ onDownloadClick }) {
               <div className="group rounded-2xl bg-gradient-to-br from-white/95 to-teal-50/60 backdrop-blur border border-teal-100/80 px-4 py-3 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-teal-200/30">
                 <div className="flex items-start gap-2.5">
                   <span className="mt-1.5 h-2.5 w-2.5 rounded-full bg-gradient-to-r from-teal-500 to-emerald-500 shadow-sm" />
-                  <h2 className="text-sm font-extrabold text-gray-900 leading-snug">
+                  <p className="text-sm font-extrabold text-gray-900 leading-snug">
                     Scan What You Have, Eat What Works
-                  </h2>
+                  </p>
                 </div>
               </div>
               <div className="group rounded-2xl bg-gradient-to-br from-white/95 to-teal-50/60 backdrop-blur border border-teal-100/80 px-4 py-3 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-teal-200/30">
                 <div className="flex items-start gap-2.5">
                   <span className="mt-1.5 h-2.5 w-2.5 rounded-full bg-gradient-to-r from-teal-500 to-emerald-500 shadow-sm" />
-                  <h2 className="text-sm font-extrabold text-gray-900 leading-snug">
+                  <p className="text-sm font-extrabold text-gray-900 leading-snug">
                     A Daily Plan Built for Blood Sugar
-                  </h2>
+                  </p>
                 </div>
               </div>
               <div className="group rounded-2xl bg-gradient-to-br from-white/95 to-teal-50/60 backdrop-blur border border-teal-100/80 px-4 py-3 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-teal-200/30">
                 <div className="flex items-start gap-2.5">
                   <span className="mt-1.5 h-2.5 w-2.5 rounded-full bg-gradient-to-r from-teal-500 to-emerald-500 shadow-sm" />
-                  <h2 className="text-sm font-extrabold text-gray-900 leading-snug">
+                  <p className="text-sm font-extrabold text-gray-900 leading-snug">
                     Smarter Swaps, Better Choices
-                  </h2>
+                  </p>
                 </div>
               </div>
             </div>
@@ -211,6 +93,16 @@ export default function HeroSection({ onDownloadClick }) {
                   autoPlay
                   controls
                 />
+              </div>
+
+              {/* Premium badge chips */}
+              <div className="absolute -left-4 top-10 hidden sm:flex items-center gap-2 rounded-2xl bg-white/95 backdrop-blur border border-teal-100 px-4 py-2.5 shadow-lg shadow-teal-900/10">
+                <span className="flex h-2.5 w-2.5 rounded-full bg-gradient-to-r from-teal-500 to-emerald-500" />
+                <span className="text-xs font-bold text-gray-800">AI-powered</span>
+              </div>
+              <div className="absolute -right-4 bottom-16 hidden sm:flex items-center gap-2 rounded-2xl bg-white/95 backdrop-blur border border-teal-100 px-4 py-2.5 shadow-lg shadow-teal-900/10">
+                <span className="flex h-2.5 w-2.5 rounded-full bg-gradient-to-r from-teal-500 to-emerald-500" />
+                <span className="text-xs font-bold text-gray-800">Free to start</span>
               </div>
             </div>
           </div>
