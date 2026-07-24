@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": false,
-      "buildNumber": "14",
+      "buildNumber": "15",
       "infoPlist": {
         "NSCameraUsageDescription": "GlucoForager uses your camera to scan ingredients and identify items for diabetes-friendly recipe suggestions (e.g., take a photo of your fridge or pantry).",
         "NSPhotoLibraryUsageDescription": "Allow $(PRODUCT_NAME) to access your photo library to select ingredient images",
@@ -23,7 +23,7 @@
       "bundleIdentifier": "com.glucoforager.app"
     },
     "android": {
-      "versionCode": 54,
+      "versionCode": 55,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",

@@ -867,7 +867,7 @@ def list_users(
         elif tier_key == "premium":
             query = query.filter(effective_premium, User.suspended_at.is_(None))
         elif tier_key == "free":
-            query = query.filter(~effective_premium)
+            query = query.filter(normal_non_premium, legacy_grace_inactive, User.trial_started_at.is_(None))
         elif tier_key == "trialing":
             query = query.filter(effective_premium, billing_trialing, User.suspended_at.is_(None))
         elif tier_key == "cancelled_active":
@@ -875,7 +875,7 @@ def list_users(
         elif tier_key == "legacy_grace":
             query = query.filter(normal_non_premium, legacy_grace_active)
         elif tier_key == "expired":
-            query = query.filter(normal_non_premium, legacy_grace_inactive)
+            query = query.filter(normal_non_premium, legacy_grace_inactive, User.trial_started_at.is_not(None))
         elif tier_key == "blocked":
             query = query.filter(active_block, User.suspended_at.is_(None))
         elif tier_key == "suspended":
@@ -1001,6 +1001,7 @@ def users_access_summary(
         "trialing": 0,
         "cancelled_active": 0,
         "legacy_grace": 0,
+        "free": 0,
         "expired": 0,
         "premium": 0,
         "blocked": 0,
@@ -1011,7 +1012,10 @@ def users_access_summary(
     for user in db.query(User).all():
         payload = _admin_user_access_payload(db, user, now=now)
         status_value = payload.get("access_status")
-        if status_value in counts:
+        if status_value == "expired":
+            bucket = "free" if user.trial_started_at is None else "expired"
+            counts[bucket] += 1
+        elif status_value in counts:
             counts[status_value] += 1
         elif status_value == "trial":
             counts["trialing"] += 1

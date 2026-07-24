@@ -54,9 +54,6 @@ export default function Header({ onDownloadClick }) {
           <a href={homeSectionHref('#features')} className="text-gray-600 hover:text-teal-600 transition-colors">
             Features
           </a>
-          <a href={homeSectionHref('#screenshots')} className="text-gray-600 hover:text-teal-600 transition-colors">
-            Screenshots
-          </a>
           <a href={homeSectionHref('#faq')} className="text-gray-600 hover:text-teal-600 transition-colors">
             FAQ
           </a>
@@ -69,12 +66,21 @@ export default function Header({ onDownloadClick }) {
         </nav>
         
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => onDownloadClick?.()}
-            className="hidden sm:inline-flex items-center justify-center rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 transition-colors"
-          >
-            Download Free
-          </button>
+          {onDownloadClick ? (
+            <button
+              onClick={() => onDownloadClick()}
+              className="hidden sm:inline-flex items-center justify-center rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 transition-colors"
+            >
+              Download Free
+            </button>
+          ) : (
+            <Link
+              href="/download"
+              className="hidden sm:inline-flex items-center justify-center rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 transition-colors"
+            >
+              Download Free
+            </Link>
+          )}
           
           {/* Mobile Menu Button */}
           <button
@@ -107,13 +113,6 @@ export default function Header({ onDownloadClick }) {
               Features
             </a>
             <a
-              href={homeSectionHref('#screenshots')}
-              onClick={() => setIsMenuOpen(false)}
-              className="block py-3 px-4 text-gray-700 hover:text-teal-600 hover:bg-gray-50 rounded-lg transition-colors"
-            >
-              Screenshots
-            </a>
-            <a
               href={homeSectionHref('#faq')}
               onClick={() => setIsMenuOpen(false)}
               className="block py-3 px-4 text-gray-700 hover:text-teal-600 hover:bg-gray-50 rounded-lg transition-colors"
@@ -134,15 +133,25 @@ export default function Header({ onDownloadClick }) {
             >
               Contact
             </a>
-            <button
-              onClick={() => {
-                setIsMenuOpen(false);
-                onDownloadClick?.();
-              }}
-              className="block w-full py-3 px-4 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors text-center mt-2"
-            >
-              Download Free
-            </button>
+            {onDownloadClick ? (
+              <button
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  onDownloadClick();
+                }}
+                className="block w-full py-3 px-4 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors text-center mt-2"
+              >
+                Download Free
+              </button>
+            ) : (
+              <Link
+                href="/download"
+                onClick={() => setIsMenuOpen(false)}
+                className="block w-full py-3 px-4 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors text-center mt-2"
+              >
+                Download Free
+              </Link>
+            )}
           </div>
         </div>
       )}

@@ -680,7 +680,7 @@ export default function ManualInputScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.primaryDark} />
+      <StatusBar barStyle="light-content" />
       <ScrollView
         ref={scrollRef}
         contentContainerStyle={[

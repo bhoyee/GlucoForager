@@ -99,7 +99,6 @@ export default function AdminKPIDashboard() {
     premiumUsers: 0,
     trialUsers: 0,
     cancelledActiveUsers: 0,
-    legacyGraceUsers: 0,
     blockedUsers: 0,
     suspendedUsers: 0,
     totalRecipes: 0,
@@ -386,11 +385,9 @@ export default function AdminKPIDashboard() {
       const premiumUsers = Number(accessSummary.premium || 0) || 0;
       const trialUsers = Number(accessSummary.trialing || accessSummary.trial || 0) || 0;
       const cancelledActiveUsers = Number(accessSummary.cancelled_active || 0) || 0;
-      const legacyGraceUsers = Number(accessSummary.legacy_grace || accessSummary.grace || 0) || 0;
+      const freeUsers = Number(accessSummary.free || 0) || 0;
       const blockedUsers = Number(accessSummary.blocked || 0) || 0;
       const suspendedUsers = Number(accessSummary.suspended || 0) || 0;
-      const countedUsers = premiumUsers + trialUsers + cancelledActiveUsers + legacyGraceUsers + blockedUsers + suspendedUsers;
-      const freeUsers = Math.max(0, Number(totalUsers || 0) - countedUsers);
 
       setStats({
         totalUsers,
@@ -398,7 +395,6 @@ export default function AdminKPIDashboard() {
         premiumUsers,
         trialUsers,
         cancelledActiveUsers,
-        legacyGraceUsers,
         blockedUsers,
         suspendedUsers,
         totalRecipes: totalRecipes || 0,
@@ -426,7 +422,6 @@ export default function AdminKPIDashboard() {
         premiumUsers: 0,
         trialUsers: 0,
         cancelledActiveUsers: 0,
-        legacyGraceUsers: 0,
         blockedUsers: 0,
         suspendedUsers: 0,
         totalRecipes: 0,
@@ -489,14 +484,12 @@ export default function AdminKPIDashboard() {
   const premiumRate = stats.totalUsers ? (stats.premiumUsers / stats.totalUsers) * 100 : 0;
   const trialRate = stats.totalUsers ? (stats.trialUsers / stats.totalUsers) * 100 : 0;
   const cancelledActiveRate = stats.totalUsers ? (stats.cancelledActiveUsers / stats.totalUsers) * 100 : 0;
-  const legacyGraceRate = stats.totalUsers ? (stats.legacyGraceUsers / stats.totalUsers) * 100 : 0;
   const freeRate = stats.totalUsers ? (stats.freeUsers / stats.totalUsers) * 100 : 0;
-  const activeAccessUsers = stats.premiumUsers + stats.trialUsers + stats.cancelledActiveUsers + stats.legacyGraceUsers;
+  const activeAccessUsers = stats.premiumUsers + stats.trialUsers + stats.cancelledActiveUsers;
   const activeAccessRate = stats.totalUsers ? (activeAccessUsers / stats.totalUsers) * 100 : 0;
   const premiumEnd = clampPercent(premiumRate);
   const trialEnd = clampPercent(premiumRate + trialRate);
   const cancelledActiveEnd = clampPercent(premiumRate + trialRate + cancelledActiveRate);
-  const legacyGraceEnd = clampPercent(premiumRate + trialRate + cancelledActiveRate + legacyGraceRate);
   const contentTotal = stats.totalRecipes + stats.totalBlogPosts;
   const recipeRate = contentTotal ? (stats.totalRecipes / contentTotal) * 100 : 0;
   const textQueueLength = queueMetrics.redis?.streams?.text?.length ?? 0;
@@ -653,7 +646,6 @@ export default function AdminKPIDashboard() {
                 '--premium-end': `${premiumEnd}%`,
                 '--trial-end': `${trialEnd}%`,
                 '--cancelled-end': `${cancelledActiveEnd}%`,
-                '--grace-end': `${legacyGraceEnd}%`,
               }}
               aria-label={`Active access users ${Math.round(clampPercent(activeAccessRate))} percent`}
             >
@@ -666,8 +658,7 @@ export default function AdminKPIDashboard() {
               <ProgressBar label="Premium active" value={premiumRate} meta={formatNumber(stats.premiumUsers)} tone="blue" />
               <ProgressBar label="Store trials" value={trialRate} meta={formatNumber(stats.trialUsers)} tone="orange" />
               <ProgressBar label="Cancelled, still active" value={cancelledActiveRate} meta={formatNumber(stats.cancelledActiveUsers)} tone="gold" />
-              <ProgressBar label="Grace access" value={legacyGraceRate} meta={formatNumber(stats.legacyGraceUsers)} tone="green" />
-              <ProgressBar label="Expired / no active access" value={freeRate} meta={formatNumber(stats.freeUsers)} />
+              <ProgressBar label="Free" value={freeRate} meta={formatNumber(stats.freeUsers)} />
             </div>
           </div>
         </SectionCard>
