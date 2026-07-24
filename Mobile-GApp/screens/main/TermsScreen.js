@@ -10,7 +10,7 @@ export default function TermsScreen({ navigation }) {
   const contentBottomPadding = Math.max(insets.bottom, 16) + 16;
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.primaryDark} />
+      <StatusBar barStyle="light-content" />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
