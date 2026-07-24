@@ -5099,8 +5099,7 @@
       #2563eb 0 var(--premium-end),
       #ea580c var(--premium-end) var(--trial-end),
       #b45309 var(--trial-end) var(--cancelled-end),
-      #2e7d32 var(--cancelled-end) var(--grace-end),
-      #dbe9e1 var(--grace-end) 100%
+      #dbe9e1 var(--cancelled-end) 100%
     );
   display: grid;
   place-items: center;
