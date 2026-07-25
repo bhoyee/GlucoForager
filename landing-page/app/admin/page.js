@@ -188,15 +188,48 @@ export default function AdminLoginPage() {
     <div className="admin-container admin-auth-container">
       <div className="admin-auth-layout">
         <section className="admin-auth-panel">
-          <div className="admin-auth-brand-block">
-            <img className="admin-auth-logo" src="/images/logo.png" alt="GlucoForager" />
-            <div>
-              <p className="admin-auth-eyebrow">Private admin portal</p>
-              <h1 className="admin-auth-title">GlucoForager Admin</h1>
-              <p className="admin-auth-subtitle">Sign in to manage content, users, support, and platform operations.</p>
+          <div className="admin-auth-panel-top">
+            <div className="admin-auth-brand-block">
+              <img className="admin-auth-logo" src="/images/logo.png" alt="GlucoForager" />
+              <div>
+                <p className="admin-auth-eyebrow">Private admin portal</p>
+                <h1 className="admin-auth-title">GlucoForager Admin</h1>
+                <p className="admin-auth-subtitle">Sign in to manage content, users, support, and platform operations.</p>
+              </div>
             </div>
+
+            <ul className="admin-auth-highlights">
+              <li>
+                <span className="admin-auth-highlight-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </span>
+                <span>Manage users, subscriptions &amp; access</span>
+              </li>
+              <li>
+                <span className="admin-auth-highlight-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5A2.5 2.5 0 0 0 6.5 22H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </span>
+                <span>Review &amp; publish recipes and blog content</span>
+              </li>
+              <li>
+                <span className="admin-auth-highlight-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none"><path d="M3 12h4l3 8 4-16 3 8h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </span>
+                <span>Monitor AI usage, queues &amp; system health</span>
+              </li>
+              <li>
+                <span className="admin-auth-highlight-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </span>
+                <span>Support tools: newsletters, requests &amp; logs</span>
+              </li>
+            </ul>
           </div>
 
+          <p className="admin-auth-panel-footer">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 8.7 8 11 4.6-2.3 8-6 8-11V5l-8-3Z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            Access is limited to authorised GlucoForager staff and is logged for security.
+          </p>
         </section>
 
         <section className="admin-card admin-auth-form-card">
