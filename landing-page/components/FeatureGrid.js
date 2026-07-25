@@ -1,23 +1,39 @@
 const steps = [
   {
-    title: 'Scan or type ingredients',
-    description: 'Use your camera or type what you have to get recipes you can cook today.',
+    title: 'Get a recipe your way',
+    description: 'Scan your fridge or pantry, type what you have, or tap Surprise Me for instant diabetes-friendly recipe ideas.',
   },
   {
-    title: 'Recipe steps + nutrition',
-    description: 'Clear instructions with per-meal nutrition estimates to help you compare options.',
+    title: 'Recipe steps & nutrition facts',
+    description: 'Clear cooking instructions with per-meal nutrition estimates (calories, carbs, protein, and fibre) to help you compare options.',
   },
   {
     title: 'Food swaps',
-    description: 'Get practical alternatives and portion tips to reduce carb load without losing taste.',
+    description: 'Get practical alternatives and portion tips to reduce carb load without losing the foods you like.',
+  },
+  {
+    title: 'Shopping list',
+    description: 'Build a list from scratch or straight from a recipe, and check items off as you shop.',
+  },
+  {
+    title: 'GlucoGuide AI',
+    description: 'Ask quick food questions and get everyday, profile-aware guidance whenever you are unsure.',
   },
   {
     title: 'Daily tips',
-    description: 'Short daily guidance to build steady habits over time.',
+    description: 'Short daily guidance to build steady blood-sugar habits over time.',
   },
   {
-    title: 'Daily challenges',
-    description: 'Simple, realistic challenges tailored to support better blood-sugar routines.',
+    title: 'Daily challenges & streaks',
+    description: 'Simple, realistic challenges with milestone celebrations at 7, 30, and 100 days.',
+  },
+  {
+    title: 'Favourites & recipe history',
+    description: 'Save meals and revisit recent recipes so successful choices become easier to repeat.',
+  },
+  {
+    title: 'Weekly recap',
+    description: 'See the recipes you made, your favourites, your streak, and your recipe of the week.',
   },
   {
     title: 'Daily Meal Planner (Premium)',
