@@ -393,9 +393,9 @@ export default function ShoppingListScreen() {
       <Modal visible={showCreateModal} animationType="slide" transparent onRequestClose={closeCreateModal}>
         <KeyboardAvoidingView
           style={styles.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-          <View style={styles.modalCard}>
+          <View style={[styles.modalCard, { paddingBottom: Math.max(insets.bottom, 12) + 20 }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>New shopping list</Text>
               <TouchableOpacity onPress={closeCreateModal} disabled={isSavingNewList}>

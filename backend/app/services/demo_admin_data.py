@@ -616,7 +616,7 @@ def get_demo_admin_response(path: str, query: QueryParams, method: str) -> Respo
         )
 
     if subpath == "revenuecat/overview":
-        return _json({"available": True, "currency": "GBP", "metrics": {"revenue": 184.72, "revenue_total": 1288.44}, "message": "Demo RevenueCat overview"})
+        return _json({"available": True, "currency": "GBP", "metrics": {"revenue": 184.72}, "message": "Demo RevenueCat overview"})
     if subpath == "ai/recipe-image-usage":
         return _json({"currency": "USD", "today": {"count": 9, "cost_usd": 0.54}, "week": {"count": 41, "cost_usd": 2.46}, "month": {"count": 126, "cost_usd": 7.56}})
     if subpath == "ai/queue-metrics":

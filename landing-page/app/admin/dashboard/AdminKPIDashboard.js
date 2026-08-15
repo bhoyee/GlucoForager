@@ -624,7 +624,7 @@ export default function AdminKPIDashboard() {
         <KpiTile
           label="Revenue window"
           value={sales.available ? formatMoney(sales.metrics?.revenue, sales.currency) : '--'}
-          detail={sales.available ? 'RevenueCat overview period' : sales.message || 'RevenueCat not configured'}
+          detail={sales.available ? 'Trailing 28 days (RevenueCat)' : sales.message || 'RevenueCat not configured'}
           tone="gold"
         />
         <KpiTile
@@ -680,19 +680,15 @@ export default function AdminKPIDashboard() {
         </SectionCard>
 
         <SectionCard title="Revenue" eyebrow="RevenueCat" className="admin-kpi-wide">
-          <div className="admin-kpi-revenue-grid">
+          <div className="admin-kpi-revenue-grid admin-kpi-revenue-grid--single">
             <div>
-              <span>Overview revenue</span>
+              <span>Overview revenue (last 28 days)</span>
               <strong suppressHydrationWarning>{sales.available ? formatMoney(sales.metrics?.revenue, sales.currency) : '--'}</strong>
-            </div>
-            <div>
-              <span>Total sales</span>
-              <strong suppressHydrationWarning>{sales.available ? formatMoney(sales.metrics?.revenue_total, sales.currency) : '--'}</strong>
             </div>
           </div>
           <div className="admin-kpi-note">
             {sales.available
-              ? 'RevenueCat overview revenue is typically a recent rolling period. Export data for exact all-time reporting.'
+              ? 'RevenueCat only exposes a rolling 28-day revenue snapshot via this API — there is no all-time total field. Use the RevenueCat dashboard’s Revenue Chart for historical/all-time reporting.'
               : sales.message || 'RevenueCat metrics are not configured yet.'}
           </div>
         </SectionCard>
