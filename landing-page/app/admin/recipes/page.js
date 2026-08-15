@@ -25,6 +25,7 @@ export default function AdminRecipesList() {
   const [message, setMessage] = useState('');
   const [pendingAction, setPendingAction] = useState(null);
   const [actionBusy, setActionBusy] = useState(false);
+  const [publishingId, setPublishingId] = useState(null);
 
   useEffect(() => {
     if (!token) {
@@ -82,6 +83,33 @@ export default function AdminRecipesList() {
 
   const requestDelete = (recipe) => {
     setPendingAction({ recipe });
+  };
+
+  const handlePublish = async (recipe) => {
+    setPublishingId(recipe.id);
+    setMessage('');
+    try {
+      const response = await fetch(`${API_URL}/api/admin/recipes/${recipe.id}/publish`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.detail || 'Failed to publish recipe.');
+      }
+      setRecipes((current) =>
+        current.map((item) => (item.id === recipe.id ? { ...item, status: 'published' } : item))
+      );
+    } catch (error) {
+      setMessage(error.message || 'Failed to publish recipe.');
+    } finally {
+      setPublishingId(null);
+    }
   };
 
   const confirmDelete = async () => {
@@ -295,12 +323,22 @@ export default function AdminRecipesList() {
                     )}
                     
                     <div className="admin-recipe-card-actions">
-                      <Link 
-                        className="admin-button admin-button-edit" 
+                      <Link
+                        className="admin-button admin-button-edit"
                         href={`/admin/recipes/${recipe.id}`}
                       >
                         <span>✏️</span> Edit
                       </Link>
+                      {(recipe.status || 'published') === 'draft' && (
+                        <button
+                          type="button"
+                          className="admin-button admin-button-publish"
+                          onClick={() => handlePublish(recipe)}
+                          disabled={publishingId === recipe.id}
+                        >
+                          <span>🚀</span> {publishingId === recipe.id ? 'Publishing...' : 'Publish'}
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="admin-button admin-button-delete"
@@ -383,12 +421,22 @@ export default function AdminRecipesList() {
                         </td>
                         <td>
                           <div className="admin-table-actions">
-                            <Link 
-                              className="admin-button admin-button-small admin-button-edit" 
+                            <Link
+                              className="admin-button admin-button-small admin-button-edit"
                               href={`/admin/recipes/${recipe.id}`}
                             >
                               Edit
                             </Link>
+                            {(recipe.status || 'published') === 'draft' && (
+                              <button
+                                type="button"
+                                className="admin-button admin-button-small admin-button-publish"
+                                onClick={() => handlePublish(recipe)}
+                                disabled={publishingId === recipe.id}
+                              >
+                                {publishingId === recipe.id ? 'Publishing...' : 'Publish'}
+                              </button>
+                            )}
                             <button
                               type="button"
                               className="admin-button admin-button-small admin-button-delete"
