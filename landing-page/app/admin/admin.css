@@ -5445,6 +5445,10 @@
   margin-bottom: 16px;
 }
 
+.admin-kpi-revenue-grid--single {
+  grid-template-columns: 1fr;
+}
+
 .admin-kpi-content-card,
 .admin-kpi-revenue-grid > div,
 .admin-kpi-queue-meta > div {
