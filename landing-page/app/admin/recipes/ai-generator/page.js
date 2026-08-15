@@ -8,13 +8,18 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
 const CUISINES = [
   ['west_african', 'West African'],
+  ['east_african', 'East African'],
+  ['mena', 'Middle Eastern / North African'],
   ['british_irish', 'British / Irish'],
+  ['american_canadian', 'American / Canadian'],
   ['caribbean', 'Caribbean'],
   ['mediterranean', 'Mediterranean'],
   ['south_asian', 'South Asian'],
   ['east_asian', 'East Asian'],
+  ['southeast_asian', 'Southeast Asian'],
   ['latin_american', 'Latin American'],
-  ['mena', 'Middle Eastern / North African'],
+  ['european', 'European'],
+  ['other', 'Other'],
 ];
 
 const DIETARY = [

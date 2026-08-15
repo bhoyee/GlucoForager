@@ -2,6 +2,7 @@ import os
 import uuid
 import json
 import html
+import logging
 import re
 from datetime import datetime
 from datetime import timedelta
@@ -45,9 +46,11 @@ from ...services.cache_service import CacheService
 from ...services.settings_service import get_ai_guardrail_settings
 from ...services.ai_recipe_generator import AIRecipeGenerator
 from ...services.user_deletion_service import hard_delete_user, permanent_delete_at
+from ...services.system_log_service import log_system_event
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 admin_cache = CacheService()
+logger = logging.getLogger(__name__)
 
 
 ACCESS_STATUS_LABELS = {
@@ -504,7 +507,7 @@ def _repair_recipe_json_with_ai(
 def _admin_recipe_ai_prompt(payload: RecipeGenerateDraftsPayload, existing_titles: list[str]) -> str:
     allowed = {
         "meal_types": ["breakfast", "lunch", "dinner", "snack"],
-        "cuisine_tags": ["west_african", "british_irish", "caribbean", "mediterranean", "south_asian", "east_asian", "latin_american", "mena"],
+        "cuisine_tags": ["west_african", "east_african", "mena", "british_irish", "american_canadian", "caribbean", "mediterranean", "south_asian", "east_asian", "southeast_asian", "latin_american", "european", "other"],
         "dietary_tags": ["vegetarian", "vegan", "pescatarian", "halal", "kosher"],
         "allergen_tags": ["dairy", "eggs", "fish", "shellfish", "peanuts", "tree_nuts", "soy", "wheat_gluten", "sesame"],
         "food_exclusion_tags": ["pork", "beef", "chicken", "seafood", "onion_garlic", "spicy_food", "mushrooms", "alcohol", "caffeine"],
@@ -2305,8 +2308,25 @@ def upload_image(
         code = status.HTTP_413_REQUEST_ENTITY_TOO_LARGE if "too large" in msg.lower() else status.HTTP_400_BAD_REQUEST
         raise HTTPException(status_code=code, detail=msg)
     except RuntimeError as e:
+        log_system_event({
+            "timestamp": datetime.utcnow().isoformat(),
+            "level": "error",
+            "source": "admin.uploads",
+            "message": "Recipe image upload failed (config)",
+            "details": str(e),
+            "filename": file.filename,
+        })
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-    except Exception:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Upload failed")
+    except Exception as e:
+        logger.exception("Recipe image upload failed")
+        log_system_event({
+            "timestamp": datetime.utcnow().isoformat(),
+            "level": "error",
+            "source": "admin.uploads",
+            "message": "Recipe image upload failed",
+            "details": f"{type(e).__name__}: {e}",
+            "filename": file.filename,
+        })
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Upload failed: {e}")
 
     return {"url": url}

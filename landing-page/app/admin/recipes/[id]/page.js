@@ -240,7 +240,7 @@ export default function EditRecipePage() {
           {initialData.status === 'published' ? 'Published' : 'Draft'}
         </span>
         {initialData.source === 'ai_generated' ? <span className="admin-badge info">AI generated</span> : null}
-        {initialData.safety_flags?.length ? (
+        {initialData.status !== 'published' && initialData.safety_flags?.length ? (
           <span className={`admin-badge ${initialData.safety_flags.some((item) => item?.level === 'danger') ? 'danger' : 'warning'}`}>
             Nutrition review
           </span>
@@ -251,7 +251,7 @@ export default function EditRecipePage() {
           </button>
         ) : null}
       </div>
-      {initialData.safety_flags?.length ? (
+      {initialData.status !== 'published' && initialData.safety_flags?.length ? (
         <div className={`admin-message ${initialData.safety_flags.some((item) => item?.level === 'danger') ? 'danger' : 'warning'}`}>
           <strong>Nutrition safety review needed.</strong>
           <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
