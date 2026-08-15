@@ -4037,13 +4037,25 @@
   color: #e53935;
 }
 
+.admin-button-publish {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
 .admin-button-edit:hover,
-.admin-button-delete:hover {
+.admin-button-delete:hover,
+.admin-button-publish:hover {
   opacity: 0.9;
 }
 
+.admin-button-publish:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .admin-button-edit span,
-.admin-button-delete span {
+.admin-button-delete span,
+.admin-button-publish span {
   margin-right: 6px;
 }
 
@@ -5443,6 +5455,10 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 16px;
+}
+
+.admin-kpi-revenue-grid--single {
+  grid-template-columns: 1fr;
 }
 
 .admin-kpi-content-card,
