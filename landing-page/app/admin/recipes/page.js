@@ -274,7 +274,7 @@ export default function AdminRecipesList() {
                           <span className={`admin-badge ${(recipe.status || 'published') === 'published' ? 'success' : 'warning'}`}>
                             {recipe.status || 'published'}
                           </span>
-                          {recipe.safety_flags?.length ? (
+                          {(recipe.status || 'published') !== 'published' && recipe.safety_flags?.length ? (
                             <span className={`admin-badge ${recipe.safety_flags.some((item) => item?.level === 'danger') ? 'danger' : 'warning'}`}>
                               Nutrition review
                             </span>
@@ -370,7 +370,7 @@ export default function AdminRecipesList() {
                           <span className={`admin-badge ${(recipe.status || 'published') === 'published' ? 'success' : 'warning'}`}>
                             {recipe.status || 'published'}
                           </span>
-                          {recipe.safety_flags?.length ? (
+                          {(recipe.status || 'published') !== 'published' && recipe.safety_flags?.length ? (
                             <span className={`admin-badge ${recipe.safety_flags.some((item) => item?.level === 'danger') ? 'danger' : 'warning'}`}>
                               Nutrition review
                             </span>
