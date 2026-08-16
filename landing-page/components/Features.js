@@ -104,9 +104,9 @@ export default function Features() {
   };
 
   return (
-    <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.9fr_1.1fr]">
-      <div className="flex flex-col rounded-[2rem] border border-gray-200 bg-[#F7FBF9] p-3 shadow-sm sm:p-4 lg:min-h-0">
-        <div className="grid gap-2 overflow-y-auto pr-1 lg:min-h-0 lg:flex-1">
+    <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
+      <div className="flex flex-col rounded-[2rem] border border-gray-200 bg-[#F7FBF9] p-3 shadow-sm sm:p-4 lg:max-h-[648px]">
+        <div className="grid gap-2 overflow-y-auto pr-1">
           {features.map((feature, index) => {
             const selected = index === activeIndex;
             return (
@@ -146,8 +146,8 @@ export default function Features() {
         </div>
       </div>
 
-      <div className="flex flex-col rounded-[2rem] border border-gray-200 bg-white p-4 shadow-2xl shadow-teal-950/10">
-        <div className="grid flex-1 gap-5 overflow-hidden rounded-[1.5rem] bg-[#073f3a] p-5 text-white md:grid-cols-2 md:p-5 xl:p-6">
+      <div className="rounded-[2rem] border border-gray-200 bg-white p-4 shadow-2xl shadow-teal-950/10">
+        <div className="grid gap-5 overflow-hidden rounded-[1.5rem] bg-[#073f3a] p-5 text-white md:grid-cols-2 md:p-5 xl:p-6">
           <div className="flex flex-col justify-between">
             <div>
               <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-teal-200">{active.eyebrow}</p>
