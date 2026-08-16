@@ -45,6 +45,16 @@ const features = [
     icon: 'swap',
   },
   {
+    title: 'Shopping list',
+    eyebrow: 'Shop with a plan',
+    description:
+      'Build a shopping list from scratch or straight from a recipe, then check items off as you shop.',
+    image: '/screenshots/shopping-list.jpeg',
+    alt: 'Shopping list screen in GlucoForager',
+    points: ['Add items from any recipe', 'Build lists from scratch', 'Check off items while shopping'],
+    icon: 'cart',
+  },
+  {
     title: 'Daily meal planner',
     eyebrow: 'Structure the day',
     description:
@@ -72,6 +82,7 @@ function FeatureIcon({ type }) {
     keyboard: <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5v-9Zm4 2h.01M11 9.5h.01M14 9.5h.01M17 9.5h.01M8 13h.01M11 13h6M8 16h8" />,
     chat: <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v7A2.5 2.5 0 0 1 17.5 15H12l-5 4v-4h-.5A2.5 2.5 0 0 1 4 12.5v-7Z" />,
     swap: <path d="M7 7h10m0 0-3-3m3 3-3 3M17 17H7m0 0 3 3m-3-3 3-3" />,
+    cart: <path d="M3 4h2l2.2 11.2a2 2 0 0 0 2 1.6h7.6a2 2 0 0 0 2-1.6L20.5 8H6M9 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2Zm8 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" />,
     calendar: <path d="M7 3v3m10-3v3M4 8h16M6 12h4v4H6v-4Zm8 .5h4M14 16h3" />,
     save: <path d="M6 4h10l2 2v14l-6-3-6 3V4Z" />,
   };
@@ -93,9 +104,9 @@ export default function Features() {
   };
 
   return (
-    <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
-      <div className="rounded-[2rem] border border-gray-200 bg-[#F7FBF9] p-3 shadow-sm sm:p-4">
-        <div className="grid gap-2">
+    <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.9fr_1.1fr]">
+      <div className="flex flex-col rounded-[2rem] border border-gray-200 bg-[#F7FBF9] p-3 shadow-sm sm:p-4 lg:min-h-0">
+        <div className="grid gap-2 overflow-y-auto pr-1 lg:min-h-0 lg:flex-1">
           {features.map((feature, index) => {
             const selected = index === activeIndex;
             return (
@@ -135,8 +146,8 @@ export default function Features() {
         </div>
       </div>
 
-      <div className="rounded-[2rem] border border-gray-200 bg-white p-4 shadow-2xl shadow-teal-950/10 lg:sticky lg:top-1/2 lg:-translate-y-1/2 lg:self-start">
-        <div className="grid gap-5 overflow-hidden rounded-[1.5rem] bg-[#073f3a] p-5 text-white md:grid-cols-2 md:p-5 xl:p-6">
+      <div className="flex flex-col rounded-[2rem] border border-gray-200 bg-white p-4 shadow-2xl shadow-teal-950/10">
+        <div className="grid flex-1 gap-5 overflow-hidden rounded-[1.5rem] bg-[#073f3a] p-5 text-white md:grid-cols-2 md:p-5 xl:p-6">
           <div className="flex flex-col justify-between">
             <div>
               <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-teal-200">{active.eyebrow}</p>
