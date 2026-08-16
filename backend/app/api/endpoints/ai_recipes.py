@@ -116,6 +116,13 @@ def _run_vision_job(job_id: str) -> None:
         mode = payload.get("mode") or "single"
         base_url = payload.get("base_url")
 
+        # Reassign (not mutate) job.payload — required for SQLAlchemy's plain
+        # JSON column to detect the change. Drops the raw photo from the DB
+        # as soon as it's been read into memory, so scanned images aren't
+        # retained after this point.
+        job.payload = {k: v for k, v in payload.items() if k != "images_base64"}
+        db.commit()
+
         try:
             log_system_event(
                 {
