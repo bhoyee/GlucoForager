@@ -34,7 +34,7 @@ jobs:
     needs: build-test
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy to Droplet
+      - name: Deploy to Oracle Cloud
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.DEPLOY_HOST }}
@@ -44,7 +44,7 @@ jobs:
           port: ${{ secrets.DEPLOY_PORT || 22 }}
           script: |
             set -e
-            cd /srv/glucoforager
+            cd /home/ubuntu/glucoforager
             # Deploy servers should not do interactive merges/rebases.
             # If the local branch diverged, force it to match GitHub `origin/main`.
             git fetch --prune origin
