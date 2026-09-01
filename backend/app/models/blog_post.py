@@ -22,6 +22,7 @@ class BlogPost(Base):
     author_name = Column(String, nullable=True)
     published_at = Column(DateTime, nullable=True, index=True)
     newsletter_sent_at = Column(DateTime, nullable=True, index=True)
+    all_users_notified_at = Column(DateTime, nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=True)
     updated_at = Column(DateTime, default=datetime.utcnow, nullable=True)
 
