@@ -8,6 +8,13 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 const PAGE_SIZE = 8;
 const REFRESH_MS = 20000;
 
+function formatDateTime(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+}
+
 export default function AdminRecipesList() {
   const router = useRouter();
   const token = useMemo(() => {
@@ -37,8 +44,11 @@ export default function AdminRecipesList() {
     loadRecipes();
   }, [token]);
 
-  const loadRecipes = async () => {
-    setIsLoading(true);
+  const loadRecipes = async (silent = false) => {
+    // The initial load shows the "Loading recipes..." state since there's nothing on
+    // screen yet. Background auto-refreshes (every REFRESH_MS) update the data quietly
+    // instead, so the table doesn't blank out and re-render every few seconds.
+    if (!silent) setIsLoading(true);
     try {
       const response = await fetch(`${API_URL}/api/admin/recipes`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -51,16 +61,16 @@ export default function AdminRecipesList() {
       const data = await response.json();
       setRecipes(Array.isArray(data.items) ? data.items : []);
     } catch (error) {
-      setMessage('Failed to load recipes.');
+      if (!silent) setMessage('Failed to load recipes.');
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
   useEffect(() => {
     if (!token) return undefined;
     const timer = setInterval(() => {
-      loadRecipes();
+      loadRecipes(true);
     }, REFRESH_MS);
     return () => clearInterval(timer);
   }, [token]);
@@ -85,6 +95,11 @@ export default function AdminRecipesList() {
 
   const requestDelete = (recipe) => {
     setPendingAction({ recipe });
+  };
+
+  const requestBulkDelete = () => {
+    if (selectedIds.size === 0) return;
+    setPendingAction({ bulk: true, ids: Array.from(selectedIds) });
   };
 
   const handlePublish = async (recipe) => {
@@ -114,10 +129,42 @@ export default function AdminRecipesList() {
     }
   };
 
+  const handleBulkDelete = async (ids) => {
+    setMessage('');
+    try {
+      const response = await fetch(`${API_URL}/api/admin/recipes/bulk-delete`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipe_ids: ids }),
+      });
+      if (response.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.detail || 'Failed to delete recipes.');
+      const deletedSet = new Set(ids);
+      setRecipes((current) => current.filter((item) => !deletedSet.has(item.id)));
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        ids.forEach((id) => next.delete(id));
+        return next;
+      });
+      setMessage(`Deleted ${data.deleted_count ?? ids.length} recipe(s).`);
+    } catch (error) {
+      setMessage(error.message || 'Failed to delete recipes.');
+    }
+  };
+
   const confirmDelete = async () => {
-    if (!pendingAction?.recipe) return;
+    if (!pendingAction) return;
     setActionBusy(true);
-    await handleDelete(pendingAction.recipe.id);
+    if (pendingAction.bulk) {
+      await handleBulkDelete(pendingAction.ids);
+    } else if (pendingAction.recipe) {
+      await handleDelete(pendingAction.recipe.id);
+    }
     setActionBusy(false);
     setPendingAction(null);
   };
@@ -132,14 +179,21 @@ export default function AdminRecipesList() {
   };
 
   const handleBulkPublish = async () => {
-    if (selectedIds.size === 0) return;
+    const draftSelectedIds = Array.from(selectedIds).filter((id) => {
+      const recipe = recipes.find((item) => item.id === id);
+      return (recipe?.status || 'published') === 'draft';
+    });
+    if (draftSelectedIds.length === 0) {
+      setMessage('No draft recipes selected to publish.');
+      return;
+    }
     setBulkPublishing(true);
     setMessage('');
     try {
       const response = await fetch(`${API_URL}/api/admin/recipes/bulk-publish`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ recipe_ids: Array.from(selectedIds) }),
+        body: JSON.stringify({ recipe_ids: draftSelectedIds }),
       });
       if (response.status === 401) {
         localStorage.removeItem('adminToken');
@@ -225,6 +279,11 @@ export default function AdminRecipesList() {
       return new Set([...current, ...draftIdsInView]);
     });
   };
+
+  const draftSelectedCount = Array.from(selectedIds).filter((id) => {
+    const recipe = recipes.find((item) => item.id === id);
+    return (recipe?.status || 'published') === 'draft';
+  }).length;
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const start = (page - 1) * PAGE_SIZE;
@@ -329,20 +388,32 @@ export default function AdminRecipesList() {
         </div>
       </div>
 
-      {draftIdsInView.length > 0 && (
-        <div className="admin-inline" style={{ alignItems: 'center', gap: '0.75rem', marginTop: '0.75rem' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem' }}>
-            <input type="checkbox" checked={allDraftsInViewSelected} onChange={toggleSelectAllDrafts} />
-            Select all drafts in view ({draftIdsInView.length})
-          </label>
-          {selectedIds.size > 0 && (
+      {(draftIdsInView.length > 0 || selectedIds.size > 0) && (
+        <div className="admin-inline" style={{ alignItems: 'center', gap: '0.75rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
+          {draftIdsInView.length > 0 && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem' }}>
+              <input type="checkbox" checked={allDraftsInViewSelected} onChange={toggleSelectAllDrafts} />
+              Select all drafts in view ({draftIdsInView.length})
+            </label>
+          )}
+          {draftSelectedCount > 0 && (
             <button
               type="button"
               className="admin-button admin-button-publish"
               onClick={handleBulkPublish}
               disabled={bulkPublishing}
             >
-              {bulkPublishing ? 'Publishing...' : `Publish selected (${selectedIds.size})`}
+              {bulkPublishing ? 'Publishing...' : `Publish selected (${draftSelectedCount})`}
+            </button>
+          )}
+          {selectedIds.size > 0 && (
+            <button
+              type="button"
+              className="admin-button admin-button-delete"
+              onClick={requestBulkDelete}
+              disabled={actionBusy}
+            >
+              Delete selected ({selectedIds.size})
             </button>
           )}
         </div>
@@ -367,14 +438,12 @@ export default function AdminRecipesList() {
                 {pageItems.map((recipe) => (
                   <div key={recipe.id} className="admin-recipe-card">
                     <div className="admin-recipe-card-header">
-                      {(recipe.status || 'published') === 'draft' && (
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.has(recipe.id)}
-                          onChange={() => toggleSelected(recipe.id)}
-                          style={{ marginRight: '0.5rem' }}
-                        />
-                      )}
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(recipe.id)}
+                        onChange={() => toggleSelected(recipe.id)}
+                        style={{ marginRight: '0.5rem' }}
+                      />
                       {recipe.image_url ? (
                         <div className="admin-recipe-card-image">
                           <img 
@@ -406,6 +475,7 @@ export default function AdminRecipesList() {
                           <span className="admin-recipe-time">
                             {(recipe.prep_time_minutes || 0) + (recipe.cook_time_minutes || 0)} min
                           </span>
+                          <span className="admin-recipe-time">Created {formatDateTime(recipe.created_at)}</span>
                         </div>
                       </div>
                     </div>
@@ -463,13 +533,14 @@ export default function AdminRecipesList() {
                     <th>Name</th>
                     <th>Meal Type</th>
                     <th>Time</th>
+                    <th>Created</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {pageItems.length === 0 ? (
                     <tr>
-                      <td colSpan="5" className="admin-table-empty">
+                      <td colSpan="6" className="admin-table-empty">
                         <div className="admin-empty-state">
                           <div className="admin-empty-icon">📄</div>
                           <p>No recipes found</p>
@@ -481,13 +552,11 @@ export default function AdminRecipesList() {
                     pageItems.map((recipe) => (
                       <tr key={recipe.id}>
                         <td>
-                          {(recipe.status || 'published') === 'draft' && (
-                            <input
-                              type="checkbox"
-                              checked={selectedIds.has(recipe.id)}
-                              onChange={() => toggleSelected(recipe.id)}
-                            />
-                          )}
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(recipe.id)}
+                            onChange={() => toggleSelected(recipe.id)}
+                          />
                         </td>
                         <td>
                           <div className="admin-recipe-cell">
@@ -528,6 +597,9 @@ export default function AdminRecipesList() {
                           <div className="admin-recipe-time-cell">
                             {(recipe.prep_time_minutes || 0) + (recipe.cook_time_minutes || 0)} min
                           </div>
+                        </td>
+                        <td>
+                          <div className="admin-recipe-time-cell">{formatDateTime(recipe.created_at)}</div>
                         </td>
                         <td>
                           <div className="admin-table-actions">
@@ -604,8 +676,12 @@ export default function AdminRecipesList() {
         <div className="admin-modal-backdrop">
           <div className="admin-modal">
             <div className="admin-modal-content">
-              <h3>Delete Recipe</h3>
-              <p>Are you sure you want to delete "{pendingAction.recipe.name}"? This action cannot be undone.</p>
+              <h3>{pendingAction.bulk ? `Delete ${pendingAction.ids.length} Recipes` : 'Delete Recipe'}</h3>
+              <p>
+                {pendingAction.bulk
+                  ? `Are you sure you want to delete ${pendingAction.ids.length} selected recipe(s)? This action cannot be undone.`
+                  : `Are you sure you want to delete "${pendingAction.recipe.name}"? This action cannot be undone.`}
+              </p>
               <div className="admin-modal-actions">
                 <button
                   className="admin-button admin-button-cancel"
@@ -621,7 +697,7 @@ export default function AdminRecipesList() {
                   onClick={confirmDelete}
                   disabled={actionBusy}
                 >
-                  {actionBusy ? 'Deleting...' : 'Delete Recipe'}
+                  {actionBusy ? 'Deleting...' : pendingAction.bulk ? `Delete ${pendingAction.ids.length} Recipe(s)` : 'Delete Recipe'}
                 </button>
               </div>
             </div>
