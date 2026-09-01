@@ -387,125 +387,139 @@ export default function AdminRichEditor({
         }}
       />
 
-      <div className="border-b border-gray-200 bg-white px-3 py-2 flex flex-wrap items-center gap-2">
+      <div className="gf-toolbar">
         <button
           type="button"
-          className={`admin-button !py-1 !px-2 !text-xs ${editor.isActive('bold') ? '!bg-teal-600 !text-white' : ''}`}
+          className={`gf-toolbar-btn${editor.isActive('bold') ? ' is-active' : ''}`}
           onClick={() => editor.chain().focus().toggleBold().run()}
           disabled={!can(() => editor.can().chain().focus().toggleBold().run())}
+          title="Bold"
         >
-          Bold
+          <b>B</b>
         </button>
         <button
           type="button"
-          className={`admin-button !py-1 !px-2 !text-xs ${editor.isActive('italic') ? '!bg-teal-600 !text-white' : ''}`}
+          className={`gf-toolbar-btn${editor.isActive('italic') ? ' is-active' : ''}`}
           onClick={() => editor.chain().focus().toggleItalic().run()}
           disabled={!can(() => editor.can().chain().focus().toggleItalic().run())}
+          title="Italic"
         >
-          Italic
+          <i>I</i>
         </button>
         <button
           type="button"
-          className={`admin-button !py-1 !px-2 !text-xs ${editor.isActive('underline') ? '!bg-teal-600 !text-white' : ''}`}
+          className={`gf-toolbar-btn${editor.isActive('underline') ? ' is-active' : ''}`}
           onClick={() => editor.chain().focus().toggleUnderline().run()}
+          title="Underline"
         >
-          Underline
+          <u>U</u>
         </button>
 
-        <span className="h-4 w-px bg-gray-200 mx-1" />
+        <span className="gf-toolbar-divider" />
 
         <button
           type="button"
-          className={`admin-button !py-1 !px-2 !text-xs ${editor.isActive('heading', { level: 1 }) ? '!bg-teal-600 !text-white' : ''}`}
+          className={`gf-toolbar-btn${editor.isActive('heading', { level: 1 }) ? ' is-active' : ''}`}
           onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+          title="Heading 1"
         >
           H1
         </button>
         <button
           type="button"
-          className={`admin-button !py-1 !px-2 !text-xs ${editor.isActive('heading', { level: 2 }) ? '!bg-teal-600 !text-white' : ''}`}
+          className={`gf-toolbar-btn${editor.isActive('heading', { level: 2 }) ? ' is-active' : ''}`}
           onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+          title="Heading 2"
         >
           H2
         </button>
         <button
           type="button"
-          className={`admin-button !py-1 !px-2 !text-xs ${editor.isActive('heading', { level: 3 }) ? '!bg-teal-600 !text-white' : ''}`}
+          className={`gf-toolbar-btn${editor.isActive('heading', { level: 3 }) ? ' is-active' : ''}`}
           onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+          title="Heading 3"
         >
           H3
         </button>
 
-        <span className="h-4 w-px bg-gray-200 mx-1" />
+        <span className="gf-toolbar-divider" />
 
         <button
           type="button"
-          className={`admin-button !py-1 !px-2 !text-xs ${editor.isActive('bulletList') ? '!bg-teal-600 !text-white' : ''}`}
+          className={`gf-toolbar-btn${editor.isActive('bulletList') ? ' is-active' : ''}`}
           onClick={() => editor.chain().focus().toggleBulletList().run()}
+          title="Bullet list"
         >
-          Bullets
+          • List
         </button>
         <button
           type="button"
-          className={`admin-button !py-1 !px-2 !text-xs ${editor.isActive('orderedList') ? '!bg-teal-600 !text-white' : ''}`}
+          className={`gf-toolbar-btn${editor.isActive('orderedList') ? ' is-active' : ''}`}
           onClick={() => editor.chain().focus().toggleOrderedList().run()}
+          title="Numbered list"
         >
-          Numbered
+          1. List
         </button>
         <button
           type="button"
-          className={`admin-button !py-1 !px-2 !text-xs ${editor.isActive('blockquote') ? '!bg-teal-600 !text-white' : ''}`}
+          className={`gf-toolbar-btn${editor.isActive('blockquote') ? ' is-active' : ''}`}
           onClick={() => editor.chain().focus().toggleBlockquote().run()}
+          title="Quote"
         >
-          Quote
+          " Quote
         </button>
 
-        <span className="h-4 w-px bg-gray-200 mx-1" />
+        <span className="gf-toolbar-divider" />
 
         <button
           type="button"
-          className={`admin-button !py-1 !px-2 !text-xs ${editor.isActive('link') ? '!bg-teal-600 !text-white' : ''}`}
+          className={`gf-toolbar-btn${editor.isActive('link') ? ' is-active' : ''}`}
           onClick={setLink}
+          title="Link"
         >
-          Link
+          🔗 Link
         </button>
         <button
           type="button"
-          className="admin-button !py-1 !px-2 !text-xs"
+          className="gf-toolbar-btn"
           onClick={triggerImagePicker}
           disabled={!adminToken || uploadBusy}
+          title="Insert image"
         >
-          Image
+          🖼 Image
         </button>
         <button
           type="button"
-          className="admin-button !py-1 !px-2 !text-xs"
+          className="gf-toolbar-btn"
           onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}
+          title="Clear formatting"
         >
           Clear
         </button>
 
-        <span className="h-4 w-px bg-gray-200 mx-1" />
+        <span className="gf-toolbar-divider" />
 
         <button
           type="button"
-          className="admin-button !py-1 !px-2 !text-xs"
+          className="gf-toolbar-btn"
           onClick={() => editor.chain().focus().undo().run()}
           disabled={!can(() => editor.can().chain().focus().undo().run())}
+          title="Undo"
         >
-          Undo
+          ↶ Undo
         </button>
         <button
           type="button"
-          className="admin-button !py-1 !px-2 !text-xs"
+          className="gf-toolbar-btn"
           onClick={() => editor.chain().focus().redo().run()}
           disabled={!can(() => editor.can().chain().focus().redo().run())}
+          title="Redo"
         >
-          Redo
+          ↷ Redo
         </button>
 
-        {uploadBusy ? <span className="ml-2 text-xs font-semibold text-gray-500">Uploading image…</span> : null}
-        {!uploadBusy && uploadError ? <span className="ml-2 text-xs font-semibold text-rose-600">{uploadError}</span> : null}
+        {uploadBusy ? <span className="gf-toolbar-status">Uploading image…</span> : null}
+        {!uploadBusy && uploadError ? <span className="gf-toolbar-status gf-toolbar-status--error">{uploadError}</span> : null}
       </div>
 
       <div style={{ height }} className="overflow-auto">
@@ -526,6 +540,65 @@ export default function AdminRichEditor({
           display: block;
           margin: 12px auto;
           border-radius: 12px;
+        }
+        .gf-toolbar {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 4px;
+          padding: 8px 10px;
+          background: #f9fafb;
+          border-bottom: 1px solid #e5e7eb;
+        }
+        .gf-toolbar-btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-width: 30px;
+          height: 30px;
+          padding: 0 9px;
+          font-size: 13px;
+          font-weight: 600;
+          line-height: 1;
+          color: #374151;
+          background: #ffffff;
+          border: 1px solid #d1d5db;
+          border-radius: 6px;
+          cursor: pointer;
+          white-space: nowrap;
+          transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+        }
+        .gf-toolbar-btn:hover:not(:disabled) {
+          background: #f3f4f6;
+          border-color: #9ca3af;
+        }
+        .gf-toolbar-btn:active:not(:disabled) {
+          background: #e5e7eb;
+        }
+        .gf-toolbar-btn:disabled {
+          opacity: 0.4;
+          cursor: not-allowed;
+        }
+        .gf-toolbar-btn.is-active {
+          background: #0fb7a5;
+          border-color: #0fb7a5;
+          color: #ffffff;
+        }
+        .gf-toolbar-divider {
+          width: 1px;
+          height: 20px;
+          background: #d1d5db;
+          margin: 0 4px;
+          flex-shrink: 0;
+        }
+        .gf-toolbar-status {
+          margin-left: 6px;
+          font-size: 12px;
+          font-weight: 600;
+          color: #6b7280;
+        }
+        .gf-toolbar-status--error {
+          color: #e11d48;
         }
       `}</style>
     </div>
