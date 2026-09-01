@@ -71,6 +71,15 @@ def get_access_snapshot(db: Session, user: User, now: datetime | None = None) ->
     now = _naive_utc(now) or datetime.utcnow()
     billing = get_latest_billing_subscription(db, user.id)
     comp = get_latest_admin_comp(db, user.id)
+    return build_access_snapshot(user, billing, comp, now=now)
+
+
+def build_access_snapshot(user: User, billing, comp, *, now: datetime) -> AccessSnapshot:
+    """Same logic as get_access_snapshot, but takes already-fetched billing/comp
+    subscriptions instead of querying the DB - lets callers batch-fetch subscriptions
+    for many users in one query instead of two extra queries per user (see
+    admin.py's _batch_subscriptions_for_users, used by the admin dashboard)."""
+    now = _naive_utc(now) or datetime.utcnow()
     billing_access_status = get_subscription_access_status(billing, now=now)
     billing_end = get_subscription_access_end(billing)
     comp_active = is_subscription_active(comp, now=now)
