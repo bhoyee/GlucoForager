@@ -112,6 +112,7 @@ from .services.demo_admin_data import get_demo_admin_response
 from .services.staff_rbac_service import StaffRBACService
 from .services.system_log_service import log_system_event
 from .services.backup_scheduler import start_backup_scheduler
+from .services.recipe_auto_generation_scheduler import start_recipe_auto_generation_scheduler
 from .services.user_activity_maintenance import start_user_activity_cleanup_scheduler
 from .services.user_deletion_service import start_soft_deleted_user_cleanup_scheduler
 from .services.work_plans_scheduler import start_work_plans_scheduler
@@ -345,6 +346,10 @@ def on_startup():
         start_soft_deleted_user_cleanup_scheduler()
     except Exception as exc:  # noqa: BLE001
         logger.warning("Soft-deleted user cleanup scheduler start failed: %s", exc)
+    try:
+        start_recipe_auto_generation_scheduler()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Recipe auto-generation scheduler start failed: %s", exc)
     try:
         # Only run the DB-backed in-process runner when configured.
         if (settings.ai_queue_backend or "db").strip().lower() == "db":
