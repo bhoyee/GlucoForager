@@ -347,8 +347,26 @@ def recipe_suggestions(
     ]
     random.shuffle(scored)
     scored.sort(key=lambda x: x[0], reverse=True)
-    pool_size = min(len(scored), max(30, limit * 10))
-    top_pool = [r for _, r in scored[:pool_size]] if scored else []
+
+    # If the user has stated soft preferences, don't pad the sampling pool with
+    # recipes that match none of them just to hit a fixed pool size - that's how a
+    # user with a niche combination of preferences ends up seeing something with no
+    # real relevance to what they asked for. Prefer showing fewer, better matches.
+    has_soft_signal = (
+        bool(profile.get("meal_goals"))
+        or bool(profile.get("preferred_cuisines"))
+        or bool(str(profile.get("cook_time_preference") or "").strip())
+        or bool(profile.get("available_equipment"))
+        or bool(str(profile.get("blood_sugar_profile") or "").strip())
+    )
+    pool_source = scored
+    if has_soft_signal:
+        relevant = [pair for pair in scored if pair[0] > 0]
+        if relevant:
+            pool_source = relevant
+
+    pool_size = min(len(pool_source), max(30, limit * 10))
+    top_pool = [r for _, r in pool_source[:pool_size]] if pool_source else []
 
     if not top_pool:
         # No matches under strict constraints; return fewer rather than showing unsafe suggestions.
