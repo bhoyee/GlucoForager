@@ -26,6 +26,8 @@ export default function AdminRecipesList() {
   const [pendingAction, setPendingAction] = useState(null);
   const [actionBusy, setActionBusy] = useState(false);
   const [publishingId, setPublishingId] = useState(null);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [bulkPublishing, setBulkPublishing] = useState(false);
 
   useEffect(() => {
     if (!token) {
@@ -120,6 +122,57 @@ export default function AdminRecipesList() {
     setPendingAction(null);
   };
 
+  const toggleSelected = (recipeId) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(recipeId)) next.delete(recipeId);
+      else next.add(recipeId);
+      return next;
+    });
+  };
+
+  const handleBulkPublish = async () => {
+    if (selectedIds.size === 0) return;
+    setBulkPublishing(true);
+    setMessage('');
+    try {
+      const response = await fetch(`${API_URL}/api/admin/recipes/bulk-publish`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipe_ids: Array.from(selectedIds) }),
+      });
+      if (response.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.detail || 'Failed to publish recipes.');
+      const publishedSet = new Set(data.published || []);
+      setRecipes((current) =>
+        current.map((item) => (publishedSet.has(item.id) ? { ...item, status: 'published' } : item))
+      );
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        publishedSet.forEach((id) => next.delete(id));
+        return next;
+      });
+      const failed = data.failed || [];
+      if (failed.length > 0) {
+        setMessage(
+          `Published ${data.published_count || 0}. ${failed.length} could not be published: ` +
+            failed.map((item) => `${item.name || `#${item.id}`} (${item.reason})`).join('; ')
+        );
+      } else {
+        setMessage(`Published ${data.published_count || 0} recipe(s).`);
+      }
+    } catch (error) {
+      setMessage(error.message || 'Failed to publish recipes.');
+    } finally {
+      setBulkPublishing(false);
+    }
+  };
+
   const mealCounts = useMemo(() => {
     const counts = {
       breakfast: 0,
@@ -156,6 +209,22 @@ export default function AdminRecipesList() {
       if (sortKey === 'meal_type') return a.meal_type.localeCompare(b.meal_type);
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
+
+  const draftIdsInView = filtered
+    .filter((recipe) => (recipe.status || 'published') === 'draft')
+    .map((recipe) => recipe.id);
+  const allDraftsInViewSelected = draftIdsInView.length > 0 && draftIdsInView.every((id) => selectedIds.has(id));
+
+  const toggleSelectAllDrafts = () => {
+    setSelectedIds((current) => {
+      if (allDraftsInViewSelected) {
+        const next = new Set(current);
+        draftIdsInView.forEach((id) => next.delete(id));
+        return next;
+      }
+      return new Set([...current, ...draftIdsInView]);
+    });
+  };
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const start = (page - 1) * PAGE_SIZE;
@@ -260,6 +329,25 @@ export default function AdminRecipesList() {
         </div>
       </div>
 
+      {draftIdsInView.length > 0 && (
+        <div className="admin-inline" style={{ alignItems: 'center', gap: '0.75rem', marginTop: '0.75rem' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem' }}>
+            <input type="checkbox" checked={allDraftsInViewSelected} onChange={toggleSelectAllDrafts} />
+            Select all drafts in view ({draftIdsInView.length})
+          </label>
+          {selectedIds.size > 0 && (
+            <button
+              type="button"
+              className="admin-button admin-button-publish"
+              onClick={handleBulkPublish}
+              disabled={bulkPublishing}
+            >
+              {bulkPublishing ? 'Publishing...' : `Publish selected (${selectedIds.size})`}
+            </button>
+          )}
+        </div>
+      )}
+
       {isLoading ? (
         <div className="admin-loading-state">
           <p>Loading recipes...</p>
@@ -279,6 +367,14 @@ export default function AdminRecipesList() {
                 {pageItems.map((recipe) => (
                   <div key={recipe.id} className="admin-recipe-card">
                     <div className="admin-recipe-card-header">
+                      {(recipe.status || 'published') === 'draft' && (
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(recipe.id)}
+                          onChange={() => toggleSelected(recipe.id)}
+                          style={{ marginRight: '0.5rem' }}
+                        />
+                      )}
                       {recipe.image_url ? (
                         <div className="admin-recipe-card-image">
                           <img 
@@ -359,6 +455,11 @@ export default function AdminRecipesList() {
               <table className="admin-table">
                 <thead>
                   <tr>
+                    <th>
+                      {draftIdsInView.length > 0 && (
+                        <input type="checkbox" checked={allDraftsInViewSelected} onChange={toggleSelectAllDrafts} title="Select all drafts in view" />
+                      )}
+                    </th>
                     <th>Name</th>
                     <th>Meal Type</th>
                     <th>Time</th>
@@ -368,7 +469,7 @@ export default function AdminRecipesList() {
                 <tbody>
                   {pageItems.length === 0 ? (
                     <tr>
-                      <td colSpan="4" className="admin-table-empty">
+                      <td colSpan="5" className="admin-table-empty">
                         <div className="admin-empty-state">
                           <div className="admin-empty-icon">📄</div>
                           <p>No recipes found</p>
@@ -379,6 +480,15 @@ export default function AdminRecipesList() {
                   ) : (
                     pageItems.map((recipe) => (
                       <tr key={recipe.id}>
+                        <td>
+                          {(recipe.status || 'published') === 'draft' && (
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(recipe.id)}
+                              onChange={() => toggleSelected(recipe.id)}
+                            />
+                          )}
+                        </td>
                         <td>
                           <div className="admin-recipe-cell">
                             {recipe.image_url && (
