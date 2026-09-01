@@ -7,14 +7,30 @@ import AdminRichEditor from '../../../components/AdminRichEditor';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 const API_BASE = API_URL.replace(/\/+$/, '');
 
-const stripHtml = (value) =>
-  String(value || '')
-    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, ' ')
+// DOMParser handles HTML-entity decoding, nested/attributed tags, and finding actual
+// block-level elements correctly - much more reliable than regexing raw HTML strings
+// (the old regex approach only found the literal first "<p>" substring anywhere in the
+// document, with no check that it was non-empty or actually the first real paragraph,
+// which is why "keyword in first paragraph" could report false even when the keyword
+// was clearly there - e.g. an empty leading <p></p>, or content opening with a list).
+const parseHtmlDoc = (html) => {
+  if (typeof window === 'undefined' || !window.DOMParser) return null;
+  try {
+    return new DOMParser().parseFromString(String(html || ''), 'text/html');
+  } catch {
+    return null;
+  }
+};
+
+const stripHtml = (value) => {
+  const doc = parseHtmlDoc(value);
+  if (doc) return (doc.body.textContent || '').replace(/\s+/g, ' ').trim();
+  return String(value || '')
     .replace(/<[^>]*>/g, ' ')
     .replace(/&nbsp;|\u00A0/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+};
 
 const keywordToSlug = (value) =>
   String(value || '')
@@ -27,17 +43,26 @@ const keywordToSlug = (value) =>
     .replace(/^-|-$/g, '');
 
 const extractFirstParagraphText = (html) => {
-  const source = String(html || '');
-  const match = source.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
-  if (!match) return '';
-  return stripHtml(match[1]);
+  const doc = parseHtmlDoc(html);
+  if (!doc) return '';
+  // First non-empty paragraph/list-item/quote, in document order - skips empty <p></p>
+  // (common right after clearing formatting) and doesn't count headings as "paragraph".
+  const blocks = doc.body.querySelectorAll('p, li, blockquote');
+  for (const el of blocks) {
+    const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
+    if (text) return text;
+  }
+  return '';
 };
 
 const extractHeadingsText = (html) => {
-  const source = String(html || '');
-  const matches = Array.from(source.matchAll(/<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/gi));
-  if (!matches.length) return '';
-  return matches.map((m) => stripHtml(m[1])).filter(Boolean).join(' ');
+  const doc = parseHtmlDoc(html);
+  if (!doc) return '';
+  const headings = doc.body.querySelectorAll('h1, h2, h3, h4, h5, h6');
+  return Array.from(headings)
+    .map((el) => (el.textContent || '').replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .join(' ');
 };
 
 const trimLeadingNbspHtml = (value) => {
@@ -69,6 +94,7 @@ export default function BlogPostForm({
     published_at: initialValues?.published_at || '',
     content: initialValues?.content || '',
     notify_newsletter: false,
+    notify_all_users: false,
   }));
 
   const [uploadBusy, setUploadBusy] = useState(false);
@@ -137,8 +163,7 @@ export default function BlogPostForm({
     const url = urlSlug ? `https://www.glucoforager.com/blog/${urlSlug}` : 'https://www.glucoforager.com/blog/...';
 
     const rawContent = String(form.content || '');
-    const text = stripHtml(rawContent);
-    const firstPara = extractFirstParagraphText(rawContent) || text.split(/\n{1,}|\.\s+/)[0] || text.slice(0, 240);
+    const firstPara = extractFirstParagraphText(rawContent);
     const headingsText = extractHeadingsText(rawContent).toLowerCase();
 
     const hasText = (haystack) => (keyword ? String(haystack || '').toLowerCase().includes(keyword) : false);
@@ -358,6 +383,22 @@ export default function BlogPostForm({
           <span>Send to newsletter subscribers</span>
         </label>
         <p className="admin-help">Only works when Status is set to Published. Sends at most once per post.</p>
+      </div>
+
+      <div className="admin-field">
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={!!form.notify_all_users}
+            onChange={(event) => setForm((prev) => ({ ...prev, notify_all_users: event.target.checked }))}
+            disabled={readOnly}
+          />
+          <span>Send to all users</span>
+        </label>
+        <p className="admin-help">
+          Emails every GlucoForager app user (not just newsletter subscribers). Only works when Status is set to
+          Published. Sends at most once per post.
+        </p>
       </div>
 
       <div className="admin-field">
