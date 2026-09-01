@@ -12,13 +12,15 @@ from ..admin_dependencies import get_current_admin, require_staff_permission
 from ...core.config import settings
 from ...database import get_db
 from ...database import SessionLocal
+from ...models.admin_email_campaign import AdminEmailCampaign
 from ...models.admin_user import AdminUser
 from ...models.staff_audit_log import StaffAuditLog
 from ...models.blog_comment import BlogComment
 from ...models.blog_post import BlogPost
 from ...models.newsletter_signup import NewsletterSignup
+from ...models.user import User
 from ...services.cache_service import CacheService
-from ...services.email_service import send_blog_post_newsletter_email
+from ...services.email_service import send_blog_post_newsletter_email, send_blog_post_to_user_email
 from ...services.newsletter_tokens import make_unsubscribe_token
 from ...services.staff_rbac_service import StaffRBACService
 
@@ -66,6 +68,7 @@ class BlogPostPayload(BaseModel):
 
 class BlogPostUpsertPayload(BlogPostPayload):
     notify_newsletter: bool = False
+    notify_all_users: bool = False
 
 
 class BlogPostAdminItem(BaseModel):
@@ -146,6 +149,64 @@ def _send_post_to_newsletter_task(post_id: int) -> None:
                 continue
 
         post.newsletter_sent_at = _utcnow()
+        db.commit()
+    finally:
+        db.close()
+
+
+def _send_post_to_all_users_task(post_id: int, campaign_id: int | None) -> None:
+    db = SessionLocal()
+    try:
+        post = db.query(BlogPost).filter(BlogPost.id == post_id).first()
+        if not post or post.status != "published":
+            return
+
+        rows = (
+            db.query(User.email)
+            .filter(User.email.is_not(None))
+            .order_by(desc(User.created_at), desc(User.id))
+            .limit(2000)
+            .all()
+        )
+        seen: set[str] = set()
+        emails: list[str] = []
+        for (email,) in rows:
+            normalized = str(email or "").strip().lower()
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            emails.append(normalized)
+
+        campaign = db.query(AdminEmailCampaign).filter(AdminEmailCampaign.id == campaign_id).first() if campaign_id else None
+
+        if not emails:
+            post.all_users_notified_at = _utcnow()
+            if campaign:
+                campaign.sent_count = 0
+            db.commit()
+            return
+
+        post_url = _post_url(post.slug)
+        sent = 0
+        for email in emails:
+            try:
+                send_blog_post_to_user_email(
+                    to_email=email,
+                    post_title=post.title,
+                    post_excerpt=post.excerpt,
+                    post_url=post_url,
+                    image_url=post.image_url,
+                )
+            except Exception:
+                continue
+            sent += 1
+            if campaign and (sent % 25 == 0):
+                campaign.sent_count = sent
+                db.commit()
+
+        post.all_users_notified_at = _utcnow()
+        if campaign:
+            campaign.sent_count = sent
         db.commit()
     finally:
         db.close()
@@ -297,7 +358,7 @@ def admin_create_post(
     if normalized_status == "published" and published_at and published_at > _utcnow():
         normalized_status = "scheduled"
 
-    if normalized_status in {"published", "scheduled"} or payload.notify_newsletter:
+    if normalized_status in {"published", "scheduled"} or payload.notify_newsletter or payload.notify_all_users:
         _ensure_staff_permission(db, request, "blog.publish")
 
     post = BlogPost(
@@ -338,6 +399,28 @@ def admin_create_post(
         if post.newsletter_sent_at is not None:
             raise HTTPException(status_code=409, detail="Newsletter has already been sent for this post")
         background_tasks.add_task(_send_post_to_newsletter_task, post.id)
+
+    if payload.notify_all_users:
+        if post.status != "published":
+            raise HTTPException(status_code=400, detail="Post must be published to notify all users")
+        send_count = cache.incr(f"blog:all-users:admin:{current_admin.id}", ttl_seconds=60 * 60)
+        if send_count > 3:
+            raise HTTPException(status_code=429, detail="Too many broadcast sends. Please try again later.")
+        if post.all_users_notified_at is not None:
+            raise HTTPException(status_code=409, detail="All users have already been notified for this post")
+        campaign = AdminEmailCampaign(
+            kind="blog_all_users",
+            mode="broadcast",
+            subject=f"New on GlucoForager: {post.title}"[:255],
+            body=post.content,
+            body_html=True,
+            total_count=None,
+            created_by_admin_id=current_admin.id,
+        )
+        db.add(campaign)
+        db.commit()
+        db.refresh(campaign)
+        background_tasks.add_task(_send_post_to_all_users_task, post.id, campaign.id)
 
     return BlogPostAdminItem(
         id=post.id,
@@ -401,7 +484,7 @@ def admin_update_post(
     if normalized_status == "published" and published_at and published_at > _utcnow():
         normalized_status = "scheduled"
 
-    if normalized_status in {"published", "scheduled"} or payload.notify_newsletter:
+    if normalized_status in {"published", "scheduled"} or payload.notify_newsletter or payload.notify_all_users:
         _ensure_staff_permission(db, request, "blog.publish")
 
     slug = (payload.slug or "").strip().lower()
@@ -455,6 +538,28 @@ def admin_update_post(
         if post.newsletter_sent_at is not None:
             raise HTTPException(status_code=409, detail="Newsletter has already been sent for this post")
         background_tasks.add_task(_send_post_to_newsletter_task, post.id)
+
+    if payload.notify_all_users:
+        if post.status != "published":
+            raise HTTPException(status_code=400, detail="Post must be published to notify all users")
+        send_count = cache.incr(f"blog:all-users:admin:{current_admin.id}", ttl_seconds=60 * 60)
+        if send_count > 3:
+            raise HTTPException(status_code=429, detail="Too many broadcast sends. Please try again later.")
+        if post.all_users_notified_at is not None:
+            raise HTTPException(status_code=409, detail="All users have already been notified for this post")
+        campaign = AdminEmailCampaign(
+            kind="blog_all_users",
+            mode="broadcast",
+            subject=f"New on GlucoForager: {post.title}"[:255],
+            body=post.content,
+            body_html=True,
+            total_count=None,
+            created_by_admin_id=current_admin.id,
+        )
+        db.add(campaign)
+        db.commit()
+        db.refresh(campaign)
+        background_tasks.add_task(_send_post_to_all_users_task, post.id, campaign.id)
 
     return BlogPostAdminItem(
         id=post.id,

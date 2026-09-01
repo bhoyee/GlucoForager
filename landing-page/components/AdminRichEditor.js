@@ -1,12 +1,107 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { EditorContent, useEditor } from '@tiptap/react';
+import { EditorContent, NodeViewWrapper, ReactNodeViewRenderer, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import Link from '@tiptap/extension-link';
 import Image from '@tiptap/extension-image';
 import Placeholder from '@tiptap/extension-placeholder';
+
+// Adds a `width` attribute (rendered as inline style, so it survives into the saved
+// HTML and the public blog page) and a custom NodeView with a drag handle so images
+// can be resized directly in the editor, the way a normal rich editor works.
+function ResizableImageView({ node, updateAttributes, selected }) {
+  const wrapperRef = useRef(null);
+
+  const startResize = useCallback(
+    (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const imgEl = wrapperRef.current?.querySelector('img');
+      if (!imgEl) return;
+      const startX = event.clientX;
+      const startWidth = imgEl.getBoundingClientRect().width;
+      const containerWidth = wrapperRef.current?.parentElement?.getBoundingClientRect().width || startWidth;
+
+      const onMove = (moveEvent) => {
+        const delta = moveEvent.clientX - startX;
+        const nextWidth = Math.round(Math.max(80, Math.min(startWidth + delta, containerWidth)));
+        updateAttributes({ width: `${nextWidth}px` });
+      };
+      const onUp = () => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+      };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    },
+    [updateAttributes]
+  );
+
+  return (
+    <NodeViewWrapper
+      as="span"
+      ref={wrapperRef}
+      style={{ display: 'inline-block', maxWidth: '100%', position: 'relative', lineHeight: 0 }}
+    >
+      <img
+        src={node.attrs.src}
+        alt={node.attrs.alt || ''}
+        title={node.attrs.title || ''}
+        draggable={false}
+        style={{
+          width: node.attrs.width || 'auto',
+          maxWidth: '100%',
+          height: 'auto',
+          display: 'block',
+          margin: '12px auto',
+          borderRadius: '12px',
+          outline: selected ? '2px solid #0FB7A5' : 'none',
+          outlineOffset: '2px',
+        }}
+      />
+      {selected ? (
+        <span
+          onPointerDown={startResize}
+          contentEditable={false}
+          title="Drag to resize"
+          style={{
+            position: 'absolute',
+            right: 4,
+            bottom: 16,
+            width: 14,
+            height: 14,
+            borderRadius: '50%',
+            background: '#0FB7A5',
+            border: '2px solid white',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.35)',
+            cursor: 'nwse-resize',
+          }}
+        />
+      ) : null}
+    </NodeViewWrapper>
+  );
+}
+
+const ResizableImage = Image.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      width: {
+        default: null,
+        parseHTML: (element) => element.style.width || element.getAttribute('width') || null,
+        renderHTML: (attributes) => {
+          if (!attributes.width) return {};
+          return { style: `width: ${attributes.width}; max-width: 100%; height: auto;` };
+        },
+      },
+    };
+  },
+  addNodeView() {
+    return ReactNodeViewRenderer(ResizableImageView);
+  },
+});
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 const API_BASE = API_URL.replace(/\/+$/, '');
@@ -96,7 +191,7 @@ export default function AdminRichEditor({
         linkOnPaste: true,
         autolink: true,
       }),
-      Image.configure({
+      ResizableImage.configure({
         inline: false,
         allowBase64: false,
       }),
@@ -129,10 +224,25 @@ export default function AdminRichEditor({
           const items = event?.clipboardData?.items ? Array.from(event.clipboardData.items) : [];
           const imgItem = items.find((it) => it && it.kind === 'file' && String(it.type || '').startsWith('image/'));
           const file = imgItem?.getAsFile?.() || null;
-          if (!file) return false;
-          event.preventDefault();
-          void handleFileChosen(file);
-          return true;
+          if (file) {
+            event.preventDefault();
+            void handleFileChosen(file);
+            return true;
+          }
+          // Fallback: some sources (e.g. copying an image from a webpage) put HTML with
+          // an <img src="..."> on the clipboard instead of a raw file item. Embed that
+          // image by URL directly, same as the excerpt editor already does.
+          const html = event?.clipboardData?.getData?.('text/html') || '';
+          if (typeof html === 'string' && html.includes('<img')) {
+            const match = html.match(/<img[^>]+src=['"]([^'"]+)['"]/i);
+            const src = match?.[1] ? String(match[1]).trim() : '';
+            if (src && editor) {
+              event.preventDefault();
+              editor.chain().focus().setImage({ src }).run();
+              return true;
+            }
+          }
+          return false;
         } catch {
           return false;
         }
@@ -280,7 +390,7 @@ export default function AdminRichEditor({
       <div className="border-b border-gray-200 bg-white px-3 py-2 flex flex-wrap items-center gap-2">
         <button
           type="button"
-          className="admin-button !py-1 !px-2 !text-xs"
+          className={`admin-button !py-1 !px-2 !text-xs ${editor.isActive('bold') ? '!bg-teal-600 !text-white' : ''}`}
           onClick={() => editor.chain().focus().toggleBold().run()}
           disabled={!can(() => editor.can().chain().focus().toggleBold().run())}
         >
@@ -288,7 +398,7 @@ export default function AdminRichEditor({
         </button>
         <button
           type="button"
-          className="admin-button !py-1 !px-2 !text-xs"
+          className={`admin-button !py-1 !px-2 !text-xs ${editor.isActive('italic') ? '!bg-teal-600 !text-white' : ''}`}
           onClick={() => editor.chain().focus().toggleItalic().run()}
           disabled={!can(() => editor.can().chain().focus().toggleItalic().run())}
         >
@@ -296,7 +406,7 @@ export default function AdminRichEditor({
         </button>
         <button
           type="button"
-          className="admin-button !py-1 !px-2 !text-xs"
+          className={`admin-button !py-1 !px-2 !text-xs ${editor.isActive('underline') ? '!bg-teal-600 !text-white' : ''}`}
           onClick={() => editor.chain().focus().toggleUnderline().run()}
         >
           Underline
@@ -306,14 +416,21 @@ export default function AdminRichEditor({
 
         <button
           type="button"
-          className="admin-button !py-1 !px-2 !text-xs"
+          className={`admin-button !py-1 !px-2 !text-xs ${editor.isActive('heading', { level: 1 }) ? '!bg-teal-600 !text-white' : ''}`}
+          onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+        >
+          H1
+        </button>
+        <button
+          type="button"
+          className={`admin-button !py-1 !px-2 !text-xs ${editor.isActive('heading', { level: 2 }) ? '!bg-teal-600 !text-white' : ''}`}
           onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
         >
           H2
         </button>
         <button
           type="button"
-          className="admin-button !py-1 !px-2 !text-xs"
+          className={`admin-button !py-1 !px-2 !text-xs ${editor.isActive('heading', { level: 3 }) ? '!bg-teal-600 !text-white' : ''}`}
           onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
         >
           H3
@@ -323,22 +440,33 @@ export default function AdminRichEditor({
 
         <button
           type="button"
-          className="admin-button !py-1 !px-2 !text-xs"
+          className={`admin-button !py-1 !px-2 !text-xs ${editor.isActive('bulletList') ? '!bg-teal-600 !text-white' : ''}`}
           onClick={() => editor.chain().focus().toggleBulletList().run()}
         >
           Bullets
         </button>
         <button
           type="button"
-          className="admin-button !py-1 !px-2 !text-xs"
+          className={`admin-button !py-1 !px-2 !text-xs ${editor.isActive('orderedList') ? '!bg-teal-600 !text-white' : ''}`}
           onClick={() => editor.chain().focus().toggleOrderedList().run()}
         >
           Numbered
         </button>
+        <button
+          type="button"
+          className={`admin-button !py-1 !px-2 !text-xs ${editor.isActive('blockquote') ? '!bg-teal-600 !text-white' : ''}`}
+          onClick={() => editor.chain().focus().toggleBlockquote().run()}
+        >
+          Quote
+        </button>
 
         <span className="h-4 w-px bg-gray-200 mx-1" />
 
-        <button type="button" className="admin-button !py-1 !px-2 !text-xs" onClick={setLink}>
+        <button
+          type="button"
+          className={`admin-button !py-1 !px-2 !text-xs ${editor.isActive('link') ? '!bg-teal-600 !text-white' : ''}`}
+          onClick={setLink}
+        >
           Link
         </button>
         <button
@@ -355,6 +483,25 @@ export default function AdminRichEditor({
           onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}
         >
           Clear
+        </button>
+
+        <span className="h-4 w-px bg-gray-200 mx-1" />
+
+        <button
+          type="button"
+          className="admin-button !py-1 !px-2 !text-xs"
+          onClick={() => editor.chain().focus().undo().run()}
+          disabled={!can(() => editor.can().chain().focus().undo().run())}
+        >
+          Undo
+        </button>
+        <button
+          type="button"
+          className="admin-button !py-1 !px-2 !text-xs"
+          onClick={() => editor.chain().focus().redo().run()}
+          disabled={!can(() => editor.can().chain().focus().redo().run())}
+        >
+          Redo
         </button>
 
         {uploadBusy ? <span className="ml-2 text-xs font-semibold text-gray-500">Uploading image…</span> : null}
