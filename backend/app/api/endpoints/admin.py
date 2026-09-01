@@ -1422,6 +1422,25 @@ def delete_recipe(
     return {"status": "deleted"}
 
 
+class RecipeBulkDeletePayload(BaseModel):
+    recipe_ids: list[int] = Field(..., min_length=1, max_length=200)
+
+
+@router.post("/recipes/bulk-delete")
+def bulk_delete_recipes(
+    payload: RecipeBulkDeletePayload,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),  # noqa: ARG001
+):
+    deleted = (
+        db.query(Recipe)
+        .filter(Recipe.id.in_(payload.recipe_ids))
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return {"deleted_count": int(deleted or 0)}
+
+
 @router.post("/bootstrap")
 def bootstrap_admin(
     payload: AdminLoginPayload,
