@@ -122,6 +122,17 @@ class RecipePayload(BaseModel):
     cook_time_tag: str | None = Field(None, max_length=30)
     status: str | None = Field(None, max_length=20)
 
+    @field_validator("image_url", mode="before")
+    def normalize_image_url(cls, value):  # noqa: N805
+        # Pydantic's HttpUrl rejects "" outright ("input is empty") instead of treating
+        # it as "no image" - the edit form sends "" for drafts that don't have an image
+        # yet, which made every save on those recipes fail with a 422. Treat blank/
+        # whitespace-only input as no image instead of a validation error.
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
+
     @field_validator("meal_type")
     def validate_meal_type(cls, value: str) -> str:  # noqa: N805
         normalized = value.strip().lower()
