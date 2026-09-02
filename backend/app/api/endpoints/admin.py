@@ -4,6 +4,7 @@ import json
 import html
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from datetime import timedelta
 from urllib import error as urlerror
@@ -19,7 +20,7 @@ from sqlalchemy.orm import Session
 from ..admin_dependencies import get_current_admin, get_current_staff_user
 from ...core.config import settings
 from ...core.security import create_access_token, get_password_hash, verify_password
-from ...database import get_db
+from ...database import get_db, SessionLocal
 from ...models.admin_user import AdminUser
 from ...models.staff_user import StaffUser
 from ...models.ai_job import AIJob
@@ -1674,59 +1675,69 @@ def _openai_credit_summary(now: datetime) -> dict:
     )
 
 
-def _deepseek_credit_summary(db: Session) -> dict:
-    if not settings.deepseek_api_key:
-        return _provider_payload("DeepSeek", configured=False, status="not_configured", message="No DeepSeek API key configured.")
-    base_url = (settings.deepseek_base_url or "https://api.deepseek.com").strip().rstrip("/")
-    if base_url.endswith("/v1"):
-        base_url = base_url[:-3]
+def _deepseek_credit_summary(db: Session | None = None) -> dict:
+    # Opens its own session when db isn't passed in, so this is safe to run on a
+    # background thread (see ai_provider_credits) instead of sharing the
+    # request-scoped session across threads, which SQLAlchemy sessions don't support.
+    owns_session = db is None
+    if owns_session:
+        db = SessionLocal()
     try:
-        data = _http_json("GET", f"{base_url}/user/balance", headers={"Authorization": f"Bearer {settings.deepseek_api_key}"})
-        infos = data.get("balance_infos") if isinstance(data, dict) else None
-        selected = None
-        if isinstance(infos, list):
-            selected = next((item for item in infos if str(item.get("currency") or "").upper() == "USD"), None)
-            selected = selected or (infos[0] if infos else None)
-        currency = str(selected.get("currency") or "USD").upper() if isinstance(selected, dict) else "USD"
-        total = _money_value(selected.get("total_balance") if isinstance(selected, dict) else None)
-        granted = _money_value(selected.get("granted_balance") if isinstance(selected, dict) else None)
-        topped_up = _money_value(selected.get("topped_up_balance") if isinstance(selected, dict) else None)
-        month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        token_sum = 0
-        request_count = 0
+        if not settings.deepseek_api_key:
+            return _provider_payload("DeepSeek", configured=False, status="not_configured", message="No DeepSeek API key configured.")
+        base_url = (settings.deepseek_base_url or "https://api.deepseek.com").strip().rstrip("/")
+        if base_url.endswith("/v1"):
+            base_url = base_url[:-3]
         try:
-            token_sum = int(
-                db.query(func.coalesce(func.sum(AIRequest.tokens_used), 0))
-                .filter(AIRequest.created_at >= month_start)
-                .filter(func.lower(AIRequest.model_used).like("%deepseek%"))
-                .scalar()
-                or 0
-            )
-            request_count = int(
-                db.query(func.count(AIRequest.id))
-                .filter(AIRequest.created_at >= month_start)
-                .filter(func.lower(AIRequest.model_used).like("%deepseek%"))
-                .scalar()
-                or 0
-            )
-        except Exception:  # noqa: BLE001
+            data = _http_json("GET", f"{base_url}/user/balance", headers={"Authorization": f"Bearer {settings.deepseek_api_key}"})
+            infos = data.get("balance_infos") if isinstance(data, dict) else None
+            selected = None
+            if isinstance(infos, list):
+                selected = next((item for item in infos if str(item.get("currency") or "").upper() == "USD"), None)
+                selected = selected or (infos[0] if infos else None)
+            currency = str(selected.get("currency") or "USD").upper() if isinstance(selected, dict) else "USD"
+            total = _money_value(selected.get("total_balance") if isinstance(selected, dict) else None)
+            granted = _money_value(selected.get("granted_balance") if isinstance(selected, dict) else None)
+            topped_up = _money_value(selected.get("topped_up_balance") if isinstance(selected, dict) else None)
+            month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
             token_sum = 0
             request_count = 0
-        return _provider_payload(
-            "DeepSeek",
-            configured=True,
-            status="connected" if data.get("is_available", True) else "unavailable",
-            currency=currency,
-            balance={"total": total, "granted": granted, "topped_up": topped_up},
-            usage={
-                "monthly_total_tokens": token_sum,
-                "monthly_requests": request_count,
-                "monthly_usage_note": "Tracked from local AI request rows.",
-            },
-            message="" if selected else "DeepSeek returned no balance rows.",
-        )
-    except Exception as exc:  # noqa: BLE001
-        return _provider_payload("DeepSeek", configured=True, status="error", message=_mask_provider_error(exc))
+            try:
+                token_sum = int(
+                    db.query(func.coalesce(func.sum(AIRequest.tokens_used), 0))
+                    .filter(AIRequest.created_at >= month_start)
+                    .filter(func.lower(AIRequest.model_used).like("%deepseek%"))
+                    .scalar()
+                    or 0
+                )
+                request_count = int(
+                    db.query(func.count(AIRequest.id))
+                    .filter(AIRequest.created_at >= month_start)
+                    .filter(func.lower(AIRequest.model_used).like("%deepseek%"))
+                    .scalar()
+                    or 0
+                )
+            except Exception:  # noqa: BLE001
+                token_sum = 0
+                request_count = 0
+            return _provider_payload(
+                "DeepSeek",
+                configured=True,
+                status="connected" if data.get("is_available", True) else "unavailable",
+                currency=currency,
+                balance={"total": total, "granted": granted, "topped_up": topped_up},
+                usage={
+                    "monthly_total_tokens": token_sum,
+                    "monthly_requests": request_count,
+                    "monthly_usage_note": "Tracked from local AI request rows.",
+                },
+                message="" if selected else "DeepSeek returned no balance rows.",
+            )
+        except Exception as exc:  # noqa: BLE001
+            return _provider_payload("DeepSeek", configured=True, status="error", message=_mask_provider_error(exc))
+    finally:
+        if owns_session:
+            db.close()
 
 
 def _runware_credit_summary() -> dict:
@@ -1772,15 +1783,22 @@ def ai_provider_credits(
             pass
 
     now = datetime.utcnow()
+    # Each of these makes its own blocking HTTP call (up to ~8s) to a different
+    # provider. Run them concurrently instead of one after another so a cold
+    # cache costs as long as the single slowest provider, not the sum of all three.
+    # _deepseek_credit_summary opens its own DB session when run this way, since a
+    # SQLAlchemy session isn't safe to share across threads.
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        openai_future = executor.submit(_openai_credit_summary, now)
+        runware_future = executor.submit(_runware_credit_summary)
+        deepseek_future = executor.submit(_deepseek_credit_summary)
+        providers = [openai_future.result(), runware_future.result(), deepseek_future.result()]
+
     payload = {
         "currency": "USD",
         "cached_for_seconds": 600,
         "generated_at": now.isoformat() + "Z",
-        "providers": [
-            _openai_credit_summary(now),
-            _runware_credit_summary(),
-            _deepseek_credit_summary(db),
-        ],
+        "providers": providers,
     }
     try:
         admin_cache.set(cache_key, json.dumps(payload), ttl_seconds=600)
