@@ -38,8 +38,11 @@ export default function AdminUserActivityPage() {
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const allOnPageSelected = items.length > 0 && items.every((item) => selectedIds.includes(item.id));
 
   const buildQuery = useCallback(() => {
     const params = new URLSearchParams();
@@ -71,6 +74,7 @@ export default function AdminUserActivityPage() {
       const data = await response.json();
       setItems(Array.isArray(data.items) ? data.items : []);
       setTotal(Number(data.total || 0));
+      setSelectedIds([]);
     } catch {
       setMessage('Failed to load user activity.');
     } finally {
@@ -86,6 +90,86 @@ export default function AdminUserActivityPage() {
     event.preventDefault();
     setPage(1);
     setTimeout(loadActivity, 0);
+  };
+
+  const toggleSelected = (id) => {
+    setSelectedIds((current) =>
+      current.includes(id) ? current.filter((value) => value !== id) : [...current, id]
+    );
+  };
+
+  const toggleSelectAllOnPage = () => {
+    setSelectedIds((current) => {
+      if (allOnPageSelected) {
+        const pageIds = new Set(items.map((item) => item.id));
+        return current.filter((id) => !pageIds.has(id));
+      }
+      const merged = new Set(current);
+      items.forEach((item) => merged.add(item.id));
+      return Array.from(merged);
+    });
+  };
+
+  const deleteSelected = async () => {
+    if (!token || isDeleting || selectedIds.length === 0) return;
+    const ok = window.confirm(`Delete ${selectedIds.length} selected activity event(s)? This cannot be undone.`);
+    if (!ok) return;
+    setIsDeleting(true);
+    setMessage('');
+    try {
+      const response = await fetch(`${API_URL}/api/admin/user-activity/bulk-delete`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: selectedIds }),
+      });
+      if (response.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.detail || 'Failed to delete selected activity.');
+      setMessage(`Deleted ${data.deleted_count || 0} activity event(s).`);
+      await loadActivity();
+    } catch (error) {
+      setMessage(error?.message || 'Failed to delete selected activity.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const deleteAllMatching = async () => {
+    if (!token || isDeleting) return;
+    const scope = q.trim() || eventType.trim() || source.trim() ? 'all activity matching the current filters' : 'ALL activity events';
+    const ok = window.confirm(`Delete ${scope}? This cannot be undone.`);
+    if (!ok) return;
+    setIsDeleting(true);
+    setMessage('');
+    try {
+      const response = await fetch(`${API_URL}/api/admin/user-activity/delete-all`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          q: q.trim() || null,
+          event_type: eventType.trim() || null,
+          source: source.trim() || null,
+        }),
+      });
+      if (response.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.detail || 'Failed to delete activity.');
+      setMessage(`Deleted ${data.deleted_count || 0} activity event(s).`);
+      setPage(1);
+      await loadActivity();
+    } catch (error) {
+      setMessage(error?.message || 'Failed to delete activity.');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
@@ -126,14 +210,45 @@ export default function AdminUserActivityPage() {
             <h2 className="admin-title--sm">Activity history</h2>
             <p className="admin-subtitle--sm">{total} total events. Events older than 2 months are cleaned automatically.</p>
           </div>
+          <div className="admin-action-buttons">
+            <button
+              type="button"
+              className="admin-button danger"
+              disabled={isDeleting || selectedIds.length === 0}
+              onClick={deleteSelected}
+            >
+              {isDeleting ? 'Deleting...' : `Delete selected (${selectedIds.length})`}
+            </button>
+            <button
+              type="button"
+              className="admin-button danger"
+              disabled={isDeleting || total === 0}
+              onClick={deleteAllMatching}
+            >
+              Delete all
+            </button>
+          </div>
         </div>
 
         {isLoading ? (
           <div className="admin-empty-state">Loading activity...</div>
         ) : items.length ? (
           <div className="admin-activity-table">
+            <div className="admin-activity-table-row admin-activity-table-row--header">
+              <label className="admin-activity-checkbox">
+                <input type="checkbox" checked={allOnPageSelected} onChange={toggleSelectAllOnPage} />
+              </label>
+              <span>Select all on page</span>
+            </div>
             {items.map((item) => (
               <div key={item.id} className="admin-activity-table-row">
+                <label className="admin-activity-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(item.id)}
+                    onChange={() => toggleSelected(item.id)}
+                  />
+                </label>
                 <div className="admin-activity-avatar">{initials(item)}</div>
                 <div>
                   <strong>{item.label || item.event_type || 'Activity'}</strong>
