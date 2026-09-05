@@ -6055,7 +6055,7 @@
 
 .admin-activity-table-row {
   display: grid;
-  grid-template-columns: 42px minmax(220px, 1.3fr) minmax(170px, 0.8fr) minmax(90px, 0.4fr) minmax(150px, 0.6fr);
+  grid-template-columns: 24px 42px minmax(220px, 1.3fr) minmax(170px, 0.8fr) minmax(90px, 0.4fr) minmax(150px, 0.6fr);
   gap: 12px;
   align-items: center;
   padding: 13px 14px;
@@ -6065,6 +6065,32 @@
 
 .admin-activity-table-row:last-child {
   border-bottom: 0;
+}
+
+.admin-activity-table-row--header {
+  grid-template-columns: 24px auto;
+  background: #f7faf8;
+  padding: 10px 14px;
+}
+
+.admin-activity-table-row--header span {
+  color: #4f6b5c;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.admin-activity-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-activity-checkbox input {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
 }
 
 .admin-activity-avatar {
@@ -6118,12 +6144,16 @@
   }
 
   .admin-activity-table-row {
-    grid-template-columns: 38px minmax(0, 1fr);
+    grid-template-columns: 24px 38px minmax(0, 1fr);
+  }
+
+  .admin-activity-table-row--header {
+    grid-template-columns: 24px auto;
   }
 
   .admin-activity-meta,
   .admin-activity-table-row time {
-    grid-column: 2;
+    grid-column: 3;
   }
 
   .admin-pagination {

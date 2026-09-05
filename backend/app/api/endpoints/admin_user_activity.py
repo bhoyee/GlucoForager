@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel, Field
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -166,3 +167,61 @@ def list_user_activity(
         "page_size": page_size_value,
         "total": total,
     }
+
+
+class ActivityBulkDeletePayload(BaseModel):
+    ids: list[int] = Field(..., min_length=1, max_length=1000)
+
+
+class ActivityDeleteAllPayload(BaseModel):
+    q: str | None = None
+    user_id: int | None = None
+    event_type: str | None = None
+    source: str | None = None
+
+
+@router.post("/bulk-delete")
+def bulk_delete_user_activity(
+    payload: ActivityBulkDeletePayload,
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("users.write")),  # noqa: ARG001
+):
+    deleted = (
+        db.query(UserActivityEvent)
+        .filter(UserActivityEvent.id.in_(payload.ids))
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return {"deleted_count": int(deleted or 0)}
+
+
+@router.post("/delete-all")
+def delete_all_user_activity(
+    payload: ActivityDeleteAllPayload,
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("users.write")),  # noqa: ARG001
+):
+    query = db.query(UserActivityEvent)
+
+    if payload.user_id is not None:
+        query = query.filter(UserActivityEvent.user_id == int(payload.user_id))
+    if payload.event_type:
+        query = query.filter(UserActivityEvent.event_type == payload.event_type.strip())
+    if payload.source:
+        query = query.filter(UserActivityEvent.source == payload.source.strip())
+    if payload.q and payload.q.strip():
+        needle = f"%{payload.q.strip()}%"
+        matching_user_ids = db.query(User.id).filter(
+            or_(User.email.ilike(needle), User.full_name.ilike(needle))
+        )
+        query = query.filter(
+            or_(
+                UserActivityEvent.user_id.in_(matching_user_ids),
+                UserActivityEvent.label.ilike(needle),
+                UserActivityEvent.event_type.ilike(needle),
+            )
+        )
+
+    deleted = query.delete(synchronize_session=False)
+    db.commit()
+    return {"deleted_count": int(deleted or 0)}
