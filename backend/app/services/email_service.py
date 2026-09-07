@@ -744,7 +744,9 @@ def _dunning_shell(*, to_email: str, user_id: int, heading: str, body_html: str)
     to this user (not the website newsletter list - see user_email_tokens.py)."""
     site_url = (settings.site_url or "https://www.glucoforager.com").rstrip("/")
     logo_url = f"{site_url}/images/logo.png"
-    resubscribe_url = f"{site_url}/resubscribe"
+    # openPremium=1 is picked up by the mobile app's Universal Links config (App.js) to jump
+    # straight to the paywall when the link opens in-app instead of the web fallback page.
+    resubscribe_url = f"{site_url}/resubscribe?openPremium=1"
     unsubscribe_token = make_dunning_unsubscribe_token(user_id, to_email)
     unsubscribe_url = f"{site_url}/unsubscribe?type=dunning&token={unsubscribe_token}"
 

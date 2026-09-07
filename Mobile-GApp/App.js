@@ -35,6 +35,29 @@ import MainTabNavigator from './navigation/MainTabNavigator';
 
 const Stack = createNativeStackNavigator();
 
+// Universal Links / App Links config - lets a tapped https://www.glucoforager.com/resubscribe
+// link (e.g. from the win-back email sequence) open straight to the in-app paywall instead of
+// a browser, once the native associatedDomains/intentFilters (app.json) verify against the
+// .well-known files hosted on the site. Only takes effect for users on a build that includes
+// those native entries - see app.json for the Team ID / signing fingerprint that still need
+// filling in before verification will actually pass.
+const linking = {
+  prefixes: ['https://www.glucoforager.com', 'https://glucoforager.com'],
+  config: {
+    screens: {
+      MainTabs: {
+        screens: {
+          Profile: {
+            screens: {
+              ProfileMain: 'resubscribe',
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
 const devLog = (...args) => {
   if (!__DEV__) return;
   // eslint-disable-next-line no-console
@@ -155,7 +178,7 @@ function AppNavigator() {
   devLog('Showing main navigation. User token:', userToken ? 'Present' : 'None');
 
   return (
-    <NavigationContainer>
+    <NavigationContainer linking={linking}>
       <Modal
         transparent
         visible={mealPromptVisible}

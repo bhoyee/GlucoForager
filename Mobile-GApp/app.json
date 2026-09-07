@@ -20,7 +20,10 @@
         "NSPhotoLibraryUsageDescription": "Allow $(PRODUCT_NAME) to access your photo library to select ingredient images",
         "ITSAppUsesNonExemptEncryption": false
       },
-      "bundleIdentifier": "com.glucoforager.app"
+      "bundleIdentifier": "com.glucoforager.app",
+      "associatedDomains": [
+        "applinks:www.glucoforager.com"
+      ]
     },
     "android": {
       "versionCode": 56,
@@ -40,7 +43,24 @@
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_MEDIA_VIDEO"
       ],
-      "package": "com.glucoforager.app"
+      "package": "com.glucoforager.app",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "www.glucoforager.com",
+              "pathPrefix": "/resubscribe"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
