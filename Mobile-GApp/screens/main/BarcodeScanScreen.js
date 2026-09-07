@@ -114,7 +114,11 @@ export default function BarcodeScanScreen() {
         Alert.alert('Unable to log meal', data?.detail?.message || data?.detail || 'Please try again.');
         return;
       }
-      navigation.goBack();
+      // This screen is reachable from two different tab stacks (Scan tab's mode
+      // switcher, and the Log Meal screen's "scan barcode" link) - always land back
+      // on Home rather than goBack(), so the second path doesn't dump the user on
+      // the unrelated Scan tab.
+      navigation.navigate('Home', { screen: 'HomeMain' });
     } catch {
       Alert.alert('Unable to log meal', 'Network request failed. Please check your connection.');
     } finally {
