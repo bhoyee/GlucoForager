@@ -969,7 +969,7 @@ export default function HomeScreen() {
         )}
 
         {/* Track today */}
-        <View style={styles.section}>
+        <View style={[styles.section, { marginTop: 18 }]}>
           <View style={styles.trackCard}>
             <View style={styles.getRecipesHeader}>
               <View style={[styles.heroPrimaryIcon, { backgroundColor: Colors.accent }]}>

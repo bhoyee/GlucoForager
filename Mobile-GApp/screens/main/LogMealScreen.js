@@ -69,6 +69,16 @@ export default function LogMealScreen() {
         </View>
 
         <View style={styles.content}>
+          <TouchableOpacity
+            style={styles.barcodeLink}
+            onPress={() => navigation.navigate('Scan', { screen: 'BarcodeScan' })}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="barcode-outline" size={18} color={Colors.primary} />
+            <Text style={styles.barcodeLinkText}>Scan a barcode instead</Text>
+            <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
+          </TouchableOpacity>
+
           <Text style={styles.label}>What did you eat?</Text>
           <TextInput
             style={styles.input}
@@ -119,6 +129,18 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 20, fontWeight: '900', color: 'white' },
   headerSubtitle: { marginTop: 3, fontSize: 12, color: 'rgba(255,255,255,0.78)', fontWeight: '700' },
   content: { padding: 20 },
+  barcodeLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: `${Colors.primary}0F`,
+    borderWidth: 1,
+    borderColor: `${Colors.primary}24`,
+    marginBottom: 18,
+  },
+  barcodeLinkText: { flex: 1, fontSize: 13, fontWeight: '800', color: Colors.primary },
   label: { fontSize: 15, fontWeight: '800', color: Colors.text, marginBottom: 10 },
   input: {
     minHeight: 96,

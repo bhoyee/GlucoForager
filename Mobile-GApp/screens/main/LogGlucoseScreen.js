@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,19 +8,57 @@ import { Colors } from '../../constants/Colors';
 import { apiFetch } from '../../utils/api';
 import { API_URL } from '../../config/api';
 
+const UNIT_PREF_KEY = 'glucose_unit_pref_v1';
+const MGDL_PER_MMOL = 18.0182;
+const MGDL_RANGE = { min: 20, max: 600 };
+const MMOL_RANGE = { min: 1.1, max: 33.3 };
+
 export default function LogGlucoseScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const headerPaddingTop = Math.max(insets.top, 16);
 
+  const [unit, setUnit] = useState('mg/dL');
   const [value, setValue] = useState('');
   const [note, setNote] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
+  useEffect(() => {
+    AsyncStorage.getItem(UNIT_PREF_KEY)
+      .then((stored) => {
+        if (stored === 'mg/dL' || stored === 'mmol/L') setUnit(stored);
+      })
+      .catch(() => {});
+  }, []);
+
+  const switchUnit = (nextUnit) => {
+    if (nextUnit === unit) return;
+    setUnit(nextUnit);
+    setValue('');
+    AsyncStorage.setItem(UNIT_PREF_KEY, nextUnit).catch(() => {});
+  };
+
+  const handleValueChange = (text) => {
+    if (unit === 'mmol/L') {
+      let cleaned = text.replace(/[^0-9.]/g, '');
+      const firstDot = cleaned.indexOf('.');
+      if (firstDot !== -1) {
+        cleaned = cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, '');
+      }
+      setValue(cleaned);
+    } else {
+      setValue(text.replace(/[^0-9]/g, ''));
+    }
+  };
+
   const handleSave = async () => {
-    const numeric = parseInt(value, 10);
-    if (!Number.isFinite(numeric) || numeric < 20 || numeric > 600) {
-      Alert.alert('Check the reading', 'Enter your glucose reading in mg/dL (a number between 20 and 600).');
+    const raw = parseFloat(value);
+    const range = unit === 'mmol/L' ? MMOL_RANGE : MGDL_RANGE;
+    if (!Number.isFinite(raw) || raw < range.min || raw > range.max) {
+      Alert.alert(
+        'Check the reading',
+        `Enter your glucose reading in ${unit} (between ${range.min} and ${range.max}).`
+      );
       return;
     }
     if (isSaving) return;
@@ -31,12 +69,13 @@ export default function LogGlucoseScreen() {
         Alert.alert('Sign in required', 'Please sign in to log a reading.');
         return;
       }
+      const valueMgDl = unit === 'mmol/L' ? Math.round(raw * MGDL_PER_MMOL) : Math.round(raw);
       const response = await apiFetch(
         `${API_URL}/api/app/glucose`,
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ value_mg_dl: numeric, note: note.trim() || undefined }),
+          body: JSON.stringify({ value_mg_dl: valueMgDl, note: note.trim() || undefined }),
         },
         { timeoutMs: 8000 }
       );
@@ -62,6 +101,11 @@ export default function LogGlucoseScreen() {
     }
   };
 
+  const spikeHint =
+    unit === 'mmol/L'
+      ? `${(180 / MGDL_PER_MMOL).toFixed(1)} mmol/L`
+      : '180 mg/dL';
+
   return (
     <View style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -79,15 +123,31 @@ export default function LogGlucoseScreen() {
         </View>
 
         <View style={styles.content}>
-          <Text style={styles.label}>Reading (mg/dL)</Text>
+          <View style={styles.labelRow}>
+            <Text style={styles.label}>Reading</Text>
+            <View style={styles.unitSwitcher}>
+              <TouchableOpacity
+                style={[styles.unitOption, unit === 'mg/dL' && styles.unitOptionActive]}
+                onPress={() => switchUnit('mg/dL')}
+              >
+                <Text style={[styles.unitOptionText, unit === 'mg/dL' && styles.unitOptionTextActive]}>mg/dL</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.unitOption, unit === 'mmol/L' && styles.unitOptionActive]}
+                onPress={() => switchUnit('mmol/L')}
+              >
+                <Text style={[styles.unitOptionText, unit === 'mmol/L' && styles.unitOptionTextActive]}>mmol/L</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
           <TextInput
             style={styles.valueInput}
-            placeholder="e.g. 142"
+            placeholder={unit === 'mmol/L' ? 'e.g. 7.9' : 'e.g. 142'}
             placeholderTextColor={Colors.textMuted}
             value={value}
-            onChangeText={(text) => setValue(text.replace(/[^0-9]/g, ''))}
-            keyboardType="number-pad"
-            maxLength={3}
+            onChangeText={handleValueChange}
+            keyboardType="decimal-pad"
+            maxLength={unit === 'mmol/L' ? 5 : 3}
             autoFocus
           />
 
@@ -102,8 +162,8 @@ export default function LogGlucoseScreen() {
           />
 
           <Text style={styles.hint}>
-            If this follows a logged meal by 30 minutes to 3 hours and reads 180 mg/dL or higher, we'll flag that
-            meal so you can spot patterns over time.
+            If this follows a logged meal by 30 minutes to 3 hours and reads {spikeHint} or higher, we'll flag
+            that meal so you can spot patterns over time.
           </Text>
 
           <TouchableOpacity
@@ -142,7 +202,25 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 20, fontWeight: '900', color: 'white' },
   headerSubtitle: { marginTop: 3, fontSize: 12, color: 'rgba(255,255,255,0.78)', fontWeight: '700' },
   content: { padding: 20 },
-  label: { fontSize: 15, fontWeight: '800', color: Colors.text, marginBottom: 10 },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  label: { fontSize: 15, fontWeight: '800', color: Colors.text },
+  unitSwitcher: {
+    flexDirection: 'row',
+    backgroundColor: Colors.background,
+    borderRadius: 999,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  unitOption: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
+  unitOptionActive: { backgroundColor: Colors.primary },
+  unitOptionText: { fontSize: 12, fontWeight: '800', color: Colors.textLight },
+  unitOptionTextActive: { color: 'white' },
   valueInput: {
     backgroundColor: Colors.surface,
     borderRadius: 16,
