@@ -534,6 +534,8 @@ export default function HomeScreen() {
   };
   const handleOpenChallenge = () => navigation.navigate('Challenge');
   const handleOpenTip = () => navigation.navigate('TodayTip', { tip: todayTip });
+  const handleOpenLogMeal = () => navigation.navigate('LogMeal');
+  const handleOpenLogGlucose = () => navigation.navigate('LogGlucose');
 
   const getRecipeTimeLabel = (recipe) => {
     const prepRaw = recipe.prep_time_minutes ?? recipe.prepTime ?? recipe.prep_time;
@@ -907,6 +909,17 @@ export default function HomeScreen() {
           <Text style={styles.sectionSubtitle}>One practical nudge for steadier choices today.</Text>
 
           <View style={styles.smartMoveCard}>
+            <View style={styles.logButtonsRow}>
+              <TouchableOpacity style={styles.logButton} onPress={handleOpenLogMeal} activeOpacity={0.85}>
+                <Ionicons name="restaurant-outline" size={18} color={Colors.primary} />
+                <Text style={styles.logButtonText}>Log meal</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.logButton} onPress={handleOpenLogGlucose} activeOpacity={0.85}>
+                <Ionicons name="water-outline" size={18} color={Colors.primary} />
+                <Text style={styles.logButtonText}>Log glucose</Text>
+              </TouchableOpacity>
+            </View>
+
             {hasChallenge ? (
               <TouchableOpacity style={styles.smartChallengeRow} onPress={handleOpenChallenge} activeOpacity={0.9}>
                 <View style={styles.smartChallengeIcon}>
@@ -1655,6 +1668,29 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: '600',
     color: Colors.textLight,
+  },
+  logButtonsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    padding: 4,
+    marginBottom: 6,
+  },
+  logButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: `${Colors.primary}0F`,
+    borderWidth: 1,
+    borderColor: `${Colors.primary}28`,
+  },
+  logButtonText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: Colors.primary,
   },
   smartChallengeRow: {
     padding: 12,
