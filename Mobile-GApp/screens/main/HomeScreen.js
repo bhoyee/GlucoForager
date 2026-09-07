@@ -50,6 +50,7 @@ export default function HomeScreen() {
   const [blockedTipIds, setBlockedTipIds] = useState([]);
   const [serverTodayTip, setServerTodayTip] = useState(null);
   const [dailyChallenge, setDailyChallenge] = useState(null);
+  const [healthLogSummary, setHealthLogSummary] = useState(null);
   const todayTip = useMemo(() => {
     if (serverTodayTip?.title && (serverTodayTip?.tip || serverTodayTip?.body)) return serverTodayTip;
     return getTodayTip(new Date(), { blockedTipIds });
@@ -148,6 +149,26 @@ export default function HomeScreen() {
       if (data?.challenge?.tasks?.length) {
         setDailyChallenge(data.challenge);
       }
+    } catch {
+      // ignore network errors
+    }
+  };
+
+  const loadHealthLogSummary = async () => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        setHealthLogSummary(null);
+        return;
+      }
+      const response = await apiFetch(
+        `${API_URL}/api/app/health-log/today`,
+        { method: 'GET', headers: { Authorization: `Bearer ${token}` } },
+        { timeoutMs: 12000 }
+      );
+      if (!response.ok) return;
+      const data = await response.json();
+      setHealthLogSummary(data);
     } catch {
       // ignore network errors
     }
@@ -259,6 +280,7 @@ export default function HomeScreen() {
         loadTipConfig(),
         loadTodayTip(),
         loadDailyChallenge(),
+        loadHealthLogSummary(),
       ]);
 
       const allFailed = results.every((result) => result.status === 'rejected');
@@ -919,6 +941,24 @@ export default function HomeScreen() {
                 <Text style={styles.logButtonText}>Log glucose</Text>
               </TouchableOpacity>
             </View>
+
+            {healthLogSummary && (healthLogSummary.meals_logged_today > 0 || healthLogSummary.readings_logged_today > 0) ? (
+              <View style={styles.healthLogSummaryRow}>
+                <Text style={styles.healthLogSummaryText}>
+                  {healthLogSummary.carbs_logged_today_g != null
+                    ? `${healthLogSummary.carbs_logged_today_g}g carbs logged today`
+                    : `${healthLogSummary.meals_logged_today} meal${healthLogSummary.meals_logged_today === 1 ? '' : 's'} logged today`}
+                </Text>
+                {healthLogSummary.spikes_flagged_today > 0 ? (
+                  <View style={styles.spikeBadge}>
+                    <Ionicons name="alert-circle" size={12} color={Colors.warning} />
+                    <Text style={styles.spikeBadgeText}>
+                      {healthLogSummary.spikes_flagged_today} spike{healthLogSummary.spikes_flagged_today === 1 ? '' : 's'} flagged
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
 
             {hasChallenge ? (
               <TouchableOpacity style={styles.smartChallengeRow} onPress={handleOpenChallenge} activeOpacity={0.9}>
@@ -1691,6 +1731,33 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     color: Colors.primary,
+  },
+  healthLogSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 8,
+    marginBottom: 8,
+  },
+  healthLogSummaryText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textLight,
+  },
+  spikeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: `${Colors.warning}18`,
+  },
+  spikeBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.warning,
   },
   smartChallengeRow: {
     padding: 12,
