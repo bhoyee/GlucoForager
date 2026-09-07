@@ -14,6 +14,7 @@ export default function LogMealScreen() {
   const headerPaddingTop = Math.max(insets.top, 16);
 
   const [description, setDescription] = useState('');
+  const [carbs, setCarbs] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSave = async () => {
@@ -21,6 +22,16 @@ export default function LogMealScreen() {
     if (!trimmed) {
       Alert.alert('Add a description', 'Say what you ate, e.g. "Grilled chicken with rice and vegetables".');
       return;
+    }
+    const trimmedCarbs = carbs.trim();
+    let carbsValue;
+    if (trimmedCarbs) {
+      const parsed = parseFloat(trimmedCarbs);
+      if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1000) {
+        Alert.alert('Check the carbs value', 'Enter a number of grams between 0 and 1000, or leave it blank.');
+        return;
+      }
+      carbsValue = parsed;
     }
     if (isSaving) return;
     setIsSaving(true);
@@ -35,7 +46,7 @@ export default function LogMealScreen() {
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ description: trimmed }),
+          body: JSON.stringify({ description: trimmed, carbs_g: carbsValue }),
         },
         { timeoutMs: 8000 }
       );
@@ -81,6 +92,20 @@ export default function LogMealScreen() {
           />
           <Text style={styles.hint}>
             A quick note is enough - this helps connect meals to how your glucose responds later.
+          </Text>
+
+          <Text style={[styles.label, { marginTop: 20 }]}>Carbs, if you know it (optional)</Text>
+          <TextInput
+            style={styles.carbsInput}
+            placeholder="e.g. 45"
+            placeholderTextColor={Colors.textMuted}
+            value={carbs}
+            onChangeText={(text) => setCarbs(text.replace(/[^0-9.]/g, ''))}
+            keyboardType="decimal-pad"
+            maxLength={5}
+          />
+          <Text style={styles.hint}>
+            Leave this blank if you're not sure - it just won't count toward today's carb total.
           </Text>
 
           <TouchableOpacity
@@ -133,6 +158,17 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   hint: { marginTop: 10, fontSize: 12, lineHeight: 18, color: Colors.textLight, fontWeight: '600' },
+  carbsInput: {
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.text,
+  },
   saveButton: {
     marginTop: 24,
     height: 52,
