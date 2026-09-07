@@ -341,13 +341,13 @@ export default function ScanScreen() {
           </View>
           <TouchableOpacity
             style={styles.modeOption}
-            onPress={() => navigation.navigate('BarcodeScan')}
+            onPress={() => navigation.replace('BarcodeScan')}
           >
             <Text style={styles.modeOptionText}>Barcode</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.modeOption}
-            onPress={() => navigation.navigate('PhotoScan')}
+            onPress={() => navigation.replace('PhotoScan')}
           >
             <Text style={styles.modeOptionText}>Photo</Text>
           </TouchableOpacity>
