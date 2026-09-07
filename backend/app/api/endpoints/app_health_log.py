@@ -310,5 +310,6 @@ def lookup_barcode(
         "name": name,
         "serving_size": product.get("serving_size"),
         **nutrition,
+        "has_nutrition_data": nutrition.get("carbs_g") is not None,
         "diabetes_note": _diabetes_note(nutrition, product) if name else None,
     }

@@ -23,9 +23,10 @@ try {
 const HOLD_STEADY_SECONDS = 2;
 
 const VERDICT_STYLE = {
-  good_fit: { label: 'Good fit', color: Colors.success },
+  good_fit: { label: 'Diabetes-friendly', color: Colors.success },
   moderate: { label: 'Moderate', color: Colors.warning },
   use_caution: { label: 'Use caution', color: Colors.danger },
+  unknown: { label: 'Not enough info', color: Colors.textLight },
 };
 
 export default function PhotoScanScreen() {
@@ -254,6 +255,7 @@ export default function PhotoScanScreen() {
         <View style={[styles.resultCard, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]}>
           {result.is_food ? (
             <>
+              <Text style={styles.eyebrow}>Diabetes check</Text>
               <View style={styles.resultTitleRow}>
                 <Text style={styles.resultTitle} numberOfLines={2}>
                   {result.name || 'Unidentified food'}
@@ -388,6 +390,14 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,
+  },
+  eyebrow: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: Colors.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: 6,
   },
   resultTitleRow: {
     flexDirection: 'row',
