@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timedelta
 
 import httpx
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -144,6 +144,24 @@ def list_meals(
     return {"items": items}
 
 
+@router.delete("/meals/{meal_id}")
+def delete_meal(
+    meal_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    meal = (
+        db.query(MealLogEntry)
+        .filter(MealLogEntry.id == meal_id, MealLogEntry.user_id == current_user.id)
+        .first()
+    )
+    if not meal:
+        raise HTTPException(status_code=404, detail="Meal not found")
+    db.delete(meal)
+    db.commit()
+    return {"detail": "Deleted"}
+
+
 @router.post("/glucose")
 def log_glucose(
     payload: GlucoseLogPayload,
@@ -201,6 +219,24 @@ def list_glucose(
         entry["flagged_meal"] = _serialize_meal(preceding_meal) if is_spike else None
         items.append(entry)
     return {"items": items}
+
+
+@router.delete("/glucose/{reading_id}")
+def delete_glucose_reading(
+    reading_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    reading = (
+        db.query(GlucoseReading)
+        .filter(GlucoseReading.id == reading_id, GlucoseReading.user_id == current_user.id)
+        .first()
+    )
+    if not reading:
+        raise HTTPException(status_code=404, detail="Reading not found")
+    db.delete(reading)
+    db.commit()
+    return {"detail": "Deleted"}
 
 
 @router.get("/health-log/today")
