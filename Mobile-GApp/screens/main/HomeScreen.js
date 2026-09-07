@@ -1014,7 +1014,11 @@ export default function HomeScreen() {
             </View>
 
             {healthLogSummary && (healthLogSummary.meals_logged_today > 0 || healthLogSummary.readings_logged_today > 0) ? (
-              <View style={styles.healthLogSummaryRow}>
+              <TouchableOpacity
+                style={styles.healthLogSummaryRow}
+                onPress={() => navigation.navigate('FoodLog')}
+                activeOpacity={0.7}
+              >
                 <Text style={styles.healthLogSummaryText}>
                   {healthLogSummary.carbs_logged_today_g != null
                     ? `${healthLogSummary.carbs_logged_today_g}g carbs logged today`
@@ -1028,8 +1032,14 @@ export default function HomeScreen() {
                     </Text>
                   </View>
                 ) : null}
-              </View>
+                <Ionicons name="chevron-forward" size={14} color={Colors.textLight} />
+              </TouchableOpacity>
             ) : null}
+
+            <TouchableOpacity style={styles.viewLogLink} onPress={() => navigation.navigate('FoodLog')} activeOpacity={0.7}>
+              <Text style={styles.viewLogLinkText}>View food log</Text>
+              <Ionicons name="chevron-forward" size={13} color={Colors.textLight} />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -1889,6 +1899,18 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     color: Colors.warning,
+  },
+  viewLogLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 6,
+  },
+  viewLogLinkText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textLight,
   },
   smartChallengeRow: {
     padding: 12,
