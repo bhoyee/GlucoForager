@@ -345,6 +345,12 @@ export default function ScanScreen() {
           >
             <Text style={styles.modeOptionText}>Barcode</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.modeOption}
+            onPress={() => navigation.navigate('PhotoScan')}
+          >
+            <Text style={styles.modeOptionText}>Photo</Text>
+          </TouchableOpacity>
         </View>
         <TouchableOpacity
           style={styles.flashButton}

@@ -47,6 +47,7 @@ from .api.endpoints import (
     app_challenge,
     app_recipe_checkins,
     app_health_log,
+    app_food_scan,
     app_recap,
     ingredients,
     recipes,
@@ -680,6 +681,7 @@ app.include_router(app_public.router, prefix="/api")
 app.include_router(app_challenge.router, prefix="/api")
 app.include_router(app_recipe_checkins.router, prefix="/api")
 app.include_router(app_health_log.router, prefix="/api")
+app.include_router(app_food_scan.router, prefix="/api")
 app.include_router(app_recap.router, prefix="/api")
 app.include_router(app_swaps.router, prefix="/api")
 app.include_router(app_daily_plan.router, prefix="/api")

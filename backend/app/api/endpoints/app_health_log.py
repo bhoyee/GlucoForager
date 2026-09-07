@@ -10,6 +10,7 @@ from ...database import get_db
 from ...models.glucose_reading import GlucoseReading
 from ...models.meal_log_entry import MealLogEntry
 from ...models.user import User
+from ...services.diabetes_food_note import build_diabetes_note
 from ...services.user_activity_service import add_user_activity
 from ..dependencies import get_current_user
 
@@ -266,43 +267,14 @@ def _extract_nutrition(product: dict) -> dict:
     }
 
 
-# Sugar per serving/100g at or above this is flagged "high sugar" - a commonly used
-# nutrition-label rule of thumb, not a personalized threshold.
-HIGH_SUGAR_THRESHOLD_G = 10
-# Ultra-processed on the NOVA classification (1=unprocessed, 4=ultra-processed).
-ULTRA_PROCESSED_NOVA_GROUP = 4
-# Meaningful carb load with very little fiber to slow absorption.
-LOW_FIBER_CARB_THRESHOLD_G = 15
-LOW_FIBER_THRESHOLD_G = 2
-
-
 def _diabetes_note(nutrition: dict, product: dict) -> dict:
-    """Rule-based, transparent flags - not a medical verdict. Mirrors the same
-    "simple rule, not ML" approach as the glucose spike threshold: named, fixed
-    signals a viewer can see and judge for themselves, rather than an opaque score."""
-    flags: list[str] = []
-
-    sugars = nutrition.get("sugars_g")
-    if sugars is not None and sugars >= HIGH_SUGAR_THRESHOLD_G:
-        flags.append("High in sugar")
-
-    nova_group = product.get("nova_group")
-    if isinstance(nova_group, (int, float)) and int(nova_group) == ULTRA_PROCESSED_NOVA_GROUP:
-        flags.append("Highly processed")
-
-    carbs = nutrition.get("carbs_g")
-    fiber = nutrition.get("fiber_g")
-    if carbs is not None and carbs >= LOW_FIBER_CARB_THRESHOLD_G and (fiber is None or fiber < LOW_FIBER_THRESHOLD_G):
-        flags.append("Low fiber for its carbs")
-
-    if len(flags) == 0:
-        verdict = "good_fit"
-    elif len(flags) == 1:
-        verdict = "moderate"
-    else:
-        verdict = "use_caution"
-
-    return {"verdict": verdict, "flags": flags, "nova_group": nova_group, "nutriscore_grade": product.get("nutriscore_grade")}
+    return build_diabetes_note(
+        carbs_g=nutrition.get("carbs_g"),
+        sugars_g=nutrition.get("sugars_g"),
+        fiber_g=nutrition.get("fiber_g"),
+        nova_group=product.get("nova_group"),
+        nutriscore_grade=product.get("nutriscore_grade"),
+    )
 
 
 @router.get("/barcode/{barcode}")
