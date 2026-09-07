@@ -1,5 +1,7 @@
+import logging
 from datetime import datetime, timedelta
 
+import httpx
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -12,6 +14,7 @@ from ...services.user_activity_service import add_user_activity
 from ..dependencies import get_current_user
 
 router = APIRouter(prefix="/app", tags=["app"])
+logger = logging.getLogger(__name__)
 
 # A reading at/above this, within SPIKE_WINDOW of a logged meal, flags that meal as a
 # likely trigger. 180 mg/dL 1-2h after eating is the standard ADA post-meal threshold -
@@ -21,10 +24,15 @@ SPIKE_WINDOW_MIN_MINUTES = 30
 SPIKE_WINDOW_MAX_MINUTES = 180
 LOG_HISTORY_DAYS = 14
 
+OPEN_FOOD_FACTS_URL = "https://world.openfoodfacts.org/api/v2/product/{barcode}.json"
+
 
 class MealLogPayload(BaseModel):
     description: str = Field(..., min_length=1, max_length=200)
     logged_at: datetime | None = None
+    source: str = Field("manual", pattern="^(manual|barcode|photo)$")
+    carbs_g: float | None = Field(None, ge=0, le=1000)
+    calories: int | None = Field(None, ge=0, le=10000)
 
 
 class GlucoseLogPayload(BaseModel):
@@ -37,6 +45,9 @@ def _serialize_meal(meal: MealLogEntry) -> dict:
     return {
         "id": meal.id,
         "description": meal.description,
+        "source": meal.source,
+        "carbs_g": meal.carbs_g,
+        "calories": meal.calories,
         "logged_at": meal.logged_at.isoformat(),
     }
 
@@ -91,6 +102,9 @@ def log_meal(
     meal = MealLogEntry(
         user_id=current_user.id,
         description=payload.description.strip(),
+        source=payload.source,
+        carbs_g=payload.carbs_g,
+        calories=payload.calories,
         logged_at=logged_at,
     )
     db.add(meal)
@@ -100,7 +114,7 @@ def log_meal(
         event_type="meal_log.created",
         label="Logged a meal",
         source="mobile",
-        metadata={"description": meal.description},
+        metadata={"description": meal.description, "log_source": meal.source},
     )
     db.commit()
     db.refresh(meal)
@@ -212,9 +226,75 @@ def get_today_health_log_summary(
         if r.value_mg_dl >= SPIKE_THRESHOLD_MGDL
         and _find_preceding_meal(db, current_user.id, r.logged_at) is not None
     )
+    carbs_logged_today = sum(m.carbs_g for m in meals_today if m.carbs_g is not None)
     return {
         "meals_logged_today": len(meals_today),
         "readings_logged_today": len(readings_today),
         "spikes_flagged_today": spikes_today,
+        "carbs_logged_today_g": round(carbs_logged_today, 1) if carbs_logged_today else None,
         "last_reading": _serialize_reading(readings_today[0]) if readings_today else None,
+    }
+
+
+def _extract_nutrition(product: dict) -> dict:
+    nutriments = product.get("nutriments") or {}
+
+    def _num(*keys):
+        for key in keys:
+            value = nutriments.get(key)
+            if isinstance(value, (int, float)):
+                return float(value)
+        return None
+
+    serving_carbs = _num("carbohydrates_serving")
+    serving_calories = _num("energy-kcal_serving")
+    if serving_carbs is not None or serving_calories is not None:
+        return {
+            "carbs_g": round(serving_carbs, 1) if serving_carbs is not None else None,
+            "calories": round(serving_calories) if serving_calories is not None else None,
+            "basis": "serving",
+        }
+
+    per100_carbs = _num("carbohydrates_100g")
+    per100_calories = _num("energy-kcal_100g")
+    return {
+        "carbs_g": round(per100_carbs, 1) if per100_carbs is not None else None,
+        "calories": round(per100_calories) if per100_calories is not None else None,
+        "basis": "per_100g" if (per100_carbs is not None or per100_calories is not None) else None,
+    }
+
+
+@router.get("/barcode/{barcode}")
+def lookup_barcode(
+    barcode: str,
+    current_user: User = Depends(get_current_user),  # noqa: ARG001
+):
+    code = "".join(ch for ch in barcode if ch.isdigit())
+    if not code:
+        return {"found": False, "barcode": barcode}
+
+    try:
+        with httpx.Client(timeout=8.0) as client:
+            response = client.get(OPEN_FOOD_FACTS_URL.format(barcode=code))
+    except Exception:
+        logger.exception("Barcode lookup request failed for %s", code)
+        return {"found": False, "barcode": code}
+
+    if not response.is_success:
+        return {"found": False, "barcode": code}
+
+    data = response.json()
+    if int(data.get("status") or 0) != 1 or not isinstance(data.get("product"), dict):
+        return {"found": False, "barcode": code}
+
+    product = data["product"]
+    nutrition = _extract_nutrition(product)
+    name = (product.get("product_name") or product.get("generic_name") or "").strip() or None
+
+    return {
+        "found": bool(name),
+        "barcode": code,
+        "name": name,
+        "serving_size": product.get("serving_size"),
+        **nutrition,
     }
