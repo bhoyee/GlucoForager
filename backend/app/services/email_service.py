@@ -11,6 +11,7 @@ import httpx
 
 from ..core.config import settings
 from .newsletter_tokens import make_unsubscribe_token
+from .user_email_tokens import make_dunning_unsubscribe_token
 
 logger = logging.getLogger(__name__)
 RESEND_API_URL = "https://api.resend.com/emails"
@@ -735,3 +736,122 @@ def send_blog_post_to_user_email(
     """
     _send_email(to_email, subject, html_body)
     logger.info("Sent blog post user-broadcast email to %s", to_email)
+
+
+def _dunning_shell(*, to_email: str, user_id: int, heading: str, body_html: str) -> str:
+    """Shared HTML wrapper for the win-back sequence - logo header, teal heading,
+    caller-supplied body, then a resubscribe button and an unsubscribe footer scoped
+    to this user (not the website newsletter list - see user_email_tokens.py)."""
+    site_url = (settings.site_url or "https://www.glucoforager.com").rstrip("/")
+    logo_url = f"{site_url}/images/logo.png"
+    resubscribe_url = f"{site_url}/resubscribe"
+    unsubscribe_token = make_dunning_unsubscribe_token(user_id, to_email)
+    unsubscribe_url = f"{site_url}/unsubscribe?type=dunning&token={unsubscribe_token}"
+
+    return f"""
+    <html>
+      <body style="font-family: Arial, sans-serif; color: #0C1824;">
+        <div style="max-width:560px; margin:0 auto; border:1px solid #e5e7eb; border-radius:14px; padding:22px;">
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+            <img src="{logo_url}" alt="GlucoForager" width="36" height="36" style="display:block; border-radius:10px;" />
+            <div style="font-weight:800; font-size:18px; color:#0C1824;">GlucoForager</div>
+          </div>
+          <h2 style="color:#0FB7A5; margin-top:0;">{heading}</h2>
+          {body_html}
+          <p style="margin:24px 0;">
+            <a href="{resubscribe_url}" style="display:inline-block; background:#0D9488; color:#ffffff; text-decoration:none; font-weight:800; padding:12px 18px; border-radius:10px;">
+              Resubscribe to Premium
+            </a>
+          </p>
+          <p style="margin-top:20px; color:#6b7280;">Stay steady, eat well.<br/>The GlucoForager team</p>
+          <p style="margin-top:24px; color:#6b7280; font-size:12px;">
+            Don't want these emails?
+            <a href="{unsubscribe_url}" style="color:#0FB7A5;">Unsubscribe</a>
+          </p>
+        </div>
+      </body>
+    </html>
+    """
+
+
+def send_dunning_day0_email(to_email: str, full_name: str | None, user_id: int) -> None:
+    greeting_name = full_name.strip().split(" ")[0] if full_name else "there"
+    subject = "Your GlucoForager Premium has ended"
+    body_html = f"""
+      <p>Hi {greeting_name},</p>
+      <p style="line-height:1.6;">Your Premium access has ended and you're back on the free plan - unlimited
+      recipe search and scans, and full meal planning, are paused for now.</p>
+      <p style="line-height:1.6;">Nothing you saved is deleted. Resubscribe anytime to pick up right where you left off.</p>
+    """
+    html_body = _dunning_shell(to_email=to_email, user_id=user_id, heading="Your Premium access has ended", body_html=body_html)
+    _send_email(to_email, subject, html_body)
+    logger.info("Sent dunning day0 email to %s", to_email)
+
+
+def send_dunning_day7_email(to_email: str, full_name: str | None, user_id: int) -> None:
+    greeting_name = full_name.strip().split(" ")[0] if full_name else "there"
+    subject = "Still with us?"
+    body_html = f"""
+      <p>Hi {greeting_name},</p>
+      <p style="line-height:1.6;">Just checking in - was there something specific that made Premium not worth it for you
+      (price, a bug, a missing feature)? Reply to this email and let us know.</p>
+      <p style="line-height:1.6;">Or if you're ready to come back, you can resubscribe below.</p>
+    """
+    html_body = _dunning_shell(to_email=to_email, user_id=user_id, heading="Still with us?", body_html=body_html)
+    _send_email(to_email, subject, html_body)
+    logger.info("Sent dunning day7 email to %s", to_email)
+
+
+def send_dunning_day14_email(to_email: str, full_name: str | None, user_id: int) -> None:
+    greeting_name = full_name.strip().split(" ")[0] if full_name else "there"
+    subject = "What you're missing on the free plan"
+    body_html = f"""
+      <p>Hi {greeting_name},</p>
+      <p style="line-height:1.6;">A quick reminder of what Premium unlocks: unlimited recipe search and scans, full
+      diabetes-friendly meal planning, and your saved recipes and plans, all in one place.</p>
+      <p style="line-height:1.6;">Your data is still there waiting for you.</p>
+    """
+    html_body = _dunning_shell(to_email=to_email, user_id=user_id, heading="What you're missing on the free plan", body_html=body_html)
+    _send_email(to_email, subject, html_body)
+    logger.info("Sent dunning day14 email to %s", to_email)
+
+
+def send_dunning_day21_email(to_email: str, full_name: str | None, user_id: int) -> None:
+    greeting_name = full_name.strip().split(" ")[0] if full_name else "there"
+    subject = "Last check-in for a while"
+    body_html = f"""
+      <p>Hi {greeting_name},</p>
+      <p style="line-height:1.6;">This is the last weekly note from us - after this we'll only reach out occasionally.</p>
+      <p style="line-height:1.6;">If you want back in, we're one tap away.</p>
+    """
+    html_body = _dunning_shell(to_email=to_email, user_id=user_id, heading="Last check-in for a while", body_html=body_html)
+    _send_email(to_email, subject, html_body)
+    logger.info("Sent dunning day21 email to %s", to_email)
+
+
+def send_dunning_monthly_email(to_email: str, full_name: str | None, user_id: int) -> None:
+    greeting_name = full_name.strip().split(" ")[0] if full_name else "there"
+    subject = "Still here when you're ready"
+    body_html = f"""
+      <p>Hi {greeting_name},</p>
+      <p style="line-height:1.6;">Just a low-key reminder that GlucoForager Premium is still here whenever you want it back.</p>
+    """
+    html_body = _dunning_shell(to_email=to_email, user_id=user_id, heading="Still here when you're ready", body_html=body_html)
+    _send_email(to_email, subject, html_body)
+    logger.info("Sent dunning monthly email to %s", to_email)
+
+
+DUNNING_STAGE_SENDERS = {
+    "day0": send_dunning_day0_email,
+    "day7": send_dunning_day7_email,
+    "day14": send_dunning_day14_email,
+    "day21": send_dunning_day21_email,
+    "monthly": send_dunning_monthly_email,
+}
+
+
+def send_dunning_email(to_email: str, full_name: str | None, user_id: int, *, stage: str) -> None:
+    sender = DUNNING_STAGE_SENDERS.get(stage)
+    if not sender:
+        raise ValueError(f"Unknown dunning stage: {stage}")
+    sender(to_email, full_name, user_id)
