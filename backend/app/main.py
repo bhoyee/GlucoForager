@@ -46,6 +46,7 @@ from .api.endpoints import (
     app_public,
     app_challenge,
     app_recipe_checkins,
+    app_health_log,
     app_recap,
     ingredients,
     recipes,
@@ -114,6 +115,7 @@ from .services.staff_rbac_service import StaffRBACService
 from .services.system_log_service import log_system_event
 from .services.backup_scheduler import start_backup_scheduler
 from .services.dunning_scheduler import start_dunning_scheduler
+from .services.streak_nudge_scheduler import start_streak_nudge_scheduler
 from .services.recipe_auto_generation_scheduler import start_recipe_auto_generation_scheduler
 from .services.user_activity_maintenance import start_user_activity_cleanup_scheduler
 from .services.user_deletion_service import start_soft_deleted_user_cleanup_scheduler
@@ -356,6 +358,10 @@ def on_startup():
         start_dunning_scheduler()
     except Exception as exc:  # noqa: BLE001
         logger.warning("Dunning email scheduler start failed: %s", exc)
+    try:
+        start_streak_nudge_scheduler()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Streak nudge scheduler start failed: %s", exc)
     try:
         # Only run the DB-backed in-process runner when configured.
         if (settings.ai_queue_backend or "db").strip().lower() == "db":
@@ -673,6 +679,7 @@ app.include_router(admin_push_campaigns.router, prefix="/api")
 app.include_router(app_public.router, prefix="/api")
 app.include_router(app_challenge.router, prefix="/api")
 app.include_router(app_recipe_checkins.router, prefix="/api")
+app.include_router(app_health_log.router, prefix="/api")
 app.include_router(app_recap.router, prefix="/api")
 app.include_router(app_swaps.router, prefix="/api")
 app.include_router(app_daily_plan.router, prefix="/api")

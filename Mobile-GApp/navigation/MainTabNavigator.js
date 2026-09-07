@@ -28,6 +28,8 @@ import RecentRecipesScreen from '../screens/main/RecentRecipesScreen';
 import EatNowScreen from '../screens/main/EatNowScreen';
 import CarbSwapsScreen from '../screens/main/CarbSwapsScreen';
 import ChallengeScreen from '../screens/main/ChallengeScreen';
+import LogMealScreen from '../screens/main/LogMealScreen';
+import LogGlucoseScreen from '../screens/main/LogGlucoseScreen';
 import TodayTipScreen from '../screens/main/TodayTipScreen';
 import TipsArchiveScreen from '../screens/main/TipsArchiveScreen';
 import FoodPreferencesScreen from '../screens/main/FoodPreferencesScreen';
@@ -59,6 +61,8 @@ function HomeStackNavigator() {
       <HomeStack.Screen name="EatNow" component={EatNowScreen} />
       <HomeStack.Screen name="CarbSwaps" component={CarbSwapsScreen} />
       <HomeStack.Screen name="Challenge" component={ChallengeScreen} />
+      <HomeStack.Screen name="LogMeal" component={LogMealScreen} />
+      <HomeStack.Screen name="LogGlucose" component={LogGlucoseScreen} />
       <HomeStack.Screen name="TodayTip" component={TodayTipScreen} />
       <HomeStack.Screen name="TipsArchive" component={TipsArchiveScreen} />
     </HomeStack.Navigator>
