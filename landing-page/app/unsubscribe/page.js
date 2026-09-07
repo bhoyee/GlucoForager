@@ -11,6 +11,8 @@ export const metadata = {
 
 export default async function UnsubscribePage({ searchParams }) {
   const token = typeof searchParams?.token === 'string' ? searchParams.token.trim() : '';
+  const type = typeof searchParams?.type === 'string' ? searchParams.type.trim() : '';
+  const endpoint = type === 'dunning' ? '/api/dunning/unsubscribe' : '/api/newsletter/unsubscribe';
 
   let status = { ok: false, message: 'Invalid unsubscribe link.' };
 
@@ -18,7 +20,7 @@ export default async function UnsubscribePage({ searchParams }) {
     status = { ok: false, message: 'Missing unsubscribe token.' };
   } else {
     try {
-      const res = await fetch(`${API_URL}/api/newsletter/unsubscribe?token=${encodeURIComponent(token)}`, {
+      const res = await fetch(`${API_URL}${endpoint}?token=${encodeURIComponent(token)}`, {
         cache: 'no-store',
       });
       if (res.ok) {
