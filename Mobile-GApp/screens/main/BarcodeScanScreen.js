@@ -22,6 +22,12 @@ try {
 
 const BARCODE_TYPES = ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128'];
 
+const VERDICT_STYLE = {
+  good_fit: { label: 'Good fit', color: Colors.success },
+  moderate: { label: 'Moderate', color: Colors.warning },
+  use_caution: { label: 'Use caution', color: Colors.danger },
+};
+
 export default function BarcodeScanScreen() {
   const navigation = useNavigation();
   const isFocused = useIsFocused();
@@ -180,12 +186,51 @@ export default function BarcodeScanScreen() {
         <View style={[styles.resultCard, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]}>
           {result.found ? (
             <>
-              <Text style={styles.resultTitle}>{result.name}</Text>
+              <View style={styles.resultTitleRow}>
+                <Text style={styles.resultTitle} numberOfLines={2}>
+                  {result.name}
+                </Text>
+                {result.diabetes_note ? (
+                  <View
+                    style={[
+                      styles.verdictBadge,
+                      { backgroundColor: `${VERDICT_STYLE[result.diabetes_note.verdict]?.color ?? Colors.textLight}18` },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.verdictBadgeText,
+                        { color: VERDICT_STYLE[result.diabetes_note.verdict]?.color ?? Colors.textLight },
+                      ]}
+                    >
+                      {VERDICT_STYLE[result.diabetes_note.verdict]?.label ?? 'Unrated'}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+
               <Text style={styles.resultMeta}>
                 {result.carbs_g != null ? `${result.carbs_g}g carbs` : 'Carbs unknown'}
+                {result.net_carbs_g != null ? ` (${result.net_carbs_g}g net)` : ''}
+                {result.sugars_g != null ? ` • ${result.sugars_g}g sugar` : ''}
                 {result.calories != null ? ` • ${result.calories} cal` : ''}
                 {result.basis === 'per_100g' ? ' (per 100g)' : result.basis === 'serving' ? ' (per serving)' : ''}
               </Text>
+
+              {result.diabetes_note?.flags?.length ? (
+                <View style={styles.flagRow}>
+                  {result.diabetes_note.flags.map((flag) => (
+                    <View key={flag} style={styles.flagChip}>
+                      <Text style={styles.flagChipText}>{flag}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+
+              <Text style={styles.disclaimer}>
+                General guide based on sugar, processing level, and fiber - not medical advice.
+              </Text>
+
               <TouchableOpacity
                 style={[styles.primaryButton, isSaving && styles.buttonDisabled]}
                 onPress={handleLogProduct}
@@ -272,8 +317,34 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     padding: 20,
   },
-  resultTitle: { fontSize: 18, fontWeight: '900', color: Colors.text },
+  resultTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  resultTitle: { flex: 1, fontSize: 18, fontWeight: '900', color: Colors.text },
+  verdictBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+  },
+  verdictBadgeText: { fontSize: 11, fontWeight: '900' },
   resultMeta: { marginTop: 6, fontSize: 13, color: Colors.textLight, fontWeight: '600', lineHeight: 19 },
+  flagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 10,
+  },
+  flagChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: `${Colors.danger}12`,
+  },
+  flagChipText: { fontSize: 11, fontWeight: '800', color: Colors.danger },
+  disclaimer: { marginTop: 10, fontSize: 11, lineHeight: 15, color: Colors.textMuted, fontWeight: '600' },
   primaryButton: {
     marginTop: 18,
     height: 50,

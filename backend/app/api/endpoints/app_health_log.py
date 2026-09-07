@@ -246,22 +246,63 @@ def _extract_nutrition(product: dict) -> dict:
                 return float(value)
         return None
 
-    serving_carbs = _num("carbohydrates_serving")
-    serving_calories = _num("energy-kcal_serving")
-    if serving_carbs is not None or serving_calories is not None:
-        return {
-            "carbs_g": round(serving_carbs, 1) if serving_carbs is not None else None,
-            "calories": round(serving_calories) if serving_calories is not None else None,
-            "basis": "serving",
-        }
+    has_serving = _num("carbohydrates_serving") is not None or _num("energy-kcal_serving") is not None
+    suffix = "_serving" if has_serving else "_100g"
+    basis = "serving" if has_serving else ("per_100g" if _num("carbohydrates_100g", "energy-kcal_100g") is not None else None)
 
-    per100_carbs = _num("carbohydrates_100g")
-    per100_calories = _num("energy-kcal_100g")
+    carbs = _num(f"carbohydrates{suffix}")
+    calories = _num(f"energy-kcal{suffix}")
+    sugars = _num(f"sugars{suffix}")
+    fiber = _num(f"fiber{suffix}")
+    net_carbs = carbs - fiber if carbs is not None and fiber is not None else None
+
     return {
-        "carbs_g": round(per100_carbs, 1) if per100_carbs is not None else None,
-        "calories": round(per100_calories) if per100_calories is not None else None,
-        "basis": "per_100g" if (per100_carbs is not None or per100_calories is not None) else None,
+        "carbs_g": round(carbs, 1) if carbs is not None else None,
+        "calories": round(calories) if calories is not None else None,
+        "sugars_g": round(sugars, 1) if sugars is not None else None,
+        "fiber_g": round(fiber, 1) if fiber is not None else None,
+        "net_carbs_g": round(net_carbs, 1) if net_carbs is not None else None,
+        "basis": basis,
     }
+
+
+# Sugar per serving/100g at or above this is flagged "high sugar" - a commonly used
+# nutrition-label rule of thumb, not a personalized threshold.
+HIGH_SUGAR_THRESHOLD_G = 10
+# Ultra-processed on the NOVA classification (1=unprocessed, 4=ultra-processed).
+ULTRA_PROCESSED_NOVA_GROUP = 4
+# Meaningful carb load with very little fiber to slow absorption.
+LOW_FIBER_CARB_THRESHOLD_G = 15
+LOW_FIBER_THRESHOLD_G = 2
+
+
+def _diabetes_note(nutrition: dict, product: dict) -> dict:
+    """Rule-based, transparent flags - not a medical verdict. Mirrors the same
+    "simple rule, not ML" approach as the glucose spike threshold: named, fixed
+    signals a viewer can see and judge for themselves, rather than an opaque score."""
+    flags: list[str] = []
+
+    sugars = nutrition.get("sugars_g")
+    if sugars is not None and sugars >= HIGH_SUGAR_THRESHOLD_G:
+        flags.append("High in sugar")
+
+    nova_group = product.get("nova_group")
+    if isinstance(nova_group, (int, float)) and int(nova_group) == ULTRA_PROCESSED_NOVA_GROUP:
+        flags.append("Highly processed")
+
+    carbs = nutrition.get("carbs_g")
+    fiber = nutrition.get("fiber_g")
+    if carbs is not None and carbs >= LOW_FIBER_CARB_THRESHOLD_G and (fiber is None or fiber < LOW_FIBER_THRESHOLD_G):
+        flags.append("Low fiber for its carbs")
+
+    if len(flags) == 0:
+        verdict = "good_fit"
+    elif len(flags) == 1:
+        verdict = "moderate"
+    else:
+        verdict = "use_caution"
+
+    return {"verdict": verdict, "flags": flags, "nova_group": nova_group, "nutriscore_grade": product.get("nutriscore_grade")}
 
 
 @router.get("/barcode/{barcode}")
@@ -297,4 +338,5 @@ def lookup_barcode(
         "name": name,
         "serving_size": product.get("serving_size"),
         **nutrition,
+        "diabetes_note": _diabetes_note(nutrition, product) if name else None,
     }
