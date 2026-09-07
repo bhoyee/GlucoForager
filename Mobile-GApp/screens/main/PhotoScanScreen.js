@@ -37,6 +37,7 @@ export default function PhotoScanScreen() {
 
   const [hasPermission, setHasPermission] = useState(null);
   const [cameraRef, setCameraRef] = useState(null);
+  const [cameraReady, setCameraReady] = useState(false);
   // 'countdown' | 'capturing' | 'analyzing' | 'result'
   const [phase, setPhase] = useState('countdown');
   const [countdown, setCountdown] = useState(HOLD_STEADY_SECONDS);
@@ -151,7 +152,7 @@ export default function PhotoScanScreen() {
   // detection - keeps this to one AI call per attempt (cost-bounded), and the AI's
   // own "not food" classification is what actually catches a bad/empty capture.
   useEffect(() => {
-    if (phase !== 'countdown' || !isFocused || !hasPermission || !CameraView) {
+    if (phase !== 'countdown' || !isFocused || !hasPermission || !CameraView || !cameraReady) {
       clearCountdownTimer();
       return;
     }
@@ -169,7 +170,14 @@ export default function PhotoScanScreen() {
     }, 100);
     return clearCountdownTimer;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, isFocused, hasPermission, cameraRef]);
+  }, [phase, isFocused, hasPermission, cameraRef, cameraReady]);
+
+  // The camera view remounts on every focus (mode switch, "Scan again" after
+  // losing focus, etc.) - reset readiness so the countdown waits for a fresh
+  // onCameraReady rather than trusting a previous mount's state.
+  useEffect(() => {
+    if (!isFocused) setCameraReady(false);
+  }, [isFocused]);
 
   useEffect(() => {
     if (phase !== 'analyzing') return undefined;
@@ -258,7 +266,12 @@ export default function PhotoScanScreen() {
         </View>
       ) : phase === 'countdown' || phase === 'capturing' ? (
         isFocused ? (
-          <CameraView ref={(ref) => setCameraRef(ref)} style={StyleSheet.absoluteFill} facing="back" />
+          <CameraView
+            ref={(ref) => setCameraRef(ref)}
+            style={StyleSheet.absoluteFill}
+            facing="back"
+            onCameraReady={() => setCameraReady(true)}
+          />
         ) : null
       ) : capturedUri ? (
         <Image source={{ uri: capturedUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
@@ -268,7 +281,11 @@ export default function PhotoScanScreen() {
         <View style={styles.scanFrameWrap} pointerEvents="none">
           <View style={styles.scanFrame} />
           <Text style={styles.scanHint}>
-            {phase === 'capturing' ? 'Capturing...' : `Hold steady - scanning in ${Math.ceil(countdown)}...`}
+            {phase === 'capturing'
+              ? 'Capturing...'
+              : !cameraReady
+                ? 'Starting camera...'
+                : `Hold steady - scanning in ${Math.ceil(countdown)}...`}
           </Text>
         </View>
       ) : null}
