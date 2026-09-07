@@ -31,6 +31,7 @@ import ChallengeScreen from '../screens/main/ChallengeScreen';
 import LogMealScreen from '../screens/main/LogMealScreen';
 import LogGlucoseScreen from '../screens/main/LogGlucoseScreen';
 import BarcodeScanScreen from '../screens/main/BarcodeScanScreen';
+import PhotoScanScreen from '../screens/main/PhotoScanScreen';
 import TodayTipScreen from '../screens/main/TodayTipScreen';
 import TipsArchiveScreen from '../screens/main/TipsArchiveScreen';
 import FoodPreferencesScreen from '../screens/main/FoodPreferencesScreen';
@@ -82,6 +83,7 @@ function ScanStackNavigator() {
     >
       <ScanStack.Screen name="ScanMain" component={ScanScreen} />
       <ScanStack.Screen name="BarcodeScan" component={BarcodeScanScreen} />
+      <ScanStack.Screen name="PhotoScan" component={PhotoScanScreen} />
       <ScanStack.Screen name="LogMeal" component={LogMealScreen} />
       <ScanStack.Screen name="ScanProcessing" component={ScanProcessingScreen} />
       <ScanStack.Screen name="ScanResults" component={ScanResultsScreen} />
