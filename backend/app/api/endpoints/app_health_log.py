@@ -3,19 +3,21 @@ from datetime import datetime, timedelta
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from ...database import get_db
 from ...models.glucose_reading import GlucoseReading
 from ...models.meal_log_entry import MealLogEntry
 from ...models.user import User
+from ...services.cache_service import CacheService
 from ...services.diabetes_food_note import build_diabetes_note
 from ...services.user_activity_service import add_user_activity
 from ..dependencies import get_current_user
 
 router = APIRouter(prefix="/app", tags=["app"])
 logger = logging.getLogger(__name__)
+cache = CacheService()
 
 # A reading at/above this, within SPIKE_WINDOW of a logged meal, flags that meal as a
 # likely trigger. 180 mg/dL 1-2h after eating is the standard ADA post-meal threshold -
@@ -27,6 +29,21 @@ LOG_HISTORY_DAYS = 14
 
 OPEN_FOOD_FACTS_URL = "https://world.openfoodfacts.org/api/v2/product/{barcode}.json"
 
+# Meal/glucose logging has no AI cost, so this isn't about billing abuse the way the
+# barcode/photo-scan limits are - it's a burst guard against a compromised or scripted
+# client hammering these endpoints (e.g. a spam bot creating hundreds of junk rows a
+# minute), not a limit anyone would hit from normal use.
+LOG_RATE_LIMIT_PER_MINUTE = 20
+
+
+def _enforce_log_rate_limit(user_id: int, kind: str) -> None:
+    key = f"health_log:rl:v1:{kind}:user:{user_id}"
+    if cache.incr(key, ttl_seconds=60) > LOG_RATE_LIMIT_PER_MINUTE:
+        raise HTTPException(
+            status_code=429,
+            detail={"code": "rate_limited", "message": "Too many entries too fast - please slow down."},
+        )
+
 
 class MealLogPayload(BaseModel):
     description: str = Field(..., min_length=1, max_length=200)
@@ -34,6 +51,17 @@ class MealLogPayload(BaseModel):
     source: str = Field("manual", pattern="^(manual|barcode|photo)$")
     carbs_g: float | None = Field(None, ge=0, le=1000)
     calories: int | None = Field(None, ge=0, le=10000)
+
+    @field_validator("description")
+    @classmethod
+    def _description_must_have_letters(cls, value: str) -> str:
+        # Cheap, non-AI guard: catches trivial junk (pure digits/symbols, e.g. "111"
+        # or "!!!!") for free. Not real content moderation - real moderation would
+        # need an AI call, which this free/instant endpoint deliberately doesn't make.
+        cleaned = value.strip()
+        if not any(ch.isalpha() for ch in cleaned):
+            raise ValueError("Description must include some actual words, not just numbers or symbols.")
+        return cleaned
 
 
 class GlucoseLogPayload(BaseModel):
@@ -99,6 +127,7 @@ def log_meal(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _enforce_log_rate_limit(current_user.id, "meal")
     logged_at = payload.logged_at or datetime.utcnow()
     meal = MealLogEntry(
         user_id=current_user.id,
@@ -168,6 +197,7 @@ def log_glucose(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _enforce_log_rate_limit(current_user.id, "glucose")
     logged_at = payload.logged_at or datetime.utcnow()
     reading = GlucoseReading(
         user_id=current_user.id,
