@@ -163,8 +163,13 @@ export default function HomeScreen() {
         setHealthLogSummary(null);
         return;
       }
+      // "Today" must mean the phone's local calendar day, not the server's UTC day -
+      // send local midnight as a UTC instant so entries near the day boundary land on
+      // the correct side regardless of timezone.
+      const localMidnight = new Date();
+      localMidnight.setHours(0, 0, 0, 0);
       const response = await apiFetch(
-        `${API_URL}/api/app/health-log/today`,
+        `${API_URL}/api/app/health-log/today?local_day_start=${encodeURIComponent(localMidnight.toISOString())}`,
         { method: 'GET', headers: { Authorization: `Bearer ${token}` } },
         { timeoutMs: 12000 }
       );

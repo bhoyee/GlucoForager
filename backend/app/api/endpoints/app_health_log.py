@@ -1,8 +1,8 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
@@ -271,10 +271,23 @@ def delete_glucose_reading(
 
 @router.get("/health-log/today")
 def get_today_health_log_summary(
+    local_day_start: datetime | None = Query(
+        None,
+        description="Start of 'today' in the client's local timezone, as a UTC instant "
+        "(e.g. local midnight converted to UTC). Falls back to UTC midnight if omitted.",
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    today_start = datetime.combine(datetime.utcnow().date(), datetime.min.time())
+    # "Today" must mean the user's local calendar day, not the server's UTC day -
+    # entries are stored with real UTC timestamps, but anchoring the boundary to UTC
+    # midnight instead of the phone's local midnight silently drops or includes
+    # entries near the day edge depending on the user's timezone.
+    if local_day_start is not None and local_day_start.tzinfo is not None:
+        # Stored logged_at values are naive UTC (datetime.utcnow()) - normalize to match,
+        # since comparing an aware datetime against a naive column is unreliable.
+        local_day_start = local_day_start.astimezone(timezone.utc).replace(tzinfo=None)
+    today_start = local_day_start or datetime.combine(datetime.utcnow().date(), datetime.min.time())
     meals_today = (
         db.query(MealLogEntry)
         .filter(MealLogEntry.user_id == current_user.id, MealLogEntry.logged_at >= today_start)
