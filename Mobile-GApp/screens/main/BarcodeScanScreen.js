@@ -142,7 +142,7 @@ export default function BarcodeScanScreen() {
         <View style={styles.modeSwitcher}>
           <TouchableOpacity
             style={styles.modeOption}
-            onPress={() => navigation.navigate('ScanMain')}
+            onPress={() => navigation.replace('ScanMain')}
           >
             <Text style={styles.modeOptionText}>Ingredients</Text>
           </TouchableOpacity>
@@ -151,7 +151,7 @@ export default function BarcodeScanScreen() {
           </View>
           <TouchableOpacity
             style={styles.modeOption}
-            onPress={() => navigation.navigate('PhotoScan')}
+            onPress={() => navigation.replace('PhotoScan')}
           >
             <Text style={styles.modeOptionText}>Photo</Text>
           </TouchableOpacity>
@@ -242,7 +242,7 @@ export default function BarcodeScanScreen() {
                     usually estimate it instead.
                   </Text>
                   <TouchableOpacity
-                    onPress={() => navigation.navigate('PhotoScan')}
+                    onPress={() => navigation.replace('PhotoScan')}
                     style={styles.noDataNudgeButton}
                   >
                     <Text style={styles.noDataNudgeButtonText}>Try photo scan</Text>

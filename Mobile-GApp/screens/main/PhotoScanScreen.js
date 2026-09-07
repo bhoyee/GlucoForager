@@ -66,9 +66,21 @@ export default function PhotoScanScreen() {
     }
   };
 
+  const resetToCountdown = () => {
+    setPhase('countdown');
+    setCountdown(HOLD_STEADY_SECONDS);
+  };
+
   const capturePhoto = useCallback(async () => {
     if (!cameraRef) return;
     setPhase('capturing');
+
+    // Capture + resize/compress is its own try/catch, separate from the network
+    // call below - a camera failure (e.g. hardware still held by the previous
+    // screen right after switching scan modes) and a real network failure are
+    // different problems and should say so, not share one misleading
+    // "network request failed" message that hides which one actually happened.
+    let base64;
     try {
       // Capture at full res without base64, then resize+compress before encoding -
       // a raw full-camera-resolution base64 photo can be several MB, which fails at
@@ -83,20 +95,25 @@ export default function PhotoScanScreen() {
         [{ resize: { width: 768 } }],
         { compress: 0.5, format: ImageManipulator.SaveFormat.JPEG, base64: true }
       );
-      if (!manipulated?.base64) {
-        Alert.alert('Scan failed', 'Could not process the photo. Please try again.');
-        setPhase('countdown');
-        setCountdown(HOLD_STEADY_SECONDS);
-        return;
-      }
+      base64 = manipulated?.base64 || null;
+    } catch {
+      Alert.alert('Scan failed', "Couldn't capture the photo - the camera may still be starting up. Try again.");
+      resetToCountdown();
+      return;
+    }
+    if (!base64) {
+      Alert.alert('Scan failed', 'Could not process the photo. Please try again.');
+      resetToCountdown();
+      return;
+    }
 
-      setPhase('analyzing');
+    setPhase('analyzing');
 
+    try {
       const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         Alert.alert('Sign in required', 'Please sign in to scan food.');
-        setPhase('countdown');
-        setCountdown(HOLD_STEADY_SECONDS);
+        resetToCountdown();
         return;
       }
       const response = await apiFetch(
@@ -104,7 +121,7 @@ export default function PhotoScanScreen() {
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image_base64: manipulated.base64 }),
+          body: JSON.stringify({ image_base64: base64 }),
         },
         { timeoutMs: 30000 }
       );
@@ -117,8 +134,7 @@ export default function PhotoScanScreen() {
         } else {
           Alert.alert('Scan failed', data?.detail?.message || data?.detail || 'Please try again.');
         }
-        setPhase('countdown');
-        setCountdown(HOLD_STEADY_SECONDS);
+        resetToCountdown();
         return;
       }
       const data = await response.json();
@@ -126,8 +142,7 @@ export default function PhotoScanScreen() {
       setPhase('result');
     } catch {
       Alert.alert('Scan failed', 'Network request failed. Please check your connection.');
-      setPhase('countdown');
-      setCountdown(HOLD_STEADY_SECONDS);
+      resetToCountdown();
     }
   }, [cameraRef]);
 
@@ -221,10 +236,10 @@ export default function PhotoScanScreen() {
           <Ionicons name="arrow-back" size={22} color="white" />
         </TouchableOpacity>
         <View style={styles.modeSwitcher}>
-          <TouchableOpacity style={styles.modeOption} onPress={() => navigation.navigate('ScanMain')}>
+          <TouchableOpacity style={styles.modeOption} onPress={() => navigation.replace('ScanMain')}>
             <Text style={styles.modeOptionText}>Ingredients</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.modeOption} onPress={() => navigation.navigate('BarcodeScan')}>
+          <TouchableOpacity style={styles.modeOption} onPress={() => navigation.replace('BarcodeScan')}>
             <Text style={styles.modeOptionText}>Barcode</Text>
           </TouchableOpacity>
           <View style={[styles.modeOption, styles.modeOptionActive]}>
