@@ -560,6 +560,7 @@ export default function HomeScreen() {
   const handleOpenLogMeal = () => navigation.navigate('LogMeal');
   const handleOpenLogGlucose = () => navigation.navigate('LogGlucose');
   const handleOpenBarcodeScan = () => navigation.navigate('Scan', { screen: 'BarcodeScan' });
+  const handleOpenPhotoScan = () => navigation.navigate('Scan', { screen: 'PhotoScan' });
 
   const getRecipeTimeLabel = (recipe) => {
     const prepRaw = recipe.prep_time_minutes ?? recipe.prepTime ?? recipe.prep_time;
@@ -984,11 +985,16 @@ export default function HomeScreen() {
               </View>
             </View>
 
-            <TouchableOpacity style={styles.scanBarcodeButton} onPress={handleOpenBarcodeScan} activeOpacity={0.9}>
-              <Ionicons name="barcode-outline" size={20} color="white" />
-              <Text style={styles.scanBarcodeButtonText}>Scan barcode</Text>
-              <Text style={styles.scanBarcodeButtonHint}>Fastest way to log a packaged food</Text>
-            </TouchableOpacity>
+            <View style={styles.scanButtonsRow}>
+              <TouchableOpacity style={styles.scanButton} onPress={handleOpenBarcodeScan} activeOpacity={0.9}>
+                <Ionicons name="barcode-outline" size={19} color="white" />
+                <Text style={styles.scanButtonText}>Scan barcode</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.scanButton} onPress={handleOpenPhotoScan} activeOpacity={0.9}>
+                <Ionicons name="camera-outline" size={19} color="white" />
+                <Text style={styles.scanButtonText}>Scan food</Text>
+              </TouchableOpacity>
+            </View>
 
             <View style={styles.trackButtonRow}>
               <TouchableOpacity style={styles.trackButton} onPress={handleOpenLogMeal} activeOpacity={0.85}>
@@ -1807,27 +1813,26 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 3,
   },
-  scanBarcodeButton: {
+  scanButtonsRow: {
     marginTop: 12,
     flexDirection: 'row',
-    alignItems: 'center',
     gap: 8,
-    height: 52,
+  },
+  scanButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    height: 50,
     borderRadius: 16,
-    paddingHorizontal: 16,
+    paddingHorizontal: 10,
     backgroundColor: Colors.primary,
   },
-  scanBarcodeButtonText: {
-    fontSize: 15,
+  scanButtonText: {
+    fontSize: 13.5,
     fontWeight: '900',
     color: 'white',
-  },
-  scanBarcodeButtonHint: {
-    flex: 1,
-    textAlign: 'right',
-    fontSize: 11,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.78)',
   },
   trackButtonRow: {
     flexDirection: 'row',
