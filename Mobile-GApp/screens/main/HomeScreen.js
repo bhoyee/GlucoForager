@@ -31,6 +31,8 @@ import {
 import { getTodayTip } from '../../utils/todayTips';
 import { scheduleDailyPlanNotifications } from '../../utils/mealReminders';
 
+const LAST_INGREDIENTS_KEY = 'last_used_ingredients_v1';
+
 export default function HomeScreen() {
   const navigation = useNavigation();
   const { signOut, foodProfileHasPreferences } = useAuth();
@@ -542,7 +544,6 @@ export default function HomeScreen() {
     }
   };
 
-  const handleOpenEatNow = () => navigation.navigate('EatNow');
   const handleOpenSwaps = () => navigation.navigate('CarbSwaps');
   const handleOpenShoppingList = () => {
     setShowShoppingListNewDot(false);
@@ -655,6 +656,12 @@ export default function HomeScreen() {
             mode: 'surprise',
             source: 'eat_now_surprise',
           });
+        } else if (source === 'quick') {
+          navigation.navigate('ManualInput', {
+            autoSubmit: true,
+            mode: 'quick',
+            source: 'eat_now_quick',
+          });
         } else {
           // Navigate to Scan tab
           navigation.navigate('Scan', { screen: 'ScanMain' });
@@ -689,6 +696,59 @@ export default function HomeScreen() {
     checkScanLimit('surprise');
   };
 
+  const handleQuickMealPress = () => {
+    checkScanLimit('quick');
+  };
+
+  const handleUseWhatIHave = async () => {
+    try {
+      const raw = await AsyncStorage.getItem(LAST_INGREDIENTS_KEY);
+      const list = raw ? JSON.parse(raw) : null;
+      const ingredients = Array.isArray(list) ? list.filter(Boolean) : [];
+      if (!ingredients.length) {
+        try {
+          const token = await AsyncStorage.getItem('userToken');
+          if (token) {
+            const res = await apiFetch(
+              `${API_URL}${API_ENDPOINTS.USER_LAST_INGREDIENTS}`,
+              { headers: { Authorization: `Bearer ${token}` } },
+              { onUnauthorized: signOut, timeoutMs: 10000 }
+            );
+            if (res.ok) {
+              const data = await res.json();
+              const serverList = Array.isArray(data?.ingredients) ? data.ingredients.filter(Boolean) : [];
+              if (serverList.length) {
+                await AsyncStorage.setItem(LAST_INGREDIENTS_KEY, JSON.stringify(serverList));
+                navigation.navigate('ManualInput', {
+                  prefillIngredients: serverList,
+                  autoSubmit: true,
+                  source: 'eat_now_have',
+                  excludeRecent: true,
+                  varietyMode: true,
+                });
+                return;
+              }
+            }
+          }
+        } catch {
+          // Ignore.
+        }
+        Alert.alert('No saved ingredients', 'Scan or type ingredients once, then you can reuse them here.');
+        navigation.navigate('ManualInput');
+        return;
+      }
+      navigation.navigate('ManualInput', {
+        prefillIngredients: ingredients,
+        autoSubmit: true,
+        source: 'eat_now_have',
+        excludeRecent: true,
+        varietyMode: true,
+      });
+    } catch {
+      navigation.navigate('ManualInput');
+    }
+  };
+
   const handleViewRecentRecipes = () => {
     navigation.navigate('RecentRecipes', { initialRecipes: recentRecipes });
   };
@@ -719,20 +779,9 @@ export default function HomeScreen() {
     openPremiumPaywall();
   };
 
-  const getDayPeriod = () => {
-    const hour = new Date().getHours();
-    if (hour >= 5 && hour <= 11) return 'morning';
-    if (hour >= 12 && hour <= 16) return 'afternoon';
-    if (hour >= 17 && hour <= 21) return 'evening';
-    return 'night';
-  };
-
-  const getMealLabel = () => {
-    const t = getMealType();
-    if (t === 'breakfast') return 'Breakfast';
-    if (t === 'lunch') return 'Lunch';
-    if (t === 'dinner') return 'Dinner';
-    return 'Snack';
+  const getSubGreeting = () => {
+    if (hasChallenge && streakDays > 0) return "Let's keep your streak going";
+    return "Let's find your next meal";
   };
 
   const getAccessBadgeLabel = () => {
@@ -772,12 +821,11 @@ export default function HomeScreen() {
           <View style={styles.heroGreetingBlock}>
             <Text style={styles.greeting} numberOfLines={1} ellipsizeMode="tail">
               <Text style={styles.greetingHey}>Hey</Text>
-              {greetingName ? ` ${greetingName}` : ''}
-              {`, ${getDayPeriod()}`}
+              {greetingName ? `, ${greetingName}` : ''}
             </Text>
             <View style={styles.subGreetingRow}>
               <Text style={styles.subGreeting} numberOfLines={1} ellipsizeMode="tail">
-                {`${getMealLabel()} time`}
+                {getSubGreeting()}
               </Text>
               <View style={styles.accessBadge}>
                 <Text style={styles.accessBadgeText} numberOfLines={1} ellipsizeMode="tail">
@@ -853,10 +901,14 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity style={styles.moreWaysLink} onPress={handleOpenEatNow} activeOpacity={0.7}>
-              <Text style={styles.moreWaysLinkText}>More ways to eat now</Text>
-              <Ionicons name="chevron-forward" size={14} color={Colors.secondary} />
-            </TouchableOpacity>
+            <View style={styles.filterChipRow}>
+              <TouchableOpacity style={styles.filterChip} onPress={handleUseWhatIHave} activeOpacity={0.8}>
+                <Text style={styles.filterChipText}>Use what I have</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.filterChip} onPress={handleQuickMealPress} activeOpacity={0.8}>
+                <Text style={styles.filterChipText}>Quick meal</Text>
+              </TouchableOpacity>
+            </View>
           </View>
           {!hasCurrentFeatureAccess ? (
             <View style={styles.heroUsageWrap}>
@@ -916,29 +968,35 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* Daily smart move */}
+        {/* Track today */}
         <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Today's smart move</Text>
-            {hasChallenge && streakDays > 0 ? (
-              <TouchableOpacity style={styles.streakBadge} onPress={handleOpenWeeklyRecap} activeOpacity={0.8}>
-                <Ionicons name="flame" size={13} color={Colors.accent} />
-                <Text style={styles.streakBadgeText}>{streakDays} day streak</Text>
-                {showWeeklyRecapNewDot ? <View style={styles.newDot} /> : null}
-              </TouchableOpacity>
-            ) : null}
-          </View>
-          <Text style={styles.sectionSubtitle}>One practical nudge for steadier choices today.</Text>
+          <View style={styles.trackCard}>
+            <View style={styles.getRecipesHeader}>
+              <View style={[styles.heroPrimaryIcon, { backgroundColor: Colors.accent }]}>
+                <Ionicons name="water-outline" size={20} color="white" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.getRecipesTitle}>Track today</Text>
+                <Text style={styles.getRecipesSub} numberOfLines={1}>
+                  Log meals and glucose readings
+                </Text>
+              </View>
+            </View>
 
-          <View style={styles.smartMoveCard}>
-            <View style={styles.logButtonsRow}>
-              <TouchableOpacity style={styles.logButton} onPress={handleOpenLogMeal} activeOpacity={0.85}>
-                <Ionicons name="restaurant-outline" size={18} color={Colors.primary} />
-                <Text style={styles.logButtonText}>Log meal</Text>
+            <View style={styles.trackButtonRow}>
+              <TouchableOpacity style={styles.trackButton} onPress={handleOpenLogMeal} activeOpacity={0.85}>
+                <View style={styles.trackButtonTop}>
+                  <Ionicons name="restaurant-outline" size={18} color={Colors.primary} />
+                  <Text style={styles.trackButtonTitle}>Log meal</Text>
+                </View>
+                <Text style={styles.trackButtonHint}>Scan barcode or type it in</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.logButton} onPress={handleOpenLogGlucose} activeOpacity={0.85}>
-                <Ionicons name="water-outline" size={18} color={Colors.primary} />
-                <Text style={styles.logButtonText}>Log glucose</Text>
+              <TouchableOpacity style={styles.trackButton} onPress={handleOpenLogGlucose} activeOpacity={0.85}>
+                <View style={styles.trackButtonTop}>
+                  <Ionicons name="water-outline" size={18} color={Colors.primary} />
+                  <Text style={styles.trackButtonTitle}>Log glucose</Text>
+                </View>
+                <Text style={styles.trackButtonHint}>Track a reading in seconds</Text>
               </TouchableOpacity>
             </View>
 
@@ -959,7 +1017,24 @@ export default function HomeScreen() {
                 ) : null}
               </View>
             ) : null}
+          </View>
+        </View>
 
+        {/* Daily smart move */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Today's smart move</Text>
+            {hasChallenge && streakDays > 0 ? (
+              <TouchableOpacity style={styles.streakBadge} onPress={handleOpenWeeklyRecap} activeOpacity={0.8}>
+                <Ionicons name="flame" size={13} color={Colors.accent} />
+                <Text style={styles.streakBadgeText}>{streakDays} day streak</Text>
+                {showWeeklyRecapNewDot ? <View style={styles.newDot} /> : null}
+              </TouchableOpacity>
+            ) : null}
+          </View>
+          <Text style={styles.sectionSubtitle}>One practical nudge for steadier choices today.</Text>
+
+          <View style={styles.smartMoveCard}>
             {hasChallenge ? (
               <TouchableOpacity style={styles.smartChallengeRow} onPress={handleOpenChallenge} activeOpacity={0.9}>
                 <View style={styles.smartChallengeIcon}>
@@ -1318,18 +1393,22 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: Colors.primary,
   },
-  moreWaysLink: {
-    marginTop: 10,
+  filterChipRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    paddingVertical: 4,
+    gap: 6,
+    marginTop: 8,
   },
-  moreWaysLinkText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.secondary,
+  filterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  filterChipText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: Colors.textLight,
   },
   heroUsageWrap: {
     borderRadius: 18,
@@ -1709,28 +1788,46 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.textLight,
   },
-  logButtonsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    padding: 4,
-    marginBottom: 6,
+  trackCard: {
+    borderRadius: 22,
+    padding: 14,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
   },
-  logButton: {
-    flex: 1,
+  trackButtonRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
     gap: 8,
-    height: 46,
+    marginTop: 12,
+  },
+  trackButton: {
+    flex: 1,
     borderRadius: 14,
+    padding: 12,
     backgroundColor: `${Colors.primary}0F`,
     borderWidth: 1,
-    borderColor: `${Colors.primary}28`,
+    borderColor: `${Colors.primary}24`,
   },
-  logButtonText: {
+  trackButtonTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  trackButtonTitle: {
     fontSize: 13,
     fontWeight: '800',
     color: Colors.primary,
+  },
+  trackButtonHint: {
+    marginTop: 6,
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.textLight,
   },
   healthLogSummaryRow: {
     flexDirection: 'row',
