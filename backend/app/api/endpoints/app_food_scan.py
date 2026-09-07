@@ -84,9 +84,7 @@ def scan_food_photo(
     fiber = _num(result.get("fiber_g"))
     calories = _num(result.get("calories"))
 
-    diabetes_note = None
-    if carbs is not None or sugars is not None:
-        diabetes_note = build_diabetes_note(carbs_g=carbs, sugars_g=sugars, fiber_g=fiber)
+    diabetes_note = build_diabetes_note(carbs_g=carbs, sugars_g=sugars, fiber_g=fiber)
 
     return {
         "is_food": True,

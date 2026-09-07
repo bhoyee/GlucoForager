@@ -23,9 +23,10 @@ try {
 const BARCODE_TYPES = ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128'];
 
 const VERDICT_STYLE = {
-  good_fit: { label: 'Good fit', color: Colors.success },
+  good_fit: { label: 'Diabetes-friendly', color: Colors.success },
   moderate: { label: 'Moderate', color: Colors.warning },
   use_caution: { label: 'Use caution', color: Colors.danger },
+  unknown: { label: 'Not enough info', color: Colors.textLight },
 };
 
 export default function BarcodeScanScreen() {
@@ -192,6 +193,7 @@ export default function BarcodeScanScreen() {
         <View style={[styles.resultCard, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]}>
           {result.found ? (
             <>
+              <Text style={styles.eyebrow}>Diabetes check</Text>
               <View style={styles.resultTitleRow}>
                 <Text style={styles.resultTitle} numberOfLines={2}>
                   {result.name}
@@ -230,6 +232,22 @@ export default function BarcodeScanScreen() {
                       <Text style={styles.flagChipText}>{flag}</Text>
                     </View>
                   ))}
+                </View>
+              ) : null}
+
+              {result.has_nutrition_data === false ? (
+                <View style={styles.noDataNudge}>
+                  <Text style={styles.noDataNudgeText}>
+                    This barcode has no nutrition label data on file - common for fresh produce. Photo scan can
+                    usually estimate it instead.
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate('PhotoScan')}
+                    style={styles.noDataNudgeButton}
+                  >
+                    <Text style={styles.noDataNudgeButtonText}>Try photo scan</Text>
+                    <Ionicons name="chevron-forward" size={14} color={Colors.primary} />
+                  </TouchableOpacity>
                 </View>
               ) : null}
 
@@ -323,6 +341,14 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     padding: 20,
   },
+  eyebrow: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: Colors.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: 6,
+  },
   resultTitleRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -350,6 +376,23 @@ const styles = StyleSheet.create({
     backgroundColor: `${Colors.danger}12`,
   },
   flagChipText: { fontSize: 11, fontWeight: '800', color: Colors.danger },
+  noDataNudge: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: `${Colors.primary}0C`,
+    borderWidth: 1,
+    borderColor: `${Colors.primary}22`,
+  },
+  noDataNudgeText: { fontSize: 12, lineHeight: 17, color: Colors.textLight, fontWeight: '600' },
+  noDataNudgeButton: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+  },
+  noDataNudgeButtonText: { fontSize: 13, fontWeight: '800', color: Colors.primary },
   disclaimer: { marginTop: 10, fontSize: 11, lineHeight: 15, color: Colors.textMuted, fontWeight: '600' },
   primaryButton: {
     marginTop: 18,

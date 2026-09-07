@@ -21,6 +21,18 @@ def build_diabetes_note(
     nova_group: float | int | None = None,
     nutriscore_grade: str | None = None,
 ) -> dict:
+    # Carbs is the single most diabetes-relevant number here. Without it, "no red
+    # flags triggered" is not the same as "confirmed fine" - defaulting to good_fit
+    # in that case would be false confidence, not caution, so surface that plainly
+    # as its own state instead of guessing.
+    if carbs_g is None:
+        return {
+            "verdict": "unknown",
+            "flags": [],
+            "nova_group": nova_group,
+            "nutriscore_grade": nutriscore_grade,
+        }
+
     flags: list[str] = []
 
     if sugars_g is not None and sugars_g >= HIGH_SUGAR_THRESHOLD_G:
