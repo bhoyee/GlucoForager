@@ -18,6 +18,12 @@ function formatDateTime(value) {
 }
 
 const SOURCE_LABEL = { manual: 'Typed', barcode: 'Barcode', photo: 'Photo' };
+const MGDL_PER_MMOL = 18.0182;
+
+function formatGlucoseValue(valueMgDl) {
+  const mmol = (valueMgDl / MGDL_PER_MMOL).toFixed(1);
+  return `${valueMgDl} mg/dL · ${mmol} mmol/L`;
+}
 
 export default function FoodLogScreen() {
   const navigation = useNavigation();
@@ -68,7 +74,7 @@ export default function FoodLogScreen() {
   };
 
   const handleDelete = (item) => {
-    const label = item.kind === 'meal' ? item.description : `${item.value_mg_dl} mg/dL reading`;
+    const label = item.kind === 'meal' ? item.description : `${formatGlucoseValue(item.value_mg_dl)} reading`;
     Alert.alert('Delete entry', `Remove "${label}"? This can't be undone.`, [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -111,7 +117,7 @@ export default function FoodLogScreen() {
         </View>
         <View style={styles.rowBody}>
           <Text style={styles.rowTitle} numberOfLines={2}>
-            {isMeal ? item.description : `${item.value_mg_dl} mg/dL`}
+            {isMeal ? item.description : formatGlucoseValue(item.value_mg_dl)}
           </Text>
           <Text style={styles.rowMeta} numberOfLines={1}>
             {formatDateTime(item.logged_at)}
