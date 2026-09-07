@@ -4,6 +4,7 @@ import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { Colors } from '../../constants/Colors';
 import { apiFetch } from '../../utils/api';
 import { API_URL } from '../../config/api';
@@ -69,8 +70,26 @@ export default function PhotoScanScreen() {
     if (!cameraRef) return;
     setPhase('capturing');
     try {
-      const photo = await cameraRef.takePictureAsync({ quality: 0.5, base64: true, skipProcessing: true });
+      // Capture at full res without base64, then resize+compress before encoding -
+      // a raw full-camera-resolution base64 photo can be several MB, which fails at
+      // the network layer on some devices/connections. Matches the same
+      // resize-then-base64 approach ScanProcessingScreen.js already uses for the
+      // ingredient-photo flow.
+      const photo = await cameraRef.takePictureAsync({ quality: 0.7, skipProcessing: true, base64: false });
       setCapturedUri(photo?.uri || null);
+
+      const manipulated = await ImageManipulator.manipulateAsync(
+        photo.uri,
+        [{ resize: { width: 768 } }],
+        { compress: 0.5, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+      );
+      if (!manipulated?.base64) {
+        Alert.alert('Scan failed', 'Could not process the photo. Please try again.');
+        setPhase('countdown');
+        setCountdown(HOLD_STEADY_SECONDS);
+        return;
+      }
+
       setPhase('analyzing');
 
       const token = await AsyncStorage.getItem('userToken');
@@ -85,7 +104,7 @@ export default function PhotoScanScreen() {
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image_base64: photo.base64 }),
+          body: JSON.stringify({ image_base64: manipulated.base64 }),
         },
         { timeoutMs: 30000 }
       );
