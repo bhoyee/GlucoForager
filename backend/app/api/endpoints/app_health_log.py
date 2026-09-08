@@ -32,6 +32,33 @@ LOG_HISTORY_DAYS = 14
 # recipes against (30g breakfast/snack, 35g lunch/dinner) summed across a normal day.
 DEFAULT_DAILY_CARB_GOAL_G = 130
 
+# General educational starting points by the diabetes type already collected at
+# onboarding (blood_sugar_profile) - not medical advice, surfaced with a disclaimer
+# client-side. Two types need different treatment, not just a different number:
+#   - "gestational" guidance is usually a MINIMUM (eat at least this much), not a
+#     ceiling, so the ring direction flips (goal_mode "floor" vs "ceiling").
+#   - "type_1" has no single daily ceiling at all - management is per-meal carb
+#     counting against insulin dosing, so we show the raw total with no target/verdict
+#     (goal_mode "none") rather than a misleading pass/fail judgment.
+CARB_GOAL_BY_PROFILE = {
+    "type_2": 130,
+    "prediabetes": 130,
+    "gestational": 175,
+    "managing": DEFAULT_DAILY_CARB_GOAL_G,
+    "prefer_not": DEFAULT_DAILY_CARB_GOAL_G,
+}
+
+
+def _carb_goal_for_user(user: User) -> tuple[int | None, str]:
+    """Returns (carb_goal_g, goal_mode) - goal_mode is "ceiling", "floor", or "none"."""
+    if user.daily_carb_goal_g:
+        return user.daily_carb_goal_g, "ceiling"
+    if user.blood_sugar_profile == "type_1":
+        return None, "none"
+    if user.blood_sugar_profile == "gestational":
+        return CARB_GOAL_BY_PROFILE["gestational"], "floor"
+    return CARB_GOAL_BY_PROFILE.get(user.blood_sugar_profile, DEFAULT_DAILY_CARB_GOAL_G), "ceiling"
+
 OPEN_FOOD_FACTS_URL = "https://world.openfoodfacts.org/api/v2/product/{barcode}.json"
 
 # Meal/glucose logging has no AI cost, so this isn't about billing abuse the way the
@@ -312,12 +339,14 @@ def get_today_health_log_summary(
         and _find_preceding_meal(db, current_user.id, r.logged_at) is not None
     )
     carbs_logged_today = sum(m.carbs_g for m in meals_today if m.carbs_g is not None)
+    carb_goal_g, carb_goal_mode = _carb_goal_for_user(current_user)
     return {
         "meals_logged_today": len(meals_today),
         "readings_logged_today": len(readings_today),
         "spikes_flagged_today": spikes_today,
         "carbs_logged_today_g": round(carbs_logged_today, 1) if carbs_logged_today else None,
-        "carb_goal_g": current_user.daily_carb_goal_g or DEFAULT_DAILY_CARB_GOAL_G,
+        "carb_goal_g": carb_goal_g,
+        "carb_goal_mode": carb_goal_mode,
         "last_reading": _serialize_reading(readings_today[0]) if readings_today else None,
     }
 
