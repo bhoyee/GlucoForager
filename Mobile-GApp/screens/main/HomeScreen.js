@@ -817,6 +817,25 @@ export default function HomeScreen() {
   const hasChallenge = Boolean(dailyChallenge?.tasks?.length);
   const streakDays = Number(dailyChallenge?.streak_days || 0);
 
+  const carbsLoggedToday = healthLogSummary?.carbs_logged_today_g ?? null;
+  const carbGoalToday = healthLogSummary?.carb_goal_g || 130;
+  const carbsOverGoal = carbsLoggedToday != null ? carbsLoggedToday - carbGoalToday : 0;
+  const carbGoalSubtitle =
+    carbsLoggedToday == null
+      ? 'Scan a barcode or photo to track carbs'
+      : carbsOverGoal > 0
+      ? `${Math.round(carbsOverGoal * 10) / 10}g over your goal`
+      : carbsLoggedToday >= 0.85 * carbGoalToday
+      ? 'Getting close to your goal'
+      : 'On track for today';
+
+  const showCarbGoalDisclaimer = () => {
+    Alert.alert(
+      'About your carb target',
+      `${carbGoalToday}g/day is a general starting point, not medical advice. Your ideal daily carb range depends on your specific diagnosis and treatment - check with your doctor or diabetes care team to set a target that's right for you.`
+    );
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
@@ -996,37 +1015,25 @@ export default function HomeScreen() {
               onPress={() => navigation.navigate('FoodLog')}
               activeOpacity={0.7}
             >
-              <CarbGoalRing
-                carbsLogged={healthLogSummary?.carbs_logged_today_g ?? null}
-                carbGoal={healthLogSummary?.carb_goal_g || 130}
-              />
+              <CarbGoalRing carbsLogged={carbsLoggedToday} carbGoal={carbGoalToday} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.carbGoalTitle} numberOfLines={1}>
-                  {healthLogSummary?.carbs_logged_today_g != null
-                    ? `${healthLogSummary.carbs_logged_today_g}g of ${healthLogSummary.carb_goal_g || 130}g carbs today`
-                    : healthLogSummary?.meals_logged_today > 0
-                    ? `${healthLogSummary.meals_logged_today} meal${healthLogSummary.meals_logged_today === 1 ? '' : 's'} logged today`
-                    : 'No carbs logged yet today'}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                  <Text style={styles.carbGoalTitle} numberOfLines={1}>
+                    {carbsLoggedToday != null
+                      ? `${carbsLoggedToday}g of ${carbGoalToday}g carbs today`
+                      : healthLogSummary?.meals_logged_today > 0
+                      ? `${healthLogSummary.meals_logged_today} meal${healthLogSummary.meals_logged_today === 1 ? '' : 's'} logged today`
+                      : 'No carbs logged yet today'}
+                  </Text>
+                  <Pressable hitSlop={10} onPress={showCarbGoalDisclaimer}>
+                    <Ionicons name="information-circle-outline" size={15} color={Colors.textLight} />
+                  </Pressable>
+                </View>
                 <Text
-                  style={[
-                    styles.carbGoalSubtitle,
-                    {
-                      color: getCarbGoalRingColor(
-                        healthLogSummary?.carbs_logged_today_g ?? null,
-                        healthLogSummary?.carb_goal_g || 130
-                      ),
-                    },
-                  ]}
+                  style={[styles.carbGoalSubtitle, { color: getCarbGoalRingColor(carbsLoggedToday, carbGoalToday) }]}
                   numberOfLines={1}
                 >
-                  {healthLogSummary?.carbs_logged_today_g != null
-                    ? healthLogSummary.carbs_logged_today_g > (healthLogSummary.carb_goal_g || 130)
-                      ? 'Over your daily goal'
-                      : healthLogSummary.carbs_logged_today_g >= 0.85 * (healthLogSummary.carb_goal_g || 130)
-                      ? 'Getting close to your goal'
-                      : 'On track for today'
-                    : 'Scan a barcode or photo to track carbs'}
+                  {carbGoalSubtitle}
                 </Text>
                 {healthLogSummary?.spikes_flagged_today > 0 ? (
                   <View style={[styles.spikeBadge, { marginTop: 6, alignSelf: 'flex-start' }]}>
