@@ -424,9 +424,6 @@ export default function GlucoGuideScreen({ navigation }) {
           <Pressable style={styles.backButton} onPress={() => navigation.navigate('Home')}>
             <Ionicons name="arrow-back" size={20} color="white" />
           </Pressable>
-          <View style={styles.headerIcon}>
-            <Ionicons name="sparkles-outline" size={20} color="white" />
-          </View>
           <View style={styles.headerCopy}>
             <Text style={styles.headerTitle}>GlucoGuide AI</Text>
             <Text style={styles.headerSubtitle}>Diabetes-aware food and lifestyle support</Text>
@@ -587,16 +584,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.16)',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  headerIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
   },
   headerCopy: {
     flex: 1,

@@ -564,9 +564,6 @@ export default function DailyPlanScreen() {
               <Ionicons name="arrow-back" size={20} color="white" />
             </Pressable>
             <View style={styles.headerTitleRow}>
-              <View style={styles.headerIcon}>
-                <Ionicons name="calendar-outline" size={18} color="white" />
-              </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.headerTitle}>Daily Meal Planner</Text>
                 <Text style={styles.headerSubtitle}>A simple plan for steady blood sugar habits.</Text>
@@ -770,14 +767,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     flex: 1,
-  },
-  headerIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 22,
