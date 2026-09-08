@@ -5,7 +5,6 @@ import io
 import mimetypes
 import os
 import html
-from html.parser import HTMLParser
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile, status
@@ -21,6 +20,7 @@ from ...models.staff_notification import StaffNotification
 from ...models.staff_user import StaffUser
 from ...services.email_service import _send_email  # re-use configured provider
 from ...services.ftp_storage_service import open_shared_ftp
+from ...services.html_sanitizer import sanitize_html
 from ...services.inbox_file_storage_service import store_inbox_attachment
 from ...services.staff_rbac_service import StaffRBACService
 
@@ -82,91 +82,6 @@ def _get_active_staff_recipients(db: Session, emails: list[str]) -> list[StaffUs
             detail=f"These recipients are not active staff members: {', '.join(inactive)}",
         )
     return [by_email[email] for email in emails]
-
-
-class _Sanitizer(HTMLParser):
-    allowed_tags = {"b", "strong", "i", "em", "u", "br", "p", "div", "span", "ul", "ol", "li", "a"}
-    allowed_attrs = {"a": {"href", "target", "rel"}}
-
-    def __init__(self) -> None:
-        super().__init__(convert_charrefs=True)
-        self.out: list[str] = []
-
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        t = (tag or "").lower().strip()
-        if t not in self.allowed_tags:
-            return
-        safe_attrs: list[str] = []
-        allowed = self.allowed_attrs.get(t, set())
-        for k, v in attrs:
-            key = (k or "").lower().strip()
-            if key not in allowed:
-                continue
-            val = str(v or "").strip()
-            if key == "href":
-                # allow http(s) and mailto only
-                if val.startswith("mailto:"):
-                    pass
-                else:
-                    try:
-                        u = urlparse(val)
-                        if u.scheme not in {"http", "https"}:
-                            continue
-                    except Exception:
-                        continue
-            if key in {"target", "rel"}:
-                # enforce safe link behavior
-                continue
-            safe_val = val.replace('"', "&quot;")
-            safe_attrs.append(f'{key}="{safe_val}"')
-
-        if t == "a":
-            safe_attrs.append('target="_blank"')
-            safe_attrs.append('rel="noreferrer"')
-
-        attr_str = (" " + " ".join(safe_attrs)) if safe_attrs else ""
-        self.out.append(f"<{t}{attr_str}>")
-
-    def handle_endtag(self, tag: str) -> None:
-        t = (tag or "").lower().strip()
-        if t not in self.allowed_tags:
-            return
-        if t == "br":
-            return
-        self.out.append(f"</{t}>")
-
-    def handle_data(self, data: str) -> None:
-        text = str(data or "")
-        text = (
-            text.replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-        )
-        self.out.append(text)
-
-    def handle_entityref(self, name: str) -> None:
-        self.out.append(f"&{name};")
-
-    def handle_charref(self, name: str) -> None:
-        self.out.append(f"&#{name};")
-
-
-def sanitize_html(html: str) -> str:
-    raw = str(html or "").strip()
-    if not raw:
-        return ""
-    s = _Sanitizer()
-    try:
-        s.feed(raw)
-    except Exception:
-        # fallback: plain text
-        return (
-            raw.replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace("\n", "<br/>")
-        )
-    return "".join(s.out)[:100_000]
 
 
 class ComposePayload(BaseModel):

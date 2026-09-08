@@ -38,6 +38,7 @@ from ...models.subscription import Subscription
 from ...models.user import SearchLog, User
 from ...models.user_activity_event import UserActivityEvent
 from ...models.user_daily_challenge import UserDailyChallenge
+from ...services.login_throttler import LoginThrottler
 from ...services.redis_ai_queue import RedisAIQueue
 from ...services.recipe_upload_storage_service import store_recipe_image_upload
 from ...services.staff_rbac_service import StaffRBACService
@@ -58,6 +59,13 @@ from ...services.system_log_service import log_system_event
 router = APIRouter(prefix="/admin", tags=["admin"])
 admin_cache = CacheService()
 logger = logging.getLogger(__name__)
+
+# Staff/admin login has no other rate limiting anywhere in front of it, unlike the
+# regular user login (auth.py already uses this same LoginThrottler) - a compromised
+# admin account reaches far more (user PII, blog publishing, inbox, broadcast email
+# to all users) than a compromised regular account, so this closes an unprotected
+# online brute-force path against the single highest-value credential in the app.
+admin_login_throttler = LoginThrottler()
 
 
 ACCESS_STATUS_LABELS = {
@@ -277,16 +285,36 @@ def _recipe_metadata_payload(recipe: Recipe) -> dict:
 
 
 @router.post("/login", response_model=AdminToken)
-def admin_login(payload: AdminLoginPayload, db: Session = Depends(get_db)):
+def admin_login(payload: AdminLoginPayload, request: Request, db: Session = Depends(get_db)):
     email = payload.email.lower()
+    client_host = request.client.host if request.client else "unknown"
+    identifier = f"{email}@{client_host}"
+
+    allowed, remaining = admin_login_throttler.check_allowed(identifier)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Invalid credentials. Please wait {remaining} seconds and try again.",
+        )
+
     admin = db.query(AdminUser).filter(AdminUser.email == email).first()
     if not admin or not verify_password(payload.password, admin.hashed_password):
+        remaining_attempts = admin_login_throttler.record_failure(identifier)
+        logger.warning("Admin login failed for email=%s, remaining_attempts=%s", email, remaining_attempts)
+        if remaining_attempts == 0:
+            allowed, remaining = admin_login_throttler.check_allowed(identifier)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Invalid credentials. Please wait {remaining} seconds and try again.",
+            )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     # If this admin account maps to a staff user, enforce staff status here too
     # so disabled/deleted staff cannot even obtain a token.
     staff = db.query(StaffUser).filter(StaffUser.email == email).first()
     if staff and not StaffRBACService.is_active_staff(staff):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Staff account disabled")
+
+    admin_login_throttler.record_success(identifier)
     token = create_access_token({"sub": str(admin.id), "role": "admin"})
     return AdminToken(access_token=token)
 
