@@ -1,5 +1,6 @@
 // components/CarbGoalRing.js
 import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { Colors } from '../constants/Colors';
 
@@ -33,32 +34,52 @@ export default function CarbGoalRing({ carbsLogged, carbGoal, mode = 'ceiling', 
   const ratio = showArc ? Math.min(carbsLogged / carbGoal, 1) : 0;
   const color = getCarbGoalRingColor(carbsLogged, carbGoal, mode);
   const dashOffset = circumference * (1 - ratio);
+  // Real (uncapped) percentage - e.g. can read "385%" if well over a ceiling, or
+  // "128%" past a floor. Kept modest in size ("not too big") relative to the ring.
+  const percentLabel = showArc ? Math.round((carbsLogged / carbGoal) * 100) : null;
+  const fontSize = Math.min(20, Math.max(10, Math.round(size * 0.2)));
 
   return (
-    <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      <Circle
-        cx={size / 2}
-        cy={size / 2}
-        r={radius}
-        stroke={Colors.border}
-        strokeWidth={strokeWidth}
-        fill="none"
-      />
-      {showArc && ratio > 0 ? (
+    <View style={{ width: size, height: size }}>
+      <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         <Circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke={color}
+          stroke={Colors.border}
           strokeWidth={strokeWidth}
-          strokeLinecap="round"
-          strokeDasharray={`${circumference} ${circumference}`}
-          strokeDashoffset={dashOffset}
           fill="none"
-          rotation={-90}
-          origin={`${size / 2}, ${size / 2}`}
         />
+        {showArc && ratio > 0 ? (
+          <Circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke={color}
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+            strokeDasharray={`${circumference} ${circumference}`}
+            strokeDashoffset={dashOffset}
+            fill="none"
+            rotation={-90}
+            origin={`${size / 2}, ${size / 2}`}
+          />
+        ) : null}
+      </Svg>
+      {percentLabel != null ? (
+        <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+          <View style={styles.labelCenter}>
+            <Text style={[styles.labelText, { fontSize, color }]} numberOfLines={1} adjustsFontSizeToFit>
+              {percentLabel}%
+            </Text>
+          </View>
+        </View>
       ) : null}
-    </Svg>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  labelCenter: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  labelText: { fontWeight: '800' },
+});
