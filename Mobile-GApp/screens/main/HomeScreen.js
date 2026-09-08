@@ -31,6 +31,7 @@ import {
 import { getTodayTip } from '../../utils/todayTips';
 import { scheduleDailyPlanNotifications } from '../../utils/mealReminders';
 import CarbGoalRing, { getCarbGoalRingColor } from '../../components/CarbGoalRing';
+import { getCarbGoalTitle, getCarbGoalSubtitle, getCarbGoalDisclaimer } from '../../utils/carbGoal';
 
 const LAST_INGREDIENTS_KEY = 'last_used_ingredients_v1';
 
@@ -820,41 +821,13 @@ export default function HomeScreen() {
   const carbsLoggedToday = healthLogSummary?.carbs_logged_today_g ?? null;
   const carbGoalMode = healthLogSummary?.carb_goal_mode || 'ceiling';
   const carbGoalToday = healthLogSummary?.carb_goal_g || (carbGoalMode === 'none' ? null : 130);
+  const mealsLoggedToday = healthLogSummary?.meals_logged_today || 0;
 
-  const carbGoalTitle =
-    carbsLoggedToday == null
-      ? healthLogSummary?.meals_logged_today > 0
-        ? `${healthLogSummary.meals_logged_today} meal${healthLogSummary.meals_logged_today === 1 ? '' : 's'} logged today`
-        : 'No carbs logged yet today'
-      : carbGoalMode === 'none'
-      ? `${carbsLoggedToday}g carbs logged today`
-      : `${carbsLoggedToday}g of ${carbGoalToday}g carbs today`;
-
-  const carbGoalSubtitle =
-    carbsLoggedToday == null
-      ? carbGoalMode === 'none'
-        ? 'Carb counting is personal to your insulin plan'
-        : 'Scan a barcode or photo to track carbs'
-      : carbGoalMode === 'none'
-      ? 'No fixed daily target - match this to your insulin plan'
-      : carbGoalMode === 'floor'
-      ? carbsLoggedToday >= carbGoalToday
-        ? "You've reached your daily minimum"
-        : `${Math.round((carbGoalToday - carbsLoggedToday) * 10) / 10}g to reach your minimum`
-      : carbsLoggedToday > carbGoalToday
-      ? `${Math.round((carbsLoggedToday - carbGoalToday) * 10) / 10}g over your goal`
-      : carbsLoggedToday >= 0.85 * carbGoalToday
-      ? 'Getting close to your goal'
-      : 'On track for today';
+  const carbGoalTitle = getCarbGoalTitle({ carbsLoggedToday, carbGoalToday, carbGoalMode, mealsLoggedToday });
+  const carbGoalSubtitle = getCarbGoalSubtitle({ carbsLoggedToday, carbGoalToday, carbGoalMode });
 
   const showCarbGoalDisclaimer = () => {
-    const message =
-      carbGoalMode === 'none'
-        ? "Type 1 diabetes doesn't have a single daily carb ceiling - carbs are typically counted per meal against your insulin dose. Check with your doctor or diabetes care team for guidance specific to your plan."
-        : carbGoalMode === 'floor'
-        ? `${carbGoalToday}g/day is a general starting point for pregnancy, not medical advice. Your ideal daily carb range depends on your specific care plan - check with your doctor or diabetes care team to set a target that's right for you.`
-        : `${carbGoalToday}g/day is a general starting point, not medical advice. Your ideal daily carb range depends on your specific diagnosis and treatment - check with your doctor or diabetes care team to set a target that's right for you.`;
-    Alert.alert('About your carb target', message);
+    Alert.alert('About your carb target', getCarbGoalDisclaimer(carbGoalMode, carbGoalToday));
   };
 
   return (
@@ -1033,7 +1006,7 @@ export default function HomeScreen() {
 
             <TouchableOpacity
               style={styles.carbGoalRow}
-              onPress={() => navigation.navigate('FoodLog')}
+              onPress={() => navigation.navigate('CarbGoal')}
               activeOpacity={0.7}
             >
               <CarbGoalRing carbsLogged={carbsLoggedToday} carbGoal={carbGoalToday} mode={carbGoalMode} />

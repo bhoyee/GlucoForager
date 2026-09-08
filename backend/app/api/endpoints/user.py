@@ -69,6 +69,7 @@ def profile(
         "available_equipment": getattr(current_user, "available_equipment", None),
         "cook_time_preference": getattr(current_user, "cook_time_preference", None),
         "profile_completed": getattr(current_user, "profile_completed", None),
+        "daily_carb_goal_g": getattr(current_user, "daily_carb_goal_g", None),
         **_access_payload(db, current_user),
         "premium_access_blocked": bool(getattr(current_user, "premium_access_blocked_at", None)),
         "premium_access_blocked_until": getattr(current_user, "premium_access_blocked_until", None),
@@ -91,6 +92,10 @@ class ProfileUpdate(BaseModel):
     available_equipment: list[str] | None = None
     cook_time_preference: str | None = None
     profile_completed: bool | None = None
+    # Daily carb target override for the home screen ring. 0 is a sentinel meaning
+    # "clear my override, go back to the type-based suggested default" - a real
+    # target of 0g isn't meaningful, so this doesn't collide with real input.
+    daily_carb_goal_g: int | None = None
 
 
 def _clean_string_list(value: list[str] | None, *, max_items: int = 24, max_len: int = 40) -> list[str] | None:
@@ -171,6 +176,16 @@ def update_profile(
         current_user.cook_time_preference = payload.cook_time_preference.strip() or None
     if payload.profile_completed is not None:
         current_user.profile_completed = bool(payload.profile_completed)
+    if payload.daily_carb_goal_g is not None:
+        if payload.daily_carb_goal_g == 0:
+            current_user.daily_carb_goal_g = None
+        elif 20 <= payload.daily_carb_goal_g <= 400:
+            current_user.daily_carb_goal_g = payload.daily_carb_goal_g
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Carb goal must be between 20g and 400g",
+            )
 
     db.add(current_user)
     db.commit()
@@ -192,6 +207,7 @@ def update_profile(
         "available_equipment": getattr(current_user, "available_equipment", None),
         "cook_time_preference": getattr(current_user, "cook_time_preference", None),
         "profile_completed": getattr(current_user, "profile_completed", None),
+        "daily_carb_goal_g": getattr(current_user, "daily_carb_goal_g", None),
         **_access_payload(db, current_user),
         "premium_access_blocked": bool(getattr(current_user, "premium_access_blocked_at", None)),
         "premium_access_blocked_until": getattr(current_user, "premium_access_blocked_until", None),
