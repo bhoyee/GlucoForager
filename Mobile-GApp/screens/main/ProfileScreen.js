@@ -620,9 +620,9 @@ export default function ProfileScreen() {
                 <TouchableOpacity style={styles.backButton} onPress={() => navigation.navigate('Home')}>
                   <Ionicons name="arrow-back" size={20} color="white" />
                 </TouchableOpacity>
-                <View>
+                <View style={styles.headerTitleBlock}>
                   <Text style={styles.title}>Profile</Text>
-                  <Text style={styles.headerSubtitle}>Account, preferences, and reminders</Text>
+                  <Text style={styles.headerSubtitle} numberOfLines={1}>Account, preferences, and reminders</Text>
                 </View>
               </View>
               <TouchableOpacity style={styles.logoutButton} onPress={signOut}>
@@ -990,9 +990,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerLeft: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    marginRight: 12,
+  },
+  headerTitleBlock: {
+    flexShrink: 1,
   },
   backButton: {
     width: 40,
@@ -1001,6 +1006,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.16)',
+    flexShrink: 0,
   },
   title: {
     fontSize: 28,
@@ -1014,6 +1020,7 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.78)',
   },
   logoutButton: {
+    flexShrink: 0,
     borderRadius: 999,
     paddingHorizontal: 14,
     paddingVertical: 9,
