@@ -621,12 +621,12 @@ export default function ProfileScreen() {
                   <Ionicons name="arrow-back" size={20} color="white" />
                 </TouchableOpacity>
                 <View style={styles.headerTitleBlock}>
-                  <Text style={styles.title}>Profile</Text>
+                  <Text style={styles.title} numberOfLines={1}>Profile</Text>
                   <Text style={styles.headerSubtitle} numberOfLines={1}>Account, preferences, and reminders</Text>
                 </View>
               </View>
               <TouchableOpacity style={styles.logoutButton} onPress={signOut}>
-                <Text style={styles.logoutText}>Logout</Text>
+                <Text style={styles.logoutText} numberOfLines={1}>Logout</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -998,6 +998,7 @@ const styles = StyleSheet.create({
   },
   headerTitleBlock: {
     flexShrink: 1,
+    minWidth: 0,
   },
   backButton: {
     width: 40,
@@ -1021,6 +1022,8 @@ const styles = StyleSheet.create({
   },
   logoutButton: {
     flexShrink: 0,
+    minWidth: 88,
+    alignItems: 'center',
     borderRadius: 999,
     paddingHorizontal: 14,
     paddingVertical: 9,
