@@ -1041,9 +1041,10 @@ export default function HomeScreen() {
               </TouchableOpacity>
             ) : null}
 
-            <TouchableOpacity style={styles.viewLogLink} onPress={() => navigation.navigate('FoodLog')} activeOpacity={0.7}>
-              <Text style={styles.viewLogLinkText}>View food log</Text>
-              <Ionicons name="chevron-forward" size={13} color={Colors.textLight} />
+            <TouchableOpacity style={styles.viewLogBadge} onPress={() => navigation.navigate('FoodLog')} activeOpacity={0.85}>
+              <Ionicons name="clipboard-outline" size={14} color={Colors.secondary} />
+              <Text style={styles.viewLogBadgeText}>View food log</Text>
+              <Ionicons name="chevron-forward" size={13} color={Colors.secondary} />
             </TouchableOpacity>
           </View>
         </View>
@@ -1905,17 +1906,24 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: Colors.warning,
   },
-  viewLogLink: {
+  viewLogBadge: {
+    marginTop: 4,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    paddingVertical: 6,
+    gap: 6,
+    alignSelf: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: `${Colors.secondary}14`,
+    borderWidth: 1,
+    borderColor: `${Colors.secondary}28`,
   },
-  viewLogLinkText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.textLight,
+  viewLogBadgeText: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: Colors.secondary,
   },
   smartChallengeRow: {
     padding: 12,
