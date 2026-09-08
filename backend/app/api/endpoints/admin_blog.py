@@ -21,6 +21,7 @@ from ...models.newsletter_signup import NewsletterSignup
 from ...models.user import User
 from ...services.cache_service import CacheService
 from ...services.email_service import send_blog_post_newsletter_email, send_blog_post_to_user_email
+from ...services.html_sanitizer import RICH_CONTENT_ALLOWED_ATTRS, RICH_CONTENT_ALLOWED_TAGS, sanitize_html
 from ...services.newsletter_tokens import make_unsubscribe_token
 from ...services.staff_rbac_service import StaffRBACService
 
@@ -29,6 +30,19 @@ cache = CacheService()
 
 ALLOWED_POST_STATUSES = {"draft", "published", "scheduled"}
 ALLOWED_COMMENT_STATUSES = {"pending", "approved", "rejected", "deleted"}
+
+
+def _sanitize_blog_content(value: str) -> str:
+    # Blog content renders via dangerouslySetInnerHTML on the public site (and gets
+    # reused verbatim as an outbound email body for the "notify all users" broadcast
+    # below), so it must never carry through raw <script>/event-handler HTML from
+    # whatever the editor produced - strip to a safe rich-text allowlist at write time.
+    return sanitize_html(
+        value,
+        allowed_tags=RICH_CONTENT_ALLOWED_TAGS,
+        allowed_attrs=RICH_CONTENT_ALLOWED_ATTRS,
+        max_length=1_000_000,
+    )
 
 
 def _utcnow() -> datetime:
@@ -369,7 +383,7 @@ def admin_create_post(
         seo_title=payload.seo_title.strip() if payload.seo_title else None,
         seo_description=payload.seo_description.strip() if payload.seo_description else None,
         focus_keyword=payload.focus_keyword.strip() if payload.focus_keyword else None,
-        content=payload.content.strip(),
+        content=_sanitize_blog_content(payload.content),
         status=normalized_status,
         author_name=payload.author_name.strip() if payload.author_name else None,
         published_at=published_at,
@@ -503,7 +517,7 @@ def admin_update_post(
     post.seo_title = payload.seo_title.strip() if payload.seo_title else None
     post.seo_description = payload.seo_description.strip() if payload.seo_description else None
     post.focus_keyword = payload.focus_keyword.strip() if payload.focus_keyword else None
-    post.content = payload.content.strip()
+    post.content = _sanitize_blog_content(payload.content)
     post.status = normalized_status
     post.author_name = payload.author_name.strip() if payload.author_name else None
     if normalized_status in {"published", "scheduled"}:
