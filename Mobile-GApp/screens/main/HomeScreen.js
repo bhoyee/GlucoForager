@@ -818,22 +818,43 @@ export default function HomeScreen() {
   const streakDays = Number(dailyChallenge?.streak_days || 0);
 
   const carbsLoggedToday = healthLogSummary?.carbs_logged_today_g ?? null;
-  const carbGoalToday = healthLogSummary?.carb_goal_g || 130;
-  const carbsOverGoal = carbsLoggedToday != null ? carbsLoggedToday - carbGoalToday : 0;
+  const carbGoalMode = healthLogSummary?.carb_goal_mode || 'ceiling';
+  const carbGoalToday = healthLogSummary?.carb_goal_g || (carbGoalMode === 'none' ? null : 130);
+
+  const carbGoalTitle =
+    carbsLoggedToday == null
+      ? healthLogSummary?.meals_logged_today > 0
+        ? `${healthLogSummary.meals_logged_today} meal${healthLogSummary.meals_logged_today === 1 ? '' : 's'} logged today`
+        : 'No carbs logged yet today'
+      : carbGoalMode === 'none'
+      ? `${carbsLoggedToday}g carbs logged today`
+      : `${carbsLoggedToday}g of ${carbGoalToday}g carbs today`;
+
   const carbGoalSubtitle =
     carbsLoggedToday == null
-      ? 'Scan a barcode or photo to track carbs'
-      : carbsOverGoal > 0
-      ? `${Math.round(carbsOverGoal * 10) / 10}g over your goal`
+      ? carbGoalMode === 'none'
+        ? 'Carb counting is personal to your insulin plan'
+        : 'Scan a barcode or photo to track carbs'
+      : carbGoalMode === 'none'
+      ? 'No fixed daily target - match this to your insulin plan'
+      : carbGoalMode === 'floor'
+      ? carbsLoggedToday >= carbGoalToday
+        ? "You've reached your daily minimum"
+        : `${Math.round((carbGoalToday - carbsLoggedToday) * 10) / 10}g to reach your minimum`
+      : carbsLoggedToday > carbGoalToday
+      ? `${Math.round((carbsLoggedToday - carbGoalToday) * 10) / 10}g over your goal`
       : carbsLoggedToday >= 0.85 * carbGoalToday
       ? 'Getting close to your goal'
       : 'On track for today';
 
   const showCarbGoalDisclaimer = () => {
-    Alert.alert(
-      'About your carb target',
-      `${carbGoalToday}g/day is a general starting point, not medical advice. Your ideal daily carb range depends on your specific diagnosis and treatment - check with your doctor or diabetes care team to set a target that's right for you.`
-    );
+    const message =
+      carbGoalMode === 'none'
+        ? "Type 1 diabetes doesn't have a single daily carb ceiling - carbs are typically counted per meal against your insulin dose. Check with your doctor or diabetes care team for guidance specific to your plan."
+        : carbGoalMode === 'floor'
+        ? `${carbGoalToday}g/day is a general starting point for pregnancy, not medical advice. Your ideal daily carb range depends on your specific care plan - check with your doctor or diabetes care team to set a target that's right for you.`
+        : `${carbGoalToday}g/day is a general starting point, not medical advice. Your ideal daily carb range depends on your specific diagnosis and treatment - check with your doctor or diabetes care team to set a target that's right for you.`;
+    Alert.alert('About your carb target', message);
   };
 
   return (
@@ -1015,22 +1036,21 @@ export default function HomeScreen() {
               onPress={() => navigation.navigate('FoodLog')}
               activeOpacity={0.7}
             >
-              <CarbGoalRing carbsLogged={carbsLoggedToday} carbGoal={carbGoalToday} />
+              <CarbGoalRing carbsLogged={carbsLoggedToday} carbGoal={carbGoalToday} mode={carbGoalMode} />
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                   <Text style={styles.carbGoalTitle} numberOfLines={1}>
-                    {carbsLoggedToday != null
-                      ? `${carbsLoggedToday}g of ${carbGoalToday}g carbs today`
-                      : healthLogSummary?.meals_logged_today > 0
-                      ? `${healthLogSummary.meals_logged_today} meal${healthLogSummary.meals_logged_today === 1 ? '' : 's'} logged today`
-                      : 'No carbs logged yet today'}
+                    {carbGoalTitle}
                   </Text>
                   <Pressable hitSlop={10} onPress={showCarbGoalDisclaimer}>
                     <Ionicons name="information-circle-outline" size={15} color={Colors.textLight} />
                   </Pressable>
                 </View>
                 <Text
-                  style={[styles.carbGoalSubtitle, { color: getCarbGoalRingColor(carbsLoggedToday, carbGoalToday) }]}
+                  style={[
+                    styles.carbGoalSubtitle,
+                    { color: getCarbGoalRingColor(carbsLoggedToday, carbGoalToday, carbGoalMode) },
+                  ]}
                   numberOfLines={1}
                 >
                   {carbGoalSubtitle}
