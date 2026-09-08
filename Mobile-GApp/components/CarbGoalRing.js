@@ -3,10 +3,8 @@ import React from 'react';
 import Svg, { Circle } from 'react-native-svg';
 import { Colors } from '../constants/Colors';
 
-const SIZE = 56;
-const STROKE_WIDTH = 6;
-const RADIUS = (SIZE - STROKE_WIDTH) / 2;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+const DEFAULT_SIZE = 56;
+const STROKE_WIDTH_RATIO = 6 / 56;
 
 // mode "ceiling": normal target, red once carbsLogged exceeds carbGoal (Type 2 /
 //   prediabetes / general use).
@@ -27,35 +25,38 @@ export function getCarbGoalRingColor(carbsLogged, carbGoal, mode = 'ceiling') {
   return Colors.success;
 }
 
-export default function CarbGoalRing({ carbsLogged, carbGoal, mode = 'ceiling' }) {
+export default function CarbGoalRing({ carbsLogged, carbGoal, mode = 'ceiling', size = DEFAULT_SIZE }) {
+  const strokeWidth = Math.max(4, Math.round(size * STROKE_WIDTH_RATIO));
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
   const showArc = mode !== 'none' && carbsLogged != null && carbGoal;
   const ratio = showArc ? Math.min(carbsLogged / carbGoal, 1) : 0;
   const color = getCarbGoalRingColor(carbsLogged, carbGoal, mode);
-  const dashOffset = CIRCUMFERENCE * (1 - ratio);
+  const dashOffset = circumference * (1 - ratio);
 
   return (
-    <Svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
+    <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
       <Circle
-        cx={SIZE / 2}
-        cy={SIZE / 2}
-        r={RADIUS}
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
         stroke={Colors.border}
-        strokeWidth={STROKE_WIDTH}
+        strokeWidth={strokeWidth}
         fill="none"
       />
       {showArc && ratio > 0 ? (
         <Circle
-          cx={SIZE / 2}
-          cy={SIZE / 2}
-          r={RADIUS}
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
           stroke={color}
-          strokeWidth={STROKE_WIDTH}
+          strokeWidth={strokeWidth}
           strokeLinecap="round"
-          strokeDasharray={`${CIRCUMFERENCE} ${CIRCUMFERENCE}`}
+          strokeDasharray={`${circumference} ${circumference}`}
           strokeDashoffset={dashOffset}
           fill="none"
           rotation={-90}
-          origin={`${SIZE / 2}, ${SIZE / 2}`}
+          origin={`${size / 2}, ${size / 2}`}
         />
       ) : null}
     </Svg>
