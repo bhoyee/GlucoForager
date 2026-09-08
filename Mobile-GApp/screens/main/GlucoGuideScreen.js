@@ -421,6 +421,9 @@ export default function GlucoGuideScreen({ navigation }) {
         keyboardShouldPersistTaps="handled"
       >
         <View style={[styles.header, { paddingTop: Math.max(insets.top, 14) + 8 }]}>
+          <Pressable style={styles.backButton} onPress={() => navigation.navigate('Home')}>
+            <Ionicons name="arrow-back" size={20} color="white" />
+          </Pressable>
           <View style={styles.headerIcon}>
             <Ionicons name="sparkles-outline" size={20} color="white" />
           </View>
@@ -576,6 +579,14 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 10 },
     elevation: 8,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerIcon: {
     width: 48,

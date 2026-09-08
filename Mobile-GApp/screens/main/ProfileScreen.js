@@ -616,9 +616,14 @@ export default function ProfileScreen() {
         >
           <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
             <View style={styles.header}>
-              <View>
-                <Text style={styles.title}>Profile</Text>
-                <Text style={styles.headerSubtitle}>Account, preferences, and reminders</Text>
+              <View style={styles.headerLeft}>
+                <TouchableOpacity style={styles.backButton} onPress={() => navigation.navigate('Home')}>
+                  <Ionicons name="arrow-back" size={20} color="white" />
+                </TouchableOpacity>
+                <View>
+                  <Text style={styles.title}>Profile</Text>
+                  <Text style={styles.headerSubtitle}>Account, preferences, and reminders</Text>
+                </View>
               </View>
               <TouchableOpacity style={styles.logoutButton} onPress={signOut}>
                 <Text style={styles.logoutText}>Logout</Text>
@@ -983,6 +988,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.16)',
   },
   title: {
     fontSize: 28,
