@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert, Image } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -386,6 +386,7 @@ function MealPlanDetail({ meal, item, showImageLoading, onBack }) {
 }
 
 export default function DailyPlanScreen() {
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { signOut } = useAuth();
   const todayKey = dateKey();
@@ -559,6 +560,9 @@ export default function DailyPlanScreen() {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) + 8 }]}>
           <View style={styles.headerRow}>
+            <Pressable style={styles.backButton} onPress={() => navigation.navigate('Home')}>
+              <Ionicons name="arrow-back" size={20} color="white" />
+            </Pressable>
             <View style={styles.headerTitleRow}>
               <View style={styles.headerIcon}>
                 <Ionicons name="calendar-outline" size={18} color="white" />
@@ -568,10 +572,6 @@ export default function DailyPlanScreen() {
                 <Text style={styles.headerSubtitle}>A simple plan for steady blood sugar habits.</Text>
               </View>
             </View>
-            <Pressable style={styles.notificationButton}>
-              <Ionicons name="notifications-outline" size={21} color="white" />
-              <View style={styles.notificationDot} />
-            </Pressable>
           </View>
 
           {meals.length ? (
@@ -790,25 +790,13 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontWeight: '600',
   },
-  notificationButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.14)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
-    position: 'relative',
-  },
-  notificationDot: {
-    position: 'absolute',
-    top: 8,
-    right: 9,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#B9F6CA',
+    backgroundColor: 'rgba(255,255,255,0.16)',
   },
   headerActions: {
     marginTop: 18,
