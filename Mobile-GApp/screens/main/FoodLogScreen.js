@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, RefreshControl, ActivityIndicator, Alert } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, RefreshControl, ActivityIndicator, Alert, Modal, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,6 +25,12 @@ function formatGlucoseValue(valueMgDl) {
   return `${valueMgDl} mg/dL · ${mmol} mmol/L`;
 }
 
+const FILTERS = [
+  { key: 'all', label: 'All', icon: 'apps-outline' },
+  { key: 'meal', label: 'Meals', icon: 'restaurant-outline' },
+  { key: 'glucose', label: 'Glucose', icon: 'water-outline' },
+];
+
 export default function FoodLogScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -33,6 +39,8 @@ export default function FoodLogScreen() {
   const [entries, setEntries] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [filter, setFilter] = useState('all');
+  const [selectedEntry, setSelectedEntry] = useState(null);
 
   const loadEntries = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setIsLoading(true);
@@ -73,9 +81,16 @@ export default function FoodLogScreen() {
     loadEntries({ silent: true });
   };
 
+  const filteredEntries = useMemo(
+    () => (filter === 'all' ? entries : entries.filter((e) => e.kind === filter)),
+    [entries, filter]
+  );
+
+  const entryLabel = (item) =>
+    item.kind === 'meal' ? item.description : `${formatGlucoseValue(item.value_mg_dl)} reading`;
+
   const handleDelete = (item) => {
-    const label = item.kind === 'meal' ? item.description : `${formatGlucoseValue(item.value_mg_dl)} reading`;
-    Alert.alert('Delete entry', `Remove "${label}"? This can't be undone.`, [
+    Alert.alert('Delete entry', `Remove "${entryLabel(item)}"? This can't be undone.`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -95,6 +110,7 @@ export default function FoodLogScreen() {
               return;
             }
             setEntries((prev) => prev.filter((e) => e.key !== item.key));
+            setSelectedEntry((prev) => (prev?.key === item.key ? null : prev));
           } catch {
             Alert.alert('Unable to delete', 'Network request failed. Please check your connection.');
           }
@@ -107,7 +123,7 @@ export default function FoodLogScreen() {
     const isMeal = item.kind === 'meal';
     const isSpike = isMeal ? item.flagged_spike_mg_dl != null : item.is_spike;
     return (
-      <View style={styles.row}>
+      <TouchableOpacity style={styles.row} onPress={() => setSelectedEntry(item)} activeOpacity={0.75}>
         <View style={[styles.icon, { backgroundColor: isMeal ? `${Colors.primary}14` : `${Colors.accent}14` }]}>
           <Ionicons
             name={isMeal ? 'restaurant-outline' : 'water-outline'}
@@ -134,12 +150,17 @@ export default function FoodLogScreen() {
             </View>
           ) : null}
         </View>
-        <TouchableOpacity style={styles.deleteButton} onPress={() => handleDelete(item)} hitSlop={8}>
-          <Ionicons name="trash-outline" size={18} color={Colors.textLight} />
-        </TouchableOpacity>
-      </View>
+        <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+      </TouchableOpacity>
     );
   };
+
+  const detailIsMeal = selectedEntry?.kind === 'meal';
+  const detailIsSpike = selectedEntry
+    ? detailIsMeal
+      ? selectedEntry.flagged_spike_mg_dl != null
+      : selectedEntry.is_spike
+    : false;
 
   return (
     <View style={styles.container}>
@@ -154,26 +175,163 @@ export default function FoodLogScreen() {
           </View>
           <View style={{ width: 44 }} />
         </View>
+
+        <View style={styles.filterRow}>
+          {FILTERS.map((f) => {
+            const active = filter === f.key;
+            return (
+              <TouchableOpacity
+                key={f.key}
+                style={[styles.filterChip, active && styles.filterChipActive]}
+                onPress={() => setFilter(f.key)}
+                activeOpacity={0.85}
+              >
+                <Ionicons name={f.icon} size={14} color={active ? Colors.primaryDark : 'rgba(255,255,255,0.8)'} />
+                <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{f.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </View>
 
       {isLoading ? (
         <View style={styles.centerState}>
           <ActivityIndicator size="large" color={Colors.primary} />
         </View>
-      ) : entries.length === 0 ? (
+      ) : filteredEntries.length === 0 ? (
         <View style={styles.centerState}>
           <Ionicons name="clipboard-outline" size={40} color={Colors.textMuted} />
-          <Text style={styles.emptyText}>No entries yet. Log a meal or glucose reading to see it here.</Text>
+          <Text style={styles.emptyText}>
+            {entries.length === 0
+              ? 'No entries yet. Log a meal or glucose reading to see it here.'
+              : `No ${filter === 'meal' ? 'meals' : 'glucose readings'} in the last 14 days.`}
+          </Text>
         </View>
       ) : (
         <FlatList
-          data={entries}
+          data={filteredEntries}
           keyExtractor={(item) => item.key}
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={Colors.primary} />}
         />
       )}
+
+      <Modal visible={Boolean(selectedEntry)} transparent animationType="fade" onRequestClose={() => setSelectedEntry(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]}>
+            {selectedEntry ? (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <View style={styles.modalHeaderRow}>
+                  <View
+                    style={[
+                      styles.icon,
+                      { backgroundColor: detailIsMeal ? `${Colors.primary}14` : `${Colors.accent}14` },
+                    ]}
+                  >
+                    <Ionicons
+                      name={detailIsMeal ? 'restaurant-outline' : 'water-outline'}
+                      size={20}
+                      color={detailIsMeal ? Colors.primary : Colors.accent}
+                    />
+                  </View>
+                  <TouchableOpacity style={styles.modalCloseButton} onPress={() => setSelectedEntry(null)} hitSlop={8}>
+                    <Ionicons name="close" size={22} color={Colors.textLight} />
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={styles.modalTitle}>
+                  {detailIsMeal ? selectedEntry.description : formatGlucoseValue(selectedEntry.value_mg_dl)}
+                </Text>
+                <Text style={styles.modalTimestamp}>{formatDateTime(selectedEntry.logged_at)}</Text>
+
+                {detailIsSpike ? (
+                  <View style={[styles.spikeBadge, { marginTop: 12, alignSelf: 'flex-start' }]}>
+                    <Ionicons name="alert-circle" size={12} color={Colors.warning} />
+                    <Text style={styles.spikeBadgeText}>
+                      {detailIsMeal
+                        ? `Followed by a ${selectedEntry.flagged_spike_mg_dl} mg/dL spike within 3 hours`
+                        : 'This reading followed a logged meal and was 180 mg/dL (10.0 mmol/L) or higher'}
+                    </Text>
+                  </View>
+                ) : null}
+
+                <View style={styles.modalDivider} />
+
+                {detailIsMeal ? (
+                  <>
+                    <View style={styles.modalDetailRow}>
+                      <Text style={styles.modalDetailLabel}>Logged via</Text>
+                      <Text style={styles.modalDetailValue}>
+                        {SOURCE_LABEL[selectedEntry.source] || selectedEntry.source || 'Typed'}
+                      </Text>
+                    </View>
+                    {selectedEntry.carbs_g != null ? (
+                      <View style={styles.modalDetailRow}>
+                        <Text style={styles.modalDetailLabel}>Carbs</Text>
+                        <Text style={styles.modalDetailValue}>{selectedEntry.carbs_g}g</Text>
+                      </View>
+                    ) : null}
+                    {selectedEntry.net_carbs_g != null ? (
+                      <View style={styles.modalDetailRow}>
+                        <Text style={styles.modalDetailLabel}>Net carbs</Text>
+                        <Text style={styles.modalDetailValue}>{selectedEntry.net_carbs_g}g</Text>
+                      </View>
+                    ) : null}
+                    {selectedEntry.sugars_g != null ? (
+                      <View style={styles.modalDetailRow}>
+                        <Text style={styles.modalDetailLabel}>Sugar</Text>
+                        <Text style={styles.modalDetailValue}>{selectedEntry.sugars_g}g</Text>
+                      </View>
+                    ) : null}
+                    {selectedEntry.calories != null ? (
+                      <View style={styles.modalDetailRow}>
+                        <Text style={styles.modalDetailLabel}>Calories</Text>
+                        <Text style={styles.modalDetailValue}>{selectedEntry.calories}</Text>
+                      </View>
+                    ) : null}
+                    {selectedEntry.carbs_g == null ? (
+                      <Text style={styles.modalNote}>
+                        No nutrition data for this entry - it was typed manually, so it won't count toward your
+                        daily carb total.
+                      </Text>
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    <View style={styles.modalDetailRow}>
+                      <Text style={styles.modalDetailLabel}>mg/dL</Text>
+                      <Text style={styles.modalDetailValue}>{selectedEntry.value_mg_dl}</Text>
+                    </View>
+                    <View style={styles.modalDetailRow}>
+                      <Text style={styles.modalDetailLabel}>mmol/L</Text>
+                      <Text style={styles.modalDetailValue}>
+                        {(selectedEntry.value_mg_dl / MGDL_PER_MMOL).toFixed(1)}
+                      </Text>
+                    </View>
+                    {selectedEntry.note ? (
+                      <View style={styles.modalDetailRow}>
+                        <Text style={styles.modalDetailLabel}>Note</Text>
+                        <Text style={[styles.modalDetailValue, { flex: 1, textAlign: 'right' }]}>
+                          {selectedEntry.note}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </>
+                )}
+
+                <TouchableOpacity
+                  style={styles.modalDeleteButton}
+                  onPress={() => selectedEntry && handleDelete(selectedEntry)}
+                >
+                  <Ionicons name="trash-outline" size={16} color={Colors.danger} />
+                  <Text style={styles.modalDeleteButtonText}>Delete entry</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -199,6 +357,22 @@ const styles = StyleSheet.create({
   headerText: { flex: 1, marginLeft: 12 },
   headerTitle: { fontSize: 20, fontWeight: '900', color: 'white' },
   headerSubtitle: { marginTop: 3, fontSize: 12, color: 'rgba(255,255,255,0.78)', fontWeight: '700' },
+  filterRow: { flexDirection: 'row', gap: 8, marginTop: 16 },
+  filterChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 9,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+  },
+  filterChipActive: { backgroundColor: 'white', borderColor: 'white' },
+  filterChipText: { fontSize: 12.5, fontWeight: '800', color: 'rgba(255,255,255,0.85)' },
+  filterChipTextActive: { color: Colors.primaryDark },
   centerState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40, gap: 12 },
   emptyText: { fontSize: 14, color: Colors.textLight, fontWeight: '600', textAlign: 'center', lineHeight: 20 },
   listContent: { padding: 20, gap: 10 },
@@ -233,6 +407,44 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: `${Colors.warning}18`,
   },
-  spikeBadgeText: { fontSize: 10.5, fontWeight: '800', color: Colors.warning },
-  deleteButton: { padding: 4 },
+  spikeBadgeText: { fontSize: 10.5, fontWeight: '800', color: Colors.warning, flexShrink: 1 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(7, 29, 24, 0.55)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  modalHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  modalCloseButton: { padding: 4 },
+  modalTitle: { marginTop: 14, fontSize: 19, fontWeight: '900', color: Colors.text, lineHeight: 25 },
+  modalTimestamp: { marginTop: 4, fontSize: 12, fontWeight: '700', color: Colors.textLight },
+  modalDivider: { height: 1, backgroundColor: Colors.border, marginVertical: 16 },
+  modalDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.background,
+  },
+  modalDetailLabel: { fontSize: 13, fontWeight: '700', color: Colors.textLight },
+  modalDetailValue: { fontSize: 14, fontWeight: '800', color: Colors.text },
+  modalNote: { marginTop: 10, fontSize: 12, lineHeight: 17, color: Colors.textMuted, fontWeight: '600' },
+  modalDeleteButton: {
+    marginTop: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: `${Colors.danger}12`,
+  },
+  modalDeleteButtonText: { fontSize: 14, fontWeight: '800', color: Colors.danger },
 });
