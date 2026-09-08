@@ -30,6 +30,7 @@ import {
 } from '../../utils/recipeImageCache';
 import { getTodayTip } from '../../utils/todayTips';
 import { scheduleDailyPlanNotifications } from '../../utils/mealReminders';
+import CarbGoalRing, { getCarbGoalRingColor } from '../../components/CarbGoalRing';
 
 const LAST_INGREDIENTS_KEY = 'last_used_ingredients_v1';
 
@@ -990,6 +991,55 @@ export default function HomeScreen() {
               </View>
             </View>
 
+            <TouchableOpacity
+              style={styles.carbGoalRow}
+              onPress={() => navigation.navigate('FoodLog')}
+              activeOpacity={0.7}
+            >
+              <CarbGoalRing
+                carbsLogged={healthLogSummary?.carbs_logged_today_g ?? null}
+                carbGoal={healthLogSummary?.carb_goal_g || 130}
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.carbGoalTitle} numberOfLines={1}>
+                  {healthLogSummary?.carbs_logged_today_g != null
+                    ? `${healthLogSummary.carbs_logged_today_g}g of ${healthLogSummary.carb_goal_g || 130}g carbs today`
+                    : healthLogSummary?.meals_logged_today > 0
+                    ? `${healthLogSummary.meals_logged_today} meal${healthLogSummary.meals_logged_today === 1 ? '' : 's'} logged today`
+                    : 'No carbs logged yet today'}
+                </Text>
+                <Text
+                  style={[
+                    styles.carbGoalSubtitle,
+                    {
+                      color: getCarbGoalRingColor(
+                        healthLogSummary?.carbs_logged_today_g ?? null,
+                        healthLogSummary?.carb_goal_g || 130
+                      ),
+                    },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {healthLogSummary?.carbs_logged_today_g != null
+                    ? healthLogSummary.carbs_logged_today_g > (healthLogSummary.carb_goal_g || 130)
+                      ? 'Over your daily goal'
+                      : healthLogSummary.carbs_logged_today_g >= 0.85 * (healthLogSummary.carb_goal_g || 130)
+                      ? 'Getting close to your goal'
+                      : 'On track for today'
+                    : 'Scan a barcode or photo to track carbs'}
+                </Text>
+                {healthLogSummary?.spikes_flagged_today > 0 ? (
+                  <View style={[styles.spikeBadge, { marginTop: 6, alignSelf: 'flex-start' }]}>
+                    <Ionicons name="alert-circle" size={12} color={Colors.warning} />
+                    <Text style={styles.spikeBadgeText}>
+                      {healthLogSummary.spikes_flagged_today} spike{healthLogSummary.spikes_flagged_today === 1 ? '' : 's'} flagged
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+              <Ionicons name="chevron-forward" size={14} color={Colors.textLight} />
+            </TouchableOpacity>
+
             <View style={styles.scanButtonsRow}>
               <TouchableOpacity style={styles.scanButton} onPress={handleOpenBarcodeScan} activeOpacity={0.9}>
                 <Ionicons name="barcode-outline" size={19} color="white" />
@@ -1017,29 +1067,6 @@ export default function HomeScreen() {
                 <Text style={styles.trackButtonHint}>Track a reading in seconds</Text>
               </TouchableOpacity>
             </View>
-
-            {healthLogSummary && (healthLogSummary.meals_logged_today > 0 || healthLogSummary.readings_logged_today > 0) ? (
-              <TouchableOpacity
-                style={styles.healthLogSummaryRow}
-                onPress={() => navigation.navigate('FoodLog')}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.healthLogSummaryText}>
-                  {healthLogSummary.carbs_logged_today_g != null
-                    ? `${healthLogSummary.carbs_logged_today_g}g carbs logged today`
-                    : `${healthLogSummary.meals_logged_today} meal${healthLogSummary.meals_logged_today === 1 ? '' : 's'} logged today`}
-                </Text>
-                {healthLogSummary.spikes_flagged_today > 0 ? (
-                  <View style={styles.spikeBadge}>
-                    <Ionicons name="alert-circle" size={12} color={Colors.warning} />
-                    <Text style={styles.spikeBadgeText}>
-                      {healthLogSummary.spikes_flagged_today} spike{healthLogSummary.spikes_flagged_today === 1 ? '' : 's'} flagged
-                    </Text>
-                  </View>
-                ) : null}
-                <Ionicons name="chevron-forward" size={14} color={Colors.textLight} />
-              </TouchableOpacity>
-            ) : null}
 
             <TouchableOpacity style={styles.viewLogBadge} onPress={() => navigation.navigate('FoodLog')} activeOpacity={0.85}>
               <Ionicons name="clipboard-outline" size={14} color={Colors.secondary} />
@@ -1879,18 +1906,24 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.textLight,
   },
-  healthLogSummaryRow: {
+  carbGoalRow: {
+    marginTop: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-    paddingHorizontal: 8,
-    marginBottom: 8,
+    gap: 12,
+    padding: 10,
+    borderRadius: 16,
+    backgroundColor: Colors.background,
   },
-  healthLogSummaryText: {
-    fontSize: 12,
+  carbGoalTitle: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: Colors.text,
+  },
+  carbGoalSubtitle: {
+    marginTop: 2,
+    fontSize: 11.5,
     fontWeight: '700',
-    color: Colors.textLight,
   },
   spikeBadge: {
     flexDirection: 'row',

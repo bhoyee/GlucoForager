@@ -27,6 +27,11 @@ SPIKE_WINDOW_MIN_MINUTES = 30
 SPIKE_WINDOW_MAX_MINUTES = 180
 LOG_HISTORY_DAYS = 14
 
+# Default daily carb target shown on the home screen ring when the user hasn't set
+# their own. Matches the per-meal ceilings recipe_generation_service.py already flags
+# recipes against (30g breakfast/snack, 35g lunch/dinner) summed across a normal day.
+DEFAULT_DAILY_CARB_GOAL_G = 130
+
 OPEN_FOOD_FACTS_URL = "https://world.openfoodfacts.org/api/v2/product/{barcode}.json"
 
 # Meal/glucose logging has no AI cost, so this isn't about billing abuse the way the
@@ -312,6 +317,7 @@ def get_today_health_log_summary(
         "readings_logged_today": len(readings_today),
         "spikes_flagged_today": spikes_today,
         "carbs_logged_today_g": round(carbs_logged_today, 1) if carbs_logged_today else None,
+        "carb_goal_g": current_user.daily_carb_goal_g or DEFAULT_DAILY_CARB_GOAL_G,
         "last_reading": _serialize_reading(readings_today[0]) if readings_today else None,
     }
 
