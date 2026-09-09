@@ -7,7 +7,10 @@
 import { PostHog } from 'posthog-react-native';
 
 const API_KEY = process.env.EXPO_PUBLIC_POSTHOG_API_KEY;
-const HOST = process.env.EXPO_PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com';
+// Must match the region the PostHog project actually lives in (check the
+// dashboard URL: eu.posthog.com vs us.posthog.com) - a mismatch doesn't error,
+// it just silently accepts events into a region the project can't see.
+const HOST = process.env.EXPO_PUBLIC_POSTHOG_HOST || 'https://eu.i.posthog.com';
 
 // null when no API key is configured (e.g. local dev without analytics set up) -
 // every helper below no-ops safely in that case rather than throwing.

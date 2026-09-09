@@ -202,7 +202,10 @@ class Settings(BaseSettings):
     # PostHog product analytics (server-side events). Same Project API Key as the
     # mobile app's EXPO_PUBLIC_POSTHOG_API_KEY.
     posthog_api_key: str | None = Field(None, env="POSTHOG_API_KEY")
-    posthog_host: str = Field("https://us.i.posthog.com", env="POSTHOG_HOST")
+    # Must match the region the PostHog project actually lives in (check the
+    # dashboard URL: eu.posthog.com vs us.posthog.com) - a mismatch doesn't error,
+    # it just silently accepts events into a region your project can't see.
+    posthog_host: str = Field("https://eu.i.posthog.com", env="POSTHOG_HOST")
 
     # Payroll / payslip branding
     payroll_company_name: str = Field("GlucoForager", env="PAYROLL_COMPANY_NAME")
