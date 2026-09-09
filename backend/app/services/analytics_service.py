@@ -20,7 +20,7 @@ _client: Posthog | None = None
 if settings.posthog_api_key:
     _client = Posthog(
         api_key=settings.posthog_api_key,
-        host=settings.posthog_host or "https://us.i.posthog.com",
+        host=settings.posthog_host or "https://eu.i.posthog.com",
     )
 
 
