@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/Colors';
 import { apiFetch } from '../../utils/api';
 import { API_URL } from '../../config/api';
+import { trackEvent } from '../../utils/analytics';
 
 let Camera;
 let CameraView;
@@ -69,11 +70,18 @@ export default function BarcodeScanScreen() {
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data?.found) {
         setResult({ found: false, barcode: code });
+        trackEvent('barcode_scan_result', { found: false });
         return;
       }
       setResult({ ...data, found: true });
+      trackEvent('barcode_scan_result', {
+        found: true,
+        verdict: data?.diabetes_note?.verdict ?? null,
+        has_nutrition_data: data?.has_nutrition_data ?? null,
+      });
     } catch {
       setResult({ found: false, barcode: code });
+      trackEvent('barcode_scan_result', { found: false, error: true });
     } finally {
       setIsLooking(false);
     }
@@ -83,6 +91,7 @@ export default function BarcodeScanScreen() {
     ({ data }) => {
       if (scanLockRef.current || !data) return;
       scanLockRef.current = true;
+      trackEvent('barcode_scan_started');
       lookupBarcode(data);
     },
     [lookupBarcode]

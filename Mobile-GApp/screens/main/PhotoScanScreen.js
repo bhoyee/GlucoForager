@@ -8,6 +8,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { Colors } from '../../constants/Colors';
 import { apiFetch } from '../../utils/api';
 import { API_URL } from '../../config/api';
+import { trackEvent } from '../../utils/analytics';
 
 let Camera;
 let CameraView;
@@ -109,6 +110,7 @@ export default function PhotoScanScreen() {
     }
 
     setPhase('analyzing');
+    trackEvent('photo_scan_started');
 
     try {
       const token = await AsyncStorage.getItem('userToken');
@@ -130,10 +132,13 @@ export default function PhotoScanScreen() {
         const data = await response.json().catch(() => ({}));
         if (response.status === 402) {
           Alert.alert('Start your 7-day free trial', data?.detail?.message || 'Food scanning is a premium feature.');
+          trackEvent('photo_scan_result', { blocked_reason: 'paywall' });
         } else if (response.status === 429) {
           Alert.alert('Slow down', data?.detail?.message || 'Please try again shortly.');
+          trackEvent('photo_scan_result', { blocked_reason: 'rate_limited' });
         } else {
           Alert.alert('Scan failed', data?.detail?.message || data?.detail || 'Please try again.');
+          trackEvent('photo_scan_result', { blocked_reason: 'error' });
         }
         resetToCountdown();
         return;
@@ -141,8 +146,13 @@ export default function PhotoScanScreen() {
       const data = await response.json();
       setResult(data);
       setPhase('result');
+      trackEvent('photo_scan_result', {
+        is_food: data?.is_food ?? null,
+        verdict: data?.diabetes_note?.verdict ?? null,
+      });
     } catch {
       Alert.alert('Scan failed', 'Network request failed. Please check your connection.');
+      trackEvent('photo_scan_result', { blocked_reason: 'network_error' });
       resetToCountdown();
     }
   }, [cameraRef]);

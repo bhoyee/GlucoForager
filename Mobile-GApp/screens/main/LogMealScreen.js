@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/Colors';
 import { apiFetch } from '../../utils/api';
 import { API_URL } from '../../config/api';
+import { trackEvent } from '../../utils/analytics';
 
 export default function LogMealScreen() {
   const navigation = useNavigation();
@@ -44,6 +45,8 @@ export default function LogMealScreen() {
         Alert.alert('Unable to log meal', data?.detail?.message || data?.detail || 'Please try again.');
         return;
       }
+      // Description text itself is never sent - only that a meal was logged.
+      trackEvent('meal_logged', { source: 'manual' });
       navigation.goBack();
     } catch {
       Alert.alert('Unable to log meal', 'Network request failed. Please check your connection.');

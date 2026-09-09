@@ -22,6 +22,7 @@ import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { useAuth } from '../../context/authContext';
 import CarbGoalRing, { getCarbGoalRingColor } from '../../components/CarbGoalRing';
 import { getCarbGoalTitle, getCarbGoalSubtitle, getCarbGoalDisclaimer } from '../../utils/carbGoal';
+import { trackEvent } from '../../utils/analytics';
 
 const GOAL_RANGE = { min: 20, max: 400 };
 
@@ -110,6 +111,10 @@ export default function CarbGoalScreen() {
         Alert.alert('Unable to save', data?.detail?.message || data?.detail || 'Please try again.');
         return;
       }
+      trackEvent('carb_goal_target_saved', {
+        reset_to_suggested: rawValue === 0,
+        carb_goal_mode: carbGoalMode,
+      });
       await loadData();
     } catch {
       Alert.alert('Unable to save', 'Network request failed. Please check your connection.');

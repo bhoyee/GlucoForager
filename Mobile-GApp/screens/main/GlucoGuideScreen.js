@@ -17,6 +17,7 @@ import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
 import { useAuth } from '../../context/authContext';
 import { Colors } from '../../constants/Colors';
+import { trackEvent } from '../../utils/analytics';
 
 const QUICK_PROMPTS = [
   'What can I eat for steady blood sugar today?',
@@ -306,6 +307,9 @@ export default function GlucoGuideScreen({ navigation }) {
     setMessages((current) => [...current, userMessage, { id: assistantId, role: 'assistant', content: '' }]);
     setLoading(true);
     scrollToEnd();
+    // Message content is never sent - it may contain personal health details the
+    // user typed - only that a message was sent, and whether it was a quick prompt.
+    trackEvent('glucoguide_message_sent', { from_quick_prompt: Boolean(overrideText) });
 
     const payload = {
       message: text,
