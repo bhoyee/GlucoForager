@@ -14,6 +14,7 @@ import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
 import { configureRevenueCat, getCustomerInfo, getOfferings, getPaywallOffering, isPremiumEntitled, isRevenueCatConfigured, presentCustomerCenter, presentPaywall, restorePurchases } from '../../utils/revenuecat';
 import { disableMealReminders, enableMealRemindersAndSchedule, getMealRemindersEnabled, setMealRemindersPrompted } from '../../utils/mealReminders';
+import { trackEvent } from '../../utils/analytics';
 import { disableExpoPushTokens, registerExpoPushToken } from '../../utils/pushToken';
 import { addDebugLog } from '../../utils/debugLogger';
 
@@ -341,6 +342,7 @@ export default function ProfileScreen() {
       setPremiumOfferingId('');
       setPremiumProductId('');
       setPremiumModalVisible(true);
+      trackEvent('paywall_shown');
 
       if (!revenueCatReady) {
         setPremiumModalError(
@@ -450,6 +452,7 @@ export default function ProfileScreen() {
         const latestProfile = await refreshUserProfile?.();
         if (latestProfile?.has_feature_access === true || latestProfile?.subscription_tier === 'premium') {
           setPremiumModalVisible(false);
+          trackEvent('subscription_purchased');
           Alert.alert('Success', 'Premium unlocked.');
           return;
         }
@@ -488,6 +491,7 @@ export default function ProfileScreen() {
         const latestProfile = await refreshUserProfile?.();
         if (latestProfile?.has_feature_access === true || latestProfile?.subscription_tier === 'premium') {
           setPremiumModalVisible(false);
+          trackEvent('subscription_restored');
           Alert.alert('Restored', 'Your Premium subscription has been restored.');
           return;
         }

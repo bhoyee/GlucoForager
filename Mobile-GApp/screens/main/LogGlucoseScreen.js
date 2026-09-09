@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/Colors';
 import { apiFetch } from '../../utils/api';
 import { API_URL } from '../../config/api';
+import { trackEvent } from '../../utils/analytics';
 
 const UNIT_PREF_KEY = 'glucose_unit_pref_v1';
 const MGDL_PER_MMOL = 18.0182;
@@ -85,6 +86,9 @@ export default function LogGlucoseScreen() {
         return;
       }
       const data = await response.json();
+      // The actual reading value is never sent - only that a reading was logged,
+      // and whether it was flagged as a spike (a state, not a health value).
+      trackEvent('glucose_logged', { unit, is_spike: Boolean(data?.is_spike) });
       if (data?.is_spike && data?.flagged_meal) {
         Alert.alert(
           'Reading logged',

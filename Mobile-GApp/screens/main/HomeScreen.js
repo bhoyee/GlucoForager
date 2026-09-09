@@ -32,6 +32,7 @@ import { getTodayTip } from '../../utils/todayTips';
 import { scheduleDailyPlanNotifications } from '../../utils/mealReminders';
 import CarbGoalRing, { getCarbGoalRingColor } from '../../components/CarbGoalRing';
 import { getCarbGoalTitle, getCarbGoalSubtitle, getCarbGoalDisclaimer } from '../../utils/carbGoal';
+import { trackEvent } from '../../utils/analytics';
 
 const LAST_INGREDIENTS_KEY = 'last_used_ingredients_v1';
 
@@ -1006,7 +1007,10 @@ export default function HomeScreen() {
 
             <TouchableOpacity
               style={styles.carbGoalRow}
-              onPress={() => navigation.navigate('CarbGoal')}
+              onPress={() => {
+                trackEvent('carb_goal_ring_tapped', { carb_goal_mode: carbGoalMode });
+                navigation.navigate('CarbGoal');
+              }}
               activeOpacity={0.7}
             >
               <CarbGoalRing carbsLogged={carbsLoggedToday} carbGoal={carbGoalToday} mode={carbGoalMode} />
