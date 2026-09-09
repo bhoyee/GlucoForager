@@ -37,7 +37,11 @@ export default function BarcodeScanScreen() {
 
   const [hasPermission, setHasPermission] = useState(null);
   const [torchEnabled, setTorchEnabled] = useState(false);
+  const [focusSettled, setFocusSettled] = useState(false);
   const [result, setResult] = useState(null);
+  const [isLooking, setIsLooking] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const scanLockRef = useRef(false);
 
   // A lit torch measurably slows down how fast the OS actually releases the camera
   // session on teardown - leaving it on while switching to Photo scan was causing
@@ -50,9 +54,20 @@ export default function BarcodeScanScreen() {
     }
     return () => setTorchEnabled(false);
   }, [isFocused]);
-  const [isLooking, setIsLooking] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const scanLockRef = useRef(false);
+
+  // Turning off the torch on blur wasn't enough on its own - the previous screen's
+  // camera hardware can still be mid-teardown (torch, transition animation, or just
+  // OS-level release lag) at the exact moment this screen mounts its own CameraView.
+  // Don't mount the camera until a fixed grace period after gaining focus, so
+  // whatever was using it before has unconditionally had time to let go.
+  useEffect(() => {
+    if (!isFocused) {
+      setFocusSettled(false);
+      return;
+    }
+    const timer = setTimeout(() => setFocusSettled(true), 500);
+    return () => clearTimeout(timer);
+  }, [isFocused]);
 
   useEffect(() => {
     const requestPermission = async () => {
@@ -194,7 +209,7 @@ export default function BarcodeScanScreen() {
             Camera access is needed to scan a barcode. You can enable it in your device settings.
           </Text>
         </View>
-      ) : isFocused && hasPermission ? (
+      ) : isFocused && focusSettled && hasPermission ? (
         <CameraView
           style={StyleSheet.absoluteFill}
           facing="back"
@@ -202,9 +217,14 @@ export default function BarcodeScanScreen() {
           barcodeScannerSettings={{ barcodeTypes: BARCODE_TYPES }}
           onBarcodeScanned={result || isLooking ? undefined : handleBarcodeScanned}
         />
+      ) : isFocused && hasPermission ? (
+        <View style={styles.centerMessage}>
+          <ActivityIndicator size="large" color="white" />
+          <Text style={styles.centerMessageText}>Starting camera...</Text>
+        </View>
       ) : null}
 
-      {!result && !isLooking ? (
+      {!result && !isLooking && focusSettled ? (
         <View style={styles.scanFrameWrap} pointerEvents="none">
           <View style={styles.scanFrame} />
           <Text style={styles.scanHint}>Point the camera at a product's barcode</Text>

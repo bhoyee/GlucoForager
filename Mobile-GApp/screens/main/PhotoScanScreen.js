@@ -40,6 +40,7 @@ export default function PhotoScanScreen() {
   const [cameraRef, setCameraRef] = useState(null);
   const [cameraReady, setCameraReady] = useState(false);
   const [torchEnabled, setTorchEnabled] = useState(false);
+  const [focusSettled, setFocusSettled] = useState(false);
   // 'countdown' | 'capturing' | 'analyzing' | 'result'
   const [phase, setPhase] = useState('countdown');
   const [countdown, setCountdown] = useState(HOLD_STEADY_SECONDS);
@@ -58,6 +59,23 @@ export default function PhotoScanScreen() {
       setTorchEnabled(false);
     }
     return () => setTorchEnabled(false);
+  }, [isFocused]);
+
+  // Turning off the torch on blur wasn't enough on its own - switching straight from
+  // Barcode still failed with "camera may still be starting up" because the OLD
+  // screen's camera hardware can still be mid-teardown (torch, animation transition,
+  // or just OS-level release lag) at the exact moment this screen's onCameraReady
+  // fires, which only reflects this CameraView's own init, not the previous
+  // consumer's release. Don't even mount the camera until a fixed grace period after
+  // gaining focus, so whatever was using it before has unconditionally had time to
+  // let go, regardless of the specific reason it was slow.
+  useEffect(() => {
+    if (!isFocused) {
+      setFocusSettled(false);
+      return;
+    }
+    const timer = setTimeout(() => setFocusSettled(true), 500);
+    return () => clearTimeout(timer);
   }, [isFocused]);
 
   useEffect(() => {
@@ -293,7 +311,7 @@ export default function PhotoScanScreen() {
           </Text>
         </View>
       ) : phase === 'countdown' || phase === 'capturing' ? (
-        isFocused ? (
+        isFocused && focusSettled ? (
           <CameraView
             ref={(ref) => setCameraRef(ref)}
             style={StyleSheet.absoluteFill}
