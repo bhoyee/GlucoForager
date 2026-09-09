@@ -49,6 +49,17 @@ export default function PhotoScanScreen() {
   const scanLineAnim = useRef(new Animated.Value(0)).current;
   const countdownTimerRef = useRef(null);
 
+  // A lit torch measurably slows down how fast the OS actually releases the camera
+  // session on teardown - leaving it on while switching modes can make the next
+  // screen's camera report ready before the hardware has genuinely finished
+  // releasing. Turn it off the moment this screen loses focus, before the switch.
+  useEffect(() => {
+    if (!isFocused) {
+      setTorchEnabled(false);
+    }
+    return () => setTorchEnabled(false);
+  }, [isFocused]);
+
   useEffect(() => {
     const requestPermission = async () => {
       if (!Camera?.requestCameraPermissionsAsync && !Camera?.Camera?.requestCameraPermissionsAsync) {
