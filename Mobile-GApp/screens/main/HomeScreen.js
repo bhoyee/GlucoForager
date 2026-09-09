@@ -1016,7 +1016,7 @@ export default function HomeScreen() {
               }}
               activeOpacity={0.7}
             >
-              <CarbGoalRing carbsLogged={carbsLoggedToday} carbGoal={carbGoalToday} mode={carbGoalMode} size={72} />
+              <CarbGoalRing carbsLogged={carbsLoggedToday} carbGoal={carbGoalToday} mode={carbGoalMode} size={92} />
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                   <Text style={styles.carbGoalTitle} numberOfLines={1}>
