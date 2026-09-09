@@ -16,6 +16,7 @@ from PIL import Image
 from ..core.config import settings
 from ..core.constants import EAT_NOW_PROMPT, INGREDIENT_RECIPES_PROMPT, OPENAI_PROMPT
 from ..services.cache_service import CacheService
+from ..services.r2_storage_service import r2_upload_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -591,16 +592,26 @@ class AIRecipeGenerator:
 
     def _store_generated_image(self, image_bytes: bytes, recipe: Dict[str, Any], *, size: int) -> str:
         digest = self._image_cache_key(recipe).replace("img:", "")
-        folder = Path(settings.uploads_dir) / "recipe-images"
-        folder.mkdir(parents=True, exist_ok=True)
         filename = f"{digest}-{int(size)}.jpg"
-        path = folder / filename
 
         img = Image.open(io.BytesIO(image_bytes))
         img = img.convert("RGB")
         target = 512 if int(size) not in (512, 768, 1024) else int(size)
         if img.size[0] != target or img.size[1] != target:
             img = img.resize((target, target), Image.Resampling.LANCZOS)
+
+        # Shares RECIPE_UPLOAD_STORAGE_BACKEND with the manual recipe-image upload
+        # endpoint - "recipe images" (AI-generated or manually uploaded) are one
+        # concept with one storage choice.
+        backend = str(settings.recipe_upload_storage_backend or "local").strip().lower()
+        if backend == "r2":
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=82, optimize=True, progressive=True)
+            return r2_upload_bytes(key=f"recipe-images/{filename}", data=buf.getvalue(), content_type="image/jpeg")
+
+        folder = Path(settings.uploads_dir) / "recipe-images"
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / filename
         img.save(path, format="JPEG", quality=82, optimize=True, progressive=True)
 
         # Always return a path under `/uploads/...` so callers can normalize it to the
