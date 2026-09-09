@@ -39,6 +39,7 @@ export default function PhotoScanScreen() {
   const [hasPermission, setHasPermission] = useState(null);
   const [cameraRef, setCameraRef] = useState(null);
   const [cameraReady, setCameraReady] = useState(false);
+  const [torchEnabled, setTorchEnabled] = useState(false);
   // 'countdown' | 'capturing' | 'analyzing' | 'result'
   const [phase, setPhase] = useState('countdown');
   const [countdown, setCountdown] = useState(HOLD_STEADY_SECONDS);
@@ -264,7 +265,13 @@ export default function PhotoScanScreen() {
             <Text style={styles.modeOptionTextActive}>Photo</Text>
           </View>
         </View>
-        <View style={styles.headerButton} />
+        <TouchableOpacity
+          style={styles.headerButton}
+          onPress={() => setTorchEnabled((prev) => !prev)}
+          disabled={hasPermission !== true}
+        >
+          <Ionicons name={torchEnabled ? 'flash' : 'flash-off'} size={22} color="white" />
+        </TouchableOpacity>
       </View>
 
       {hasPermission === false || !CameraView ? (
@@ -280,6 +287,7 @@ export default function PhotoScanScreen() {
             ref={(ref) => setCameraRef(ref)}
             style={StyleSheet.absoluteFill}
             facing="back"
+            enableTorch={torchEnabled}
             onCameraReady={() => setCameraReady(true)}
           />
         ) : null

@@ -36,6 +36,7 @@ export default function BarcodeScanScreen() {
   const insets = useSafeAreaInsets();
 
   const [hasPermission, setHasPermission] = useState(null);
+  const [torchEnabled, setTorchEnabled] = useState(false);
   const [result, setResult] = useState(null);
   const [isLooking, setIsLooking] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -165,7 +166,13 @@ export default function BarcodeScanScreen() {
             <Text style={styles.modeOptionText}>Photo</Text>
           </TouchableOpacity>
         </View>
-        <View style={styles.headerButton} />
+        <TouchableOpacity
+          style={styles.headerButton}
+          onPress={() => setTorchEnabled((prev) => !prev)}
+          disabled={hasPermission !== true}
+        >
+          <Ionicons name={torchEnabled ? 'flash' : 'flash-off'} size={22} color="white" />
+        </TouchableOpacity>
       </View>
 
       {hasPermission === false || !CameraView ? (
@@ -179,6 +186,7 @@ export default function BarcodeScanScreen() {
         <CameraView
           style={StyleSheet.absoluteFill}
           facing="back"
+          enableTorch={torchEnabled}
           barcodeScannerSettings={{ barcodeTypes: BARCODE_TYPES }}
           onBarcodeScanned={result || isLooking ? undefined : handleBarcodeScanned}
         />
