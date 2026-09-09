@@ -1016,7 +1016,7 @@ export default function HomeScreen() {
               }}
               activeOpacity={0.7}
             >
-              <CarbGoalRing carbsLogged={carbsLoggedToday} carbGoal={carbGoalToday} mode={carbGoalMode} />
+              <CarbGoalRing carbsLogged={carbsLoggedToday} carbGoal={carbGoalToday} mode={carbGoalMode} size={72} />
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                   <Text style={styles.carbGoalTitle} numberOfLines={1}>
@@ -1064,14 +1064,12 @@ export default function HomeScreen() {
                   <Ionicons name="restaurant-outline" size={18} color={Colors.primary} />
                   <Text style={styles.trackButtonTitle}>Log meal</Text>
                 </View>
-                <Text style={styles.trackButtonHint}>Type what you ate</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.trackButton} onPress={handleOpenLogGlucose} activeOpacity={0.85}>
                 <View style={styles.trackButtonTop}>
                   <Ionicons name="water-outline" size={18} color={Colors.primary} />
                   <Text style={styles.trackButtonTitle}>Log glucose</Text>
                 </View>
-                <Text style={styles.trackButtonHint}>Track a reading in seconds</Text>
               </TouchableOpacity>
             </View>
 
@@ -1906,12 +1904,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     color: Colors.primary,
-  },
-  trackButtonHint: {
-    marginTop: 6,
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.textLight,
   },
   carbGoalRow: {
     marginTop: 12,
