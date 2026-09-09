@@ -1915,13 +1915,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   carbGoalTitle: {
-    fontSize: 13.5,
+    fontSize: 12,
     fontWeight: '800',
     color: Colors.text,
   },
   carbGoalSubtitle: {
     marginTop: 2,
-    fontSize: 11.5,
+    fontSize: 10.5,
     fontWeight: '700',
   },
   spikeBadge: {
