@@ -38,6 +38,18 @@ export default function BarcodeScanScreen() {
   const [hasPermission, setHasPermission] = useState(null);
   const [torchEnabled, setTorchEnabled] = useState(false);
   const [result, setResult] = useState(null);
+
+  // A lit torch measurably slows down how fast the OS actually releases the camera
+  // session on teardown - leaving it on while switching to Photo scan was causing
+  // "couldn't capture the photo" there, since the new screen's onCameraReady fires
+  // before the old camera+torch have genuinely finished releasing. Turn it off the
+  // moment this screen loses focus, before the switch/unmount happens.
+  useEffect(() => {
+    if (!isFocused) {
+      setTorchEnabled(false);
+    }
+    return () => setTorchEnabled(false);
+  }, [isFocused]);
   const [isLooking, setIsLooking] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const scanLockRef = useRef(false);
