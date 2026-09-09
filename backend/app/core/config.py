@@ -199,6 +199,11 @@ class Settings(BaseSettings):
     r2_bucket_name: str | None = Field(None, env="R2_BUCKET_NAME")
     r2_public_base_url: str | None = Field(None, env="R2_PUBLIC_BASE_URL")
 
+    # PostHog product analytics (server-side events). Same Project API Key as the
+    # mobile app's EXPO_PUBLIC_POSTHOG_API_KEY.
+    posthog_api_key: str | None = Field(None, env="POSTHOG_API_KEY")
+    posthog_host: str = Field("https://us.i.posthog.com", env="POSTHOG_HOST")
+
     # Payroll / payslip branding
     payroll_company_name: str = Field("GlucoForager", env="PAYROLL_COMPANY_NAME")
     payroll_holding_name: str = Field("Bhoyee Global Enterprise", env="PAYROLL_HOLDING_NAME")

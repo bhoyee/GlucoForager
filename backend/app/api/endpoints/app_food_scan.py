@@ -11,6 +11,7 @@ from ...api.dependencies import get_current_user, require_ai_feature_access
 from ...database import get_db
 from ...models.user import User
 from ...services.ai_vision import AIVisionService
+from ...services.analytics_service import track_event
 from ...services.cache_service import CacheService
 from ...services.cost_tracker import record_ai_request
 from ...services.diabetes_food_note import build_diabetes_note
@@ -77,6 +78,7 @@ def scan_food_photo(
     )
 
     if not bool(result.get("is_food")):
+        track_event(current_user.public_id, "photo_scan_verdict", {"tier": tier, "is_food": False})
         return {"is_food": False}
 
     carbs = _num(result.get("carbs_g"))
@@ -85,6 +87,11 @@ def scan_food_photo(
     calories = _num(result.get("calories"))
 
     diabetes_note = build_diabetes_note(carbs_g=carbs, sugars_g=sugars, fiber_g=fiber)
+    track_event(
+        current_user.public_id,
+        "photo_scan_verdict",
+        {"tier": tier, "is_food": True, "verdict": diabetes_note.get("verdict")},
+    )
 
     return {
         "is_food": True,
