@@ -52,7 +52,7 @@ def store_recipe_image_upload(file: UploadFile, *, request_base_url: str) -> str
     if backend == "r2":
         file.file.seek(0)
         data = file.file.read()
-        return r2_upload_bytes(key=f"recipes/{filename}", data=data, content_type=_CONTENT_TYPES[extension])
+        return r2_upload_bytes(key=f"adminrecipesimage/{filename}", data=data, content_type=_CONTENT_TYPES[extension])
 
     if backend == "ftp":
         base_url = _normalize_public_base_url(settings.recipe_remote_base_url or "")

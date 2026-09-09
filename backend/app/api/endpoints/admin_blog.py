@@ -291,7 +291,7 @@ async def upload_blog_image(
             ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
             ".webp": "image/webp", ".gif": "image/gif",
         }.get(suffix, content_type or "application/octet-stream")
-        url = r2_upload_bytes(key=f"blog/{name}", data=data, content_type=upload_content_type)
+        url = r2_upload_bytes(key=f"blogimage/{name}", data=data, content_type=upload_content_type)
         return {"ok": True, "url": url}
 
     folder = Path(settings.uploads_dir) / "blog"

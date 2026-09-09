@@ -607,7 +607,7 @@ class AIRecipeGenerator:
         if backend == "r2":
             buf = io.BytesIO()
             img.save(buf, format="JPEG", quality=82, optimize=True, progressive=True)
-            return r2_upload_bytes(key=f"recipe-images/{filename}", data=buf.getvalue(), content_type="image/jpeg")
+            return r2_upload_bytes(key=f"recipethumbnails/{filename}", data=buf.getvalue(), content_type="image/jpeg")
 
         folder = Path(settings.uploads_dir) / "recipe-images"
         folder.mkdir(parents=True, exist_ok=True)

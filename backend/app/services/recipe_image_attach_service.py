@@ -49,7 +49,7 @@ def _is_durable_recipe_image_url(image_url: str) -> bool:
     # without this, every cached R2 URL would be treated as stale and regenerated on
     # every request once RECIPE_UPLOAD_STORAGE_BACKEND=r2 is set, wasting image spend.
     r2_base = _normalize_base_url(core_settings.r2_public_base_url)
-    if r2_base and value.startswith(f"{r2_base}/recipe-images/"):
+    if r2_base and value.startswith(f"{r2_base}/recipethumbnails/"):
         return True
     path = urlsplit(value).path if value.startswith(("http://", "https://")) else value
     return isinstance(path, str) and path.startswith("/uploads/recipe-images/")
