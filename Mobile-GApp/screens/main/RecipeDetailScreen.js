@@ -20,6 +20,7 @@ import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
 import { getRecipeImageSettings } from '../../utils/recipeImageSettings';
+import { trackEvent } from '../../utils/analytics';
 import { getCachedRecipeImageUrl, setCachedRecipeImageUrl } from '../../utils/recipeImageCache';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import RecipePlaceholder from '../../assets/images/recipe-placeholder.jpeg';
@@ -651,6 +652,7 @@ const RecipeDetailsScreen = () => {
         return;
       }
       setRecipe({ ...recipe, isBookmarked: true });
+      trackEvent('recipe_favorited');
       Alert.alert('Saved', 'Recipe added to favorites.');
     } catch (error) {
       Alert.alert('Error', 'Unable to save favorite right now.');

@@ -8,6 +8,7 @@ import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
 import { Colors } from '../../constants/Colors';
+import { trackEvent } from '../../utils/analytics';
 import RecipePlaceholder from '../../assets/images/recipe-placeholder.jpeg';
 
 const isPlaceholderImage = (item) => {
@@ -528,12 +529,15 @@ export default function DailyPlanScreen() {
                 : 'Please try again.';
 
         if (response.status === 429) {
+          trackEvent('meal_plan_generation_blocked', { reason: 'rate_limited' });
           Alert.alert('Upgrade to Premium', String(message));
         } else {
+          trackEvent('meal_plan_generation_blocked', { reason: 'error' });
           Alert.alert('Could not generate plan', String(message));
         }
         return;
       }
+      trackEvent('meal_plan_generated', { regenerated: shouldForce });
       setPlan(data?.plan || null);
       setSelectedMeal(null);
     } finally {
