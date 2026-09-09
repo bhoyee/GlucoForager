@@ -23,6 +23,7 @@ from ...services.cache_service import CacheService
 from ...services.email_service import send_blog_post_newsletter_email, send_blog_post_to_user_email
 from ...services.html_sanitizer import RICH_CONTENT_ALLOWED_ATTRS, RICH_CONTENT_ALLOWED_TAGS, sanitize_html
 from ...services.newsletter_tokens import make_unsubscribe_token
+from ...services.r2_storage_service import r2_upload_bytes
 from ...services.staff_rbac_service import StaffRBACService
 
 router = APIRouter(prefix="/admin/blog", tags=["admin-blog"])
@@ -275,17 +276,26 @@ async def upload_blog_image(
     data = await file.read()
     if not data:
         raise HTTPException(status_code=400, detail="Empty file")
-    if len(data) > 5 * 1024 * 1024:
+    if len(data) > int(settings.blog_max_image_bytes):
         raise HTTPException(status_code=413, detail="Image too large (max 5MB)")
 
     original = (file.filename or "").strip()
     suffix = Path(original).suffix.lower()
     if suffix not in {".png", ".jpg", ".jpeg", ".webp", ".gif"}:
         suffix = ".png" if content_type.endswith("png") else ".jpg"
+    name = f"blog_{uuid.uuid4().hex}{suffix}"
+
+    backend = str(settings.blog_image_storage_backend or "local").strip().lower()
+    if backend == "r2":
+        upload_content_type = {
+            ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+            ".webp": "image/webp", ".gif": "image/gif",
+        }.get(suffix, content_type or "application/octet-stream")
+        url = r2_upload_bytes(key=f"blog/{name}", data=data, content_type=upload_content_type)
+        return {"ok": True, "url": url}
 
     folder = Path(settings.uploads_dir) / "blog"
     folder.mkdir(parents=True, exist_ok=True)
-    name = f"blog_{uuid.uuid4().hex}{suffix}"
     path = folder / name
     path.write_bytes(data)
 
