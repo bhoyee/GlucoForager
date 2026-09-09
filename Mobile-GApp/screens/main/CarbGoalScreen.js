@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     paddingVertical: 24,
     paddingHorizontal: 16,
-    marginBottom: 24,
+    marginBottom: 12,
   },
   ringTitle: { marginTop: 16, fontSize: 17, fontWeight: '900', color: Colors.text, textAlign: 'center' },
   ringSubtitle: { marginTop: 4, fontSize: 13, fontWeight: '700', textAlign: 'center' },
@@ -284,7 +284,7 @@ const styles = StyleSheet.create({
   inputUnit: { fontSize: 14, fontWeight: '700', color: Colors.textLight },
   hint: { marginTop: 10, fontSize: 12, lineHeight: 18, color: Colors.textLight, fontWeight: '600' },
   saveButton: {
-    marginTop: 20,
+    marginTop: 12,
     height: 52,
     borderRadius: 16,
     backgroundColor: Colors.primary,
