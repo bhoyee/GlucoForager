@@ -658,6 +658,7 @@ export default function HomeScreen() {
       setTrialDaysLeft(data.trial_days_left ?? null);
 
       if (allowed) {
+        trackEvent('get_recipes_started', { source });
         if (source === 'manual') {
           navigation.navigate('ManualInput');
         } else if (source === 'surprise') {
@@ -677,6 +678,7 @@ export default function HomeScreen() {
           navigation.navigate('Scan', { screen: 'ScanMain' });
         }
       } else {
+        trackEvent('get_recipes_blocked', { source, reason: 'paywall' });
         Alert.alert(
           'Start your 7-day free trial',
           data?.detail?.message || 'Start your 7-day free trial to use scan and recipe generation.',
@@ -711,6 +713,7 @@ export default function HomeScreen() {
   };
 
   const handleUseWhatIHave = async () => {
+    trackEvent('get_recipes_started', { source: 'use_what_i_have' });
     try {
       const raw = await AsyncStorage.getItem(LAST_INGREDIENTS_KEY);
       const list = raw ? JSON.parse(raw) : null;
