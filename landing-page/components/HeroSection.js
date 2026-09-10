@@ -85,8 +85,8 @@ export default function HeroSection({ onDownloadClick }) {
               <Image
                 src="/screenshots/home-hero.png"
                 alt="GlucoForager home screen with today's carb goal, and a barcode scan showing a diabetes-friendly verdict"
-                width={1149}
-                height={1369}
+                width={458}
+                height={545}
                 sizes="(min-width: 1024px) 500px, 90vw"
                 priority
                 className="h-auto w-full drop-shadow-2xl"
