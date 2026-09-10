@@ -23,7 +23,7 @@ export const faqs = [
   {
     question: "What features does GlucoForager include?",
     answer:
-      "GlucoForager covers the full flow from ingredients to meal: get recipes by scanning your fridge or pantry, typing what you have, or tapping Surprise Me for instant diabetes-friendly ideas with no input needed; daily tips and challenges to build steady habits; food swaps for smarter alternatives to familiar foods; a shopping list you can build from scratch or straight from a recipe; GlucoGuide AI for quick food questions and everyday guidance; favourites and recipe history to reuse what works; and a weekly recap of your recipes, streak, and check-ins. Premium adds the Daily Meal Planner for a full day's breakfast, lunch, dinner, and snack.",
+      "GlucoForager covers both cooking and tracking. To decide what to eat: get recipes by scanning your fridge or pantry, typing what you have, or tapping Surprise Me for instant diabetes-friendly ideas; food swaps for smarter alternatives to familiar foods; a shopping list; and a Premium Daily Meal Planner for a full day's breakfast, lunch, dinner, and snack. To track how food affects you: scan a barcode or take a photo of any food for an instant diabetes-friendly verdict with carbs, sugar, and fibre; log meals and glucose readings, with automatic flagging when a reading follows a meal by more than expected; and see your daily carb target as a simple ring on your home screen, personalised to your diagnosis (Type 1, Type 2, prediabetes, or gestational). GlucoGuide AI is available throughout for quick food questions, and daily tips, challenges, favourites, and a weekly recap help you build steady habits over time.",
     category: "Features",
   },
   {
@@ -65,7 +65,7 @@ export const faqs = [
   {
     question: "Is my personal health data safe?",
     answer:
-      "We prioritize your privacy. We don't store personal health information. Your food preferences and saved recipes (if any) are kept secure, and we comply with privacy regulations.",
+      "We take your privacy seriously. If you choose to log glucose readings or meals, that data is stored securely and used only to power features like spike flagging and your daily carb target - it is never sold or shared with third parties. Your food preferences, saved recipes, and logged health data are all kept private, and you can delete your account and its data at any time.",
     category: "Privacy",
   },
   {
@@ -89,7 +89,7 @@ export const faqs = [
   {
     question: "Do you offer nutritional information?",
     answer:
-      "Yes. GlucoForager includes per-meal nutrition estimates (e.g., calories, carbs, protein, and fibre) to help you compare options. For medical or highly precise nutrition tracking, use a dedicated nutrition app.",
+      "Yes. Every recipe includes per-meal nutrition estimates (calories, carbs, protein, and fibre), and scanning a barcode or food photo gives you carbs, sugar, and fibre for that specific item along with a diabetes-friendly verdict. These are estimates for everyday decisions, not a substitute for medical-grade tracking - always confirm with your healthcare provider for clinical decisions.",
     category: "Features",
   },
 ];

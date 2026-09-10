@@ -14,6 +14,7 @@ import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
 import { configureRevenueCat, getCustomerInfo, getOfferings, getPaywallOffering, isPremiumEntitled, isRevenueCatConfigured, presentCustomerCenter, presentPaywall, restorePurchases } from '../../utils/revenuecat';
 import { disableMealReminders, enableMealRemindersAndSchedule, getMealRemindersEnabled, setMealRemindersPrompted } from '../../utils/mealReminders';
+import { trackEvent } from '../../utils/analytics';
 import { disableExpoPushTokens, registerExpoPushToken } from '../../utils/pushToken';
 import { addDebugLog } from '../../utils/debugLogger';
 
@@ -341,6 +342,7 @@ export default function ProfileScreen() {
       setPremiumOfferingId('');
       setPremiumProductId('');
       setPremiumModalVisible(true);
+      trackEvent('paywall_shown');
 
       if (!revenueCatReady) {
         setPremiumModalError(
@@ -450,6 +452,7 @@ export default function ProfileScreen() {
         const latestProfile = await refreshUserProfile?.();
         if (latestProfile?.has_feature_access === true || latestProfile?.subscription_tier === 'premium') {
           setPremiumModalVisible(false);
+          trackEvent('subscription_purchased');
           Alert.alert('Success', 'Premium unlocked.');
           return;
         }
@@ -488,6 +491,7 @@ export default function ProfileScreen() {
         const latestProfile = await refreshUserProfile?.();
         if (latestProfile?.has_feature_access === true || latestProfile?.subscription_tier === 'premium') {
           setPremiumModalVisible(false);
+          trackEvent('subscription_restored');
           Alert.alert('Restored', 'Your Premium subscription has been restored.');
           return;
         }
@@ -616,12 +620,17 @@ export default function ProfileScreen() {
         >
           <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
             <View style={styles.header}>
-              <View>
-                <Text style={styles.title}>Profile</Text>
-                <Text style={styles.headerSubtitle}>Account, preferences, and reminders</Text>
+              <View style={styles.headerLeft}>
+                <TouchableOpacity style={styles.backButton} onPress={() => navigation.navigate('Home')}>
+                  <Ionicons name="arrow-back" size={20} color="white" />
+                </TouchableOpacity>
+                <View style={styles.headerTitleBlock}>
+                  <Text style={styles.title} numberOfLines={1}>Profile</Text>
+                  <Text style={styles.headerSubtitle} numberOfLines={1}>Account, preferences, and reminders</Text>
+                </View>
               </View>
               <TouchableOpacity style={styles.logoutButton} onPress={signOut}>
-                <Text style={styles.logoutText}>Logout</Text>
+                <Text style={styles.logoutText} numberOfLines={1}>Logout</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -984,6 +993,26 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  headerLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginRight: 12,
+  },
+  headerTitleBlock: {
+    flexShrink: 1,
+    minWidth: 0,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    flexShrink: 0,
+  },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
@@ -996,6 +1025,9 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.78)',
   },
   logoutButton: {
+    flexShrink: 0,
+    minWidth: 88,
+    alignItems: 'center',
     borderRadius: 999,
     paddingHorizontal: 14,
     paddingVertical: 9,

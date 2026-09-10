@@ -17,6 +17,7 @@ import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
 import { useAuth } from '../../context/authContext';
 import { Colors } from '../../constants/Colors';
+import { trackEvent } from '../../utils/analytics';
 
 const QUICK_PROMPTS = [
   'What can I eat for steady blood sugar today?',
@@ -306,6 +307,9 @@ export default function GlucoGuideScreen({ navigation }) {
     setMessages((current) => [...current, userMessage, { id: assistantId, role: 'assistant', content: '' }]);
     setLoading(true);
     scrollToEnd();
+    // Message content is never sent - it may contain personal health details the
+    // user typed - only that a message was sent, and whether it was a quick prompt.
+    trackEvent('glucoguide_message_sent', { from_quick_prompt: Boolean(overrideText) });
 
     const payload = {
       message: text,
@@ -421,9 +425,9 @@ export default function GlucoGuideScreen({ navigation }) {
         keyboardShouldPersistTaps="handled"
       >
         <View style={[styles.header, { paddingTop: Math.max(insets.top, 14) + 8 }]}>
-          <View style={styles.headerIcon}>
-            <Ionicons name="sparkles-outline" size={20} color="white" />
-          </View>
+          <Pressable style={styles.backButton} onPress={() => navigation.navigate('Home')}>
+            <Ionicons name="arrow-back" size={20} color="white" />
+          </Pressable>
           <View style={styles.headerCopy}>
             <Text style={styles.headerTitle}>GlucoGuide AI</Text>
             <Text style={styles.headerSubtitle}>Diabetes-aware food and lifestyle support</Text>
@@ -577,15 +581,13 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     elevation: 8,
   },
-  headerIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.16)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
   },
   headerCopy: {
     flex: 1,

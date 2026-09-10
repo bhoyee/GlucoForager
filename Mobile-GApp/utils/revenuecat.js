@@ -1,19 +1,43 @@
-import Purchases from 'react-native-purchases';
-import PurchasesUI from 'react-native-purchases-ui';
 import { Platform } from 'react-native';
 import { REVENUECAT_API_KEY, REVENUECAT_ENTITLEMENT, REVENUECAT_OFFERING_ID } from '../config/revenuecat';
 import { addDebugLog } from './debugLogger';
+
+// Native modules - not present in Expo Go, only in a real dev/production build. Guarded the
+// same way expo-camera is in ScanScreen.js, so the app doesn't crash at bundle-load time when
+// running under Expo Go for quick UI testing of unrelated screens.
+let Purchases;
+let PurchasesUI;
+try {
+  Purchases = require('react-native-purchases')?.default ?? null;
+  PurchasesUI = require('react-native-purchases-ui')?.default ?? null;
+} catch (error) {
+  Purchases = null;
+  PurchasesUI = null;
+}
 
 let configured = false;
 let currentUserId = null;
 let hasLoggedInUser = false;
 let missingKeyLogged = false;
+let missingModuleLogged = false;
 const isAnonymousId = (value) => {
   if (!value) return true;
   return `${value}`.startsWith('$RCAnonymousID');
 };
 
 export const configureRevenueCat = async ({ token, publicId, email, fullName } = {}) => {
+  if (!Purchases || !PurchasesUI) {
+    if (!missingModuleLogged) {
+      addDebugLog({
+        source: 'RevenueCat',
+        level: 'warn',
+        message: 'RevenueCat native module unavailable (expected in Expo Go).',
+      });
+      missingModuleLogged = true;
+    }
+    return;
+  }
+
   if (!REVENUECAT_API_KEY) {
     if (!missingKeyLogged) {
       addDebugLog({ source: 'RevenueCat', level: 'warn', message: 'Missing RevenueCat API key.' });

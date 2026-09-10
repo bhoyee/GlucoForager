@@ -4,10 +4,12 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ActivityIndicator, Alert, Linking, LogBox, Modal, Pressable, View, Text } from 'react-native';
+import { PostHogProvider } from 'posthog-react-native';
 
 // Import Auth Provider
 import { AuthProvider, useAuth } from './context/authContext';
 import { configureRevenueCat } from './utils/revenuecat';
+import { posthog } from './utils/analytics';
 import { startMobileLogUploader } from './utils/mobileLogUploader';
 import {
   configureMealReminderNotificationHandler,
@@ -34,6 +36,38 @@ import FoodPreferencesScreen from './screens/main/FoodPreferencesScreen';
 import MainTabNavigator from './navigation/MainTabNavigator';
 
 const Stack = createNativeStackNavigator();
+
+// Universal Links / App Links config - lets a tapped https://www.glucoforager.com/resubscribe
+// link (e.g. from the win-back email sequence) open straight to the in-app paywall instead of
+// a browser, once the native associatedDomains/intentFilters (app.json) verify against the
+// .well-known files hosted on the site. Only takes effect for users on a build that includes
+// those native entries - see app.json for the Team ID / signing fingerprint that still need
+// filling in before verification will actually pass.
+const linking = {
+  prefixes: ['https://www.glucoforager.com', 'https://glucoforager.com'],
+  config: {
+    screens: {
+      MainTabs: {
+        screens: {
+          Profile: {
+            screens: {
+              ProfileMain: 'resubscribe',
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
+// PostHog's screen-autocapture hook reads React Navigation's context, so this must
+// wrap content INSIDE <NavigationContainer>, not around it. Skips wrapping entirely
+// when analytics isn't configured (posthog is null) rather than constructing a
+// client with an empty API key.
+function AnalyticsBoundary({ children }) {
+  if (!posthog) return children;
+  return <PostHogProvider client={posthog}>{children}</PostHogProvider>;
+}
 
 const devLog = (...args) => {
   if (!__DEV__) return;
@@ -155,7 +189,8 @@ function AppNavigator() {
   devLog('Showing main navigation. User token:', userToken ? 'Present' : 'None');
 
   return (
-    <NavigationContainer>
+    <NavigationContainer linking={linking}>
+    <AnalyticsBoundary>
       <Modal
         transparent
         visible={mealPromptVisible}
@@ -349,6 +384,7 @@ function AppNavigator() {
           <Stack.Screen name="Auth" component={AuthStack} />
         )}
       </Stack.Navigator>
+    </AnalyticsBoundary>
     </NavigationContainer>
   );
 }

@@ -1,3 +1,4 @@
+import json
 import logging
 import re
 from typing import Any, Dict
@@ -7,6 +8,22 @@ from openai import OpenAI, OpenAIError
 from ..core.config import settings
 
 logger = logging.getLogger(__name__)
+
+FOOD_SCAN_SYSTEM_PROMPT = (
+    "You are analyzing a single photo for a diabetes nutrition-tracking app. Determine: "
+    "1) Is this actually a food or drink item (not a barcode, receipt, unrelated object, or person)? "
+    "2) If yes, what is it, as specifically as you can reasonably tell? "
+    "3) Estimate its nutrition for the typical serving shown: carbohydrates (g), sugars (g), fiber (g), calories. "
+    "Respond with ONLY a JSON object, no other text, in exactly this shape: "
+    '{"is_food": true or false, "name": "short food name" or null, '
+    '"confidence": "high" | "medium" | "low", '
+    '"carbs_g": number or null, "sugars_g": number or null, "fiber_g": number or null, "calories": number or null}. '
+    "If is_food is false, set every other field to null. "
+    "If it is food but you cannot make a reasonable nutrition estimate, still set is_food true and name it, "
+    'but set confidence to "low" and the numeric fields to null. '
+    "Never invent precise-looking numbers you are not reasonably confident in - a null or omission is better than "
+    "false precision, since this feeds a health-related estimate."
+)
 
 
 class AIVisionService:
@@ -68,6 +85,56 @@ class AIVisionService:
             timeout=timeout_seconds,
         )
         return resp.choices[0].message.content or ""
+
+    def _food_scan_call(self, client: OpenAI, model: str, image_b64: str, *, timeout_seconds: float) -> str:
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": FOOD_SCAN_SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Identify this food item and estimate its nutrition."},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}},
+                    ],
+                },
+            ],
+            temperature=0.2,
+            timeout=timeout_seconds,
+            response_format={"type": "json_object"},
+        )
+        return resp.choices[0].message.content or "{}"
+
+    def analyze_food_photo(self, image_b64: str, tier: str) -> Dict[str, Any]:
+        """Live food-photo scan (not barcode) - identifies the food and estimates
+        nutrition. Deliberately single-purpose and separate from analyze_fridge
+        (which lists ingredients for recipe generation, not nutrition estimates)."""
+        if not self.enabled or not self.primary_client:
+            return {"is_food": False, "raw": "vision_unavailable", "model_used": None}
+
+        tier_model = settings.openai_vision_model
+        from ..core.constants import TIER_CONFIG  # local import to avoid cycle
+
+        tier_cfg = TIER_CONFIG.get(tier, {})
+        if tier_cfg.get("vision_model"):
+            tier_model = tier_cfg["vision_model"]
+
+        try:
+            content = self._food_scan_call(self.primary_client, tier_model, image_b64, timeout_seconds=25.0)
+        except OpenAIError as exc:
+            logger.warning("Food photo scan failed: %s", exc)
+            return {"is_food": False, "raw": "vision_error", "model_used": tier_model}
+
+        try:
+            parsed = json.loads(content)
+            if not isinstance(parsed, dict):
+                raise ValueError("non-dict JSON response")
+        except (json.JSONDecodeError, ValueError):
+            logger.warning("Food photo scan returned unparseable JSON: %s", content[:200])
+            return {"is_food": False, "raw": "vision_parse_error", "model_used": tier_model}
+
+        parsed["model_used"] = tier_model
+        return parsed
 
     def analyze_fridge(self, image_b64: str, tier: str) -> Dict[str, Any]:
         if not self.enabled:

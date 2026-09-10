@@ -173,13 +173,39 @@ class Settings(BaseSettings):
     drive_max_excel_bytes: int = Field(2_097_152, env="DRIVE_MAX_EXCEL_BYTES")  # 2 MB
     drive_max_video_bytes: int = Field(25 * 1024 * 1024, env="DRIVE_MAX_VIDEO_BYTES")  # 25 MB
 
-    # Recipe image upload storage (used by /api/admin/uploads)
+    # Recipe image upload storage (used by /api/admin/uploads AND the AI-generated
+    # recipe thumbnails in ai_recipe_generator.py - both read this same setting).
     # - local: store on backend disk under UPLOADS_DIR (served from /uploads)
     # - ftp: upload to shared hosting under RECIPE_FTP_BASE_DIR and store public RECIPE_REMOTE_BASE_URL
+    # - r2: upload to the shared Cloudflare R2 bucket (see R2_* settings below)
     recipe_upload_storage_backend: str = Field("local", env="RECIPE_UPLOAD_STORAGE_BACKEND")
     recipe_remote_base_url: str | None = Field(None, env="RECIPE_REMOTE_BASE_URL")
     recipe_ftp_base_dir: str = Field("/glucoforager.com/recipes", env="RECIPE_FTP_BASE_DIR")
     recipe_max_image_bytes: int = Field(2_097_152, env="RECIPE_MAX_IMAGE_BYTES")  # 2 MB
+
+    # Blog post content images (used by /api/admin/blog/upload). Same backend choices as
+    # recipe images above - defaults to local so existing deployments are unaffected.
+    blog_image_storage_backend: str = Field("local", env="BLOG_IMAGE_STORAGE_BACKEND")
+    blog_max_image_bytes: int = Field(5 * 1024 * 1024, env="BLOG_MAX_IMAGE_BYTES")  # 5 MB
+
+    # Cloudflare R2 (S3-compatible object storage). One bucket/credential set shared by
+    # every feature above that opts into the "r2" storage backend.
+    # - R2_PUBLIC_BASE_URL is whatever public URL you've enabled for the bucket (an
+    #   r2.dev subdomain, or a custom domain mapped to it in the Cloudflare dashboard) -
+    #   uploaded files are returned as {R2_PUBLIC_BASE_URL}/{key}.
+    r2_account_id: str | None = Field(None, env="R2_ACCOUNT_ID")
+    r2_access_key_id: str | None = Field(None, env="R2_ACCESS_KEY_ID")
+    r2_secret_access_key: str | None = Field(None, env="R2_SECRET_ACCESS_KEY")
+    r2_bucket_name: str | None = Field(None, env="R2_BUCKET_NAME")
+    r2_public_base_url: str | None = Field(None, env="R2_PUBLIC_BASE_URL")
+
+    # PostHog product analytics (server-side events). Same Project API Key as the
+    # mobile app's EXPO_PUBLIC_POSTHOG_API_KEY.
+    posthog_api_key: str | None = Field(None, env="POSTHOG_API_KEY")
+    # Must match the region the PostHog project actually lives in (check the
+    # dashboard URL: eu.posthog.com vs us.posthog.com) - a mismatch doesn't error,
+    # it just silently accepts events into a region your project can't see.
+    posthog_host: str = Field("https://eu.i.posthog.com", env="POSTHOG_HOST")
 
     # Payroll / payslip branding
     payroll_company_name: str = Field("GlucoForager", env="PAYROLL_COMPANY_NAME")

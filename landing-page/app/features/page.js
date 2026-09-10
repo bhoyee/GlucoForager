@@ -6,12 +6,12 @@ const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.glucoforager.
 export const metadata = {
   title: "Features",
   description:
-    "See what GlucoForager can do: scan or type ingredients for diabetes-friendly meal ideas, get food swaps, daily tips and challenges, and a Premium daily meal planner.",
+    "See what GlucoForager can do: scan a barcode or food photo for an instant diabetes-friendly verdict, log glucose and carbs, get personalised meal ideas, and more.",
   alternates: { canonical: "/features" },
   openGraph: {
-    title: "GlucoForager Features — Meal Ideas, Swaps & Daily Planning",
+    title: "GlucoForager Features — Food Scanning, Glucose Tracking & Meal Ideas",
     description:
-      "Scan ingredients, get diabetes-aware meal ideas, smarter food swaps, and a Premium daily meal planner built around your blood sugar goals.",
+      "Scan any food or barcode for a diabetes-friendly verdict, track glucose and your daily carb goal, and get diabetes-aware meal ideas built around your blood sugar goals.",
     url: `${SITE_URL}/features`,
     type: "website",
   },
@@ -27,8 +27,8 @@ export default function FeaturesPage() {
       <header className="space-y-3">
         <h1 className="text-4xl font-extrabold text-gray-900">What you can do with GlucoForager</h1>
         <p className="text-gray-600">
-          Scan ingredients, get practical meal ideas, and build steadier habits with tips, challenges, swaps, shopping
-          lists, and meal plans.
+          Scan any food or barcode for an instant diabetes-friendly verdict, track your glucose and daily carb goal,
+          and get practical meal ideas, swaps, shopping lists, and meal plans to build steadier habits.
         </p>
       </header>
       <FeatureGrid />

@@ -13,7 +13,7 @@ export default function HeroSection({ onDownloadClick }) {
               Your <span className="text-teal-600">Daily Diabetes</span> Food Assistant
             </h1>
             <p className="text-lg md:text-xl text-gray-600 mb-10 max-w-2xl mx-auto lg:mx-0">
-              Turn what you already have into practical diabetes-aware meal ideas, smarter swaps, and a daily plan that feels easier to follow.
+              Scan any food or barcode for an instant diabetes-friendly verdict, track your glucose and carbs, and turn what you already have into practical meal ideas - all in one place.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-10 max-w-2xl mx-auto lg:mx-0">
@@ -21,7 +21,7 @@ export default function HeroSection({ onDownloadClick }) {
                 <div className="flex items-start gap-2.5">
                   <span className="mt-1.5 h-2.5 w-2.5 rounded-full bg-gradient-to-r from-teal-500 to-emerald-500 shadow-sm" />
                   <p className="text-sm font-extrabold text-gray-900 leading-snug">
-                    Scan What You Have, Eat What Works
+                    Scan Any Food, Know Instantly
                   </p>
                 </div>
               </div>
@@ -29,7 +29,7 @@ export default function HeroSection({ onDownloadClick }) {
                 <div className="flex items-start gap-2.5">
                   <span className="mt-1.5 h-2.5 w-2.5 rounded-full bg-gradient-to-r from-teal-500 to-emerald-500 shadow-sm" />
                   <p className="text-sm font-extrabold text-gray-900 leading-snug">
-                    A Daily Plan Built for Blood Sugar
+                    Track Glucose & Your Daily Carb Goal
                   </p>
                 </div>
               </div>
@@ -37,7 +37,7 @@ export default function HeroSection({ onDownloadClick }) {
                 <div className="flex items-start gap-2.5">
                   <span className="mt-1.5 h-2.5 w-2.5 rounded-full bg-gradient-to-r from-teal-500 to-emerald-500 shadow-sm" />
                   <p className="text-sm font-extrabold text-gray-900 leading-snug">
-                    Smarter Swaps, Better Choices
+                    Recipes From What You Already Have
                   </p>
                 </div>
               </div>
