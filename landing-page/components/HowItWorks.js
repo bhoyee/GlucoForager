@@ -1,21 +1,21 @@
 const steps = [
   {
-    title: 'Start with your real ingredients',
+    title: 'Scan a food, or start with what you have',
     description:
-      'Scan the fridge, pantry, or type what you have. You can review the list before anything is used.',
-    detail: 'Scan or type',
+      'Scan a barcode or photo for an instant verdict on a specific product or meal, or scan your fridge/pantry to see what you can cook with what you already have.',
+    detail: 'Scan a barcode, photo, or your pantry',
   },
   {
     title: 'GlucoForager checks the food context',
     description:
-      'The app looks for a more balanced direction, highlights better choices, and avoids ingredients that are less useful for steadier blood sugar.',
-    detail: 'Review guidance',
+      'Get a clear diabetes-friendly verdict with carbs, sugar, and fibre for a scanned item, or a more balanced direction and better choices for a full meal.',
+    detail: 'Review your verdict or guidance',
   },
   {
-    title: 'Choose a practical next step',
+    title: 'Log it and see the pattern build',
     description:
-      'Get recipe ideas, food swaps, or a daily plan with clear cooking steps and food decisions you can act on.',
-    detail: 'Cook, swap, or plan',
+      'Log the meal or a glucose reading, watch your daily carb target fill in on the home screen, and get flagged automatically if a reading follows a meal by more than expected.',
+    detail: 'Track, log, or plan',
   },
 ];
 

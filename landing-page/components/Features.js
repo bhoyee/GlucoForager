@@ -5,6 +5,36 @@ import Image from 'next/image';
 
 const features = [
   {
+    title: 'Barcode & photo food scan',
+    eyebrow: 'Know before you eat it',
+    description:
+      'Scan a barcode or take a photo of any food for an instant diabetes-friendly verdict, with carbs, sugar, and fibre.',
+    image: '/screenshots/food-scan-verdict.png',
+    alt: 'GlucoForager barcode and photo scan result showing a diabetes-friendly verdict',
+    points: ['Barcode or live photo scan', 'Carbs, sugar, and fibre at a glance', 'Clear diabetes-friendly verdict'],
+    icon: 'barcode',
+  },
+  {
+    title: 'Glucose logging & spike alerts',
+    eyebrow: 'Track how food affects you',
+    description:
+      'Log your glucose readings and get flagged automatically when one follows a meal by more than expected.',
+    image: '/screenshots/glucose-log.png',
+    alt: 'GlucoForager glucose logging screen with spike detection',
+    points: ['mg/dL or mmol/L, your choice', 'Automatic spike flagging after meals', 'Full history in your food log'],
+    icon: 'droplet',
+  },
+  {
+    title: 'Daily carb goal',
+    eyebrow: 'A target built for you',
+    description:
+      'See your daily carb target as a simple ring on your home screen, personalised to your diagnosis - including Type 1, Type 2, prediabetes, and gestational diabetes.',
+    image: '/screenshots/carb-goal-ring.png',
+    alt: 'GlucoForager daily carb goal ring on the home screen',
+    points: ['Personalised to your diagnosis', 'Set your own target anytime', 'Updates as you log through the day'],
+    icon: 'target',
+  },
+  {
     title: 'Ingredient scan',
     eyebrow: 'Scan what you have',
     description:
@@ -78,6 +108,14 @@ const features = [
 
 function FeatureIcon({ type }) {
   const paths = {
+    barcode: <path d="M4 5v14M8 5v14M11 5v14M15 5v14M17.5 5v14M20 5v14" />,
+    droplet: <path d="M12 3c-3.5 4.2-6 7.7-6 11a6 6 0 0 0 12 0c0-3.3-2.5-6.8-6-11Z" />,
+    target: (
+      <>
+        <circle cx="12" cy="12" r="7.2" />
+        <circle cx="12" cy="12" r="2.6" />
+      </>
+    ),
     scan: <path d="M5 7V5a2 2 0 0 1 2-2h2m6 0h2a2 2 0 0 1 2 2v2M5 17v2a2 2 0 0 0 2 2h2m6 0h2a2 2 0 0 0 2-2v-2M8 12h8M12 8v8" />,
     keyboard: <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5v-9Zm4 2h.01M11 9.5h.01M14 9.5h.01M17 9.5h.01M8 13h.01M11 13h6M8 16h8" />,
     chat: <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v7A2.5 2.5 0 0 1 17.5 15H12l-5 4v-4h-.5A2.5 2.5 0 0 1 4 12.5v-7Z" />,

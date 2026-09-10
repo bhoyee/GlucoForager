@@ -1,5 +1,17 @@
 const steps = [
   {
+    title: 'Barcode & photo food scan',
+    description: 'Scan a barcode or take a photo of any food for an instant diabetes-friendly verdict, with carbs, sugar, and fibre.',
+  },
+  {
+    title: 'Glucose logging & spike alerts',
+    description: 'Log your glucose readings and get flagged automatically when one follows a meal by more than expected.',
+  },
+  {
+    title: 'Daily carb goal',
+    description: 'See your daily carb target as a simple ring on your home screen, personalised to your diagnosis (Type 1, Type 2, prediabetes, or gestational).',
+  },
+  {
     title: 'Get a recipe your way',
     description: 'Scan your fridge or pantry, type what you have, or tap Surprise Me for instant diabetes-friendly recipe ideas.',
   },

@@ -3,9 +3,11 @@ const tiers = [
     name: 'Free',
     price: '$0',
     bullets: [
+      'Unlimited barcode scanning for a diabetes-friendly verdict',
+      'Glucose and meal logging, with your daily carb goal',
       'Browse recipes, tips & the daily challenge',
       'Save favourites and view recent recipes',
-      '7-day free trial for AI recipe generation',
+      '7-day free trial for AI recipe generation and AI photo food scan',
     ],
   },
   {
@@ -13,8 +15,9 @@ const tiers = [
     price: 'From $5.99/month',
     highlight: true,
     bullets: [
+      'Unlimited AI photo food scans',
       'Daily Meal Planner',
-      'Higher usage limits for AI recipes and scans',
+      'Higher usage limits for AI recipes',
       'Food swaps + personalised guidance',
       'Ad-free experience',
     ],
