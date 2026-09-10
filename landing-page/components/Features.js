@@ -19,7 +19,7 @@ const features = [
     eyebrow: 'Track how food affects you',
     description:
       'Log your glucose readings and get flagged automatically when one follows a meal by more than expected.',
-    image: '/screenshots/glucose-log.png',
+    image: '/screenshots/glucose-logging.png',
     alt: 'GlucoForager glucose logging screen with spike detection',
     points: ['mg/dL or mmol/L, your choice', 'Automatic spike flagging after meals', 'Full history in your food log'],
     icon: 'droplet',
@@ -29,7 +29,7 @@ const features = [
     eyebrow: 'A target built for you',
     description:
       'See your daily carb target as a simple ring on your home screen, personalised to your diagnosis - including Type 1, Type 2, prediabetes, and gestational diabetes.',
-    image: '/screenshots/carb-goal-ring.png',
+    image: '/screenshots/carb-goal.png',
     alt: 'GlucoForager daily carb goal ring on the home screen',
     points: ['Personalised to your diagnosis', 'Set your own target anytime', 'Updates as you log through the day'],
     icon: 'target',
