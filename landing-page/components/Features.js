@@ -213,7 +213,7 @@ export default function Features() {
                 alt={active.alt}
                 fill
                 sizes="260px"
-                className="object-contain"
+                className="object-cover"
               />
             </div>
             {/* Dynamic Island notch */}
