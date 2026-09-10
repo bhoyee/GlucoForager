@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 export default function HeroSection({ onDownloadClick }) {
   return (
     <section className="container mx-auto px-4 py-4 md:py-10 relative overflow-hidden bg-gradient-to-br from-white via-teal-50/30 to-purple-50/20">
@@ -78,22 +80,17 @@ export default function HeroSection({ onDownloadClick }) {
             </div>
           </div>
 
-          <div className="flex justify-center lg:justify-end lg:pr-6 xl:pr-10 -mt-10">
-            <div className="relative w-[220px] sm:w-[260px] md:w-[300px] lg:w-[340px] h-[470px] sm:h-[520px] md:h-[580px] lg:h-[640px] transform-gpu transition-transform duration-300">
-              <div className="absolute inset-0 rounded-[2.5rem] bg-white shadow-2xl ring-1 ring-black/5 transition-transform duration-300 hover:-translate-y-2 hover:shadow-emerald-200/40"></div>
-              <div className="absolute inset-3 rounded-[2rem] overflow-hidden bg-white ring-1 ring-black/5">
-                <video
-                  className="h-full w-full object-cover object-center"
-                  src="/videos/app-demo.mp4"
-                  poster="/screenshots/home-screenshot.png"
-                  preload="metadata"
-                  muted
-                  playsInline
-                  loop
-                  autoPlay
-                  controls
-                />
-              </div>
+          <div className="flex justify-center lg:justify-end lg:pr-6 xl:pr-10">
+            <div className="relative w-full max-w-[360px] sm:max-w-[420px] md:max-w-[460px] lg:max-w-[500px] transform-gpu transition-transform duration-300 hover:-translate-y-2">
+              <Image
+                src="/screenshots/home-hero.png"
+                alt="GlucoForager home screen with today's carb goal, and a barcode scan showing a diabetes-friendly verdict"
+                width={1149}
+                height={1369}
+                sizes="(min-width: 1024px) 500px, 90vw"
+                priority
+                className="h-auto w-full drop-shadow-2xl"
+              />
 
               {/* Premium badge chips */}
               <div className="absolute -left-4 top-10 hidden sm:flex items-center gap-2 rounded-2xl bg-white/95 backdrop-blur border border-teal-100 px-4 py-2.5 shadow-lg shadow-teal-900/10">
