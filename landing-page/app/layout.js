@@ -6,31 +6,32 @@ const SOCIAL_IMAGE_VERSION = "20260323";
 
 export const metadata = {
   title: {
-    default: "GlucoForager — Your Daily Diabetes Food Assistant | Meal Ideas & Blood Sugar Support",
+    default: "GlucoForager — Diabetes Food Scanner, Glucose Tracker & Meal Ideas",
     template: "%s | GlucoForager",
   },
   description:
-    "Stop guessing what to eat with diabetes. GlucoForager scans ingredients, suggests blood-sugar-friendly meals, and gives you a daily plan to stay in control. Free on iOS & Android.",
+    "Stop guessing what to eat with diabetes. Scan any food or barcode for an instant diabetes-friendly verdict, log your glucose and carbs, and get meal ideas built around your goals. Free on iOS & Android.",
   applicationName: "GlucoForager",
   keywords: [
+    "diabetes food scanner",
+    "blood sugar tracker",
+    "glucose tracker app",
+    "barcode scanner diabetic",
+    "carb counter app",
     "diabetes food assistant",
     "what to eat with diabetes",
-    "blood sugar meal ideas",
     "diabetes meal planner",
-    "daily meal plan",
     "food swaps",
     "carb swaps",
     "Type 2 Diabetes app",
     "ingredient scanner app",
-    "scan ingredients",
-    "low carb meal ideas",
     "glucose-friendly meals",
   ],
   metadataBase: new URL("https://www.glucoforager.com"),
   openGraph: {
-    title: "GlucoForager — Your Daily Diabetes Food Assistant | Meal Ideas & Blood Sugar Support",
+    title: "GlucoForager — Diabetes Food Scanner, Glucose Tracker & Meal Ideas",
     description:
-      "Stop guessing what to eat with diabetes. GlucoForager scans ingredients, suggests blood-sugar-friendly meals, and gives you a daily plan to stay in control. Free on iOS & Android.",
+      "Stop guessing what to eat with diabetes. Scan any food or barcode for an instant diabetes-friendly verdict, log your glucose and carbs, and get meal ideas built around your goals. Free on iOS & Android.",
     url: "https://www.glucoforager.com",
     siteName: "GlucoForager",
     locale: "en_GB",
@@ -47,9 +48,9 @@ export const metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "GlucoForager — Your Daily Diabetes Food Assistant | Meal Ideas & Blood Sugar Support",
+    title: "GlucoForager — Diabetes Food Scanner, Glucose Tracker & Meal Ideas",
     description:
-      "Stop guessing what to eat with diabetes. GlucoForager scans ingredients, suggests blood-sugar-friendly meals, and gives you a daily plan to stay in control. Free on iOS & Android.",
+      "Stop guessing what to eat with diabetes. Scan any food or barcode for an instant diabetes-friendly verdict, log your glucose and carbs, and get meal ideas built around your goals. Free on iOS & Android.",
     images: [`/twitter-image.png?v=${SOCIAL_IMAGE_VERSION}`],
   },
   robots: {
@@ -101,7 +102,7 @@ export default function RootLayout({ children }) {
         url: siteUrl,
         downloadUrl: [appStoreUrl, playStoreUrl],
         description:
-          "GlucoForager is a daily diabetes food assistant that helps you decide what to eat without guessing. Scan ingredients or type what you have to get meal ideas, food swaps, and a daily meal plan.",
+          "GlucoForager is a daily diabetes food assistant that helps you decide what to eat without guessing. Scan any food or barcode for a diabetes-friendly verdict, log glucose and carbs, and get meal ideas, food swaps, and a daily meal plan.",
       },
     ],
   };
