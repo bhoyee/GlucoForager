@@ -207,13 +207,13 @@ export default function Features() {
             {/* Outer frame / bezel */}
             <div className="absolute inset-0 rounded-[2.5rem] bg-white shadow-2xl ring-1 ring-black/10"></div>
             {/* Screen */}
-            <div className="absolute inset-[10px] rounded-[2rem] overflow-hidden bg-black ring-1 ring-black/5">
+            <div className="absolute inset-[10px] rounded-[2rem] overflow-hidden bg-[#F7FBF9] ring-1 ring-black/5">
               <Image
                 src={active.image}
                 alt={active.alt}
                 fill
                 sizes="260px"
-                className="object-cover"
+                className="object-contain"
               />
             </div>
             {/* Dynamic Island notch */}
