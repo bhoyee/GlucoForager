@@ -30,6 +30,11 @@ import {
 } from '../../utils/recipeImageCache';
 import { getTodayTip } from '../../utils/todayTips';
 import { scheduleDailyPlanNotifications } from '../../utils/mealReminders';
+import CarbGoalRing, { getCarbGoalRingColor } from '../../components/CarbGoalRing';
+import { getCarbGoalTitle, getCarbGoalSubtitle, getCarbGoalDisclaimer } from '../../utils/carbGoal';
+import { trackEvent } from '../../utils/analytics';
+
+const LAST_INGREDIENTS_KEY = 'last_used_ingredients_v1';
 
 export default function HomeScreen() {
   const navigation = useNavigation();
@@ -50,6 +55,7 @@ export default function HomeScreen() {
   const [blockedTipIds, setBlockedTipIds] = useState([]);
   const [serverTodayTip, setServerTodayTip] = useState(null);
   const [dailyChallenge, setDailyChallenge] = useState(null);
+  const [healthLogSummary, setHealthLogSummary] = useState(null);
   const todayTip = useMemo(() => {
     if (serverTodayTip?.title && (serverTodayTip?.tip || serverTodayTip?.body)) return serverTodayTip;
     return getTodayTip(new Date(), { blockedTipIds });
@@ -148,6 +154,31 @@ export default function HomeScreen() {
       if (data?.challenge?.tasks?.length) {
         setDailyChallenge(data.challenge);
       }
+    } catch {
+      // ignore network errors
+    }
+  };
+
+  const loadHealthLogSummary = async () => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        setHealthLogSummary(null);
+        return;
+      }
+      // "Today" must mean the phone's local calendar day, not the server's UTC day -
+      // send local midnight as a UTC instant so entries near the day boundary land on
+      // the correct side regardless of timezone.
+      const localMidnight = new Date();
+      localMidnight.setHours(0, 0, 0, 0);
+      const response = await apiFetch(
+        `${API_URL}/api/app/health-log/today?local_day_start=${encodeURIComponent(localMidnight.toISOString())}`,
+        { method: 'GET', headers: { Authorization: `Bearer ${token}` } },
+        { timeoutMs: 12000 }
+      );
+      if (!response.ok) return;
+      const data = await response.json();
+      setHealthLogSummary(data);
     } catch {
       // ignore network errors
     }
@@ -259,6 +290,7 @@ export default function HomeScreen() {
         loadTipConfig(),
         loadTodayTip(),
         loadDailyChallenge(),
+        loadHealthLogSummary(),
       ]);
 
       const allFailed = results.every((result) => result.status === 'rejected');
@@ -520,7 +552,6 @@ export default function HomeScreen() {
     }
   };
 
-  const handleOpenEatNow = () => navigation.navigate('EatNow');
   const handleOpenSwaps = () => navigation.navigate('CarbSwaps');
   const handleOpenShoppingList = () => {
     setShowShoppingListNewDot(false);
@@ -534,6 +565,10 @@ export default function HomeScreen() {
   };
   const handleOpenChallenge = () => navigation.navigate('Challenge');
   const handleOpenTip = () => navigation.navigate('TodayTip', { tip: todayTip });
+  const handleOpenLogMeal = () => navigation.navigate('LogMeal');
+  const handleOpenLogGlucose = () => navigation.navigate('LogGlucose');
+  const handleOpenBarcodeScan = () => navigation.navigate('Scan', { screen: 'BarcodeScan' });
+  const handleOpenPhotoScan = () => navigation.navigate('Scan', { screen: 'PhotoScan' });
 
   const getRecipeTimeLabel = (recipe) => {
     const prepRaw = recipe.prep_time_minutes ?? recipe.prepTime ?? recipe.prep_time;
@@ -623,6 +658,7 @@ export default function HomeScreen() {
       setTrialDaysLeft(data.trial_days_left ?? null);
 
       if (allowed) {
+        trackEvent('get_recipes_started', { source });
         if (source === 'manual') {
           navigation.navigate('ManualInput');
         } else if (source === 'surprise') {
@@ -631,11 +667,18 @@ export default function HomeScreen() {
             mode: 'surprise',
             source: 'eat_now_surprise',
           });
+        } else if (source === 'quick') {
+          navigation.navigate('ManualInput', {
+            autoSubmit: true,
+            mode: 'quick',
+            source: 'eat_now_quick',
+          });
         } else {
           // Navigate to Scan tab
           navigation.navigate('Scan', { screen: 'ScanMain' });
         }
       } else {
+        trackEvent('get_recipes_blocked', { source, reason: 'paywall' });
         Alert.alert(
           'Start your 7-day free trial',
           data?.detail?.message || 'Start your 7-day free trial to use scan and recipe generation.',
@@ -663,6 +706,60 @@ export default function HomeScreen() {
 
   const handleSurprisePress = () => {
     checkScanLimit('surprise');
+  };
+
+  const handleQuickMealPress = () => {
+    checkScanLimit('quick');
+  };
+
+  const handleUseWhatIHave = async () => {
+    trackEvent('get_recipes_started', { source: 'use_what_i_have' });
+    try {
+      const raw = await AsyncStorage.getItem(LAST_INGREDIENTS_KEY);
+      const list = raw ? JSON.parse(raw) : null;
+      const ingredients = Array.isArray(list) ? list.filter(Boolean) : [];
+      if (!ingredients.length) {
+        try {
+          const token = await AsyncStorage.getItem('userToken');
+          if (token) {
+            const res = await apiFetch(
+              `${API_URL}${API_ENDPOINTS.USER_LAST_INGREDIENTS}`,
+              { headers: { Authorization: `Bearer ${token}` } },
+              { onUnauthorized: signOut, timeoutMs: 10000 }
+            );
+            if (res.ok) {
+              const data = await res.json();
+              const serverList = Array.isArray(data?.ingredients) ? data.ingredients.filter(Boolean) : [];
+              if (serverList.length) {
+                await AsyncStorage.setItem(LAST_INGREDIENTS_KEY, JSON.stringify(serverList));
+                navigation.navigate('ManualInput', {
+                  prefillIngredients: serverList,
+                  autoSubmit: true,
+                  source: 'eat_now_have',
+                  excludeRecent: true,
+                  varietyMode: true,
+                });
+                return;
+              }
+            }
+          }
+        } catch {
+          // Ignore.
+        }
+        Alert.alert('No saved ingredients', 'Scan or type ingredients once, then you can reuse them here.');
+        navigation.navigate('ManualInput');
+        return;
+      }
+      navigation.navigate('ManualInput', {
+        prefillIngredients: ingredients,
+        autoSubmit: true,
+        source: 'eat_now_have',
+        excludeRecent: true,
+        varietyMode: true,
+      });
+    } catch {
+      navigation.navigate('ManualInput');
+    }
   };
 
   const handleViewRecentRecipes = () => {
@@ -695,20 +792,9 @@ export default function HomeScreen() {
     openPremiumPaywall();
   };
 
-  const getDayPeriod = () => {
-    const hour = new Date().getHours();
-    if (hour >= 5 && hour <= 11) return 'morning';
-    if (hour >= 12 && hour <= 16) return 'afternoon';
-    if (hour >= 17 && hour <= 21) return 'evening';
-    return 'night';
-  };
-
-  const getMealLabel = () => {
-    const t = getMealType();
-    if (t === 'breakfast') return 'Breakfast';
-    if (t === 'lunch') return 'Lunch';
-    if (t === 'dinner') return 'Dinner';
-    return 'Snack';
+  const getSubGreeting = () => {
+    if (hasChallenge && streakDays > 0) return "Let's keep your streak going";
+    return "Let's find your next meal";
   };
 
   const getAccessBadgeLabel = () => {
@@ -736,6 +822,18 @@ export default function HomeScreen() {
   const hasChallenge = Boolean(dailyChallenge?.tasks?.length);
   const streakDays = Number(dailyChallenge?.streak_days || 0);
 
+  const carbsLoggedToday = healthLogSummary?.carbs_logged_today_g ?? null;
+  const carbGoalMode = healthLogSummary?.carb_goal_mode || 'ceiling';
+  const carbGoalToday = healthLogSummary?.carb_goal_g || (carbGoalMode === 'none' ? null : 130);
+  const mealsLoggedToday = healthLogSummary?.meals_logged_today || 0;
+
+  const carbGoalTitle = getCarbGoalTitle({ carbsLoggedToday, carbGoalToday, carbGoalMode, mealsLoggedToday });
+  const carbGoalSubtitle = getCarbGoalSubtitle({ carbsLoggedToday, carbGoalToday, carbGoalMode });
+
+  const showCarbGoalDisclaimer = () => {
+    Alert.alert('About your carb target', getCarbGoalDisclaimer(carbGoalMode, carbGoalToday));
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
@@ -748,12 +846,11 @@ export default function HomeScreen() {
           <View style={styles.heroGreetingBlock}>
             <Text style={styles.greeting} numberOfLines={1} ellipsizeMode="tail">
               <Text style={styles.greetingHey}>Hey</Text>
-              {greetingName ? ` ${greetingName}` : ''}
-              {`, ${getDayPeriod()}`}
+              {greetingName ? `, ${greetingName}` : ''}
             </Text>
             <View style={styles.subGreetingRow}>
               <Text style={styles.subGreeting} numberOfLines={1} ellipsizeMode="tail">
-                {`${getMealLabel()} time`}
+                {getSubGreeting()}
               </Text>
               <View style={styles.accessBadge}>
                 <Text style={styles.accessBadgeText} numberOfLines={1} ellipsizeMode="tail">
@@ -829,10 +926,14 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity style={styles.moreWaysLink} onPress={handleOpenEatNow} activeOpacity={0.7}>
-              <Text style={styles.moreWaysLinkText}>More ways to eat now</Text>
-              <Ionicons name="chevron-forward" size={14} color={Colors.secondary} />
-            </TouchableOpacity>
+            <View style={styles.filterChipRow}>
+              <TouchableOpacity style={styles.filterChip} onPress={handleUseWhatIHave} activeOpacity={0.8}>
+                <Text style={styles.filterChipText}>Use what I have</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.filterChip} onPress={handleQuickMealPress} activeOpacity={0.8}>
+                <Text style={styles.filterChipText}>Quick meal</Text>
+              </TouchableOpacity>
+            </View>
           </View>
           {!hasCurrentFeatureAccess ? (
             <View style={styles.heroUsageWrap}>
@@ -891,6 +992,94 @@ export default function HomeScreen() {
             </Pressable>
           </View>
         )}
+
+        {/* Track today */}
+        <View style={[styles.section, { marginTop: 18 }]}>
+          <View style={styles.trackCard}>
+            <View style={styles.getRecipesHeader}>
+              <View style={[styles.heroPrimaryIcon, { backgroundColor: Colors.accent }]}>
+                <Ionicons name="water-outline" size={20} color="white" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.getRecipesTitle}>Track today</Text>
+                <Text style={styles.getRecipesSub} numberOfLines={1}>
+                  Log meals and glucose readings
+                </Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.carbGoalRow}
+              onPress={() => {
+                trackEvent('carb_goal_ring_tapped', { carb_goal_mode: carbGoalMode });
+                navigation.navigate('CarbGoal');
+              }}
+              activeOpacity={0.7}
+            >
+              <CarbGoalRing carbsLogged={carbsLoggedToday} carbGoal={carbGoalToday} mode={carbGoalMode} size={92} />
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                  <Text style={styles.carbGoalTitle} numberOfLines={1}>
+                    {carbGoalTitle}
+                  </Text>
+                  <Pressable hitSlop={10} onPress={showCarbGoalDisclaimer}>
+                    <Ionicons name="information-circle-outline" size={15} color={Colors.textLight} />
+                  </Pressable>
+                </View>
+                <Text
+                  style={[
+                    styles.carbGoalSubtitle,
+                    { color: getCarbGoalRingColor(carbsLoggedToday, carbGoalToday, carbGoalMode) },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {carbGoalSubtitle}
+                </Text>
+                {healthLogSummary?.spikes_flagged_today > 0 ? (
+                  <View style={[styles.spikeBadge, { marginTop: 6, alignSelf: 'flex-start' }]}>
+                    <Ionicons name="alert-circle" size={12} color={Colors.warning} />
+                    <Text style={styles.spikeBadgeText}>
+                      {healthLogSummary.spikes_flagged_today} spike{healthLogSummary.spikes_flagged_today === 1 ? '' : 's'} flagged
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+              <Ionicons name="chevron-forward" size={14} color={Colors.textLight} />
+            </TouchableOpacity>
+
+            <View style={styles.scanButtonsRow}>
+              <TouchableOpacity style={styles.scanButton} onPress={handleOpenBarcodeScan} activeOpacity={0.9}>
+                <Ionicons name="barcode-outline" size={19} color="white" />
+                <Text style={styles.scanButtonText}>Scan barcode</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.scanButton} onPress={handleOpenPhotoScan} activeOpacity={0.9}>
+                <Ionicons name="camera-outline" size={19} color="white" />
+                <Text style={styles.scanButtonText}>Scan food</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.trackButtonRow}>
+              <TouchableOpacity style={styles.trackButton} onPress={handleOpenLogMeal} activeOpacity={0.85}>
+                <View style={styles.trackButtonTop}>
+                  <Ionicons name="restaurant-outline" size={18} color={Colors.primary} />
+                  <Text style={styles.trackButtonTitle}>Log meal</Text>
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.trackButton} onPress={handleOpenLogGlucose} activeOpacity={0.85}>
+                <View style={styles.trackButtonTop}>
+                  <Ionicons name="water-outline" size={18} color={Colors.primary} />
+                  <Text style={styles.trackButtonTitle}>Log glucose</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity style={styles.viewLogBadge} onPress={() => navigation.navigate('FoodLog')} activeOpacity={0.85}>
+              <Ionicons name="clipboard-outline" size={14} color={Colors.secondary} />
+              <Text style={styles.viewLogBadgeText}>View food log</Text>
+              <Ionicons name="chevron-forward" size={13} color={Colors.secondary} />
+            </TouchableOpacity>
+          </View>
+        </View>
 
         {/* Daily smart move */}
         <View style={styles.section}>
@@ -1265,18 +1454,22 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: Colors.primary,
   },
-  moreWaysLink: {
-    marginTop: 10,
+  filterChipRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    paddingVertical: 4,
+    gap: 6,
+    marginTop: 8,
   },
-  moreWaysLinkText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.secondary,
+  filterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  filterChipText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: Colors.textLight,
   },
   heroUsageWrap: {
     borderRadius: 18,
@@ -1655,6 +1848,114 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: '600',
     color: Colors.textLight,
+  },
+  trackCard: {
+    borderRadius: 22,
+    padding: 14,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  scanButtonsRow: {
+    marginTop: 12,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  scanButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    height: 50,
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    backgroundColor: Colors.primary,
+  },
+  scanButtonText: {
+    fontSize: 13.5,
+    fontWeight: '900',
+    color: 'white',
+  },
+  trackButtonRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+  },
+  trackButton: {
+    flex: 1,
+    borderRadius: 14,
+    padding: 12,
+    backgroundColor: `${Colors.primary}0F`,
+    borderWidth: 1,
+    borderColor: `${Colors.primary}24`,
+  },
+  trackButtonTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  trackButtonTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: Colors.primary,
+  },
+  carbGoalRow: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 10,
+    borderRadius: 16,
+    backgroundColor: Colors.background,
+  },
+  carbGoalTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Colors.text,
+  },
+  carbGoalSubtitle: {
+    marginTop: 2,
+    fontSize: 10.5,
+    fontWeight: '700',
+  },
+  spikeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: `${Colors.warning}18`,
+  },
+  spikeBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.warning,
+  },
+  viewLogBadge: {
+    marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    alignSelf: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: `${Colors.secondary}14`,
+    borderWidth: 1,
+    borderColor: `${Colors.secondary}28`,
+  },
+  viewLogBadgeText: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: Colors.secondary,
   },
   smartChallengeRow: {
     padding: 12,

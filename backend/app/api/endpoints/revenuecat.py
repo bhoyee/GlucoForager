@@ -8,6 +8,7 @@ from ...core.config import settings
 from ...database import get_db
 from ...models.subscription import Subscription
 from ...models.user import User
+from ...services.analytics_service import track_event
 from ...services.email_service import send_premium_activated_email
 from ...services.subscription_service import refresh_user_tier
 
@@ -162,6 +163,19 @@ async def revenuecat_webhook(
             send_premium_activated_email(user.email, user.full_name)
         except Exception:
             logger.exception("Failed to send premium activation email for user_id=%s", user.id)
+
+    track_event(
+        user.public_id,
+        "subscription_event",
+        {
+            "event_type": event_type_upper,
+            "plan": plan,
+            "status": status_value,
+            "product_id": product_id,
+            "store": store,
+        },
+    )
+
     logger.info(
         "Webhook processed: user_id=%s plan=%s status=%s expires_at=%s",
         user.id,

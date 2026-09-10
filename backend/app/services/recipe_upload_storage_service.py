@@ -5,6 +5,9 @@ from fastapi import UploadFile
 
 from ..core.config import settings
 from .ftp_storage_service import ftp_upload, open_shared_ftp
+from .r2_storage_service import r2_upload_bytes
+
+_CONTENT_TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
 
 
 def _normalize_public_base_url(raw: str) -> str:
@@ -45,6 +48,11 @@ def store_recipe_image_upload(file: UploadFile, *, request_base_url: str) -> str
 
     filename = f"{uuid.uuid4().hex}{extension}"
     backend = str(settings.recipe_upload_storage_backend or "local").strip().lower()
+
+    if backend == "r2":
+        file.file.seek(0)
+        data = file.file.read()
+        return r2_upload_bytes(key=f"adminrecipesimage/{filename}", data=data, content_type=_CONTENT_TYPES[extension])
 
     if backend == "ftp":
         base_url = _normalize_public_base_url(settings.recipe_remote_base_url or "")

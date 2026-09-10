@@ -173,6 +173,12 @@ export default function FavoritesScreen() {
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
           <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
             <View style={styles.header}>
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={() => navigation.navigate('Home')}
+              >
+                <Ionicons name="arrow-back" size={22} color="white" />
+              </TouchableOpacity>
               <View style={styles.headerText}>
                 <Text style={styles.headerTitle}>My Favorites</Text>
                 <Text style={styles.headerSubtitle}>Saved recipes you love</Text>
@@ -220,7 +226,7 @@ export default function FavoritesScreen() {
           <View style={styles.header}>
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => navigation.goBack()}
+              onPress={() => navigation.navigate('Home')}
             >
               <Ionicons name="arrow-back" size={22} color="white" />
             </TouchableOpacity>

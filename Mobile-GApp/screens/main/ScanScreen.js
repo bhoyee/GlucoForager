@@ -335,8 +335,24 @@ export default function ScanScreen() {
         >
           <Ionicons name="arrow-back" size={24} color="white" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Scan Ingredients</Text>
-        <TouchableOpacity 
+        <View style={styles.modeSwitcher}>
+          <View style={[styles.modeOption, styles.modeOptionActive]}>
+            <Text style={styles.modeOptionTextActive}>Ingredients</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.modeOption}
+            onPress={() => navigation.replace('BarcodeScan')}
+          >
+            <Text style={styles.modeOptionText}>Barcode</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.modeOption}
+            onPress={() => navigation.replace('PhotoScan')}
+          >
+            <Text style={styles.modeOptionText}>Photo</Text>
+          </TouchableOpacity>
+        </View>
+        <TouchableOpacity
           style={styles.flashButton}
           onPress={() => Alert.alert('Info', 'Use gallery to select ingredient images.')}
         >
@@ -581,6 +597,30 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: 'white',
+  },
+  modeSwitcher: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 999,
+    padding: 3,
+  },
+  modeOption: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  modeOptionActive: {
+    backgroundColor: 'white',
+  },
+  modeOptionText: {
+    color: 'rgba(255,255,255,0.75)',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  modeOptionTextActive: {
+    color: Colors.primaryDark,
+    fontSize: 13,
+    fontWeight: '800',
   },
   flashButton: {
     width: 44,

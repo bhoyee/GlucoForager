@@ -2,7 +2,7 @@
   "expo": {
     "name": "GlucoForager",
     "slug": "Mobile-GApp",
-    "version": "1.0.8",
+    "version": "1.0.10",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -14,16 +14,19 @@
     },
     "ios": {
       "supportsTablet": false,
-      "buildNumber": "15",
+      "buildNumber": "18",
       "infoPlist": {
         "NSCameraUsageDescription": "GlucoForager uses your camera to scan ingredients and identify items for diabetes-friendly recipe suggestions (e.g., take a photo of your fridge or pantry).",
         "NSPhotoLibraryUsageDescription": "Allow $(PRODUCT_NAME) to access your photo library to select ingredient images",
         "ITSAppUsesNonExemptEncryption": false
       },
-      "bundleIdentifier": "com.glucoforager.app"
+      "bundleIdentifier": "com.glucoforager.app",
+      "associatedDomains": [
+        "applinks:www.glucoforager.com"
+      ]
     },
     "android": {
-      "versionCode": 56,
+      "versionCode": 58,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -40,7 +43,24 @@
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_MEDIA_VIDEO"
       ],
-      "package": "com.glucoforager.app"
+      "package": "com.glucoforager.app",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "www.glucoforager.com",
+              "pathPrefix": "/resubscribe"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"

@@ -51,6 +51,7 @@ class User(Base):
     available_equipment = Column(JSON, nullable=True)
     cook_time_preference = Column(String, nullable=True)
     profile_completed = Column(Boolean, nullable=True)
+    daily_carb_goal_g = Column(Integer, nullable=True)
 
     searches = relationship("SearchLog", back_populates="user", cascade="all, delete-orphan")
     subscriptions = relationship("Subscription", back_populates="user")

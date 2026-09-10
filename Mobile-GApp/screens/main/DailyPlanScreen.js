@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert, Image } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,6 +8,7 @@ import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
 import { Colors } from '../../constants/Colors';
+import { trackEvent } from '../../utils/analytics';
 import RecipePlaceholder from '../../assets/images/recipe-placeholder.jpeg';
 
 const isPlaceholderImage = (item) => {
@@ -386,6 +387,7 @@ function MealPlanDetail({ meal, item, showImageLoading, onBack }) {
 }
 
 export default function DailyPlanScreen() {
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { signOut } = useAuth();
   const todayKey = dateKey();
@@ -527,12 +529,15 @@ export default function DailyPlanScreen() {
                 : 'Please try again.';
 
         if (response.status === 429) {
+          trackEvent('meal_plan_generation_blocked', { reason: 'rate_limited' });
           Alert.alert('Upgrade to Premium', String(message));
         } else {
+          trackEvent('meal_plan_generation_blocked', { reason: 'error' });
           Alert.alert('Could not generate plan', String(message));
         }
         return;
       }
+      trackEvent('meal_plan_generated', { regenerated: shouldForce });
       setPlan(data?.plan || null);
       setSelectedMeal(null);
     } finally {
@@ -559,19 +564,15 @@ export default function DailyPlanScreen() {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) + 8 }]}>
           <View style={styles.headerRow}>
+            <Pressable style={styles.backButton} onPress={() => navigation.navigate('Home')}>
+              <Ionicons name="arrow-back" size={20} color="white" />
+            </Pressable>
             <View style={styles.headerTitleRow}>
-              <View style={styles.headerIcon}>
-                <Ionicons name="calendar-outline" size={18} color="white" />
-              </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.headerTitle}>Daily Meal Planner</Text>
                 <Text style={styles.headerSubtitle}>A simple plan for steady blood sugar habits.</Text>
               </View>
             </View>
-            <Pressable style={styles.notificationButton}>
-              <Ionicons name="notifications-outline" size={21} color="white" />
-              <View style={styles.notificationDot} />
-            </Pressable>
           </View>
 
           {meals.length ? (
@@ -771,14 +772,6 @@ const styles = StyleSheet.create({
     gap: 12,
     flex: 1,
   },
-  headerIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   headerTitle: {
     fontSize: 22,
     fontWeight: '900',
@@ -790,25 +783,13 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontWeight: '600',
   },
-  notificationButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.14)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
-    position: 'relative',
-  },
-  notificationDot: {
-    position: 'absolute',
-    top: 8,
-    right: 9,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#B9F6CA',
+    backgroundColor: 'rgba(255,255,255,0.16)',
   },
   headerActions: {
     marginTop: 18,

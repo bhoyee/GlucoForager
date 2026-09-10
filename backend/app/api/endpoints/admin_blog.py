@@ -21,7 +21,9 @@ from ...models.newsletter_signup import NewsletterSignup
 from ...models.user import User
 from ...services.cache_service import CacheService
 from ...services.email_service import send_blog_post_newsletter_email, send_blog_post_to_user_email
+from ...services.html_sanitizer import RICH_CONTENT_ALLOWED_ATTRS, RICH_CONTENT_ALLOWED_TAGS, sanitize_html
 from ...services.newsletter_tokens import make_unsubscribe_token
+from ...services.r2_storage_service import r2_upload_bytes
 from ...services.staff_rbac_service import StaffRBACService
 
 router = APIRouter(prefix="/admin/blog", tags=["admin-blog"])
@@ -29,6 +31,19 @@ cache = CacheService()
 
 ALLOWED_POST_STATUSES = {"draft", "published", "scheduled"}
 ALLOWED_COMMENT_STATUSES = {"pending", "approved", "rejected", "deleted"}
+
+
+def _sanitize_blog_content(value: str) -> str:
+    # Blog content renders via dangerouslySetInnerHTML on the public site (and gets
+    # reused verbatim as an outbound email body for the "notify all users" broadcast
+    # below), so it must never carry through raw <script>/event-handler HTML from
+    # whatever the editor produced - strip to a safe rich-text allowlist at write time.
+    return sanitize_html(
+        value,
+        allowed_tags=RICH_CONTENT_ALLOWED_TAGS,
+        allowed_attrs=RICH_CONTENT_ALLOWED_ATTRS,
+        max_length=1_000_000,
+    )
 
 
 def _utcnow() -> datetime:
@@ -261,17 +276,26 @@ async def upload_blog_image(
     data = await file.read()
     if not data:
         raise HTTPException(status_code=400, detail="Empty file")
-    if len(data) > 5 * 1024 * 1024:
+    if len(data) > int(settings.blog_max_image_bytes):
         raise HTTPException(status_code=413, detail="Image too large (max 5MB)")
 
     original = (file.filename or "").strip()
     suffix = Path(original).suffix.lower()
     if suffix not in {".png", ".jpg", ".jpeg", ".webp", ".gif"}:
         suffix = ".png" if content_type.endswith("png") else ".jpg"
+    name = f"blog_{uuid.uuid4().hex}{suffix}"
+
+    backend = str(settings.blog_image_storage_backend or "local").strip().lower()
+    if backend == "r2":
+        upload_content_type = {
+            ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+            ".webp": "image/webp", ".gif": "image/gif",
+        }.get(suffix, content_type or "application/octet-stream")
+        url = r2_upload_bytes(key=f"blogimage/{name}", data=data, content_type=upload_content_type)
+        return {"ok": True, "url": url}
 
     folder = Path(settings.uploads_dir) / "blog"
     folder.mkdir(parents=True, exist_ok=True)
-    name = f"blog_{uuid.uuid4().hex}{suffix}"
     path = folder / name
     path.write_bytes(data)
 
@@ -369,7 +393,7 @@ def admin_create_post(
         seo_title=payload.seo_title.strip() if payload.seo_title else None,
         seo_description=payload.seo_description.strip() if payload.seo_description else None,
         focus_keyword=payload.focus_keyword.strip() if payload.focus_keyword else None,
-        content=payload.content.strip(),
+        content=_sanitize_blog_content(payload.content),
         status=normalized_status,
         author_name=payload.author_name.strip() if payload.author_name else None,
         published_at=published_at,
@@ -503,7 +527,7 @@ def admin_update_post(
     post.seo_title = payload.seo_title.strip() if payload.seo_title else None
     post.seo_description = payload.seo_description.strip() if payload.seo_description else None
     post.focus_keyword = payload.focus_keyword.strip() if payload.focus_keyword else None
-    post.content = payload.content.strip()
+    post.content = _sanitize_blog_content(payload.content)
     post.status = normalized_status
     post.author_name = payload.author_name.strip() if payload.author_name else None
     if normalized_status in {"published", "scheduled"}:

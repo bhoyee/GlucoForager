@@ -5,6 +5,7 @@ import { configureRevenueCat } from '../utils/revenuecat';
 import { API_ENDPOINTS, API_URL } from '../config/api';
 import { apiFetch, setAuthRefreshHandler } from '../utils/api';
 import { addDebugLog } from '../utils/debugLogger';
+import { identifyUser, resetAnalyticsIdentity } from '../utils/analytics';
 
 // Create the context
 const AuthContext = createContext({});
@@ -119,6 +120,9 @@ export function AuthProvider({ children }) {
           applyAccessFlags(profile);
 
           setUserToken(token);
+          if (resolvedPublicId) {
+            identifyUser(resolvedPublicId);
+          }
           await configureRevenueCat({
             token,
             publicId: resolvedPublicId,
@@ -293,6 +297,9 @@ export function AuthProvider({ children }) {
         applyAccessFlags(profile);
       }
       setUserToken(token);
+      if (publicId) {
+        identifyUser(publicId);
+      }
       await configureRevenueCat({
         token,
         publicId,
@@ -329,6 +336,8 @@ export function AuthProvider({ children }) {
     } catch (error) {
       console.warn('AsyncStorage sign-out cleanup failed (ignored):', error);
     }
+
+    resetAnalyticsIdentity();
 
     try {
       setUserToken(null);
