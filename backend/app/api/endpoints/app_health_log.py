@@ -96,9 +96,13 @@ class MealLogPayload(BaseModel):
         return cleaned
 
 
+GLUCOSE_CONTEXTS = ("fasting", "before_meal", "after_meal", "bedtime")
+
+
 class GlucoseLogPayload(BaseModel):
     value_mg_dl: int = Field(..., ge=20, le=600)
     note: str | None = Field(None, max_length=200)
+    context: str | None = Field(None, pattern="^(fasting|before_meal|after_meal|bedtime)$")
     logged_at: datetime | None = None
 
 
@@ -118,6 +122,7 @@ def _serialize_reading(reading: GlucoseReading) -> dict:
         "id": reading.id,
         "value_mg_dl": reading.value_mg_dl,
         "note": reading.note,
+        "context": reading.context,
         "logged_at": reading.logged_at.isoformat(),
     }
 
@@ -235,6 +240,7 @@ def log_glucose(
         user_id=current_user.id,
         value_mg_dl=payload.value_mg_dl,
         note=(payload.note or "").strip() or None,
+        context=payload.context,
         logged_at=logged_at,
     )
     db.add(reading)
@@ -244,12 +250,14 @@ def log_glucose(
         event_type="glucose_reading.created",
         label="Logged a glucose reading",
         source="mobile",
-        metadata={"value_mg_dl": reading.value_mg_dl},
+        metadata={"value_mg_dl": reading.value_mg_dl, "context": reading.context},
     )
     db.commit()
     db.refresh(reading)
 
-    preceding_meal = _find_preceding_meal(db, current_user.id, logged_at)
+    # A reading explicitly tagged "fasting" isn't a post-meal reading no matter what the
+    # time-window heuristic below would otherwise infer from a nearby meal log.
+    preceding_meal = None if reading.context == "fasting" else _find_preceding_meal(db, current_user.id, logged_at)
     is_spike = reading.value_mg_dl >= SPIKE_THRESHOLD_MGDL and preceding_meal is not None
 
     return {
@@ -274,7 +282,9 @@ def list_glucose(
     )
     items = []
     for reading in readings:
-        preceding_meal = _find_preceding_meal(db, current_user.id, reading.logged_at)
+        preceding_meal = (
+            None if reading.context == "fasting" else _find_preceding_meal(db, current_user.id, reading.logged_at)
+        )
         is_spike = reading.value_mg_dl >= SPIKE_THRESHOLD_MGDL and preceding_meal is not None
         entry = _serialize_reading(reading)
         entry["is_spike"] = is_spike

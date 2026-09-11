@@ -14,6 +14,13 @@ const MGDL_PER_MMOL = 18.0182;
 const MGDL_RANGE = { min: 20, max: 600 };
 const MMOL_RANGE = { min: 1.1, max: 33.3 };
 
+const CONTEXTS = [
+  { key: 'fasting', label: 'Fasting', icon: 'sunny-outline', color: '#16A34A' },
+  { key: 'before_meal', label: 'Before meal', icon: 'restaurant-outline', color: '#D97706' },
+  { key: 'after_meal', label: 'After meal', icon: 'restaurant-outline', color: '#7C3AED' },
+  { key: 'bedtime', label: 'Bedtime', icon: 'moon-outline', color: '#2563EB' },
+];
+
 export default function LogGlucoseScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -22,6 +29,7 @@ export default function LogGlucoseScreen() {
   const [unit, setUnit] = useState('mg/dL');
   const [value, setValue] = useState('');
   const [note, setNote] = useState('');
+  const [context, setContext] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -76,7 +84,11 @@ export default function LogGlucoseScreen() {
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ value_mg_dl: valueMgDl, note: note.trim() || undefined }),
+          body: JSON.stringify({
+            value_mg_dl: valueMgDl,
+            note: note.trim() || undefined,
+            context: context || undefined,
+          }),
         },
         { timeoutMs: 8000 }
       );
@@ -88,7 +100,7 @@ export default function LogGlucoseScreen() {
       const data = await response.json();
       // The actual reading value is never sent - only that a reading was logged,
       // and whether it was flagged as a spike (a state, not a health value).
-      trackEvent('glucose_logged', { unit, is_spike: Boolean(data?.is_spike) });
+      trackEvent('glucose_logged', { unit, is_spike: Boolean(data?.is_spike), context: context || 'none' });
       if (data?.is_spike && data?.flagged_meal) {
         Alert.alert(
           'Reading logged',
@@ -164,6 +176,27 @@ export default function LogGlucoseScreen() {
             onChangeText={setNote}
             multiline
           />
+
+          <Text style={[styles.label, { marginTop: 20, marginBottom: 10 }]}>When was this? (optional)</Text>
+          <View style={styles.contextRow}>
+            {CONTEXTS.map((c) => {
+              const selected = context === c.key;
+              return (
+                <TouchableOpacity
+                  key={c.key}
+                  style={[
+                    styles.contextChip,
+                    { backgroundColor: selected ? c.color : `${c.color}18` },
+                  ]}
+                  onPress={() => setContext(selected ? null : c.key)}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name={c.icon} size={14} color={selected ? 'white' : c.color} />
+                  <Text style={[styles.contextChipText, { color: selected ? 'white' : c.color }]}>{c.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
 
           <Text style={styles.hint}>
             If this follows a logged meal by 30 minutes to 3 hours and reads {spikeHint} or higher, we'll flag
@@ -248,6 +281,16 @@ const styles = StyleSheet.create({
     color: Colors.text,
     textAlignVertical: 'top',
   },
+  contextRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  contextChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  contextChipText: { fontSize: 12.5, fontWeight: '800' },
   hint: { marginTop: 14, fontSize: 12, lineHeight: 18, color: Colors.textLight, fontWeight: '600' },
   saveButton: {
     marginTop: 24,

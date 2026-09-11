@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/Colors';
 import { apiFetch } from '../../utils/api';
 import { API_URL } from '../../config/api';
+import GlucoseTrendChart from '../../components/GlucoseTrendChart';
 
 function formatDateTime(value) {
   if (!value) return '';
@@ -18,6 +19,12 @@ function formatDateTime(value) {
 }
 
 const SOURCE_LABEL = { manual: 'Typed', barcode: 'Barcode', photo: 'Photo' };
+const CONTEXT_LABEL = {
+  fasting: 'Fasting',
+  before_meal: 'Before meal',
+  after_meal: 'After meal',
+  bedtime: 'Bedtime',
+};
 const MGDL_PER_MMOL = 18.0182;
 
 function formatGlucoseValue(valueMgDl) {
@@ -37,6 +44,7 @@ export default function FoodLogScreen() {
   const headerPaddingTop = Math.max(insets.top, 16);
 
   const [entries, setEntries] = useState([]);
+  const [glucoseReadings, setGlucoseReadings] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [filter, setFilter] = useState('all');
@@ -64,6 +72,7 @@ export default function FoodLogScreen() {
       ].sort((a, b) => new Date(b.logged_at) - new Date(a.logged_at));
 
       setEntries(merged);
+      setGlucoseReadings(readings);
     } catch {
       // Leave whatever was already loaded - a transient failure here shouldn't wipe the list.
     } finally {
@@ -139,6 +148,7 @@ export default function FoodLogScreen() {
             {formatDateTime(item.logged_at)}
             {isMeal && item.source ? ` • ${SOURCE_LABEL[item.source] || item.source}` : ''}
             {isMeal && item.carbs_g != null ? ` • ${item.carbs_g}g carbs` : ''}
+            {!isMeal && item.context ? ` • ${CONTEXT_LABEL[item.context] || item.context}` : ''}
             {!isMeal && item.note ? ` • ${item.note}` : ''}
           </Text>
           {isSpike ? (
@@ -214,6 +224,13 @@ export default function FoodLogScreen() {
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={Colors.primary} />}
+          ListHeaderComponent={
+            filter !== 'meal' ? (
+              <View style={styles.chartWrap}>
+                <GlucoseTrendChart readings={glucoseReadings} />
+              </View>
+            ) : null
+          }
         />
       )}
 
@@ -309,6 +326,14 @@ export default function FoodLogScreen() {
                         {(selectedEntry.value_mg_dl / MGDL_PER_MMOL).toFixed(1)}
                       </Text>
                     </View>
+                    {selectedEntry.context ? (
+                      <View style={styles.modalDetailRow}>
+                        <Text style={styles.modalDetailLabel}>When</Text>
+                        <Text style={styles.modalDetailValue}>
+                          {CONTEXT_LABEL[selectedEntry.context] || selectedEntry.context}
+                        </Text>
+                      </View>
+                    ) : null}
                     {selectedEntry.note ? (
                       <View style={styles.modalDetailRow}>
                         <Text style={styles.modalDetailLabel}>Note</Text>
@@ -376,6 +401,7 @@ const styles = StyleSheet.create({
   centerState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40, gap: 12 },
   emptyText: { fontSize: 14, color: Colors.textLight, fontWeight: '600', textAlign: 'center', lineHeight: 20 },
   listContent: { padding: 20, gap: 10 },
+  chartWrap: { marginBottom: 10 },
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
