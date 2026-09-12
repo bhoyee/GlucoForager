@@ -193,16 +193,6 @@ export default function LogGlucoseScreen() {
           <Text style={[styles.label, { marginTop: 20, marginBottom: 10 }]}>How long ago was this?</Text>
           <TimeAgoSelector value={minutesAgo} onChange={setMinutesAgo} />
 
-          <Text style={[styles.label, { marginTop: 20 }]}>Note (optional)</Text>
-          <TextInput
-            style={styles.noteInput}
-            placeholder="e.g. Before lunch, felt fine"
-            placeholderTextColor={Colors.textMuted}
-            value={note}
-            onChangeText={setNote}
-            multiline
-          />
-
           <Text style={[styles.label, { marginTop: 20, marginBottom: 10 }]}>Reading context (optional)</Text>
           <View style={styles.contextRow}>
             {CONTEXTS.map((c) => {
@@ -223,6 +213,16 @@ export default function LogGlucoseScreen() {
               );
             })}
           </View>
+
+          <Text style={[styles.label, { marginTop: 20 }]}>Note (optional)</Text>
+          <TextInput
+            style={styles.noteInput}
+            placeholder="e.g. Before lunch, felt fine"
+            placeholderTextColor={Colors.textMuted}
+            value={note}
+            onChangeText={setNote}
+            multiline
+          />
 
           <Text style={styles.hint}>
             If this follows a logged meal by 30 minutes to 3 hours and reads {spikeHint} or higher, we'll flag
