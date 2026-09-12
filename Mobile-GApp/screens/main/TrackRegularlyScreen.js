@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -264,9 +264,14 @@ export default function TrackRegularlyScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    load(days);
-  }, [days, load]);
+  // Refetches every time this screen comes into focus (not just on first mount) -
+  // so returning here after logging a new reading elsewhere always shows current
+  // data, the same pattern HomeScreen uses for its own stats.
+  useFocusEffect(
+    useCallback(() => {
+      load(days);
+    }, [days, load])
+  );
 
   const sorted = [...readings].sort((a, b) => new Date(a.logged_at) - new Date(b.logged_at));
 
