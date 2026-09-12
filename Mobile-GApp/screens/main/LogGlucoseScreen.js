@@ -109,7 +109,15 @@ export default function LogGlucoseScreen() {
         context: context || 'none',
         general_alert: data?.general_alert || 'none',
         minutes_ago: minutesAgo,
+        duplicate: Boolean(data?.duplicate),
       });
+      if (data?.duplicate) {
+        // Backend recognized this as the same value/context you just logged seconds
+        // ago (a double-tap or retry) and returned that existing entry rather than
+        // creating a second one - nothing new to alert on, just move on.
+        navigation.goBack();
+        return;
+      }
       if (data?.is_spike && data?.flagged_meal) {
         Alert.alert(
           'Reading logged',
