@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, RefreshControl, ActivityIndicator, Alert, Modal, ScrollView } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -40,6 +40,7 @@ const FILTERS = [
 
 export default function FoodLogScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
   const insets = useSafeAreaInsets();
   const headerPaddingTop = Math.max(insets.top, 16);
 
@@ -47,7 +48,7 @@ export default function FoodLogScreen() {
   const [glucoseReadings, setGlucoseReadings] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [filter, setFilter] = useState('all');
+  const [filter, setFilter] = useState(route.params?.initialFilter === 'glucose' ? 'glucose' : 'all');
   const [selectedEntry, setSelectedEntry] = useState(null);
 
   const loadEntries = useCallback(async ({ silent = false } = {}) => {
