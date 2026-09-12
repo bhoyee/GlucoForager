@@ -132,6 +132,8 @@ function ProfileStackNavigator() {
       <ProfileStack.Screen name="FoodPreferences" component={FoodPreferencesScreen} />
       <ProfileStack.Screen name="ShoppingList" component={ShoppingListScreen} />
       <ProfileStack.Screen name="WeeklyRecap" component={WeeklyRecapScreen} />
+      <ProfileStack.Screen name="TrackRegularly" component={TrackRegularlyScreen} />
+      <ProfileStack.Screen name="FoodLog" component={FoodLogScreen} />
       <ProfileStack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
       <ProfileStack.Screen name="Terms" component={TermsScreen} />
       <ProfileStack.Screen name="DebugLogs" component={DebugLogsScreen} />
