@@ -88,25 +88,40 @@ const PAD_X = 6;
 const PAD_TOP = 16;
 const PAD_BOTTOM = 26;
 
-function GlucoseTrendCard({ dayPoints, average, rangeLabel, unit }) {
+function GlucoseTrendCard({ dayPoints, average, rangeLabel, unit, windowStartMs, windowEndMs, days }) {
   const [chartWidth, setChartWidth] = useState(0);
   const plotWidth = Math.max(chartWidth - PAD_X * 2, 1);
   const plotHeight = CHART_HEIGHT - PAD_TOP - PAD_BOTTOM;
 
   const yFor = (v) => PAD_TOP + plotHeight - (Math.min(v, CHART_Y_MAX) / CHART_Y_MAX) * plotHeight;
-  const xFor = (i) => (dayPoints.length <= 1 ? PAD_X : PAD_X + (i / (dayPoints.length - 1)) * plotWidth);
+  // Positioned by real elapsed time within the selected window, not by index among
+  // however many days happen to have data - otherwise 2 readings from the same
+  // week render identically whether you picked 7, 30, or 90 days, since evenly
+  // spacing 2 points always fills the same width regardless of the real time gap.
+  const windowSpan = Math.max(windowEndMs - windowStartMs, 1);
+  const xFor = (ms) => {
+    const ratio = Math.min(1, Math.max(0, (ms - windowStartMs) / windowSpan));
+    return PAD_X + ratio * plotWidth;
+  };
 
   const bandTop = yFor(TARGET_HIGH);
   const bandBottom = yFor(TARGET_LOW);
-  const svgPoints = dayPoints.map((p, i) => `${xFor(i)},${yFor(p.value)}`).join(' ');
+  const svgPoints = dayPoints.map((p) => `${xFor(p.dateMs)},${yFor(p.value)}`).join(' ');
   // Built as one plain string, not interleaved JSX text+expression children -
   // react-native-svg's <Text> only reliably renders the first child fragment when
   // given several separate ones, which was silently dropping everything after
   // "Target ".
   const targetLabel = `Target ${formatGlucose(TARGET_LOW, unit)}-${formatGlucose(TARGET_HIGH, unit)} ${unit}`;
 
-  // Thin out x-axis day labels so 30/90-day views don't overlap.
-  const labelEvery = dayPoints.length <= 8 ? 1 : Math.ceil(dayPoints.length / 6);
+  // X-axis ticks are evenly spaced across the selected window itself (not tied to
+  // which days actually have a reading), so the axis always reflects what you
+  // picked - one tick per day for a week, otherwise a handful spread across it.
+  const tickCount = days <= 7 ? days : 6;
+  const ticks = Array.from({ length: tickCount }, (_, i) => {
+    const ratio = tickCount === 1 ? 0 : i / (tickCount - 1);
+    const ms = windowStartMs + ratio * windowSpan;
+    return { ms, label: new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(ms)) };
+  });
 
   return (
     <View style={styles.card}>
@@ -157,13 +172,13 @@ function GlucoseTrendCard({ dayPoints, average, rangeLabel, unit }) {
                       strokeWidth={1}
                     />
                   ))}
-                  {/* Vertical gridlines under each day point */}
-                  {dayPoints.map((p, i) => (
+                  {/* Vertical gridlines at each axis tick across the selected window */}
+                  {ticks.map((t, i) => (
                     <Line
-                      key={`v-${p.dateKey}`}
-                      x1={xFor(i)}
+                      key={`v-${i}`}
+                      x1={xFor(t.ms)}
                       y1={PAD_TOP}
-                      x2={xFor(i)}
+                      x2={xFor(t.ms)}
                       y2={CHART_HEIGHT - PAD_BOTTOM}
                       stroke={Colors.border}
                       strokeWidth={1}
@@ -180,10 +195,10 @@ function GlucoseTrendCard({ dayPoints, average, rangeLabel, unit }) {
                       strokeLinecap="round"
                     />
                   ) : null}
-                  {dayPoints.map((p, i) => (
+                  {dayPoints.map((p) => (
                     <Circle
                       key={p.dateKey}
-                      cx={xFor(i)}
+                      cx={xFor(p.dateMs)}
                       cy={yFor(p.value)}
                       r={5}
                       fill={BUCKET_COLOR[bucketFor(p.value)]}
@@ -207,9 +222,9 @@ function GlucoseTrendCard({ dayPoints, average, rangeLabel, unit }) {
           </View>
 
           <View style={styles.xAxisRow}>
-            {dayPoints.map((p, i) => (
-              <Text key={p.dateKey} style={styles.xAxisLabel}>
-                {i % labelEvery === 0 ? p.label : ''}
+            {ticks.map((t, i) => (
+              <Text key={i} style={styles.xAxisLabel}>
+                {t.label}
               </Text>
             ))}
           </View>
@@ -288,9 +303,21 @@ export default function TrackRegularlyScreen() {
   });
   const dayPoints = Array.from(byDay.entries()).map(([dateKey, b]) => ({
     dateKey,
+    dateMs: b.date.getTime(),
     value: Math.round(b.total / b.count),
-    label: new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(b.date),
   }));
+
+  // The window is always exactly what was picked (today back `days` days), not
+  // just the span between the earliest and latest reading - otherwise a 30 or
+  // 90-day pick collapses back to "however many days actually have data",
+  // making all three range tabs look identical whenever your data is recent.
+  const now = new Date();
+  const windowEndMs = now.getTime();
+  const windowStart = new Date(now);
+  windowStart.setDate(windowStart.getDate() - (days - 1));
+  windowStart.setHours(0, 0, 0, 0);
+  const windowStartMs = windowStart.getTime();
+  const dateFormatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
 
   const average = readings.length
     ? Math.round(readings.reduce((sum, r) => sum + r.value_mg_dl, 0) / readings.length)
@@ -305,10 +332,7 @@ export default function TrackRegularlyScreen() {
   const total = readings.length || 1;
   const pct = (n) => Math.round((n / total) * 100);
 
-  const rangeLabel =
-    dayPoints.length > 0
-      ? `${dayPoints[0].label} - ${dayPoints[dayPoints.length - 1].label}`
-      : `Last ${days} days`;
+  const rangeLabel = `${dateFormatter.format(windowStart)} - ${dateFormatter.format(now)}`;
 
   const recentReadings = [...readings]
     .sort((a, b) => new Date(b.logged_at) - new Date(a.logged_at))
@@ -374,7 +398,15 @@ export default function TrackRegularlyScreen() {
             </View>
           ) : (
             <>
-              <GlucoseTrendCard dayPoints={dayPoints} average={average} rangeLabel={rangeLabel} unit={unit} />
+              <GlucoseTrendCard
+                dayPoints={dayPoints}
+                average={average}
+                rangeLabel={rangeLabel}
+                unit={unit}
+                windowStartMs={windowStartMs}
+                windowEndMs={windowEndMs}
+                days={days}
+              />
 
               <View style={styles.statsCard}>
                 <View style={styles.statColumn}>
