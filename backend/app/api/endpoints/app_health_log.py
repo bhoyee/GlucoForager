@@ -93,6 +93,47 @@ def _enforce_log_rate_limit(user_id: int, kind: str) -> None:
         )
 
 
+# Catches an accidental double-submit (double-tap, a network retry after a slow
+# response the client thinks failed) rather than deliberate re-logging - keyed off
+# created_at (the real submission instant), not logged_at, since logged_at can be
+# legitimately backdated via TimeAgoSelector and two distinct entries could share
+# one. A short window and an exact-value match keeps this from ever colliding with
+# a real second reading/meal a user logs on purpose.
+DUPLICATE_WINDOW_SECONDS = 15
+
+
+def _recent_duplicate_glucose(
+    db: Session, user_id: int, value_mg_dl: int, context: str | None
+) -> GlucoseReading | None:
+    since = datetime.utcnow() - timedelta(seconds=DUPLICATE_WINDOW_SECONDS)
+    return (
+        db.query(GlucoseReading)
+        .filter(
+            GlucoseReading.user_id == user_id,
+            GlucoseReading.value_mg_dl == value_mg_dl,
+            GlucoseReading.context == context,
+            GlucoseReading.created_at >= since,
+        )
+        .order_by(GlucoseReading.created_at.desc())
+        .first()
+    )
+
+
+def _recent_duplicate_meal(db: Session, user_id: int, description: str, source: str) -> MealLogEntry | None:
+    since = datetime.utcnow() - timedelta(seconds=DUPLICATE_WINDOW_SECONDS)
+    return (
+        db.query(MealLogEntry)
+        .filter(
+            MealLogEntry.user_id == user_id,
+            MealLogEntry.description == description,
+            MealLogEntry.source == source,
+            MealLogEntry.created_at >= since,
+        )
+        .order_by(MealLogEntry.created_at.desc())
+        .first()
+    )
+
+
 class MealLogPayload(BaseModel):
     description: str = Field(..., min_length=1, max_length=200)
     logged_at: datetime | None = None
@@ -120,6 +161,20 @@ class GlucoseLogPayload(BaseModel):
     note: str | None = Field(None, max_length=200)
     context: str | None = Field(None, pattern="^(fasting|before_meal|after_meal|bedtime)$")
     logged_at: datetime | None = None
+
+    @field_validator("note")
+    @classmethod
+    def _note_must_have_letters_if_present(cls, value: str | None) -> str | None:
+        # Same cheap guard as MealLogPayload.description, but note is optional - an
+        # empty/blank note is fine, it just can't be non-empty junk like "111".
+        if value is None:
+            return value
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        if not any(ch.isalpha() for ch in cleaned):
+            raise ValueError("Note must include some actual words, not just numbers or symbols.")
+        return cleaned
 
 
 def _serialize_meal(meal: MealLogEntry) -> dict:
@@ -181,10 +236,15 @@ def log_meal(
     current_user: User = Depends(get_current_user),
 ):
     _enforce_log_rate_limit(current_user.id, "meal")
+    description = payload.description.strip()
+    duplicate = _recent_duplicate_meal(db, current_user.id, description, payload.source)
+    if duplicate:
+        return {"meal": _serialize_meal(duplicate), "duplicate": True}
+
     logged_at = payload.logged_at or datetime.utcnow()
     meal = MealLogEntry(
         user_id=current_user.id,
-        description=payload.description.strip(),
+        description=description,
         source=payload.source,
         carbs_g=payload.carbs_g,
         calories=payload.calories,
@@ -201,7 +261,7 @@ def log_meal(
     )
     db.commit()
     db.refresh(meal)
-    return {"meal": _serialize_meal(meal)}
+    return {"meal": _serialize_meal(meal), "duplicate": False}
 
 
 @router.get("/meals")
@@ -251,6 +311,20 @@ def log_glucose(
     current_user: User = Depends(get_current_user),
 ):
     _enforce_log_rate_limit(current_user.id, "glucose")
+    duplicate = _recent_duplicate_glucose(db, current_user.id, payload.value_mg_dl, payload.context)
+    if duplicate:
+        dup_preceding_meal = (
+            None if duplicate.context == "fasting" else _find_preceding_meal(db, current_user.id, duplicate.logged_at)
+        )
+        dup_is_spike = duplicate.value_mg_dl >= SPIKE_THRESHOLD_MGDL and dup_preceding_meal is not None
+        return {
+            "reading": _serialize_reading(duplicate),
+            "is_spike": dup_is_spike,
+            "flagged_meal": _serialize_meal(dup_preceding_meal) if dup_is_spike else None,
+            "general_alert": _general_alert(duplicate.value_mg_dl),
+            "duplicate": True,
+        }
+
     logged_at = payload.logged_at or datetime.utcnow()
     reading = GlucoseReading(
         user_id=current_user.id,
@@ -281,6 +355,7 @@ def log_glucose(
         "is_spike": is_spike,
         "flagged_meal": _serialize_meal(preceding_meal) if is_spike else None,
         "general_alert": _general_alert(reading.value_mg_dl),
+        "duplicate": False,
     }
 
 

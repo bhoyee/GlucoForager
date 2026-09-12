@@ -47,8 +47,13 @@ export default function LogMealScreen() {
         Alert.alert('Unable to log meal', data?.detail?.message || data?.detail || 'Please try again.');
         return;
       }
+      const data = await response.json().catch(() => ({}));
       // Description text itself is never sent - only that a meal was logged.
-      trackEvent('meal_logged', { source: 'manual', minutes_ago: minutesAgo });
+      trackEvent('meal_logged', {
+        source: 'manual',
+        minutes_ago: minutesAgo,
+        duplicate: Boolean(data?.duplicate),
+      });
       navigation.goBack();
     } catch {
       Alert.alert('Unable to log meal', 'Network request failed. Please check your connection.');
