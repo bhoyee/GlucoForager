@@ -27,6 +27,22 @@ SPIKE_WINDOW_MIN_MINUTES = 30
 SPIKE_WINDOW_MAX_MINUTES = 180
 LOG_HISTORY_DAYS = 14
 
+# A second, independent check that doesn't depend on a nearby meal log at all - so a
+# reading logged on its own (no meal, or outside the spike window) still gets real
+# feedback instead of silently passing through unflagged. Standard ADA-referenced
+# general alert bands, deliberately separate from the post-meal SPIKE_THRESHOLD_MGDL
+# above (which specifically means "spiked after eating", not "high in general").
+GENERAL_LOW_ALERT_MGDL = 70
+GENERAL_HIGH_ALERT_MGDL = 250
+
+
+def _general_alert(value_mg_dl: int) -> str | None:
+    if value_mg_dl <= GENERAL_LOW_ALERT_MGDL:
+        return "low"
+    if value_mg_dl >= GENERAL_HIGH_ALERT_MGDL:
+        return "high"
+    return None
+
 # Default daily carb target shown on the home screen ring when the user hasn't set
 # their own. Matches the per-meal ceilings recipe_generation_service.py already flags
 # recipes against (30g breakfast/snack, 35g lunch/dinner) summed across a normal day.
@@ -77,12 +93,66 @@ def _enforce_log_rate_limit(user_id: int, kind: str) -> None:
         )
 
 
+# Primary duplicate guard: a client-generated idempotency key (regenerated on the
+# mobile side whenever the user actually edits a field, kept stable across a retry
+# of the exact same tap). This is the correct fix for "double-tap / retry after a
+# perceived timeout" - unlike a content+time-window guess, it can never confuse a
+# genuine second reading/meal with a retry, no matter how close together in time,
+# because it only matches an actual repeat of the same submission, not similar
+# values. TTL just needs to outlast any realistic client retry delay.
+IDEMPOTENCY_TTL_SECONDS = 300
+
+
+def _idempotency_cache_key(kind: str, user_id: int, idempotency_key: str) -> str:
+    return f"health_log:idem:v1:{kind}:user:{user_id}:{idempotency_key}"
+
+
+# Fallback only, for a client that doesn't send an idempotency key (e.g. an older
+# app build mid-rollout). Deliberately a tight window now that the key above is the
+# real mechanism - this just catches a true near-simultaneous double-fire, not
+# "logged the same number twice within a minute", which is well within normal use.
+DUPLICATE_WINDOW_SECONDS = 5
+
+
+def _recent_duplicate_glucose(
+    db: Session, user_id: int, value_mg_dl: int, context: str | None
+) -> GlucoseReading | None:
+    since = datetime.utcnow() - timedelta(seconds=DUPLICATE_WINDOW_SECONDS)
+    return (
+        db.query(GlucoseReading)
+        .filter(
+            GlucoseReading.user_id == user_id,
+            GlucoseReading.value_mg_dl == value_mg_dl,
+            GlucoseReading.context == context,
+            GlucoseReading.created_at >= since,
+        )
+        .order_by(GlucoseReading.created_at.desc())
+        .first()
+    )
+
+
+def _recent_duplicate_meal(db: Session, user_id: int, description: str, source: str) -> MealLogEntry | None:
+    since = datetime.utcnow() - timedelta(seconds=DUPLICATE_WINDOW_SECONDS)
+    return (
+        db.query(MealLogEntry)
+        .filter(
+            MealLogEntry.user_id == user_id,
+            MealLogEntry.description == description,
+            MealLogEntry.source == source,
+            MealLogEntry.created_at >= since,
+        )
+        .order_by(MealLogEntry.created_at.desc())
+        .first()
+    )
+
+
 class MealLogPayload(BaseModel):
     description: str = Field(..., min_length=1, max_length=200)
     logged_at: datetime | None = None
     source: str = Field("manual", pattern="^(manual|barcode|photo)$")
     carbs_g: float | None = Field(None, ge=0, le=1000)
     calories: int | None = Field(None, ge=0, le=10000)
+    idempotency_key: str | None = Field(None, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
 
     @field_validator("description")
     @classmethod
@@ -96,10 +166,29 @@ class MealLogPayload(BaseModel):
         return cleaned
 
 
+GLUCOSE_CONTEXTS = ("fasting", "before_meal", "after_meal", "bedtime")
+
+
 class GlucoseLogPayload(BaseModel):
     value_mg_dl: int = Field(..., ge=20, le=600)
     note: str | None = Field(None, max_length=200)
+    context: str | None = Field(None, pattern="^(fasting|before_meal|after_meal|bedtime)$")
     logged_at: datetime | None = None
+    idempotency_key: str | None = Field(None, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+
+    @field_validator("note")
+    @classmethod
+    def _note_must_have_letters_if_present(cls, value: str | None) -> str | None:
+        # Same cheap guard as MealLogPayload.description, but note is optional - an
+        # empty/blank note is fine, it just can't be non-empty junk like "111".
+        if value is None:
+            return value
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        if not any(ch.isalpha() for ch in cleaned):
+            raise ValueError("Note must include some actual words, not just numbers or symbols.")
+        return cleaned
 
 
 def _serialize_meal(meal: MealLogEntry) -> dict:
@@ -118,6 +207,7 @@ def _serialize_reading(reading: GlucoseReading) -> dict:
         "id": reading.id,
         "value_mg_dl": reading.value_mg_dl,
         "note": reading.note,
+        "context": reading.context,
         "logged_at": reading.logged_at.isoformat(),
     }
 
@@ -160,10 +250,30 @@ def log_meal(
     current_user: User = Depends(get_current_user),
 ):
     _enforce_log_rate_limit(current_user.id, "meal")
+    description = payload.description.strip()
+
+    idem_key = (
+        _idempotency_cache_key("meal", current_user.id, payload.idempotency_key)
+        if payload.idempotency_key
+        else None
+    )
+    if idem_key:
+        cached_id = cache.get(idem_key)
+        if cached_id:
+            cached_meal = db.query(MealLogEntry).filter(MealLogEntry.id == int(cached_id)).first()
+            if cached_meal:
+                return {"meal": _serialize_meal(cached_meal), "duplicate": True}
+    else:
+        # No idempotency key from this client - fall back to the tight content+time
+        # window guard so an old app build isn't left with zero duplicate protection.
+        duplicate = _recent_duplicate_meal(db, current_user.id, description, payload.source)
+        if duplicate:
+            return {"meal": _serialize_meal(duplicate), "duplicate": True}
+
     logged_at = payload.logged_at or datetime.utcnow()
     meal = MealLogEntry(
         user_id=current_user.id,
-        description=payload.description.strip(),
+        description=description,
         source=payload.source,
         carbs_g=payload.carbs_g,
         calories=payload.calories,
@@ -180,7 +290,9 @@ def log_meal(
     )
     db.commit()
     db.refresh(meal)
-    return {"meal": _serialize_meal(meal)}
+    if idem_key:
+        cache.set(idem_key, str(meal.id), ttl_seconds=IDEMPOTENCY_TTL_SECONDS)
+    return {"meal": _serialize_meal(meal), "duplicate": False}
 
 
 @router.get("/meals")
@@ -223,6 +335,20 @@ def delete_meal(
     return {"detail": "Deleted"}
 
 
+def _glucose_response(db: Session, user_id: int, reading: GlucoseReading, *, duplicate: bool) -> dict:
+    # A reading explicitly tagged "fasting" isn't a post-meal reading no matter what
+    # the time-window heuristic would otherwise infer from a nearby meal log.
+    preceding_meal = None if reading.context == "fasting" else _find_preceding_meal(db, user_id, reading.logged_at)
+    is_spike = reading.value_mg_dl >= SPIKE_THRESHOLD_MGDL and preceding_meal is not None
+    return {
+        "reading": _serialize_reading(reading),
+        "is_spike": is_spike,
+        "flagged_meal": _serialize_meal(preceding_meal) if is_spike else None,
+        "general_alert": _general_alert(reading.value_mg_dl),
+        "duplicate": duplicate,
+    }
+
+
 @router.post("/glucose")
 def log_glucose(
     payload: GlucoseLogPayload,
@@ -230,11 +356,31 @@ def log_glucose(
     current_user: User = Depends(get_current_user),
 ):
     _enforce_log_rate_limit(current_user.id, "glucose")
+
+    idem_key = (
+        _idempotency_cache_key("glucose", current_user.id, payload.idempotency_key)
+        if payload.idempotency_key
+        else None
+    )
+    if idem_key:
+        cached_id = cache.get(idem_key)
+        if cached_id:
+            cached_reading = db.query(GlucoseReading).filter(GlucoseReading.id == int(cached_id)).first()
+            if cached_reading:
+                return _glucose_response(db, current_user.id, cached_reading, duplicate=True)
+    else:
+        # No idempotency key from this client - fall back to the tight content+time
+        # window guard so an old app build isn't left with zero duplicate protection.
+        duplicate = _recent_duplicate_glucose(db, current_user.id, payload.value_mg_dl, payload.context)
+        if duplicate:
+            return _glucose_response(db, current_user.id, duplicate, duplicate=True)
+
     logged_at = payload.logged_at or datetime.utcnow()
     reading = GlucoseReading(
         user_id=current_user.id,
         value_mg_dl=payload.value_mg_dl,
         note=(payload.note or "").strip() or None,
+        context=payload.context,
         logged_at=logged_at,
     )
     db.add(reading)
@@ -244,41 +390,40 @@ def log_glucose(
         event_type="glucose_reading.created",
         label="Logged a glucose reading",
         source="mobile",
-        metadata={"value_mg_dl": reading.value_mg_dl},
+        metadata={"value_mg_dl": reading.value_mg_dl, "context": reading.context},
     )
     db.commit()
     db.refresh(reading)
+    if idem_key:
+        cache.set(idem_key, str(reading.id), ttl_seconds=IDEMPOTENCY_TTL_SECONDS)
 
-    preceding_meal = _find_preceding_meal(db, current_user.id, logged_at)
-    is_spike = reading.value_mg_dl >= SPIKE_THRESHOLD_MGDL and preceding_meal is not None
-
-    return {
-        "reading": _serialize_reading(reading),
-        "is_spike": is_spike,
-        "flagged_meal": _serialize_meal(preceding_meal) if is_spike else None,
-    }
+    return _glucose_response(db, current_user.id, reading, duplicate=False)
 
 
 @router.get("/glucose")
 def list_glucose(
+    days: int = Query(LOG_HISTORY_DAYS, ge=1, le=90),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    since = datetime.utcnow() - timedelta(days=LOG_HISTORY_DAYS)
+    since = datetime.utcnow() - timedelta(days=days)
     readings = (
         db.query(GlucoseReading)
         .filter(GlucoseReading.user_id == current_user.id, GlucoseReading.logged_at >= since)
         .order_by(GlucoseReading.logged_at.desc())
-        .limit(200)
+        .limit(1000)
         .all()
     )
     items = []
     for reading in readings:
-        preceding_meal = _find_preceding_meal(db, current_user.id, reading.logged_at)
+        preceding_meal = (
+            None if reading.context == "fasting" else _find_preceding_meal(db, current_user.id, reading.logged_at)
+        )
         is_spike = reading.value_mg_dl >= SPIKE_THRESHOLD_MGDL and preceding_meal is not None
         entry = _serialize_reading(reading)
         entry["is_spike"] = is_spike
         entry["flagged_meal"] = _serialize_meal(preceding_meal) if is_spike else None
+        entry["general_alert"] = _general_alert(reading.value_mg_dl)
         items.append(entry)
     return {"items": items}
 

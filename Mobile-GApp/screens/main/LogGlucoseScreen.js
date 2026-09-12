@@ -8,11 +8,20 @@ import { Colors } from '../../constants/Colors';
 import { apiFetch } from '../../utils/api';
 import { API_URL } from '../../config/api';
 import { trackEvent } from '../../utils/analytics';
+import TimeAgoSelector, { TIME_AGO_OPTIONS, loggedAtFromMinutesAgo } from '../../components/TimeAgoSelector';
+import { generateIdempotencyKey } from '../../utils/idempotency';
 
 const UNIT_PREF_KEY = 'glucose_unit_pref_v1';
 const MGDL_PER_MMOL = 18.0182;
 const MGDL_RANGE = { min: 20, max: 600 };
 const MMOL_RANGE = { min: 1.1, max: 33.3 };
+
+const CONTEXTS = [
+  { key: 'fasting', label: 'Fasting', icon: 'sunny-outline', color: '#16A34A' },
+  { key: 'before_meal', label: 'Before meal', icon: 'restaurant-outline', color: '#D97706' },
+  { key: 'after_meal', label: 'After meal', icon: 'restaurant-outline', color: '#7C3AED' },
+  { key: 'bedtime', label: 'Bedtime', icon: 'moon-outline', color: '#2563EB' },
+];
 
 export default function LogGlucoseScreen() {
   const navigation = useNavigation();
@@ -22,7 +31,17 @@ export default function LogGlucoseScreen() {
   const [unit, setUnit] = useState('mg/dL');
   const [value, setValue] = useState('');
   const [note, setNote] = useState('');
+  const [context, setContext] = useState(null);
+  const [minutesAgo, setMinutesAgo] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
+  // Stays the same across a retry of this exact attempt (e.g. a timeout the user
+  // responds to by tapping Log reading again), but regenerates whenever the actual
+  // entry changes - so a real second reading is never mistaken for a retry.
+  const [idempotencyKey, setIdempotencyKey] = useState(generateIdempotencyKey);
+
+  useEffect(() => {
+    setIdempotencyKey(generateIdempotencyKey());
+  }, [value, unit, note, context, minutesAgo]);
 
   useEffect(() => {
     AsyncStorage.getItem(UNIT_PREF_KEY)
@@ -76,7 +95,13 @@ export default function LogGlucoseScreen() {
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ value_mg_dl: valueMgDl, note: note.trim() || undefined }),
+          body: JSON.stringify({
+            value_mg_dl: valueMgDl,
+            note: note.trim() || undefined,
+            context: context || undefined,
+            logged_at: loggedAtFromMinutesAgo(minutesAgo),
+            idempotency_key: idempotencyKey,
+          }),
         },
         { timeoutMs: 8000 }
       );
@@ -88,11 +113,35 @@ export default function LogGlucoseScreen() {
       const data = await response.json();
       // The actual reading value is never sent - only that a reading was logged,
       // and whether it was flagged as a spike (a state, not a health value).
-      trackEvent('glucose_logged', { unit, is_spike: Boolean(data?.is_spike) });
+      trackEvent('glucose_logged', {
+        unit,
+        is_spike: Boolean(data?.is_spike),
+        context: context || 'none',
+        general_alert: data?.general_alert || 'none',
+        minutes_ago: minutesAgo,
+        duplicate: Boolean(data?.duplicate),
+      });
+      if (data?.duplicate) {
+        // Backend recognized this as the same value/context you just logged seconds
+        // ago (a double-tap or retry) and returned that existing entry rather than
+        // creating a second one - nothing new to alert on, just move on.
+        navigation.goBack();
+        return;
+      }
       if (data?.is_spike && data?.flagged_meal) {
         Alert.alert(
           'Reading logged',
           `This is higher than usual, and follows "${data.flagged_meal.description}" - worth keeping an eye on if it happens again.`,
+          [{ text: 'Got it', onPress: () => navigation.goBack() }]
+        );
+        return;
+      }
+      if (data?.general_alert === 'low' || data?.general_alert === 'high') {
+        Alert.alert(
+          'Reading logged',
+          data.general_alert === 'low'
+            ? "This reading is on the low side. If you're feeling unwell, treat it the way you normally would."
+            : "This reading is quite high on its own, whether or not it followed a meal - worth keeping an eye on.",
           [{ text: 'Got it', onPress: () => navigation.goBack() }]
         );
         return;
@@ -120,7 +169,11 @@ export default function LogGlucoseScreen() {
             </TouchableOpacity>
             <View style={styles.headerText}>
               <Text style={styles.headerTitle}>Log glucose</Text>
-              <Text style={styles.headerSubtitle}>Logged as right now</Text>
+              <Text style={styles.headerSubtitle}>
+                {minutesAgo === 0
+                  ? 'Logged as right now'
+                  : `Logged as ${TIME_AGO_OPTIONS.find((o) => o.minutesAgo === minutesAgo)?.label}`}
+              </Text>
             </View>
             <View style={{ width: 44 }} />
           </View>
@@ -155,6 +208,30 @@ export default function LogGlucoseScreen() {
             autoFocus
           />
 
+          <Text style={[styles.label, { marginTop: 20, marginBottom: 10 }]}>How long ago was this?</Text>
+          <TimeAgoSelector value={minutesAgo} onChange={setMinutesAgo} />
+
+          <Text style={[styles.label, { marginTop: 20, marginBottom: 10 }]}>Reading context (optional)</Text>
+          <View style={styles.contextRow}>
+            {CONTEXTS.map((c) => {
+              const selected = context === c.key;
+              return (
+                <TouchableOpacity
+                  key={c.key}
+                  style={[
+                    styles.contextChip,
+                    { backgroundColor: selected ? c.color : `${c.color}18` },
+                  ]}
+                  onPress={() => setContext(selected ? null : c.key)}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name={c.icon} size={14} color={selected ? 'white' : c.color} />
+                  <Text style={[styles.contextChipText, { color: selected ? 'white' : c.color }]}>{c.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
           <Text style={[styles.label, { marginTop: 20 }]}>Note (optional)</Text>
           <TextInput
             style={styles.noteInput}
@@ -177,6 +254,23 @@ export default function LogGlucoseScreen() {
             activeOpacity={0.9}
           >
             <Text style={styles.saveButtonText}>{isSaving ? 'Logging...' : 'Log reading'}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.trackCard}
+            onPress={() => navigation.navigate('TrackRegularly')}
+            activeOpacity={0.85}
+          >
+            <View style={styles.trackIcon}>
+              <Ionicons name="trending-up" size={18} color={Colors.success} />
+            </View>
+            <View style={styles.trackTextBlock}>
+              <Text style={styles.trackTitle}>Track regularly</Text>
+              <Text style={styles.trackSubtitle}>
+                See how your food, activity and habits affect your blood sugar over time.
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -248,6 +342,16 @@ const styles = StyleSheet.create({
     color: Colors.text,
     textAlignVertical: 'top',
   },
+  contextRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  contextChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  contextChipText: { fontSize: 12.5, fontWeight: '800' },
   hint: { marginTop: 14, fontSize: 12, lineHeight: 18, color: Colors.textLight, fontWeight: '600' },
   saveButton: {
     marginTop: 24,
@@ -259,4 +363,26 @@ const styles = StyleSheet.create({
   },
   saveButtonDisabled: { opacity: 0.7 },
   saveButtonText: { color: 'white', fontSize: 15, fontWeight: '800' },
+  trackCard: {
+    marginTop: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: `${Colors.success}0F`,
+    borderWidth: 1,
+    borderColor: `${Colors.success}33`,
+  },
+  trackIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: `${Colors.success}1A`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  trackTextBlock: { flex: 1, minWidth: 0 },
+  trackTitle: { fontSize: 14.5, fontWeight: '800', color: Colors.text },
+  trackSubtitle: { marginTop: 2, fontSize: 12, lineHeight: 17, color: Colors.textLight, fontWeight: '600' },
 });
