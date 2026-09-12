@@ -27,6 +27,22 @@ SPIKE_WINDOW_MIN_MINUTES = 30
 SPIKE_WINDOW_MAX_MINUTES = 180
 LOG_HISTORY_DAYS = 14
 
+# A second, independent check that doesn't depend on a nearby meal log at all - so a
+# reading logged on its own (no meal, or outside the spike window) still gets real
+# feedback instead of silently passing through unflagged. Standard ADA-referenced
+# general alert bands, deliberately separate from the post-meal SPIKE_THRESHOLD_MGDL
+# above (which specifically means "spiked after eating", not "high in general").
+GENERAL_LOW_ALERT_MGDL = 70
+GENERAL_HIGH_ALERT_MGDL = 250
+
+
+def _general_alert(value_mg_dl: int) -> str | None:
+    if value_mg_dl <= GENERAL_LOW_ALERT_MGDL:
+        return "low"
+    if value_mg_dl >= GENERAL_HIGH_ALERT_MGDL:
+        return "high"
+    return None
+
 # Default daily carb target shown on the home screen ring when the user hasn't set
 # their own. Matches the per-meal ceilings recipe_generation_service.py already flags
 # recipes against (30g breakfast/snack, 35g lunch/dinner) summed across a normal day.
@@ -264,6 +280,7 @@ def log_glucose(
         "reading": _serialize_reading(reading),
         "is_spike": is_spike,
         "flagged_meal": _serialize_meal(preceding_meal) if is_spike else None,
+        "general_alert": _general_alert(reading.value_mg_dl),
     }
 
 
@@ -289,6 +306,7 @@ def list_glucose(
         entry = _serialize_reading(reading)
         entry["is_spike"] = is_spike
         entry["flagged_meal"] = _serialize_meal(preceding_meal) if is_spike else None
+        entry["general_alert"] = _general_alert(reading.value_mg_dl)
         items.append(entry)
     return {"items": items}
 

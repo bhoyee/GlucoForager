@@ -8,6 +8,7 @@ import { Colors } from '../../constants/Colors';
 import { apiFetch } from '../../utils/api';
 import { API_URL } from '../../config/api';
 import { trackEvent } from '../../utils/analytics';
+import TimeAgoSelector, { TIME_AGO_OPTIONS, loggedAtFromMinutesAgo } from '../../components/TimeAgoSelector';
 
 const UNIT_PREF_KEY = 'glucose_unit_pref_v1';
 const MGDL_PER_MMOL = 18.0182;
@@ -30,6 +31,7 @@ export default function LogGlucoseScreen() {
   const [value, setValue] = useState('');
   const [note, setNote] = useState('');
   const [context, setContext] = useState(null);
+  const [minutesAgo, setMinutesAgo] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -88,6 +90,7 @@ export default function LogGlucoseScreen() {
             value_mg_dl: valueMgDl,
             note: note.trim() || undefined,
             context: context || undefined,
+            logged_at: loggedAtFromMinutesAgo(minutesAgo),
           }),
         },
         { timeoutMs: 8000 }
@@ -100,11 +103,27 @@ export default function LogGlucoseScreen() {
       const data = await response.json();
       // The actual reading value is never sent - only that a reading was logged,
       // and whether it was flagged as a spike (a state, not a health value).
-      trackEvent('glucose_logged', { unit, is_spike: Boolean(data?.is_spike), context: context || 'none' });
+      trackEvent('glucose_logged', {
+        unit,
+        is_spike: Boolean(data?.is_spike),
+        context: context || 'none',
+        general_alert: data?.general_alert || 'none',
+        minutes_ago: minutesAgo,
+      });
       if (data?.is_spike && data?.flagged_meal) {
         Alert.alert(
           'Reading logged',
           `This is higher than usual, and follows "${data.flagged_meal.description}" - worth keeping an eye on if it happens again.`,
+          [{ text: 'Got it', onPress: () => navigation.goBack() }]
+        );
+        return;
+      }
+      if (data?.general_alert === 'low' || data?.general_alert === 'high') {
+        Alert.alert(
+          'Reading logged',
+          data.general_alert === 'low'
+            ? "This reading is on the low side. If you're feeling unwell, treat it the way you normally would."
+            : "This reading is quite high on its own, whether or not it followed a meal - worth keeping an eye on.",
           [{ text: 'Got it', onPress: () => navigation.goBack() }]
         );
         return;
@@ -132,7 +151,11 @@ export default function LogGlucoseScreen() {
             </TouchableOpacity>
             <View style={styles.headerText}>
               <Text style={styles.headerTitle}>Log glucose</Text>
-              <Text style={styles.headerSubtitle}>Logged as right now</Text>
+              <Text style={styles.headerSubtitle}>
+                {minutesAgo === 0
+                  ? 'Logged as right now'
+                  : `Logged as ${TIME_AGO_OPTIONS.find((o) => o.minutesAgo === minutesAgo)?.label}`}
+              </Text>
             </View>
             <View style={{ width: 44 }} />
           </View>
@@ -167,6 +190,9 @@ export default function LogGlucoseScreen() {
             autoFocus
           />
 
+          <Text style={[styles.label, { marginTop: 20, marginBottom: 10 }]}>How long ago was this?</Text>
+          <TimeAgoSelector value={minutesAgo} onChange={setMinutesAgo} />
+
           <Text style={[styles.label, { marginTop: 20 }]}>Note (optional)</Text>
           <TextInput
             style={styles.noteInput}
@@ -177,7 +203,7 @@ export default function LogGlucoseScreen() {
             multiline
           />
 
-          <Text style={[styles.label, { marginTop: 20, marginBottom: 10 }]}>When was this? (optional)</Text>
+          <Text style={[styles.label, { marginTop: 20, marginBottom: 10 }]}>Reading context (optional)</Text>
           <View style={styles.contextRow}>
             {CONTEXTS.map((c) => {
               const selected = context === c.key;

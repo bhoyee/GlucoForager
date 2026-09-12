@@ -8,6 +8,7 @@ import { Colors } from '../../constants/Colors';
 import { apiFetch } from '../../utils/api';
 import { API_URL } from '../../config/api';
 import { trackEvent } from '../../utils/analytics';
+import TimeAgoSelector, { TIME_AGO_OPTIONS, loggedAtFromMinutesAgo } from '../../components/TimeAgoSelector';
 
 export default function LogMealScreen() {
   const navigation = useNavigation();
@@ -15,6 +16,7 @@ export default function LogMealScreen() {
   const headerPaddingTop = Math.max(insets.top, 16);
 
   const [description, setDescription] = useState('');
+  const [minutesAgo, setMinutesAgo] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSave = async () => {
@@ -36,7 +38,7 @@ export default function LogMealScreen() {
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ description: trimmed }),
+          body: JSON.stringify({ description: trimmed, logged_at: loggedAtFromMinutesAgo(minutesAgo) }),
         },
         { timeoutMs: 8000 }
       );
@@ -46,7 +48,7 @@ export default function LogMealScreen() {
         return;
       }
       // Description text itself is never sent - only that a meal was logged.
-      trackEvent('meal_logged', { source: 'manual' });
+      trackEvent('meal_logged', { source: 'manual', minutes_ago: minutesAgo });
       navigation.goBack();
     } catch {
       Alert.alert('Unable to log meal', 'Network request failed. Please check your connection.');
@@ -65,7 +67,11 @@ export default function LogMealScreen() {
             </TouchableOpacity>
             <View style={styles.headerText}>
               <Text style={styles.headerTitle}>Log a meal</Text>
-              <Text style={styles.headerSubtitle}>Logged as right now</Text>
+              <Text style={styles.headerSubtitle}>
+                {minutesAgo === 0
+                  ? 'Logged as right now'
+                  : `Logged as ${TIME_AGO_OPTIONS.find((o) => o.minutesAgo === minutesAgo)?.label}`}
+              </Text>
             </View>
             <View style={{ width: 44 }} />
           </View>
@@ -86,6 +92,13 @@ export default function LogMealScreen() {
             This won't add to today's carb total (we don't ask you to know that) - it's here so meals with no
             barcode or clear photo, like homemade dishes, still show up when spotting what led to a glucose spike.
             For a carb count, try Scan barcode or Scan food instead.
+          </Text>
+
+          <Text style={[styles.label, { marginTop: 20, marginBottom: 10 }]}>How long ago did you eat this?</Text>
+          <TimeAgoSelector value={minutesAgo} onChange={setMinutesAgo} />
+          <Text style={styles.hint}>
+            Logging the real time helps us match this meal to a glucose reading you log later, so a spike can
+            actually be flagged.
           </Text>
 
           <TouchableOpacity
