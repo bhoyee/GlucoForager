@@ -255,6 +255,23 @@ export default function LogGlucoseScreen() {
           >
             <Text style={styles.saveButtonText}>{isSaving ? 'Logging...' : 'Log reading'}</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.trackCard}
+            onPress={() => navigation.navigate('TrackRegularly')}
+            activeOpacity={0.85}
+          >
+            <View style={styles.trackIcon}>
+              <Ionicons name="trending-up" size={18} color={Colors.success} />
+            </View>
+            <View style={styles.trackTextBlock}>
+              <Text style={styles.trackTitle}>Track regularly</Text>
+              <Text style={styles.trackSubtitle}>
+                See how your food, activity and habits affect your blood sugar over time.
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </View>
@@ -346,4 +363,26 @@ const styles = StyleSheet.create({
   },
   saveButtonDisabled: { opacity: 0.7 },
   saveButtonText: { color: 'white', fontSize: 15, fontWeight: '800' },
+  trackCard: {
+    marginTop: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: `${Colors.success}0F`,
+    borderWidth: 1,
+    borderColor: `${Colors.success}33`,
+  },
+  trackIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: `${Colors.success}1A`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  trackTextBlock: { flex: 1, minWidth: 0 },
+  trackTitle: { fontSize: 14.5, fontWeight: '800', color: Colors.text },
+  trackSubtitle: { marginTop: 2, fontSize: 12, lineHeight: 17, color: Colors.textLight, fontWeight: '600' },
 });
