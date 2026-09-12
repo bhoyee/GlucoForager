@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,6 +9,7 @@ import { apiFetch } from '../../utils/api';
 import { API_URL } from '../../config/api';
 import { trackEvent } from '../../utils/analytics';
 import TimeAgoSelector, { TIME_AGO_OPTIONS, loggedAtFromMinutesAgo } from '../../components/TimeAgoSelector';
+import { generateIdempotencyKey } from '../../utils/idempotency';
 
 export default function LogMealScreen() {
   const navigation = useNavigation();
@@ -18,6 +19,11 @@ export default function LogMealScreen() {
   const [description, setDescription] = useState('');
   const [minutesAgo, setMinutesAgo] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
+  const [idempotencyKey, setIdempotencyKey] = useState(generateIdempotencyKey);
+
+  useEffect(() => {
+    setIdempotencyKey(generateIdempotencyKey());
+  }, [description, minutesAgo]);
 
   const handleSave = async () => {
     const trimmed = description.trim();
@@ -38,7 +44,11 @@ export default function LogMealScreen() {
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ description: trimmed, logged_at: loggedAtFromMinutesAgo(minutesAgo) }),
+          body: JSON.stringify({
+            description: trimmed,
+            logged_at: loggedAtFromMinutesAgo(minutesAgo),
+            idempotency_key: idempotencyKey,
+          }),
         },
         { timeoutMs: 8000 }
       );
