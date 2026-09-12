@@ -8,6 +8,7 @@ import Svg, { Circle, Polyline, Rect, Line, Text as SvgText } from 'react-native
 import { Colors } from '../../constants/Colors';
 import { apiFetch } from '../../utils/api';
 import { API_URL } from '../../config/api';
+import StatRing from '../../components/StatRing';
 
 const RANGE_OPTIONS = [
   { key: 7, label: '7 days' },
@@ -53,33 +54,6 @@ function formatRelativeDateTime(value) {
   if (isSameDay) return `Today, ${time}`;
   if (isYesterday) return `Yesterday, ${time}`;
   return `${new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date)}, ${time}`;
-}
-
-function Ring({ percent, color, size = 64 }) {
-  const strokeWidth = 7;
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const ratio = Math.max(0, Math.min(1, percent / 100));
-  return (
-    <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      <Circle cx={size / 2} cy={size / 2} r={radius} stroke={Colors.border} strokeWidth={strokeWidth} fill="none" />
-      {ratio > 0 ? (
-        <Circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke={color}
-          strokeWidth={strokeWidth}
-          strokeLinecap="round"
-          strokeDasharray={`${circumference} ${circumference}`}
-          strokeDashoffset={circumference * (1 - ratio)}
-          fill="none"
-          rotation={-90}
-          origin={`${size / 2}, ${size / 2}`}
-        />
-      ) : null}
-    </Svg>
-  );
 }
 
 const CHART_HEIGHT = 200;
@@ -410,7 +384,7 @@ export default function TrackRegularlyScreen() {
 
               <View style={styles.statsCard}>
                 <View style={styles.statColumn}>
-                  <Ring percent={pct(inRangeCount)} color={Colors.success} />
+                  <StatRing percent={pct(inRangeCount)} color={Colors.success} />
                   <Text style={styles.statPercent}>{pct(inRangeCount)}%</Text>
                   <Text style={styles.statLabel}>In range</Text>
                   <Text style={styles.statSublabel}>
@@ -419,14 +393,14 @@ export default function TrackRegularlyScreen() {
                 </View>
                 <View style={styles.statDivider} />
                 <View style={styles.statColumn}>
-                  <Ring percent={pct(highCount)} color="#D97706" />
+                  <StatRing percent={pct(highCount)} color="#D97706" />
                   <Text style={styles.statPercent}>{pct(highCount)}%</Text>
                   <Text style={styles.statLabel}>High</Text>
                   <Text style={styles.statSublabel}>&gt; {formatGlucose(TARGET_HIGH, unit)} {unit}</Text>
                 </View>
                 <View style={styles.statDivider} />
                 <View style={styles.statColumn}>
-                  <Ring percent={pct(lowCount)} color={Colors.danger} />
+                  <StatRing percent={pct(lowCount)} color={Colors.danger} />
                   <Text style={styles.statPercent}>{pct(lowCount)}%</Text>
                   <Text style={styles.statLabel}>Low</Text>
                   <Text style={styles.statSublabel}>&lt; {formatGlucose(TARGET_LOW, unit)} {unit}</Text>
