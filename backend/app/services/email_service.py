@@ -851,9 +851,22 @@ DUNNING_STAGE_SENDERS = {
     "monthly": send_dunning_monthly_email,
 }
 
+# Kept alongside DUNNING_STAGE_SENDERS so callers (the dunning scheduler) can log
+# what was actually sent without duplicating each subject line inline.
+DUNNING_STAGE_SUBJECTS = {
+    "day0": "Your GlucoForager Premium has ended",
+    "day7": "Still with us?",
+    "day14": "What you're missing on the free plan",
+    "day21": "Last check-in for a while",
+    "monthly": "Still here when you're ready",
+}
 
-def send_dunning_email(to_email: str, full_name: str | None, user_id: int, *, stage: str) -> None:
+
+def send_dunning_email(to_email: str, full_name: str | None, user_id: int, *, stage: str) -> str:
+    """Sends the dunning email for `stage` and returns its subject line, so the
+    caller can record what was actually sent (see DunningEmailLog)."""
     sender = DUNNING_STAGE_SENDERS.get(stage)
     if not sender:
         raise ValueError(f"Unknown dunning stage: {stage}")
     sender(to_email, full_name, user_id)
+    return DUNNING_STAGE_SUBJECTS[stage]
