@@ -99,6 +99,11 @@ function GlucoseTrendCard({ dayPoints, average, rangeLabel, unit }) {
   const bandTop = yFor(TARGET_HIGH);
   const bandBottom = yFor(TARGET_LOW);
   const svgPoints = dayPoints.map((p, i) => `${xFor(i)},${yFor(p.value)}`).join(' ');
+  // Built as one plain string, not interleaved JSX text+expression children -
+  // react-native-svg's <Text> only reliably renders the first child fragment when
+  // given several separate ones, which was silently dropping everything after
+  // "Target ".
+  const targetLabel = `Target ${formatGlucose(TARGET_LOW, unit)}-${formatGlucose(TARGET_HIGH, unit)} ${unit}`;
 
   // Thin out x-axis day labels so 30/90-day views don't overlap.
   const labelEvery = dayPoints.length <= 8 ? 1 : Math.ceil(dayPoints.length / 6);
@@ -194,7 +199,7 @@ function GlucoseTrendCard({ dayPoints, average, rangeLabel, unit }) {
                     fill={Colors.success}
                     textAnchor="end"
                   >
-                    Target {formatGlucose(TARGET_LOW, unit)}-{formatGlucose(TARGET_HIGH, unit)} {unit}
+                    {targetLabel}
                   </SvgText>
                 </Svg>
               ) : null}
