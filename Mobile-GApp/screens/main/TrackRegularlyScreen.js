@@ -4,7 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Svg, { Circle, Polyline, Rect } from 'react-native-svg';
+import Svg, { Circle, Polyline, Rect, Line, Text as SvgText } from 'react-native-svg';
 import { Colors } from '../../constants/Colors';
 import { apiFetch } from '../../utils/api';
 import { API_URL } from '../../config/api';
@@ -140,6 +140,31 @@ function GlucoseTrendCard({ dayPoints, average, rangeLabel, unit }) {
                     height={Math.max(bandBottom - bandTop, 0)}
                     fill={`${Colors.success}1A`}
                   />
+                  {/* Horizontal gridlines matching the y-axis ticks (300/180/70/0) */}
+                  {[300, 180, 70, 0].map((y) => (
+                    <Line
+                      key={`h-${y}`}
+                      x1={0}
+                      y1={yFor(y)}
+                      x2={chartWidth}
+                      y2={yFor(y)}
+                      stroke={Colors.border}
+                      strokeWidth={1}
+                    />
+                  ))}
+                  {/* Vertical gridlines under each day point */}
+                  {dayPoints.map((p, i) => (
+                    <Line
+                      key={`v-${p.dateKey}`}
+                      x1={xFor(i)}
+                      y1={PAD_TOP}
+                      x2={xFor(i)}
+                      y2={CHART_HEIGHT - PAD_BOTTOM}
+                      stroke={Colors.border}
+                      strokeWidth={1}
+                      strokeDasharray="3,4"
+                    />
+                  ))}
                   {dayPoints.length > 1 ? (
                     <Polyline
                       points={svgPoints}
@@ -161,6 +186,16 @@ function GlucoseTrendCard({ dayPoints, average, rangeLabel, unit }) {
                       strokeWidth={1.5}
                     />
                   ))}
+                  <SvgText
+                    x={chartWidth - 4}
+                    y={Math.max(bandTop + 12, PAD_TOP + 10)}
+                    fontSize={9.5}
+                    fontWeight="700"
+                    fill={Colors.success}
+                    textAnchor="end"
+                  >
+                    Target {formatGlucose(TARGET_LOW, unit)}-{formatGlucose(TARGET_HIGH, unit)} {unit}
+                  </SvgText>
                 </Svg>
               ) : null}
             </View>
@@ -173,10 +208,6 @@ function GlucoseTrendCard({ dayPoints, average, rangeLabel, unit }) {
               </Text>
             ))}
           </View>
-
-          <Text style={styles.targetRangeCaption}>
-            Target range {formatGlucose(TARGET_LOW, unit)} - {formatGlucose(TARGET_HIGH, unit)} {unit}
-          </Text>
         </>
       )}
     </View>
@@ -387,8 +418,8 @@ export default function TrackRegularlyScreen() {
                         activeOpacity={0.75}
                       >
                         <View style={[styles.recentDot, { backgroundColor: BUCKET_COLOR[bucket] }]} />
-                        <Text style={styles.recentValue}>
-                          {formatGlucose(r.value_mg_dl, unit)} {unit}
+                        <Text style={styles.recentValue} numberOfLines={1} adjustsFontSizeToFit>
+                          {formatGlucose(r.value_mg_dl, unit)} <Text style={styles.recentValueUnit}>{unit}</Text>
                         </Text>
                         <Text style={styles.recentTime}>{formatRelativeDateTime(r.logged_at)}</Text>
                         <View style={[styles.recentBadge, { backgroundColor: `${BUCKET_COLOR[bucket]}1A` }]}>
@@ -483,7 +514,6 @@ const styles = StyleSheet.create({
   chartArea: { flex: 1, height: CHART_HEIGHT },
   xAxisRow: { flexDirection: 'row', marginLeft: 34 },
   xAxisLabel: { flex: 1, textAlign: 'center', fontSize: 10.5, fontWeight: '700', color: Colors.textMuted },
-  targetRangeCaption: { marginTop: 10, fontSize: 11.5, fontWeight: '700', color: Colors.textLight, textAlign: 'right' },
   statsCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -517,7 +547,8 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.background,
   },
   recentDot: { width: 10, height: 10, borderRadius: 5 },
-  recentValue: { fontSize: 13.5, fontWeight: '800', color: Colors.text, width: 96 },
+  recentValue: { fontSize: 13, fontWeight: '800', color: Colors.text, width: 92 },
+  recentValueUnit: { fontSize: 10.5, fontWeight: '700', color: Colors.textLight },
   recentTime: { flex: 1, fontSize: 12.5, fontWeight: '600', color: Colors.textLight },
   recentBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
   recentBadgeText: { fontSize: 11.5, fontWeight: '800' },
