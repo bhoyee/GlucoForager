@@ -402,15 +402,16 @@ def log_glucose(
 
 @router.get("/glucose")
 def list_glucose(
+    days: int = Query(LOG_HISTORY_DAYS, ge=1, le=90),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    since = datetime.utcnow() - timedelta(days=LOG_HISTORY_DAYS)
+    since = datetime.utcnow() - timedelta(days=days)
     readings = (
         db.query(GlucoseReading)
         .filter(GlucoseReading.user_id == current_user.id, GlucoseReading.logged_at >= since)
         .order_by(GlucoseReading.logged_at.desc())
-        .limit(200)
+        .limit(1000)
         .all()
     )
     items = []
