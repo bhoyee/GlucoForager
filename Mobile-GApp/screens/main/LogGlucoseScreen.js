@@ -9,6 +9,7 @@ import { apiFetch } from '../../utils/api';
 import { API_URL } from '../../config/api';
 import { trackEvent } from '../../utils/analytics';
 import TimeAgoSelector, { TIME_AGO_OPTIONS, loggedAtFromMinutesAgo } from '../../components/TimeAgoSelector';
+import { generateIdempotencyKey } from '../../utils/idempotency';
 
 const UNIT_PREF_KEY = 'glucose_unit_pref_v1';
 const MGDL_PER_MMOL = 18.0182;
@@ -33,6 +34,14 @@ export default function LogGlucoseScreen() {
   const [context, setContext] = useState(null);
   const [minutesAgo, setMinutesAgo] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
+  // Stays the same across a retry of this exact attempt (e.g. a timeout the user
+  // responds to by tapping Log reading again), but regenerates whenever the actual
+  // entry changes - so a real second reading is never mistaken for a retry.
+  const [idempotencyKey, setIdempotencyKey] = useState(generateIdempotencyKey);
+
+  useEffect(() => {
+    setIdempotencyKey(generateIdempotencyKey());
+  }, [value, unit, note, context, minutesAgo]);
 
   useEffect(() => {
     AsyncStorage.getItem(UNIT_PREF_KEY)
@@ -91,6 +100,7 @@ export default function LogGlucoseScreen() {
             note: note.trim() || undefined,
             context: context || undefined,
             logged_at: loggedAtFromMinutesAgo(minutesAgo),
+            idempotency_key: idempotencyKey,
           }),
         },
         { timeoutMs: 8000 }
