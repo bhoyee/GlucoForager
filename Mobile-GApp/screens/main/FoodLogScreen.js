@@ -159,6 +159,14 @@ export default function FoodLogScreen() {
               </Text>
             </View>
           ) : null}
+          {!isMeal && !isSpike && item.general_alert ? (
+            <View style={[styles.spikeBadge, { backgroundColor: `${Colors.danger}14` }]}>
+              <Ionicons name="alert-circle" size={11} color={Colors.danger} />
+              <Text style={[styles.spikeBadgeText, { color: Colors.danger }]}>
+                {item.general_alert === 'low' ? 'Low reading' : 'High reading'}
+              </Text>
+            </View>
+          ) : null}
         </View>
         <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
       </TouchableOpacity>
@@ -269,6 +277,21 @@ export default function FoodLogScreen() {
                       {detailIsMeal
                         ? `Followed by a ${selectedEntry.flagged_spike_mg_dl} mg/dL spike within 3 hours`
                         : 'This reading followed a logged meal and was 180 mg/dL (10.0 mmol/L) or higher'}
+                    </Text>
+                  </View>
+                ) : null}
+                {!detailIsMeal && !detailIsSpike && selectedEntry?.general_alert ? (
+                  <View
+                    style={[
+                      styles.spikeBadge,
+                      { marginTop: 12, alignSelf: 'flex-start', backgroundColor: `${Colors.danger}14` },
+                    ]}
+                  >
+                    <Ionicons name="alert-circle" size={12} color={Colors.danger} />
+                    <Text style={[styles.spikeBadgeText, { color: Colors.danger }]}>
+                      {selectedEntry.general_alert === 'low'
+                        ? 'On the low side (70 mg/dL or below), on its own - no meal needed to flag this'
+                        : 'High on its own (250 mg/dL or above) - no meal needed to flag this'}
                     </Text>
                   </View>
                 ) : null}
