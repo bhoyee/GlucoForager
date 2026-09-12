@@ -841,6 +841,14 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
         </TouchableOpacity>
 
+        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('TrackRegularly')}>
+          <View style={styles.menuItemLeft}>
+            <Ionicons name="trending-up-outline" size={22} color={Colors.text} />
+            <Text style={styles.menuText}>Track Regularly</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
+        </TouchableOpacity>
+
         <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('ShoppingList')}>
           <View style={styles.menuItemLeft}>
             <Ionicons name="cart-outline" size={22} color={Colors.text} />

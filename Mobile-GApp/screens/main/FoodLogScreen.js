@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, RefreshControl, ActivityIndicator, Alert, Modal, ScrollView } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/Colors';
 import { apiFetch } from '../../utils/api';
 import { API_URL } from '../../config/api';
+import GlucoseTrendChart from '../../components/GlucoseTrendChart';
 
 function formatDateTime(value) {
   if (!value) return '';
@@ -18,6 +19,12 @@ function formatDateTime(value) {
 }
 
 const SOURCE_LABEL = { manual: 'Typed', barcode: 'Barcode', photo: 'Photo' };
+const CONTEXT_LABEL = {
+  fasting: 'Fasting',
+  before_meal: 'Before meal',
+  after_meal: 'After meal',
+  bedtime: 'Bedtime',
+};
 const MGDL_PER_MMOL = 18.0182;
 
 function formatGlucoseValue(valueMgDl) {
@@ -33,13 +40,15 @@ const FILTERS = [
 
 export default function FoodLogScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
   const insets = useSafeAreaInsets();
   const headerPaddingTop = Math.max(insets.top, 16);
 
   const [entries, setEntries] = useState([]);
+  const [glucoseReadings, setGlucoseReadings] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [filter, setFilter] = useState('all');
+  const [filter, setFilter] = useState(route.params?.initialFilter === 'glucose' ? 'glucose' : 'all');
   const [selectedEntry, setSelectedEntry] = useState(null);
 
   const loadEntries = useCallback(async ({ silent = false } = {}) => {
@@ -64,6 +73,7 @@ export default function FoodLogScreen() {
       ].sort((a, b) => new Date(b.logged_at) - new Date(a.logged_at));
 
       setEntries(merged);
+      setGlucoseReadings(readings);
     } catch {
       // Leave whatever was already loaded - a transient failure here shouldn't wipe the list.
     } finally {
@@ -139,6 +149,7 @@ export default function FoodLogScreen() {
             {formatDateTime(item.logged_at)}
             {isMeal && item.source ? ` • ${SOURCE_LABEL[item.source] || item.source}` : ''}
             {isMeal && item.carbs_g != null ? ` • ${item.carbs_g}g carbs` : ''}
+            {!isMeal && item.context ? ` • ${CONTEXT_LABEL[item.context] || item.context}` : ''}
             {!isMeal && item.note ? ` • ${item.note}` : ''}
           </Text>
           {isSpike ? (
@@ -146,6 +157,14 @@ export default function FoodLogScreen() {
               <Ionicons name="alert-circle" size={11} color={Colors.warning} />
               <Text style={styles.spikeBadgeText}>
                 {isMeal ? `Followed by a ${item.flagged_spike_mg_dl} mg/dL spike` : 'Spike after a logged meal'}
+              </Text>
+            </View>
+          ) : null}
+          {!isMeal && !isSpike && item.general_alert ? (
+            <View style={[styles.spikeBadge, { backgroundColor: `${Colors.danger}14` }]}>
+              <Ionicons name="alert-circle" size={11} color={Colors.danger} />
+              <Text style={[styles.spikeBadgeText, { color: Colors.danger }]}>
+                {item.general_alert === 'low' ? 'Low reading' : 'High reading'}
               </Text>
             </View>
           ) : null}
@@ -214,6 +233,13 @@ export default function FoodLogScreen() {
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={Colors.primary} />}
+          ListHeaderComponent={
+            filter !== 'meal' ? (
+              <View style={styles.chartWrap}>
+                <GlucoseTrendChart readings={glucoseReadings} />
+              </View>
+            ) : null
+          }
         />
       )}
 
@@ -252,6 +278,21 @@ export default function FoodLogScreen() {
                       {detailIsMeal
                         ? `Followed by a ${selectedEntry.flagged_spike_mg_dl} mg/dL spike within 3 hours`
                         : 'This reading followed a logged meal and was 180 mg/dL (10.0 mmol/L) or higher'}
+                    </Text>
+                  </View>
+                ) : null}
+                {!detailIsMeal && !detailIsSpike && selectedEntry?.general_alert ? (
+                  <View
+                    style={[
+                      styles.spikeBadge,
+                      { marginTop: 12, alignSelf: 'flex-start', backgroundColor: `${Colors.danger}14` },
+                    ]}
+                  >
+                    <Ionicons name="alert-circle" size={12} color={Colors.danger} />
+                    <Text style={[styles.spikeBadgeText, { color: Colors.danger }]}>
+                      {selectedEntry.general_alert === 'low'
+                        ? 'On the low side (70 mg/dL or below), on its own - no meal needed to flag this'
+                        : 'High on its own (250 mg/dL or above) - no meal needed to flag this'}
                     </Text>
                   </View>
                 ) : null}
@@ -309,6 +350,14 @@ export default function FoodLogScreen() {
                         {(selectedEntry.value_mg_dl / MGDL_PER_MMOL).toFixed(1)}
                       </Text>
                     </View>
+                    {selectedEntry.context ? (
+                      <View style={styles.modalDetailRow}>
+                        <Text style={styles.modalDetailLabel}>When</Text>
+                        <Text style={styles.modalDetailValue}>
+                          {CONTEXT_LABEL[selectedEntry.context] || selectedEntry.context}
+                        </Text>
+                      </View>
+                    ) : null}
                     {selectedEntry.note ? (
                       <View style={styles.modalDetailRow}>
                         <Text style={styles.modalDetailLabel}>Note</Text>
@@ -376,6 +425,7 @@ const styles = StyleSheet.create({
   centerState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40, gap: 12 },
   emptyText: { fontSize: 14, color: Colors.textLight, fontWeight: '600', textAlign: 'center', lineHeight: 20 },
   listContent: { padding: 20, gap: 10 },
+  chartWrap: { marginBottom: 10 },
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
