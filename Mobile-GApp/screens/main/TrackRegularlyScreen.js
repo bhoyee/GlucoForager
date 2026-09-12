@@ -513,9 +513,9 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: 'rgba(255,255,255,0.12)',
   },
-  rangeChipActive: { backgroundColor: Colors.success },
+  rangeChipActive: { backgroundColor: 'white' },
   rangeChipText: { fontSize: 13, fontWeight: '800', color: 'rgba(255,255,255,0.8)' },
-  rangeChipTextActive: { color: 'white' },
+  rangeChipTextActive: { color: Colors.primaryDark },
   unitSwitcher: {
     flexDirection: 'row',
     alignSelf: 'flex-start',
