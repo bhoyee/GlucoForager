@@ -15,9 +15,19 @@ const RANGE_OPTIONS = [
   { key: 90, label: '90 days' },
 ];
 
+const UNIT_PREF_KEY = 'glucose_unit_pref_v1';
+const MGDL_PER_MMOL = 18.0182;
+
 const TARGET_LOW = 70;
 const TARGET_HIGH = 180;
 const SEVERE_HIGH = 220;
+
+// Everything is stored and bucketed in mg/dL - this only converts what's shown on
+// screen, same split already used by LogGlucoseScreen/FoodLogScreen.
+function formatGlucose(valueMgDl, unit) {
+  if (unit === 'mmol/L') return (valueMgDl / MGDL_PER_MMOL).toFixed(1);
+  return String(Math.round(valueMgDl));
+}
 
 // Simple 3-tier bucketing purely for this trends view (not the same thing as the
 // backend's is_spike/general_alert, which are about meal-linkage and urgent-only
@@ -78,7 +88,7 @@ const PAD_X = 6;
 const PAD_TOP = 16;
 const PAD_BOTTOM = 26;
 
-function GlucoseTrendCard({ dayPoints, average, rangeLabel }) {
+function GlucoseTrendCard({ dayPoints, average, rangeLabel, unit }) {
   const [chartWidth, setChartWidth] = useState(0);
   const plotWidth = Math.max(chartWidth - PAD_X * 2, 1);
   const plotHeight = CHART_HEIGHT - PAD_TOP - PAD_BOTTOM;
@@ -102,8 +112,8 @@ function GlucoseTrendCard({ dayPoints, average, rangeLabel }) {
         </View>
         {average != null ? (
           <View style={styles.averageBadge}>
-            <Text style={styles.averageValue}>{average}</Text>
-            <Text style={styles.averageLabel}>Average{'\n'}mg/dL</Text>
+            <Text style={styles.averageValue}>{formatGlucose(average, unit)}</Text>
+            <Text style={styles.averageLabel}>Average{'\n'}{unit}</Text>
           </View>
         ) : null}
       </View>
@@ -116,7 +126,7 @@ function GlucoseTrendCard({ dayPoints, average, rangeLabel }) {
             <View style={styles.yAxisLabels}>
               {[300, 180, 70, 0].map((y) => (
                 <Text key={y} style={styles.yAxisLabel}>
-                  {y}
+                  {formatGlucose(y, unit)}
                 </Text>
               ))}
             </View>
@@ -165,7 +175,7 @@ function GlucoseTrendCard({ dayPoints, average, rangeLabel }) {
           </View>
 
           <Text style={styles.targetRangeCaption}>
-            Target range {TARGET_LOW} - {TARGET_HIGH} mg/dL
+            Target range {formatGlucose(TARGET_LOW, unit)} - {formatGlucose(TARGET_HIGH, unit)} {unit}
           </Text>
         </>
       )}
@@ -181,6 +191,20 @@ export default function TrackRegularlyScreen() {
   const [days, setDays] = useState(7);
   const [readings, setReadings] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [unit, setUnit] = useState('mg/dL');
+
+  useEffect(() => {
+    AsyncStorage.getItem(UNIT_PREF_KEY)
+      .then((stored) => {
+        if (stored === 'mg/dL' || stored === 'mmol/L') setUnit(stored);
+      })
+      .catch(() => {});
+  }, []);
+
+  const switchUnit = (nextUnit) => {
+    setUnit(nextUnit);
+    AsyncStorage.setItem(UNIT_PREF_KEY, nextUnit).catch(() => {});
+  };
 
   const load = useCallback(async (selectedDays) => {
     setIsLoading(true);
@@ -231,8 +255,11 @@ export default function TrackRegularlyScreen() {
     ? Math.round(readings.reduce((sum, r) => sum + r.value_mg_dl, 0) / readings.length)
     : null;
 
-  const inRangeCount = readings.filter((r) => bucketFor(r.value_mg_dl) === 'inRange').length;
-  const highCount = readings.filter((r) => bucketFor(r.value_mg_dl) === 'high').length;
+  // "High" here is any value above target, including the "severe" ones bucketFor()
+  // separates out for chart-dot coloring - the two-tier split only matters for the
+  // dot's shade, not for whether it counts toward the High ring.
+  const inRangeCount = readings.filter((r) => r.value_mg_dl >= TARGET_LOW && r.value_mg_dl <= TARGET_HIGH).length;
+  const highCount = readings.filter((r) => r.value_mg_dl > TARGET_HIGH).length;
   const lowCount = readings.filter((r) => r.value_mg_dl < TARGET_LOW).length;
   const total = readings.length || 1;
   const pct = (n) => Math.round((n / total) * 100);
@@ -260,10 +287,25 @@ export default function TrackRegularlyScreen() {
             </View>
             <TouchableOpacity
               style={styles.headerButton}
-              onPress={() => navigation.navigate('FoodLog')}
+              onPress={() => navigation.navigate('FoodLog', { initialFilter: 'glucose' })}
               activeOpacity={0.85}
             >
               <Ionicons name="calendar-outline" size={20} color="white" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.unitSwitcher}>
+            <TouchableOpacity
+              style={[styles.unitOption, unit === 'mg/dL' && styles.unitOptionActive]}
+              onPress={() => switchUnit('mg/dL')}
+            >
+              <Text style={[styles.unitOptionText, unit === 'mg/dL' && styles.unitOptionTextActive]}>mg/dL</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.unitOption, unit === 'mmol/L' && styles.unitOptionActive]}
+              onPress={() => switchUnit('mmol/L')}
+            >
+              <Text style={[styles.unitOptionText, unit === 'mmol/L' && styles.unitOptionTextActive]}>mmol/L</Text>
             </TouchableOpacity>
           </View>
 
@@ -291,7 +333,7 @@ export default function TrackRegularlyScreen() {
             </View>
           ) : (
             <>
-              <GlucoseTrendCard dayPoints={dayPoints} average={average} rangeLabel={rangeLabel} />
+              <GlucoseTrendCard dayPoints={dayPoints} average={average} rangeLabel={rangeLabel} unit={unit} />
 
               <View style={styles.statsCard}>
                 <View style={styles.statColumn}>
@@ -299,7 +341,7 @@ export default function TrackRegularlyScreen() {
                   <Text style={styles.statPercent}>{pct(inRangeCount)}%</Text>
                   <Text style={styles.statLabel}>In range</Text>
                   <Text style={styles.statSublabel}>
-                    {TARGET_LOW} - {TARGET_HIGH} mg/dL
+                    {formatGlucose(TARGET_LOW, unit)} - {formatGlucose(TARGET_HIGH, unit)} {unit}
                   </Text>
                 </View>
                 <View style={styles.statDivider} />
@@ -307,21 +349,24 @@ export default function TrackRegularlyScreen() {
                   <Ring percent={pct(highCount)} color="#D97706" />
                   <Text style={styles.statPercent}>{pct(highCount)}%</Text>
                   <Text style={styles.statLabel}>High</Text>
-                  <Text style={styles.statSublabel}>&gt; {TARGET_HIGH} mg/dL</Text>
+                  <Text style={styles.statSublabel}>&gt; {formatGlucose(TARGET_HIGH, unit)} {unit}</Text>
                 </View>
                 <View style={styles.statDivider} />
                 <View style={styles.statColumn}>
                   <Ring percent={pct(lowCount)} color={Colors.danger} />
                   <Text style={styles.statPercent}>{pct(lowCount)}%</Text>
                   <Text style={styles.statLabel}>Low</Text>
-                  <Text style={styles.statSublabel}>&lt; {TARGET_LOW} mg/dL</Text>
+                  <Text style={styles.statSublabel}>&lt; {formatGlucose(TARGET_LOW, unit)} {unit}</Text>
                 </View>
               </View>
 
               <View style={styles.recentCard}>
                 <View style={styles.recentHeaderRow}>
                   <Text style={styles.cardTitle}>Recent readings</Text>
-                  <TouchableOpacity onPress={() => navigation.navigate('FoodLog')} activeOpacity={0.8}>
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate('FoodLog', { initialFilter: 'glucose' })}
+                    activeOpacity={0.8}
+                  >
                     <View style={styles.seeAllRow}>
                       <Text style={styles.seeAllText}>See all</Text>
                       <Ionicons name="chevron-forward" size={14} color={Colors.primary} />
@@ -338,11 +383,13 @@ export default function TrackRegularlyScreen() {
                       <TouchableOpacity
                         key={r.id}
                         style={[styles.recentRow, idx === recentReadings.length - 1 && { borderBottomWidth: 0 }]}
-                        onPress={() => navigation.navigate('FoodLog')}
+                        onPress={() => navigation.navigate('FoodLog', { initialFilter: 'glucose' })}
                         activeOpacity={0.75}
                       >
                         <View style={[styles.recentDot, { backgroundColor: BUCKET_COLOR[bucket] }]} />
-                        <Text style={styles.recentValue}>{r.value_mg_dl} mg/dL</Text>
+                        <Text style={styles.recentValue}>
+                          {formatGlucose(r.value_mg_dl, unit)} {unit}
+                        </Text>
                         <Text style={styles.recentTime}>{formatRelativeDateTime(r.logged_at)}</Text>
                         <View style={[styles.recentBadge, { backgroundColor: `${BUCKET_COLOR[bucket]}1A` }]}>
                           <Text style={[styles.recentBadgeText, { color: BUCKET_COLOR[bucket] }]}>
@@ -396,6 +443,18 @@ const styles = StyleSheet.create({
   rangeChipActive: { backgroundColor: Colors.success },
   rangeChipText: { fontSize: 13, fontWeight: '800', color: 'rgba(255,255,255,0.8)' },
   rangeChipTextActive: { color: 'white' },
+  unitSwitcher: {
+    flexDirection: 'row',
+    alignSelf: 'flex-start',
+    marginTop: 10,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 999,
+    padding: 3,
+  },
+  unitOption: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
+  unitOptionActive: { backgroundColor: 'white' },
+  unitOptionText: { fontSize: 11.5, fontWeight: '800', color: 'rgba(255,255,255,0.8)' },
+  unitOptionTextActive: { color: Colors.primaryDark },
   content: { padding: 20, gap: 16 },
   loadingState: { paddingVertical: 60, alignItems: 'center' },
   card: {
@@ -420,9 +479,9 @@ const styles = StyleSheet.create({
   emptyText: { marginTop: 12, fontSize: 13, color: Colors.textLight, fontWeight: '600' },
   yAxisRow: { flexDirection: 'row', marginTop: 18 },
   yAxisLabels: { justifyContent: 'space-between', paddingBottom: 26, paddingTop: 16, height: CHART_HEIGHT },
-  yAxisLabel: { fontSize: 10.5, fontWeight: '700', color: Colors.textMuted, width: 28 },
+  yAxisLabel: { fontSize: 10.5, fontWeight: '700', color: Colors.textMuted, width: 34 },
   chartArea: { flex: 1, height: CHART_HEIGHT },
-  xAxisRow: { flexDirection: 'row', marginLeft: 28 },
+  xAxisRow: { flexDirection: 'row', marginLeft: 34 },
   xAxisLabel: { flex: 1, textAlign: 'center', fontSize: 10.5, fontWeight: '700', color: Colors.textMuted },
   targetRangeCaption: { marginTop: 10, fontSize: 11.5, fontWeight: '700', color: Colors.textLight, textAlign: 'right' },
   statsCard: {
@@ -458,7 +517,7 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.background,
   },
   recentDot: { width: 10, height: 10, borderRadius: 5 },
-  recentValue: { fontSize: 14, fontWeight: '800', color: Colors.text, width: 84 },
+  recentValue: { fontSize: 13.5, fontWeight: '800', color: Colors.text, width: 96 },
   recentTime: { flex: 1, fontSize: 12.5, fontWeight: '600', color: Colors.textLight },
   recentBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
   recentBadgeText: { fontSize: 11.5, fontWeight: '800' },
