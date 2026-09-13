@@ -28,16 +28,21 @@ MONTHLY_INTERVAL_DAYS = 30
 # managed via /admin/win-back/templates.
 FALLBACK_TEMPLATES = {
     "day0": {
-        "subject": "Premium's off - here's what that means",
-        "heading": "3 things paused, 3 things still free",
+        "subject": "Ready to have it all back?",
+        "heading": "We miss you - here's what's waiting",
         "body_html": (
             "<p>Hi {{name}},</p>"
-            "<p style=\"line-height:1.6;\"><strong>Paused:</strong> Photo &amp; ingredient scans, GlucoGuide AI, "
-            "Daily Meal Planner, recipe generation.</p>"
-            "<p style=\"line-height:1.6;\"><strong>Still free:</strong> Barcode scanning, food swaps, glucose "
-            "&amp; carb tracking.</p>"
-            "<p style=\"line-height:1.6;\">Nothing's deleted - resubscribing turns everything back on "
-            "instantly.</p>"
+            "<p style=\"line-height:1.6;\">We miss having you on Premium! Here's what comes right back the "
+            "moment you resubscribe:</p>"
+            "<ul style=\"line-height:1.6; padding-left:20px; margin:12px 0;\">"
+            "<li>GlucoGuide AI</li>"
+            "<li>Your Daily Meal Planner</li>"
+            "<li>Recipe generation (scan, type, or Surprise Me)</li>"
+            "<li>Unlimited photo &amp; ingredient scanning</li>"
+            "</ul>"
+            "<p style=\"line-height:1.6;\">Your barcode scans, food swaps, and glucose/carb tracking never "
+            "stopped - they're still free and still yours.</p>"
+            "<p style=\"line-height:1.6;\">One tap brings the rest back. We'd love to see you again.</p>"
         ),
     },
     "day7": {
