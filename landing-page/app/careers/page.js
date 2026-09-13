@@ -1,4 +1,6 @@
+import Link from "next/link";
 import Header from "../../components/Header";
+import Footer from "../../components/Footer";
 
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.glucoforager.com").replace(/\/+$/, "");
 const APPLY_EMAIL = "hello@glucoforager.com";
@@ -83,6 +85,12 @@ export default function CareersPage() {
       <Header />
       <main className="min-h-screen bg-white pt-20">
       <div className="container mx-auto max-w-5xl px-4 py-12 space-y-12">
+        <Link href="/" className="inline-flex items-center gap-2 text-teal-700 hover:text-teal-900 font-semibold text-sm">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          Back to Home
+        </Link>
         <header className="space-y-3">
           <div className="inline-flex items-center gap-2 rounded-full border border-teal-100 bg-teal-50 px-4 py-2 text-sm font-semibold text-teal-800">
             We&apos;re hiring
@@ -161,6 +169,7 @@ export default function CareersPage() {
         </section>
       </div>
       </main>
+      <Footer />
     </>
   );
 }

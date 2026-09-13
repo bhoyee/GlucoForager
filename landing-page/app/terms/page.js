@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
+import Footer from '../../components/Footer';
 
 
 export default function TermsAndConditions() {
@@ -166,6 +167,7 @@ export default function TermsAndConditions() {
           </a>
         </div>
       </div>
+      <Footer />
     </div>
   );
 }
