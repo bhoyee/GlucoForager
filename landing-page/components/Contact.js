@@ -63,12 +63,28 @@ function Toast({ toast, onClose }) {
   );
 }
 
-export default function Contact() {
-  const WHATSAPP_CHANNEL_URL = 'https://whatsapp.com/channel/0029VbC5ghU6GcGBY7FOni0n';
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.glucoforager.com').replace(/\/+$/, '');
+const APP_STORE_REVIEW_URL =
+  (process.env.NEXT_PUBLIC_IOS_APP_STORE_URL || 'https://apps.apple.com/us/app/glucoforager/id6758808427') +
+  '?action=write-review';
+const SHARE_TEXT =
+  "I've been using GlucoForager to turn what's in my kitchen into diabetes-friendly meal ideas — thought you might find it useful too.";
 
+export default function Contact() {
   const [form, setForm] = useState({ name: '', email: '', subject: '', message: '', website: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState(null);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(SITE_URL);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      /* clipboard unavailable — nothing to fall back to */
+    }
+  };
 
   const updateField = (field) => (e) => setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
@@ -167,21 +183,81 @@ export default function Contact() {
             </div>
 
             <div className="mt-8 pt-6 border-t border-white/20">
-              <h4 className="font-medium text-white mb-2">Community</h4>
+              <h4 className="font-medium text-white mb-2">Spread the word</h4>
               <p className="text-gray-300 text-sm">
-                Join our WhatsApp Channel for daily diabetes hacks, meal ideas, and low-glycemic swaps.
+                Know someone managing diabetes? Send them the app.
               </p>
-              <a
-                href={WHATSAPP_CHANNEL_URL}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-4 inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 px-4 py-3 text-white font-semibold text-sm transition-all duration-200"
-              >
-                Join the GlucoForager WhatsApp Channel
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
-              </a>
+
+              <div className="mt-4 grid grid-cols-4 gap-2">
+                <a
+                  href={`https://wa.me/?text=${encodeURIComponent(`${SHARE_TEXT} ${SITE_URL}`)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex flex-col items-center justify-center gap-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 py-3 text-white text-xs font-medium transition-colors"
+                >
+                  <svg className="w-5 h-5 text-emerald-300" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.58-.487-.501-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
+                    <path d="M12.003 2C6.478 2 2 6.478 2 12.003c0 1.982.55 3.887 1.588 5.535L2 22l4.575-1.55a9.96 9.96 0 0 0 5.428 1.55C17.526 22 22 17.522 22 12.003 22 6.478 17.526 2 12.003 2Zm0 18.16a8.13 8.13 0 0 1-4.146-1.13l-.297-.176-3.06 1.037.86-3.096-.194-.318a8.12 8.12 0 0 1-1.24-4.31 8.16 8.16 0 0 1 16.32 0 8.15 8.15 0 0 1-8.243 8.16Z" />
+                  </svg>
+                  WhatsApp
+                </a>
+
+                <a
+                  href={`mailto:?subject=${encodeURIComponent('Try GlucoForager')}&body=${encodeURIComponent(`${SHARE_TEXT}\n\n${SITE_URL}`)}`}
+                  className="flex flex-col items-center justify-center gap-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 py-3 text-white text-xs font-medium transition-colors"
+                >
+                  <svg className="w-5 h-5 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  Email
+                </a>
+
+                <a
+                  href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(SHARE_TEXT)}&url=${encodeURIComponent(SITE_URL)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex flex-col items-center justify-center gap-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 py-3 text-white text-xs font-medium transition-colors"
+                >
+                  <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231ZM17.083 19.77h1.833L7.084 4.126H5.117Z" />
+                  </svg>
+                  X
+                </a>
+
+                <button
+                  type="button"
+                  onClick={handleCopyLink}
+                  className="flex flex-col items-center justify-center gap-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 py-3 text-white text-xs font-medium transition-colors"
+                >
+                  {linkCopied ? (
+                    <svg className="w-5 h-5 text-emerald-300" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                  )}
+                  {linkCopied ? 'Copied' : 'Copy link'}
+                </button>
+              </div>
+
+              <div className="mt-4 flex items-center justify-between gap-3 rounded-xl bg-white/5 border border-white/10 px-4 py-3">
+                <p className="text-gray-300 text-xs">
+                  Enjoying GlucoForager? A quick review helps other people managing diabetes find us.
+                </p>
+                <a
+                  href={APP_STORE_REVIEW_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex-none inline-flex items-center gap-1 rounded-lg border border-white/20 hover:border-white/40 px-3 py-2 text-white text-xs font-semibold transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5 text-amber-300" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                    <path d="M10 1.5l2.635 5.338 5.89.856-4.263 4.155 1.007 5.871L10 14.847l-5.269 2.873 1.007-5.871L1.475 7.694l5.89-.856L10 1.5z" />
+                  </svg>
+                  Leave a review
+                </a>
+              </div>
             </div>
           </div>
 
