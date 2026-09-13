@@ -795,15 +795,20 @@ def send_dunning_template_email(
     subject: str,
     heading: str,
     body_html: str,
+    placeholders: dict[str, str] | None = None,
 ) -> str | None:
     """Sends one win-back email from admin-editable content (see
     DunningEmailTemplate / /admin/win-back/templates) - the caller (the dunning
     scheduler) resolves which stage's subject/heading/body_html to pass in, so an
     edit saved there takes effect on the very next scheduled send with no deploy.
-    {{name}} in body_html is replaced with the recipient's first name (or "there").
-    Returns Resend's email id for later open/click matching (see DunningEmailLog)."""
+    {{name}} in body_html is always replaced with the recipient's first name (or
+    "there"); any additional {{token}} the caller passes in `placeholders` (e.g.
+    {{usage_summary}} for day0) is substituted the same way. Returns Resend's email
+    id for later open/click matching (see DunningEmailLog)."""
     greeting_name = full_name.strip().split(" ")[0] if full_name else "there"
     resolved_body = body_html.replace("{{name}}", greeting_name)
+    for token, value in (placeholders or {}).items():
+        resolved_body = resolved_body.replace(f"{{{{{token}}}}}", value)
     html_body = _dunning_shell(to_email=to_email, user_id=user_id, heading=heading, body_html=resolved_body)
     resend_id = _send_email(to_email, subject, html_body)
     logger.info("Sent dunning email to %s (subject=%r)", to_email, subject)

@@ -21,17 +21,13 @@ SEED_TEMPLATES = [
     {
         "stage": "day0",
         "subject": "Ready to have it all back?",
-        "heading": "We miss you - here's what's waiting",
+        "heading": "Here's the progress you'd be picking back up",
         "body_html": (
             "<p>Hi {{name}},</p>"
-            "<p style=\"line-height:1.6;\">We miss having you on Premium! Here's what comes right back the "
-            "moment you resubscribe:</p>"
-            "<ul style=\"line-height:1.6; padding-left:20px; margin:12px 0;\">"
-            "<li>GlucoGuide AI</li>"
-            "<li>Your Daily Meal Planner</li>"
-            "<li>Recipe generation (scan, type, or Surprise Me)</li>"
-            "<li>Unlimited photo &amp; ingredient scanning</li>"
-            "</ul>"
+            "<p style=\"line-height:1.6;\">{{usage_summary}} - that's real progress, and we'd love to help "
+            "you keep it going.</p>"
+            "<p style=\"line-height:1.6;\">Resubscribing brings back GlucoGuide AI, your Daily Meal Planner, "
+            "recipe generation, and unlimited photo &amp; ingredient scanning - right where you left off.</p>"
             "<p style=\"line-height:1.6;\">Your barcode scans, food swaps, and glucose/carb tracking never "
             "stopped - they're still free and still yours.</p>"
             "<p style=\"line-height:1.6;\">One tap brings the rest back. We'd love to see you again.</p>"
@@ -39,45 +35,53 @@ SEED_TEMPLATES = [
     },
     {
         "stage": "day7",
-        "subject": "Still with us?",
-        "heading": "Still with us?",
+        "subject": "Quick question before you go",
+        "heading": "What made Premium not worth it right now?",
         "body_html": (
             "<p>Hi {{name}},</p>"
-            "<p style=\"line-height:1.6;\">Just checking in - was there something specific that made Premium not "
-            "worth it for you (price, a bug, a missing feature)? Reply to this email and let us know.</p>"
-            "<p style=\"line-height:1.6;\">Or if you're ready to come back, you can resubscribe below.</p>"
+            "<p style=\"line-height:1.6;\">You've been on the free plan a week now, and we're genuinely "
+            "curious - was it the price, a bug, a missing feature, or just bad timing? Hit reply and tell us; "
+            "we read every message.</p>"
+            "<p style=\"line-height:1.6;\">And if you just haven't gotten around to it, resubscribing takes "
+            "one tap whenever you're ready.</p>"
         ),
     },
     {
         "stage": "day14",
-        "subject": "What you're missing on the free plan",
-        "heading": "What you're missing on the free plan",
+        "subject": "Have you tried asking GlucoGuide yet?",
+        "heading": "The one Premium feature people miss trying",
         "body_html": (
             "<p>Hi {{name}},</p>"
-            "<p style=\"line-height:1.6;\">A quick reminder of what Premium unlocks: unlimited recipe search and "
-            "scans, full diabetes-friendly meal planning, and your saved recipes and plans, all in one place.</p>"
-            "<p style=\"line-height:1.6;\">Your data is still there waiting for you.</p>"
+            "<p style=\"line-height:1.6;\">A lot of people don't get to try GlucoGuide AI during a short "
+            "trial - it's built to answer real food questions on the spot, personalized to your profile, the "
+            "moment you're unsure what to eat.</p>"
+            "<p style=\"line-height:1.6;\">It comes right back with your Daily Meal Planner and recipe "
+            "generation when you resubscribe.</p>"
+            "<p style=\"line-height:1.6;\">Your barcode scans, food swaps, and glucose/carb tracking are "
+            "still free in the meantime.</p>"
         ),
     },
     {
         "stage": "day21",
-        "subject": "Last check-in for a while",
-        "heading": "Last check-in for a while",
+        "subject": "Last note for a while",
+        "heading": "No pressure, no lock-in",
         "body_html": (
             "<p>Hi {{name}},</p>"
-            "<p style=\"line-height:1.6;\">This is the last weekly note from us - after this we'll only reach out "
-            "occasionally.</p>"
+            "<p style=\"line-height:1.6;\">This is the last weekly note from us - after this we'll only reach "
+            "out occasionally.</p>"
+            "<p style=\"line-height:1.6;\">If price or commitment was the hesitation: you can resubscribe and "
+            "cancel anytime, no long-term lock-in either way.</p>"
             "<p style=\"line-height:1.6;\">If you want back in, we're one tap away.</p>"
         ),
     },
     {
         "stage": "monthly",
         "subject": "Still here when you're ready",
-        "heading": "Still here when you're ready",
+        "heading": "No rush - we're not going anywhere",
         "body_html": (
             "<p>Hi {{name}},</p>"
-            "<p style=\"line-height:1.6;\">Just a low-key reminder that GlucoForager Premium is still here "
-            "whenever you want it back.</p>"
+            "<p style=\"line-height:1.6;\">Just a low-key reminder that GlucoGuide AI, your Daily Meal "
+            "Planner, and full scanning are still here whenever you want them back. No pressure.</p>"
         ),
     },
 ]

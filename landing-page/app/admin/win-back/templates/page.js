@@ -111,6 +111,12 @@ function TemplateCard({ template, token, onSaved, router }) {
       <div style={{ marginTop: 12 }}>
         <label className="admin-subtitle" style={{ display: 'block', marginBottom: 4 }}>
           Body (HTML) - use <code>{'{{name}}'}</code> where the recipient's first name should go
+          {template.stage === 'day0' ? (
+            <>
+              , and <code>{'{{usage_summary}}'}</code> for a real sentence about what they actually did
+              recently (e.g. &quot;You generated 9 recipes and logged 14 meals recently&quot;)
+            </>
+          ) : null}
         </label>
         <textarea
           className="admin-search-input"
