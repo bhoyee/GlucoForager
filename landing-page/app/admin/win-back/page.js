@@ -139,12 +139,14 @@ export default function AdminWinBackPage() {
                 <th>User</th>
                 <th>Stage</th>
                 <th>Subject</th>
+                <th>Opened</th>
+                <th>Clicked</th>
               </tr>
             </thead>
             <tbody>
               {items.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="admin-empty">
+                  <td colSpan={6} className="admin-empty">
                     No win-back emails sent yet.
                   </td>
                 </tr>
@@ -160,6 +162,22 @@ export default function AdminWinBackPage() {
                     </td>
                     <td>{STAGE_LABEL[row.stage] || row.stage}</td>
                     <td>{row.subject}</td>
+                    <td>
+                      {row.opened_at ? (
+                        <span title={new Date(row.opened_at).toLocaleString()}>
+                          {new Date(row.opened_at).toLocaleDateString()}
+                        </span>
+                      ) : (
+                        <span className="admin-subtitle">--</span>
+                      )}
+                    </td>
+                    <td>
+                      {row.clicked_at ? (
+                        <span title={row.clicked_link || ''}>{new Date(row.clicked_at).toLocaleDateString()}</span>
+                      ) : (
+                        <span className="admin-subtitle">--</span>
+                      )}
+                    </td>
                   </tr>
                 ))
               )}
