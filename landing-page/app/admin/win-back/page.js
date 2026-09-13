@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
@@ -97,6 +98,9 @@ export default function AdminWinBackPage() {
             Every automated dunning/win-back email actually sent - who got it, which stage, and when.
           </p>
         </div>
+        <Link className="admin-link" href="/admin/win-back/templates">
+          Edit Templates
+        </Link>
       </div>
 
       {message ? <div className="admin-message admin-message-error">{message}</div> : null}

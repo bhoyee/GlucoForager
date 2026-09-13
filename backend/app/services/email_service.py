@@ -787,103 +787,24 @@ def _dunning_shell(*, to_email: str, user_id: int, heading: str, body_html: str)
     """
 
 
-def send_dunning_day0_email(to_email: str, full_name: str | None, user_id: int) -> str | None:
+def send_dunning_template_email(
+    to_email: str,
+    full_name: str | None,
+    user_id: int,
+    *,
+    subject: str,
+    heading: str,
+    body_html: str,
+) -> str | None:
+    """Sends one win-back email from admin-editable content (see
+    DunningEmailTemplate / /admin/win-back/templates) - the caller (the dunning
+    scheduler) resolves which stage's subject/heading/body_html to pass in, so an
+    edit saved there takes effect on the very next scheduled send with no deploy.
+    {{name}} in body_html is replaced with the recipient's first name (or "there").
+    Returns Resend's email id for later open/click matching (see DunningEmailLog)."""
     greeting_name = full_name.strip().split(" ")[0] if full_name else "there"
-    subject = "Your GlucoForager Premium has ended"
-    body_html = f"""
-      <p>Hi {greeting_name},</p>
-      <p style="line-height:1.6;">Your Premium access has ended and you're back on the free plan - unlimited
-      recipe search and scans, and full meal planning, are paused for now.</p>
-      <p style="line-height:1.6;">Nothing you saved is deleted. Resubscribe anytime to pick up right where you left off.</p>
-    """
-    html_body = _dunning_shell(to_email=to_email, user_id=user_id, heading="Your Premium access has ended", body_html=body_html)
+    resolved_body = body_html.replace("{{name}}", greeting_name)
+    html_body = _dunning_shell(to_email=to_email, user_id=user_id, heading=heading, body_html=resolved_body)
     resend_id = _send_email(to_email, subject, html_body)
-    logger.info("Sent dunning day0 email to %s", to_email)
+    logger.info("Sent dunning email to %s (subject=%r)", to_email, subject)
     return resend_id
-
-
-def send_dunning_day7_email(to_email: str, full_name: str | None, user_id: int) -> str | None:
-    greeting_name = full_name.strip().split(" ")[0] if full_name else "there"
-    subject = "Still with us?"
-    body_html = f"""
-      <p>Hi {greeting_name},</p>
-      <p style="line-height:1.6;">Just checking in - was there something specific that made Premium not worth it for you
-      (price, a bug, a missing feature)? Reply to this email and let us know.</p>
-      <p style="line-height:1.6;">Or if you're ready to come back, you can resubscribe below.</p>
-    """
-    html_body = _dunning_shell(to_email=to_email, user_id=user_id, heading="Still with us?", body_html=body_html)
-    resend_id = _send_email(to_email, subject, html_body)
-    logger.info("Sent dunning day7 email to %s", to_email)
-    return resend_id
-
-
-def send_dunning_day14_email(to_email: str, full_name: str | None, user_id: int) -> str | None:
-    greeting_name = full_name.strip().split(" ")[0] if full_name else "there"
-    subject = "What you're missing on the free plan"
-    body_html = f"""
-      <p>Hi {greeting_name},</p>
-      <p style="line-height:1.6;">A quick reminder of what Premium unlocks: unlimited recipe search and scans, full
-      diabetes-friendly meal planning, and your saved recipes and plans, all in one place.</p>
-      <p style="line-height:1.6;">Your data is still there waiting for you.</p>
-    """
-    html_body = _dunning_shell(to_email=to_email, user_id=user_id, heading="What you're missing on the free plan", body_html=body_html)
-    resend_id = _send_email(to_email, subject, html_body)
-    logger.info("Sent dunning day14 email to %s", to_email)
-    return resend_id
-
-
-def send_dunning_day21_email(to_email: str, full_name: str | None, user_id: int) -> str | None:
-    greeting_name = full_name.strip().split(" ")[0] if full_name else "there"
-    subject = "Last check-in for a while"
-    body_html = f"""
-      <p>Hi {greeting_name},</p>
-      <p style="line-height:1.6;">This is the last weekly note from us - after this we'll only reach out occasionally.</p>
-      <p style="line-height:1.6;">If you want back in, we're one tap away.</p>
-    """
-    html_body = _dunning_shell(to_email=to_email, user_id=user_id, heading="Last check-in for a while", body_html=body_html)
-    resend_id = _send_email(to_email, subject, html_body)
-    logger.info("Sent dunning day21 email to %s", to_email)
-    return resend_id
-
-
-def send_dunning_monthly_email(to_email: str, full_name: str | None, user_id: int) -> str | None:
-    greeting_name = full_name.strip().split(" ")[0] if full_name else "there"
-    subject = "Still here when you're ready"
-    body_html = f"""
-      <p>Hi {greeting_name},</p>
-      <p style="line-height:1.6;">Just a low-key reminder that GlucoForager Premium is still here whenever you want it back.</p>
-    """
-    html_body = _dunning_shell(to_email=to_email, user_id=user_id, heading="Still here when you're ready", body_html=body_html)
-    resend_id = _send_email(to_email, subject, html_body)
-    logger.info("Sent dunning monthly email to %s", to_email)
-    return resend_id
-
-
-DUNNING_STAGE_SENDERS = {
-    "day0": send_dunning_day0_email,
-    "day7": send_dunning_day7_email,
-    "day14": send_dunning_day14_email,
-    "day21": send_dunning_day21_email,
-    "monthly": send_dunning_monthly_email,
-}
-
-# Kept alongside DUNNING_STAGE_SENDERS so callers (the dunning scheduler) can log
-# what was actually sent without duplicating each subject line inline.
-DUNNING_STAGE_SUBJECTS = {
-    "day0": "Your GlucoForager Premium has ended",
-    "day7": "Still with us?",
-    "day14": "What you're missing on the free plan",
-    "day21": "Last check-in for a while",
-    "monthly": "Still here when you're ready",
-}
-
-
-def send_dunning_email(to_email: str, full_name: str | None, user_id: int, *, stage: str) -> tuple[str, str | None]:
-    """Sends the dunning email for `stage` and returns (subject, resend_email_id),
-    so the caller can record what was actually sent - and later match an
-    email.opened/email.clicked webhook back to it (see DunningEmailLog)."""
-    sender = DUNNING_STAGE_SENDERS.get(stage)
-    if not sender:
-        raise ValueError(f"Unknown dunning stage: {stage}")
-    resend_id = sender(to_email, full_name, user_id)
-    return DUNNING_STAGE_SUBJECTS[stage], resend_id
