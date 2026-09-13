@@ -1,5 +1,7 @@
+import Link from "next/link";
 import FeatureGrid from "../../components/FeatureGrid";
 import Header from "../../components/Header";
+import Footer from "../../components/Footer";
 
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.glucoforager.com").replace(/\/+$/, "");
 
@@ -24,6 +26,12 @@ export default function FeaturesPage() {
       <Header />
       <main className="min-h-screen bg-white pt-20">
       <div className="container mx-auto max-w-5xl px-4 py-12 space-y-10">
+      <Link href="/" className="inline-flex items-center gap-2 text-teal-700 hover:text-teal-900 font-semibold text-sm">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        </svg>
+        Back to Home
+      </Link>
       <header className="space-y-3">
         <h1 className="text-4xl font-extrabold text-gray-900">What you can do with GlucoForager</h1>
         <p className="text-gray-600">
@@ -34,6 +42,7 @@ export default function FeaturesPage() {
       <FeatureGrid />
       </div>
       </main>
+      <Footer />
     </>
   );
 }

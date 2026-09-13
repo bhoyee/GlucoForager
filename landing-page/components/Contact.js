@@ -1,14 +1,127 @@
+'use client';
+
+import { useState } from 'react';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
+
+const SUBJECT_OPTIONS = [
+  { value: '', label: 'Select a topic' },
+  { value: 'support', label: 'Technical Support' },
+  { value: 'feedback', label: 'Product Feedback' },
+  { value: 'partnership', label: 'Partnership Inquiry' },
+  { value: 'press', label: 'Press & Media' },
+  { value: 'other', label: 'Other' },
+];
+
+function Toast({ toast, onClose }) {
+  if (!toast) return null;
+  const isSuccess = toast.type === 'success';
+  return (
+    <div
+      className="fixed top-6 right-6 z-[70] w-[calc(100%-3rem)] max-w-sm"
+      role="status"
+      aria-live="polite"
+    >
+      <div
+        className={`flex items-start gap-3 rounded-2xl border p-4 shadow-2xl backdrop-blur-sm ${
+          isSuccess ? 'bg-emerald-50/95 border-emerald-200' : 'bg-red-50/95 border-red-200'
+        }`}
+      >
+        <div
+          className={`mt-0.5 flex h-8 w-8 flex-none items-center justify-center rounded-full ${
+            isSuccess ? 'bg-emerald-500' : 'bg-red-500'
+          }`}
+        >
+          {isSuccess ? (
+            <svg className="h-4 w-4 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          ) : (
+            <svg className="h-4 w-4 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className={`text-sm font-bold ${isSuccess ? 'text-emerald-900' : 'text-red-900'}`}>
+            {isSuccess ? 'Message sent' : 'Message not sent'}
+          </p>
+          <p className={`mt-0.5 text-sm ${isSuccess ? 'text-emerald-800' : 'text-red-800'}`}>{toast.message}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Dismiss"
+          className={`flex-none rounded-lg p-1 ${isSuccess ? 'text-emerald-700 hover:bg-emerald-100' : 'text-red-700 hover:bg-red-100'}`}
+        >
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Contact() {
   const WHATSAPP_CHANNEL_URL = 'https://whatsapp.com/channel/0029VbC5ghU6GcGBY7FOni0n';
 
+  const [form, setForm] = useState({ name: '', email: '', subject: '', message: '', website: '' });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  const updateField = (field) => (e) => setForm((prev) => ({ ...prev, [field]: e.target.value }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    setToast(null);
+
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 15000);
+      const response = await fetch(`${API_URL}/api/contact`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify(form),
+      });
+      clearTimeout(timer);
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const detail = typeof data?.detail === 'string' ? data.detail : '';
+        setToast({
+          type: 'error',
+          message: detail || 'Something went wrong sending your message. Please try again.',
+        });
+        return;
+      }
+
+      setToast({ type: 'success', message: "We've received your message and will reply within 24 hours." });
+      setForm({ name: '', email: '', subject: '', message: '', website: '' });
+    } catch {
+      setToast({
+        type: 'error',
+        message: 'Could not reach the server. Please check your connection and try again.',
+      });
+    } finally {
+      setIsSubmitting(false);
+      setTimeout(() => setToast(null), 6000);
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto">
+      <Toast toast={toast} onClose={() => setToast(null)} />
+
       <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 md:p-8 border border-white/20">
         <div className="grid md:grid-cols-2 gap-8">
           {/* Left Column: Contact Info */}
           <div>
             <h3 className="text-xl font-bold text-white mb-6">Get in Touch</h3>
-            
+
             <div className="space-y-5">
               {/* Email */}
               <div className="flex items-start gap-3">
@@ -23,7 +136,7 @@ export default function Contact() {
                   <p className="text-gray-400 text-xs mt-1">Typically responds within 24 hours</p>
                 </div>
               </div>
-              
+
               {/* App Status */}
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
@@ -37,7 +150,7 @@ export default function Contact() {
                   <p className="text-gray-400 text-xs mt-1">Download from App Store & Google Play</p>
                 </div>
               </div>
-              
+
               {/* Support Hours */}
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center flex-shrink-0">
@@ -70,29 +183,25 @@ export default function Contact() {
                 </svg>
               </a>
             </div>
-            
-            {/* Quick Links */}
-            {/* <div className="mt-8 pt-6 border-t border-white/20">
-              <h4 className="font-medium text-white mb-3">Quick Links</h4>
-              <div className="space-y-2">
-                <a href="#faq" className="block text-gray-300 hover:text-white text-sm transition-colors">
-                  ↳ FAQ & Help Center
-                </a>
-                <a href="#pricing" className="block text-gray-300 hover:text-white text-sm transition-colors">
-                  ↳ Pricing & Plans
-                </a>
-                <a href="#features" className="block text-gray-300 hover:text-white text-sm transition-colors">
-                  ↳ Features
-                </a>
-              </div>
-            </div> */}
           </div>
-          
+
           {/* Right Column: Contact Form */}
           <div>
             <h3 className="text-xl font-bold text-white mb-6">Send us a Message</h3>
-            
-            <form className="space-y-5">
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Honeypot - hidden from real visitors, catches bots that fill every field */}
+              <input
+                type="text"
+                name="website"
+                value={form.website}
+                onChange={updateField('website')}
+                tabIndex={-1}
+                autoComplete="off"
+                aria-hidden="true"
+                className="hidden"
+              />
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 {/* Name Field */}
                 <div>
@@ -102,12 +211,14 @@ export default function Contact() {
                   <input
                     type="text"
                     id="name"
+                    value={form.name}
+                    onChange={updateField('name')}
                     className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all"
                     placeholder="John Doe"
                     required
                   />
                 </div>
-                
+
                 {/* Email Field */}
                 <div>
                   <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
@@ -116,13 +227,15 @@ export default function Contact() {
                   <input
                     type="email"
                     id="email"
+                    value={form.email}
+                    onChange={updateField('email')}
                     className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all"
                     placeholder="john@example.com"
                     required
                   />
                 </div>
               </div>
-              
+
               {/* Subject Field */}
               <div>
                 <label htmlFor="subject" className="block text-sm font-medium text-gray-300 mb-2">
@@ -130,18 +243,18 @@ export default function Contact() {
                 </label>
                 <select
                   id="subject"
+                  value={form.subject}
+                  onChange={updateField('subject')}
                   className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all"
-                  defaultValue=""
                 >
-                  <option value="" disabled className="bg-[#01404F]">Select a topic</option>
-                  <option value="support" className="bg-[#01404F]">Technical Support</option>
-                  <option value="feedback" className="bg-[#01404F]">Product Feedback</option>
-                  <option value="partnership" className="bg-[#01404F]">Partnership Inquiry</option>
-                  <option value="press" className="bg-[#01404F]">Press & Media</option>
-                  <option value="other" className="bg-[#01404F]">Other</option>
+                  {SUBJECT_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value} disabled={opt.value === ''} className="bg-[#01404F]">
+                      {opt.label}
+                    </option>
+                  ))}
                 </select>
               </div>
-              
+
               {/* Message Field (shorter) */}
               <div>
                 <label htmlFor="message" className="block text-sm font-medium text-gray-300 mb-2">
@@ -150,20 +263,23 @@ export default function Contact() {
                 <textarea
                   id="message"
                   rows="3"
+                  value={form.message}
+                  onChange={updateField('message')}
                   className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all resize-none"
                   placeholder="How can we help you?"
                   required
                 ></textarea>
               </div>
-              
+
               {/* Submit Button */}
               <button
                 type="submit"
-                className="w-full bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 transform hover:-translate-y-0.5 hover:shadow-lg"
+                disabled={isSubmitting}
+                className="w-full bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 transform hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-60 disabled:hover:translate-y-0"
               >
-                Send Message
+                {isSubmitting ? 'Sending...' : 'Send Message'}
               </button>
-              
+
               {/* Privacy Note */}
               <p className="text-xs text-gray-400 text-center mt-4">
                 By submitting this form, you agree to our Privacy Policy. We'll never share your information.
