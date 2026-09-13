@@ -68,6 +68,7 @@ from .api.endpoints import (
     blog,
     admin_blog,
     newsletter,
+    contact,
     admin_newsletter,
     dunning,
     admin_dunning,
@@ -708,6 +709,7 @@ app.include_router(admin_backups.router, prefix="/api")
 app.include_router(blog.router, prefix="/api")
 app.include_router(admin_blog.router, prefix="/api")
 app.include_router(newsletter.router, prefix="/api")
+app.include_router(contact.router, prefix="/api")
 app.include_router(admin_newsletter.router, prefix="/api")
 app.include_router(dunning.router, prefix="/api")
 app.include_router(admin_dunning.router, prefix="/api")

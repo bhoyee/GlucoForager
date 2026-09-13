@@ -17,16 +17,18 @@ logger = logging.getLogger(__name__)
 RESEND_API_URL = "https://api.resend.com/emails"
 
 
-def _build_message(to_email: str, subject: str, html_body: str) -> MIMEMultipart:
+def _build_message(to_email: str, subject: str, html_body: str, reply_to: str | None = None) -> MIMEMultipart:
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = f"{settings.smtp_from_name or 'GlucoForager'} <{settings.smtp_from_address}>"
     msg["To"] = to_email
+    if reply_to:
+        msg["Reply-To"] = reply_to
     msg.attach(MIMEText(html_body, "html"))
     return msg
 
 
-def _send_resend_email(to_email: str, subject: str, html_body: str) -> str | None:
+def _send_resend_email(to_email: str, subject: str, html_body: str, reply_to: str | None = None) -> str | None:
     """Returns Resend's id for this send (used to match a later open/click
     webhook back to it), or None if Resend wasn't used/failed."""
     if not settings.resend_api_key:
@@ -40,6 +42,8 @@ def _send_resend_email(to_email: str, subject: str, html_body: str) -> str | Non
         "subject": subject,
         "html": html_body,
     }
+    if reply_to:
+        payload["reply_to"] = [reply_to]
     try:
         with httpx.Client(timeout=10.0) as client:
             response = client.post(
@@ -63,13 +67,13 @@ def _send_resend_email(to_email: str, subject: str, html_body: str) -> str | Non
         return None
 
 
-def _send_email(to_email: str, subject: str, html_body: str) -> str | None:
+def _send_email(to_email: str, subject: str, html_body: str, reply_to: str | None = None) -> str | None:
     """Returns Resend's email id when sent via the Resend API, else None (SMTP
     fallback, or provider not configured) - there's no per-message id to track
     opens/clicks against in the SMTP path. Preserves the original fallback
     behavior: any Resend failure (missing key or API error) still falls through
     to SMTP rather than giving up on the send entirely."""
-    resend_id = _send_resend_email(to_email, subject, html_body)
+    resend_id = _send_resend_email(to_email, subject, html_body, reply_to=reply_to)
     if resend_id:
         return resend_id
 
@@ -77,7 +81,7 @@ def _send_email(to_email: str, subject: str, html_body: str) -> str | None:
         logger.info("Email not sent (provider not configured) for %s", to_email)
         return None
 
-    msg = _build_message(to_email, subject, html_body)
+    msg = _build_message(to_email, subject, html_body, reply_to=reply_to)
     encryption = (settings.smtp_encryption or "ssl").strip().lower()
     port = int(settings.smtp_port or (465 if encryption == "ssl" else 587))
 
@@ -178,6 +182,41 @@ def send_admin_signup_alert(
     """
     _send_email(to_email, subject, html_body)
     logger.info("Sent admin signup alert to %s for user=%s", to_email, user_email)
+
+
+CONTACT_FORM_TO_ADDRESS = "hello@glucoforager.com"
+
+
+def send_contact_form_email(*, name: str, email: str, subject: str, message: str) -> None:
+    """Forwards a landing-page Contact form submission to the support inbox, with
+    Reply-To set to the visitor's own address so a human can just hit reply.
+    All fields are visitor-supplied and untrusted - always HTML-escaped."""
+    safe_name = _html.escape(name.strip() or "there")
+    safe_email = _html.escape(email.strip())
+    safe_subject = _html.escape(subject.strip() or "General")
+    safe_message = _html.escape(message.strip()).replace("\n", "<br/>")
+
+    mail_subject = f"Contact form: {subject.strip() or 'General'} - {name.strip() or 'Anonymous'}"[:160]
+    html_body = f"""
+    <html>
+      <body style="font-family: Arial, sans-serif; color: #0C1824;">
+        <div style="max-width:640px; margin:0 auto; border:1px solid #e5e7eb; border-radius:14px; padding:22px;">
+          <h2 style="color:#0FB7A5; margin-top:0;">New contact form message</h2>
+          <table style="width:100%; border-collapse:collapse; font-size:14px; margin-bottom:14px;">
+            <tr><td style="padding:6px 0; color:#6b7280; width:100px;">Name</td><td style="padding:6px 0;"><strong>{safe_name}</strong></td></tr>
+            <tr><td style="padding:6px 0; color:#6b7280;">Email</td><td style="padding:6px 0;"><strong>{safe_email}</strong></td></tr>
+            <tr><td style="padding:6px 0; color:#6b7280;">Subject</td><td style="padding:6px 0;">{safe_subject}</td></tr>
+          </table>
+          <div style="background:#f7fafc; border-radius:10px; padding:14px; line-height:1.6; font-size:14px;">
+            {safe_message}
+          </div>
+          <p style="margin-top:20px; color:#6b7280; font-size:12px;">Reply directly to this email to respond to {safe_name}.</p>
+        </div>
+      </body>
+    </html>
+    """
+    _send_email(CONTACT_FORM_TO_ADDRESS, mail_subject, html_body, reply_to=email.strip())
+    logger.info("Sent contact form email from %s", email)
 
 
 def send_password_reset_code(to_email: str, code: str) -> None:

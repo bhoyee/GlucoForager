@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
+import Footer from '../../components/Footer';
 
 const LAST_UPDATED = 'August 16, 2026';
 
@@ -252,6 +253,7 @@ export default function PrivacyPolicy() {
           </a>
         </div>
       </div>
+      <Footer />
     </div>
   );
 }
