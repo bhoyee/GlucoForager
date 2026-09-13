@@ -7,6 +7,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from ..database import SessionLocal
+from ..models.dunning_email_log import DunningEmailLog
 from ..models.subscription import Subscription
 from ..models.user import User
 from .email_service import send_dunning_email
@@ -103,7 +104,7 @@ def run_dunning_job() -> dict:
                 continue
 
             try:
-                send_dunning_email(user.email, user.full_name, user.id, stage=stage)
+                subject, resend_email_id = send_dunning_email(user.email, user.full_name, user.id, stage=stage)
             except Exception:
                 logger.exception("Failed to send dunning email user_id=%s stage=%s", user.id, stage)
                 continue
@@ -113,6 +114,16 @@ def run_dunning_job() -> dict:
             user.dunning_emails_sent = (user.dunning_emails_sent or 0) + 1
             user.last_dunning_email_at = now
             db.add(user)
+            db.add(
+                DunningEmailLog(
+                    user_id=user.id,
+                    email=user.email,
+                    stage=stage,
+                    subject=subject,
+                    sent_at=now,
+                    resend_email_id=resend_email_id,
+                )
+            )
             sent_counts[stage] = sent_counts.get(stage, 0) + 1
 
         db.commit()

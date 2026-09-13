@@ -70,6 +70,8 @@ from .api.endpoints import (
     newsletter,
     admin_newsletter,
     dunning,
+    admin_dunning,
+    webhooks_resend,
     admin_tips,
     app_swaps,
     app_daily_plan,
@@ -708,4 +710,6 @@ app.include_router(admin_blog.router, prefix="/api")
 app.include_router(newsletter.router, prefix="/api")
 app.include_router(admin_newsletter.router, prefix="/api")
 app.include_router(dunning.router, prefix="/api")
+app.include_router(admin_dunning.router, prefix="/api")
+app.include_router(webhooks_resend.router, prefix="/api")
 app.include_router(admin_tips.router, prefix="/api")
