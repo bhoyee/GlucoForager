@@ -22,6 +22,9 @@ class DunningLogItem(BaseModel):
     stage: str
     subject: str
     sent_at: datetime | None = None
+    opened_at: datetime | None = None
+    clicked_at: datetime | None = None
+    clicked_link: str | None = None
 
 
 class DunningLogListResponse(BaseModel):
@@ -64,6 +67,9 @@ def list_dunning_logs(
                 stage=log.stage,
                 subject=log.subject,
                 sent_at=log.sent_at,
+                opened_at=log.opened_at,
+                clicked_at=log.clicked_at,
+                clicked_link=log.clicked_link,
             )
             for (log, full_name) in rows
         ],

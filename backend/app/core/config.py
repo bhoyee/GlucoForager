@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     password_reset_code_ttl_minutes: int = Field(15, env="PASSWORD_RESET_CODE_TTL_MINUTES")
     password_reset_code_max_attempts: int = Field(5, env="PASSWORD_RESET_CODE_MAX_ATTEMPTS")
     resend_api_key: str | None = Field(None, env="RESEND_API_KEY")
+    resend_webhook_secret: str | None = Field(None, env="RESEND_WEBHOOK_SECRET")
     uploads_dir: str = Field("uploads", env="UPLOADS_DIR")
     openai_api_key: str | None = Field(None, env="OPENAI_API_KEY")
     openai_admin_api_key: str | None = Field(None, env="OPENAI_ADMIN_API_KEY")

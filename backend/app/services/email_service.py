@@ -26,9 +26,11 @@ def _build_message(to_email: str, subject: str, html_body: str) -> MIMEMultipart
     return msg
 
 
-def _send_resend_email(to_email: str, subject: str, html_body: str) -> bool:
+def _send_resend_email(to_email: str, subject: str, html_body: str) -> str | None:
+    """Returns Resend's id for this send (used to match a later open/click
+    webhook back to it), or None if Resend wasn't used/failed."""
     if not settings.resend_api_key:
-        return False
+        return None
 
     sender_name = settings.smtp_from_name or "GlucoForager"
     sender_email = settings.smtp_from_address or "hello@glucoforager.com"
@@ -51,20 +53,29 @@ def _send_resend_email(to_email: str, subject: str, html_body: str) -> bool:
                 response.status_code,
                 response.text[:200],
             )
-            return False
-        return True
+            return None
+        try:
+            return response.json().get("id")
+        except Exception:
+            return None
     except Exception:
         logger.exception("Resend API request failed")
-        return False
+        return None
 
 
-def _send_email(to_email: str, subject: str, html_body: str) -> None:
-    if _send_resend_email(to_email, subject, html_body):
-        return
+def _send_email(to_email: str, subject: str, html_body: str) -> str | None:
+    """Returns Resend's email id when sent via the Resend API, else None (SMTP
+    fallback, or provider not configured) - there's no per-message id to track
+    opens/clicks against in the SMTP path. Preserves the original fallback
+    behavior: any Resend failure (missing key or API error) still falls through
+    to SMTP rather than giving up on the send entirely."""
+    resend_id = _send_resend_email(to_email, subject, html_body)
+    if resend_id:
+        return resend_id
 
     if not settings.smtp_host or not settings.smtp_from_address:
         logger.info("Email not sent (provider not configured) for %s", to_email)
-        return
+        return None
 
     msg = _build_message(to_email, subject, html_body)
     encryption = (settings.smtp_encryption or "ssl").strip().lower()
@@ -776,7 +787,7 @@ def _dunning_shell(*, to_email: str, user_id: int, heading: str, body_html: str)
     """
 
 
-def send_dunning_day0_email(to_email: str, full_name: str | None, user_id: int) -> None:
+def send_dunning_day0_email(to_email: str, full_name: str | None, user_id: int) -> str | None:
     greeting_name = full_name.strip().split(" ")[0] if full_name else "there"
     subject = "Your GlucoForager Premium has ended"
     body_html = f"""
@@ -786,11 +797,12 @@ def send_dunning_day0_email(to_email: str, full_name: str | None, user_id: int) 
       <p style="line-height:1.6;">Nothing you saved is deleted. Resubscribe anytime to pick up right where you left off.</p>
     """
     html_body = _dunning_shell(to_email=to_email, user_id=user_id, heading="Your Premium access has ended", body_html=body_html)
-    _send_email(to_email, subject, html_body)
+    resend_id = _send_email(to_email, subject, html_body)
     logger.info("Sent dunning day0 email to %s", to_email)
+    return resend_id
 
 
-def send_dunning_day7_email(to_email: str, full_name: str | None, user_id: int) -> None:
+def send_dunning_day7_email(to_email: str, full_name: str | None, user_id: int) -> str | None:
     greeting_name = full_name.strip().split(" ")[0] if full_name else "there"
     subject = "Still with us?"
     body_html = f"""
@@ -800,11 +812,12 @@ def send_dunning_day7_email(to_email: str, full_name: str | None, user_id: int) 
       <p style="line-height:1.6;">Or if you're ready to come back, you can resubscribe below.</p>
     """
     html_body = _dunning_shell(to_email=to_email, user_id=user_id, heading="Still with us?", body_html=body_html)
-    _send_email(to_email, subject, html_body)
+    resend_id = _send_email(to_email, subject, html_body)
     logger.info("Sent dunning day7 email to %s", to_email)
+    return resend_id
 
 
-def send_dunning_day14_email(to_email: str, full_name: str | None, user_id: int) -> None:
+def send_dunning_day14_email(to_email: str, full_name: str | None, user_id: int) -> str | None:
     greeting_name = full_name.strip().split(" ")[0] if full_name else "there"
     subject = "What you're missing on the free plan"
     body_html = f"""
@@ -814,11 +827,12 @@ def send_dunning_day14_email(to_email: str, full_name: str | None, user_id: int)
       <p style="line-height:1.6;">Your data is still there waiting for you.</p>
     """
     html_body = _dunning_shell(to_email=to_email, user_id=user_id, heading="What you're missing on the free plan", body_html=body_html)
-    _send_email(to_email, subject, html_body)
+    resend_id = _send_email(to_email, subject, html_body)
     logger.info("Sent dunning day14 email to %s", to_email)
+    return resend_id
 
 
-def send_dunning_day21_email(to_email: str, full_name: str | None, user_id: int) -> None:
+def send_dunning_day21_email(to_email: str, full_name: str | None, user_id: int) -> str | None:
     greeting_name = full_name.strip().split(" ")[0] if full_name else "there"
     subject = "Last check-in for a while"
     body_html = f"""
@@ -827,11 +841,12 @@ def send_dunning_day21_email(to_email: str, full_name: str | None, user_id: int)
       <p style="line-height:1.6;">If you want back in, we're one tap away.</p>
     """
     html_body = _dunning_shell(to_email=to_email, user_id=user_id, heading="Last check-in for a while", body_html=body_html)
-    _send_email(to_email, subject, html_body)
+    resend_id = _send_email(to_email, subject, html_body)
     logger.info("Sent dunning day21 email to %s", to_email)
+    return resend_id
 
 
-def send_dunning_monthly_email(to_email: str, full_name: str | None, user_id: int) -> None:
+def send_dunning_monthly_email(to_email: str, full_name: str | None, user_id: int) -> str | None:
     greeting_name = full_name.strip().split(" ")[0] if full_name else "there"
     subject = "Still here when you're ready"
     body_html = f"""
@@ -839,8 +854,9 @@ def send_dunning_monthly_email(to_email: str, full_name: str | None, user_id: in
       <p style="line-height:1.6;">Just a low-key reminder that GlucoForager Premium is still here whenever you want it back.</p>
     """
     html_body = _dunning_shell(to_email=to_email, user_id=user_id, heading="Still here when you're ready", body_html=body_html)
-    _send_email(to_email, subject, html_body)
+    resend_id = _send_email(to_email, subject, html_body)
     logger.info("Sent dunning monthly email to %s", to_email)
+    return resend_id
 
 
 DUNNING_STAGE_SENDERS = {
@@ -862,11 +878,12 @@ DUNNING_STAGE_SUBJECTS = {
 }
 
 
-def send_dunning_email(to_email: str, full_name: str | None, user_id: int, *, stage: str) -> str:
-    """Sends the dunning email for `stage` and returns its subject line, so the
-    caller can record what was actually sent (see DunningEmailLog)."""
+def send_dunning_email(to_email: str, full_name: str | None, user_id: int, *, stage: str) -> tuple[str, str | None]:
+    """Sends the dunning email for `stage` and returns (subject, resend_email_id),
+    so the caller can record what was actually sent - and later match an
+    email.opened/email.clicked webhook back to it (see DunningEmailLog)."""
     sender = DUNNING_STAGE_SENDERS.get(stage)
     if not sender:
         raise ValueError(f"Unknown dunning stage: {stage}")
-    sender(to_email, full_name, user_id)
-    return DUNNING_STAGE_SUBJECTS[stage]
+    resend_id = sender(to_email, full_name, user_id)
+    return DUNNING_STAGE_SUBJECTS[stage], resend_id

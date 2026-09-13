@@ -20,3 +20,12 @@ class DunningEmailLog(Base):
     stage = Column(String, nullable=False, index=True)  # day0 | day7 | day14 | day21 | monthly
     subject = Column(String, nullable=False)
     sent_at = Column(DateTime, default=datetime.utcnow, index=True)
+    # Resend's own id for this send - the join key for matching an incoming
+    # email.opened/email.clicked webhook back to this row. Null if the email fell
+    # back to plain SMTP (no per-message id available to track in that path).
+    resend_email_id = Column(String, nullable=True, index=True)
+    # First-open/first-click only - a webhook fires again on every subsequent
+    # open/click, and the "first time" is what's actually useful to see.
+    opened_at = Column(DateTime, nullable=True)
+    clicked_at = Column(DateTime, nullable=True)
+    clicked_link = Column(String, nullable=True)

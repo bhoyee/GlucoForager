@@ -104,7 +104,7 @@ def run_dunning_job() -> dict:
                 continue
 
             try:
-                subject = send_dunning_email(user.email, user.full_name, user.id, stage=stage)
+                subject, resend_email_id = send_dunning_email(user.email, user.full_name, user.id, stage=stage)
             except Exception:
                 logger.exception("Failed to send dunning email user_id=%s stage=%s", user.id, stage)
                 continue
@@ -121,6 +121,7 @@ def run_dunning_job() -> dict:
                     stage=stage,
                     subject=subject,
                     sent_at=now,
+                    resend_email_id=resend_email_id,
                 )
             )
             sent_counts[stage] = sent_counts.get(stage, 0) + 1
