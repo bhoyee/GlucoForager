@@ -21,13 +21,17 @@ SEED_TEMPLATES = [
     {
         "stage": "day0",
         "subject": "Your GlucoForager Premium has ended",
-        "heading": "Your Premium access has ended",
+        "heading": "Here's what just turned off",
         "body_html": (
             "<p>Hi {{name}},</p>"
-            "<p style=\"line-height:1.6;\">Your Premium access has ended and you're back on the free plan - "
-            "unlimited recipe search and scans, and full meal planning, are paused for now.</p>"
-            "<p style=\"line-height:1.6;\">Nothing you saved is deleted. Resubscribe anytime to pick up right "
-            "where you left off.</p>"
+            "<p style=\"line-height:1.6;\">Your Premium access just ended, so a few things changed today:</p>"
+            "<ul style=\"line-height:1.6; padding-left:20px; margin:12px 0;\">"
+            "<li>Barcode and photo scans are back to a daily limit</li>"
+            "<li>Your Daily Meal Planner won't generate new plans</li>"
+            "<li>Food swaps and unlimited recipe search are paused</li>"
+            "</ul>"
+            "<p style=\"line-height:1.6;\">Everything you've already saved and logged is still there. "
+            "If you want it all back, it's one tap away.</p>"
         ),
     },
     {
