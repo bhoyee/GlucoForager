@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
@@ -15,6 +15,27 @@ from ...models.user import User
 router = APIRouter(prefix="/admin/dunning", tags=["admin-dunning"])
 
 STAGE_ORDER = ["day0", "day7", "day14", "day21", "monthly"]
+
+
+class DunningSummaryResponse(BaseModel):
+    days: int
+    sent: int
+    opened: int
+    clicked: int
+
+
+@router.get("/summary", response_model=DunningSummaryResponse)
+def get_dunning_summary(
+    days: int = Query(7, ge=1, le=90),
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),  # noqa: ARG001
+):
+    since = datetime.utcnow() - timedelta(days=days)
+    base = db.query(DunningEmailLog).filter(DunningEmailLog.sent_at >= since)
+    sent = base.count()
+    opened = base.filter(DunningEmailLog.opened_at.isnot(None)).count()
+    clicked = base.filter(DunningEmailLog.clicked_at.isnot(None)).count()
+    return DunningSummaryResponse(days=days, sent=sent, opened=opened, clicked=clicked)
 
 
 class DunningLogItem(BaseModel):
