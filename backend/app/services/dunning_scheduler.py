@@ -8,9 +8,10 @@ from apscheduler.triggers.cron import CronTrigger
 
 from ..database import SessionLocal
 from ..models.dunning_email_log import DunningEmailLog
+from ..models.dunning_email_template import DunningEmailTemplate
 from ..models.subscription import Subscription
 from ..models.user import User
-from .email_service import send_dunning_email
+from .email_service import send_dunning_template_email
 from .subscription_service import is_premium_blocked
 from .trial_access_service import build_access_snapshot
 
@@ -21,6 +22,62 @@ _SCHEDULER: BackgroundScheduler | None = None
 # Weekly for the first 4 sends (day 0/7/14/21), then monthly forever after.
 WEEKLY_STAGES = ["day0", "day7", "day14", "day21"]
 MONTHLY_INTERVAL_DAYS = 30
+
+# Fallback only, in case a template row is ever missing (e.g. the migration's seed
+# was deleted) - the real, editable copy lives in dunning_email_templates and is
+# managed via /admin/win-back/templates.
+FALLBACK_TEMPLATES = {
+    "day0": {
+        "subject": "Your GlucoForager Premium has ended",
+        "heading": "Your Premium access has ended",
+        "body_html": (
+            "<p>Hi {{name}},</p>"
+            "<p style=\"line-height:1.6;\">Your Premium access has ended and you're back on the free plan - "
+            "unlimited recipe search and scans, and full meal planning, are paused for now.</p>"
+            "<p style=\"line-height:1.6;\">Nothing you saved is deleted. Resubscribe anytime to pick up right "
+            "where you left off.</p>"
+        ),
+    },
+    "day7": {
+        "subject": "Still with us?",
+        "heading": "Still with us?",
+        "body_html": (
+            "<p>Hi {{name}},</p>"
+            "<p style=\"line-height:1.6;\">Just checking in - was there something specific that made Premium not "
+            "worth it for you (price, a bug, a missing feature)? Reply to this email and let us know.</p>"
+            "<p style=\"line-height:1.6;\">Or if you're ready to come back, you can resubscribe below.</p>"
+        ),
+    },
+    "day14": {
+        "subject": "What you're missing on the free plan",
+        "heading": "What you're missing on the free plan",
+        "body_html": (
+            "<p>Hi {{name}},</p>"
+            "<p style=\"line-height:1.6;\">A quick reminder of what Premium unlocks: unlimited recipe search and "
+            "scans, full diabetes-friendly meal planning, and your saved recipes and plans, all in one place.</p>"
+            "<p style=\"line-height:1.6;\">Your data is still there waiting for you.</p>"
+        ),
+    },
+    "day21": {
+        "subject": "Last check-in for a while",
+        "heading": "Last check-in for a while",
+        "body_html": (
+            "<p>Hi {{name}},</p>"
+            "<p style=\"line-height:1.6;\">This is the last weekly note from us - after this we'll only reach out "
+            "occasionally.</p>"
+            "<p style=\"line-height:1.6;\">If you want back in, we're one tap away.</p>"
+        ),
+    },
+    "monthly": {
+        "subject": "Still here when you're ready",
+        "heading": "Still here when you're ready",
+        "body_html": (
+            "<p>Hi {{name}},</p>"
+            "<p style=\"line-height:1.6;\">Just a low-key reminder that GlucoForager Premium is still here "
+            "whenever you want it back.</p>"
+        ),
+    },
+}
 
 
 def _batch_subscriptions(db, user_ids: list[int]) -> tuple[dict[int, Subscription], dict[int, Subscription]]:
@@ -77,6 +134,10 @@ def run_dunning_job() -> dict:
         if not candidates:
             return sent_counts
 
+        # Loaded once per run, not per user - templates rarely change mid-run and
+        # this avoids a DB round trip per candidate.
+        templates = {row.stage: row for row in db.query(DunningEmailTemplate).all()}
+
         latest_billing, latest_comp = _batch_subscriptions(db, [u.id for u in candidates])
 
         for user in candidates:
@@ -103,8 +164,18 @@ def run_dunning_job() -> dict:
             if not stage:
                 continue
 
+            template = templates.get(stage)
+            if template:
+                subject, heading, body_html = template.subject, template.heading, template.body_html
+            else:
+                fallback = FALLBACK_TEMPLATES[stage]
+                subject, heading, body_html = fallback["subject"], fallback["heading"], fallback["body_html"]
+                logger.warning("No DunningEmailTemplate row for stage=%s, using fallback copy", stage)
+
             try:
-                subject, resend_email_id = send_dunning_email(user.email, user.full_name, user.id, stage=stage)
+                resend_email_id = send_dunning_template_email(
+                    user.email, user.full_name, user.id, subject=subject, heading=heading, body_html=body_html
+                )
             except Exception:
                 logger.exception("Failed to send dunning email user_id=%s stage=%s", user.id, stage)
                 continue
