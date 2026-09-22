@@ -81,6 +81,49 @@ def _subscription_state(event: dict, expiry: datetime | None) -> tuple[str, str]
     return "free", "expired"
 
 
+_DISPLAY_TYPE_LABELS = {
+    "CANCELLATION": "Cancellation",
+    "UNCANCELLATION": "Uncancellation",
+    "BILLING_ISSUE": "Billing Issue",
+    "PRODUCT_CHANGE": "Product Change",
+    "NON_RENEWING_PURCHASE": "Non-Renewing Purchase",
+    "SUBSCRIPTION_PAUSED": "Paused",
+    "SUBSCRIPTION_EXTENDED": "Extended",
+    "TRANSFER": "Transfer",
+    "REFUND": "Refund",
+    "REFUND_REVERSED": "Refund Reversed",
+    "TEMPORARY_ENTITLEMENT_GRANT": "Entitlement Grant",
+    "INVOICE_ISSUANCE": "Invoice Issued",
+    "VIRTUAL_CURRENCY_TRANSACTION": "Virtual Currency",
+    "TEST": "Test Event",
+}
+
+
+def _display_type_label(event_type: str, period_type: str | None, is_trial_conversion: bool | None) -> str:
+    """Human-readable classification matching RevenueCat's own dashboard labels."""
+    period = (period_type or "").upper()
+    if event_type == "INITIAL_PURCHASE":
+        return "Trial Started" if period == "TRIAL" else "Initial Purchase"
+    if event_type == "RENEWAL":
+        return "Trial Converted" if is_trial_conversion else "Renewal"
+    if event_type == "EXPIRATION":
+        return "Trial Ended" if period == "TRIAL" else "Expired"
+    if event_type in _DISPLAY_TYPE_LABELS:
+        return _DISPLAY_TYPE_LABELS[event_type]
+    if not event_type:
+        return "Unknown"
+    return event_type.replace("_", " ").title()
+
+
+def _parse_decimal(value) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 @router.post("/webhook")
 async def revenuecat_webhook(
     request: Request,
@@ -135,6 +178,12 @@ async def revenuecat_webhook(
     product_id = event.get("product_id")
     store = event.get("store")
     environment = event.get("environment")
+    period_type = event.get("period_type")
+    is_trial_conversion = event.get("is_trial_conversion")
+    price_usd = _parse_decimal(event.get("price"))
+    price_in_purchased_currency = _parse_decimal(event.get("price_in_purchased_currency"))
+    currency = event.get("currency")
+    display_type = _display_type_label(event_type_upper, period_type, is_trial_conversion)
 
     sub_query = db.query(Subscription).filter(Subscription.user_id == user.id)
     if store:
@@ -183,6 +232,12 @@ async def revenuecat_webhook(
             store=store,
             environment=environment,
             occurred_at=_parse_event_timestamp(event) or datetime.utcnow(),
+            period_type=period_type,
+            is_trial_conversion=bool(is_trial_conversion) if is_trial_conversion is not None else None,
+            price_usd=price_usd,
+            price_in_purchased_currency=price_in_purchased_currency,
+            currency=currency,
+            display_type=display_type,
         )
     )
 

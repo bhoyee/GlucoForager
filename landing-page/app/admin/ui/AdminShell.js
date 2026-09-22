@@ -820,6 +820,12 @@ export default function AdminShell({ children }) {
           ],
         },
         {
+          id: 'reports',
+          label: 'Reports',
+          defaultOpen: true,
+          items: [{ href: '/admin/reports/transactions', label: 'Transactions', icon: 'reports' }],
+        },
+        {
           id: 'engineering',
           label: 'Engineering',
           defaultOpen: true,
@@ -902,6 +908,14 @@ export default function AdminShell({ children }) {
                 { href: '/admin/notifications', label: 'Notifications', icon: 'notifications', perm: 'push.send' },
                 { href: '/admin/push-campaigns', label: 'Push Campaigns', icon: 'push', perm: 'push.send' },
               ],
+      },
+      {
+        id: 'reports',
+        label: 'Reports',
+        defaultOpen: isAdmin,
+        items: [
+          { href: '/admin/reports/transactions', label: 'Transactions', icon: 'reports', perm: 'system.read' },
+        ],
       },
       {
         id: 'engineering',
