@@ -1,0 +1,24 @@
+name: Check Backfill Log
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Tail backfill log on Oracle Cloud
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          passphrase: ${{ secrets.DEPLOY_SSH_PASSPHRASE }}
+          port: ${{ secrets.DEPLOY_PORT || 22 }}
+          script: |
+            echo "=== backfill.log (last 80 lines) ==="
+            tail -n 80 /home/ubuntu/glucoforager/backfill.log 2>&1 || echo "no log file yet"
+            echo "=== is a backfill process still running? ==="
+            pgrep -af backfill_revenuecat_history || echo "no matching host process"
+            echo "=== any glucoforager-api-run containers still up? ==="
+            docker ps --filter "name=glucoforager-api-run" --format "{{.Names}}: {{.Status}}" || true
