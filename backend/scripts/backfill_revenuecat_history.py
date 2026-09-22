@@ -6,12 +6,24 @@ scripts/backfill_revenuecat_history.py`).
 
 RevenueCat's public API only exposes a *lifetime* revenue total per
 subscription (via GET /v2/projects/{id}/customers/{id}/subscriptions), not a
-renewal-by-renewal breakdown. The first backfill for a subscription records
-that lifetime total as one "Historical Revenue" row, dated at its original
-start (so an old subscriber's full history doesn't land in a recent period).
-Any later run that finds the lifetime total has grown records just the new
-difference as a "Renewal" row, dated at the subscription's current period
-start - see the re-run note below.
+renewal-by-renewal breakdown - it doesn't tell us how much of that total
+came from any specific cycle. Splitting it two ways:
+
+- The subscription's *current billing cycle* (bounded by the real
+  `current_period_starts_at`/`current_period_ends_at` fields) gets an
+  estimated one-cycle share of the lifetime total, dated at the current
+  period's start - so a renewal that happened right before we ran this
+  shows up in "this month"/"this year" instead of being invisible.
+- Everything before that stays dated at the subscription's original start,
+  so an old subscriber's multi-year history doesn't get dumped into a
+  recent period either.
+
+The one-cycle estimate (gross / number of cycles so far, based on how many
+cycle-lengths have elapsed since the original start) assumes a roughly
+constant per-cycle price - it won't be exact for a subscription with price
+changes or promotional pricing, but it's far more accurate than lumping
+everything at the original start date, and it never changes the *total*
+recorded for a subscription, only how that total is dated.
 
 Rather than paging through every RevenueCat customer (most of whom are free
 users who never subscribed - tens of thousands of API calls for a handful of
@@ -20,17 +32,12 @@ billing subscription row in our own `subscriptions` table. That's the exact
 set of people who could possibly have revenue history, so it's both faster
 and complete (no arbitrary recency cutoff needed).
 
-Safe to re-run, and re-running is meaningful: a subscription that renews
-after its first backfill will have a *larger* lifetime gross next time this
-runs. Rather than skipping subscriptions we've already seen, this tracks how
-much of that lifetime total we've already recorded and inserts only the
-difference - dated at the subscription's *current period start* (a real
-RevenueCat field), not its original start date. That keeps the same
-"don't misattribute an old lump sum to today" safety for the first backfill
-(dated at the original start), while still correctly dating genuinely new
-revenue from a later renewal at the period it was actually earned in - which
-a webhook outage or delivery failure would otherwise leave permanently
-missing from "this year"/"this month".
+Safe to re-run, and re-running is meaningful: each run re-derives a
+subscription's rows from RevenueCat's current state (deleting and
+recreating them if the lifetime total or the current-period split has
+changed since last time), so a later renewal - or a renewal missed here the
+first time because it hadn't rolled into "current period" data yet - gets
+picked up and correctly dated on the next run.
 """
 
 import sys
@@ -41,7 +48,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import httpx  # noqa: E402
-from sqlalchemy import func  # noqa: E402
 
 from app.core.config import settings  # noqa: E402
 from app.database import SessionLocal  # noqa: E402
@@ -52,13 +58,33 @@ from app.models.user import User  # noqa: E402
 BASE_URL = "https://api.revenuecat.com/v2"
 HISTORICAL_EVENT_TYPE = "HISTORICAL_BACKFILL"
 HISTORICAL_DISPLAY_TYPE = "Historical Revenue"
-TOPUP_DISPLAY_TYPE = "Renewal"
+CURRENT_PERIOD_DISPLAY_TYPE = "Renewal"
+CENTS = 0.01  # amounts within a cent of each other are treated as unchanged
 
 
 def _ms_to_dt(ms) -> datetime | None:
     if not ms:
         return None
     return datetime.utcfromtimestamp(ms / 1000)
+
+
+def _estimate_current_period_share(sub: dict) -> float | None:
+    """Fraction (0-1] of the lifetime gross estimated to belong to the current billing
+    cycle. None if this is the subscription's first-ever period (nothing to split out -
+    the whole gross already belongs to "now") or there isn't enough period data to
+    estimate from."""
+    starts_at_ms = sub.get("starts_at")
+    period_start_ms = sub.get("current_period_starts_at")
+    period_end_ms = sub.get("current_period_ends_at") or sub.get("ends_at")
+    if not starts_at_ms or not period_start_ms or not period_end_ms:
+        return None
+    if period_start_ms <= starts_at_ms:
+        return None
+    cycle_length = period_end_ms - period_start_ms
+    if cycle_length <= 0:
+        return None
+    periods_before_current = max(1, round((period_start_ms - starts_at_ms) / cycle_length))
+    return 1.0 / (periods_before_current + 1)
 
 
 def _get_with_retry(client: httpx.Client, url: str, params: dict, max_attempts: int = 5) -> httpx.Response:
@@ -86,7 +112,7 @@ def main() -> None:
         "candidates": 0,
         "subs_seen": 0,
         "inserted": 0,
-        "topped_up": 0,
+        "resplit": 0,
         "skipped_sandbox": 0,
         "skipped_no_revenue": 0,
         "skipped_no_change": 0,
@@ -141,61 +167,85 @@ def _backfill_customer_subscriptions(client, project_id, customer_id, user, db, 
                 continue
 
             transaction_id = sub.get("store_subscription_identifier") or sub.get("id")
+            gross = float(gross)
 
-            already_recorded = (
-                db.query(func.coalesce(func.sum(SubscriptionEvent.price_usd), 0))
+            starts_at = _ms_to_dt(sub.get("starts_at"))
+            ends_at = _ms_to_dt(sub.get("ends_at") or sub.get("current_period_ends_at"))
+            current_period_start = _ms_to_dt(sub.get("current_period_starts_at"))
+            currency = revenue.get("currency") or "USD"
+            store = (sub.get("store") or "").upper() or None
+            status = sub.get("status")
+
+            fraction = _estimate_current_period_share(sub)
+            target_current = round(gross * fraction, 2) if (fraction and current_period_start) else 0.0
+            target_historical = round(gross - target_current, 2)
+
+            existing_rows = (
+                db.query(SubscriptionEvent)
                 .filter(
                     SubscriptionEvent.user_id == user.id,
                     SubscriptionEvent.event_type == HISTORICAL_EVENT_TYPE,
                     SubscriptionEvent.transaction_id == transaction_id,
                 )
-                .scalar()
-                or 0
+                .all()
             )
-            is_first_backfill = already_recorded == 0
-            delta = float(gross) - float(already_recorded)
-            if delta <= 0:
+            recorded_total = round(sum(float(r.price_usd or 0) for r in existing_rows), 2)
+            # Has a row already been dated within the *current* period? If the current
+            # period rolled forward since we last recorded this (a new renewal), no
+            # existing row will satisfy this, correctly forcing a re-split.
+            recorded_current = round(
+                sum(
+                    float(r.price_usd or 0)
+                    for r in existing_rows
+                    if current_period_start and r.occurred_at and r.occurred_at >= current_period_start
+                ),
+                2,
+            )
+
+            unchanged = (
+                existing_rows
+                and abs(recorded_total - gross) < CENTS
+                and abs(recorded_current - target_current) < CENTS
+            )
+            if unchanged:
                 stats["skipped_no_change"] += 1
                 continue
 
-            starts_at = _ms_to_dt(sub.get("starts_at"))
-            ends_at = _ms_to_dt(sub.get("ends_at") or sub.get("current_period_ends_at"))
-            # First backfill: date conservatively at the subscription's original start,
-            # so an old subscriber's full lifetime total doesn't land in a recent period.
-            # A later top-up's delta is genuinely new revenue, correctly dated at the
-            # period it was actually earned in.
-            if is_first_backfill:
-                occurred_at = starts_at or datetime.utcnow()
-                display_type = HISTORICAL_DISPLAY_TYPE
-            else:
-                occurred_at = _ms_to_dt(sub.get("current_period_starts_at")) or datetime.utcnow()
-                display_type = TOPUP_DISPLAY_TYPE
+            for row in existing_rows:
+                db.delete(row)
 
-            db.add(
-                SubscriptionEvent(
-                    user_id=user.id,
-                    subscription_id=None,
-                    event_type=HISTORICAL_EVENT_TYPE,
-                    plan="premium",
-                    status=sub.get("status"),
-                    started_at=starts_at,
-                    expires_at=ends_at,
-                    transaction_id=transaction_id,
-                    original_transaction_id=transaction_id,
-                    product_id=sub.get("product_id"),
-                    store=(sub.get("store") or "").upper() or None,
-                    environment="PRODUCTION",
-                    occurred_at=occurred_at,
-                    price_usd=delta,
-                    currency=revenue.get("currency") or "USD",
-                    display_type=display_type,
+            def _add_row(amount: float, occurred_at, display_type: str) -> None:
+                db.add(
+                    SubscriptionEvent(
+                        user_id=user.id,
+                        subscription_id=None,
+                        event_type=HISTORICAL_EVENT_TYPE,
+                        plan="premium",
+                        status=status,
+                        started_at=starts_at,
+                        expires_at=ends_at,
+                        transaction_id=transaction_id,
+                        original_transaction_id=transaction_id,
+                        product_id=sub.get("product_id"),
+                        store=store,
+                        environment="PRODUCTION",
+                        occurred_at=occurred_at,
+                        price_usd=amount,
+                        currency=currency,
+                        display_type=display_type,
+                    )
                 )
-            )
+
+            if target_historical > CENTS:
+                _add_row(target_historical, starts_at or datetime.utcnow(), HISTORICAL_DISPLAY_TYPE)
+            if target_current > CENTS:
+                _add_row(target_current, current_period_start, CURRENT_PERIOD_DISPLAY_TYPE)
+
             db.commit()
-            if is_first_backfill:
-                stats["inserted"] += 1
+            if existing_rows:
+                stats["resplit"] += 1
             else:
-                stats["topped_up"] += 1
+                stats["inserted"] += 1
 
         subs_url = data.get("next_page")
         subs_params = {}
