@@ -7,7 +7,9 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 const PAGE_SIZE = 25;
 
 // Only types that can carry a non-zero price - the list only ever shows paid transactions.
-const TYPE_OPTIONS = ['Initial Purchase', 'Renewal', 'Trial Converted', 'Product Change', 'Refund'];
+// "Historical Revenue" is a lifetime-total row backfilled from RevenueCat's API for
+// subscriptions that existed before this tracking went live (see backfill_revenuecat_history.py).
+const TYPE_OPTIONS = ['Initial Purchase', 'Renewal', 'Trial Converted', 'Product Change', 'Refund', 'Historical Revenue'];
 
 const STORE_OPTIONS = [
   { value: 'PLAY_STORE', label: 'Play Store' },
@@ -31,6 +33,7 @@ const TYPE_TONE = {
   Refund: 'danger',
   'Refund Reversed': 'success',
   'Product Change': 'neutral',
+  'Historical Revenue': 'neutral',
 };
 
 const toneFor = (type) => TYPE_TONE[type] || 'neutral';
@@ -52,6 +55,7 @@ const relativeTime = (value) => {
   const hour = 60 * minute;
   const day = 24 * hour;
   const month = 30 * day;
+  const year = 365 * day;
   let amount;
   let unit;
   if (abs < hour) {
@@ -63,9 +67,12 @@ const relativeTime = (value) => {
   } else if (abs < month) {
     amount = Math.round(abs / day);
     unit = 'day';
-  } else {
+  } else if (abs < year) {
     amount = Math.round(abs / month);
     unit = 'month';
+  } else {
+    amount = Math.round(abs / year);
+    unit = 'year';
   }
   const plural = amount === 1 ? unit : `${unit}s`;
   return past ? `${amount} ${plural} ago` : `in ${amount} ${plural}`;
@@ -214,19 +221,19 @@ export default function AdminTransactionsPage() {
             icon="💰"
             label="All-time earning"
             value={summaryLoading ? '--' : formatUsd(summary.all_time)}
-            detail="Net revenue across every transaction on record"
+            detail="Includes backfilled historical revenue, where available"
           />
           <SummaryCard
             icon="📅"
             label="This year"
             value={summaryLoading ? '--' : formatUsd(summary.current_year)}
-            detail={`Revenue booked in ${new Date().getFullYear()}`}
+            detail={`Real transactions only, ${new Date().getFullYear()}`}
           />
           <SummaryCard
             icon="📈"
             label="This month"
             value={summaryLoading ? '--' : formatUsd(summary.current_month)}
-            detail="Revenue booked in the current calendar month"
+            detail="Real transactions only, current calendar month"
           />
         </div>
       </div>

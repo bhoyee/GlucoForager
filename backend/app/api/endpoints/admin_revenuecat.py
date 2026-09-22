@@ -14,6 +14,11 @@ from ...services.revenuecat_metrics_service import get_overview_metrics
 router = APIRouter(prefix="/admin", tags=["admin"])
 cache = CacheService()
 
+# Historical revenue backfilled from RevenueCat's API carries a lifetime total per
+# subscription, not a per-cycle breakdown - counting it in "this year"/"this month"
+# would misattribute years of past revenue to whatever period it happens to land in.
+HISTORICAL_EVENT_TYPE = "HISTORICAL_BACKFILL"
+
 STORE_LABELS = {
     "PLAY_STORE": "Play Store",
     "APP_STORE": "App Store",
@@ -50,6 +55,9 @@ def list_revenuecat_transactions(
         # Only rows tied to an actual payment - drops trial starts/ends, cancellations,
         # expirations, and the pre-fix backfill rows, none of which carry a price.
         .filter(SubscriptionEvent.price_usd.is_not(None), SubscriptionEvent.price_usd != 0)
+        # Sandbox/test-mode webhook events carry realistic-looking prices too - exclude
+        # them so test purchases never show up as real revenue.
+        .filter(func.lower(func.coalesce(SubscriptionEvent.environment, "")) != "sandbox")
     )
 
     if q:
@@ -107,17 +115,20 @@ def revenuecat_transactions_summary(
     year_start = datetime(now.year, 1, 1)
     month_start = datetime(now.year, now.month, 1)
 
-    def total_since(start: datetime | None) -> float:
+    def total_since(start: datetime | None, *, include_historical: bool) -> float:
         revenue_query = db.query(func.coalesce(func.sum(SubscriptionEvent.price_usd), 0)).filter(
-            SubscriptionEvent.price_usd.is_not(None)
+            SubscriptionEvent.price_usd.is_not(None),
+            func.lower(func.coalesce(SubscriptionEvent.environment, "")) != "sandbox",
         )
+        if not include_historical:
+            revenue_query = revenue_query.filter(SubscriptionEvent.event_type != HISTORICAL_EVENT_TYPE)
         if start is not None:
             revenue_query = revenue_query.filter(SubscriptionEvent.occurred_at >= start)
         return float(revenue_query.scalar() or 0)
 
     return {
-        "all_time": total_since(None),
-        "current_year": total_since(year_start),
-        "current_month": total_since(month_start),
+        "all_time": total_since(None, include_historical=True),
+        "current_year": total_since(year_start, include_historical=False),
+        "current_month": total_since(month_start, include_historical=False),
         "currency": "USD",
     }
