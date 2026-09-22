@@ -6,20 +6,8 @@ import { useRouter } from 'next/navigation';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 const PAGE_SIZE = 25;
 
-const TYPE_OPTIONS = [
-  'Initial Purchase',
-  'Trial Started',
-  'Renewal',
-  'Trial Converted',
-  'Trial Ended',
-  'Expired',
-  'Cancellation',
-  'Uncancellation',
-  'Billing Issue',
-  'Product Change',
-  'Refund',
-  'Existing Subscription',
-];
+// Only types that can carry a non-zero price - the list only ever shows paid transactions.
+const TYPE_OPTIONS = ['Initial Purchase', 'Renewal', 'Trial Converted', 'Product Change', 'Refund'];
 
 const STORE_OPTIONS = [
   { value: 'PLAY_STORE', label: 'Play Store' },
@@ -219,7 +207,7 @@ export default function AdminTransactionsPage() {
     <div>
       <div className="admin-card" style={{ marginBottom: 18 }}>
         <h2 className="admin-title">Transactions</h2>
-        <p className="admin-subtitle">Every billing event RevenueCat has reported, across every user.</p>
+        <p className="admin-subtitle">Paid transactions only - purchases, renewals, and refunds. Trial starts/ends, cancellations, and expirations aren't shown since no money moves on those.</p>
 
         <div className="admin-health-grid" style={{ marginTop: 16, gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
           <SummaryCard
@@ -308,7 +296,7 @@ export default function AdminTransactionsPage() {
                 {items.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="admin-empty">
-                      No transactions found.
+                      No paid transactions found.
                     </td>
                   </tr>
                 ) : (

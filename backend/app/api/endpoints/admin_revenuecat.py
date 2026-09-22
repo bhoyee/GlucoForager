@@ -47,6 +47,9 @@ def list_revenuecat_transactions(
     query = (
         db.query(SubscriptionEvent, User.public_id, User.email)
         .join(User, User.id == SubscriptionEvent.user_id)
+        # Only rows tied to an actual payment - drops trial starts/ends, cancellations,
+        # expirations, and the pre-fix backfill rows, none of which carry a price.
+        .filter(SubscriptionEvent.price_usd.is_not(None), SubscriptionEvent.price_usd != 0)
     )
 
     if q:
