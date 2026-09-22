@@ -12,6 +12,13 @@ admin summary endpoint (admin_revenuecat.py) deliberately excludes these
 rows from "this year"/"this month" - only "all-time" counts them - since
 attributing years of past renewals to a single date would be misleading.
 
+Rather than paging through every RevenueCat customer (most of whom are free
+users who never subscribed - tens of thousands of API calls for a handful of
+real matches), this only checks RevenueCat for users who already have a real
+billing subscription row in our own `subscriptions` table. That's the exact
+set of people who could possibly have revenue history, so it's both faster
+and complete (no arbitrary recency cutoff needed).
+
 Safe to re-run: skips subscriptions already backfilled (matched by
 user_id + transaction_id under the HISTORICAL_BACKFILL event type).
 """
@@ -27,6 +34,7 @@ import httpx  # noqa: E402
 
 from app.core.config import settings  # noqa: E402
 from app.database import SessionLocal  # noqa: E402
+from app.models.subscription import Subscription  # noqa: E402
 from app.models.subscription_event import SubscriptionEvent  # noqa: E402
 from app.models.user import User  # noqa: E402
 
@@ -63,45 +71,33 @@ def main() -> None:
 
     db = SessionLocal()
     stats = {
-        "customers_seen": 0,
+        "candidates": 0,
         "subs_seen": 0,
         "inserted": 0,
         "skipped_sandbox": 0,
         "skipped_no_revenue": 0,
         "skipped_existing": 0,
-        "skipped_no_user": 0,
     }
 
     try:
+        # Anyone with a non-admin (real billing) subscription row has, at minimum, gone
+        # through a RevenueCat purchase flow once - this is the full candidate set.
+        candidate_user_ids = (
+            db.query(Subscription.user_id)
+            .filter(Subscription.store.isnot(None), Subscription.store != "admin")
+            .distinct()
+        )
+        users = db.query(User).filter(User.id.in_(candidate_user_ids)).all()
+        stats["candidates"] = len(users)
+        print(f"found {len(users)} users with a real billing subscription on record")
+
         with httpx.Client(timeout=20.0, headers={"Authorization": f"Bearer {key}"}) as client:
-            customers_url = f"{BASE_URL}/projects/{project_id}/customers"
-            customers_params = {"limit": 100}
-            page_num = 0
-
-            while customers_url:
-                resp = _get_with_retry(client, customers_url, customers_params)
-                data = resp.json()
-                customers = data.get("items", [])
-                stats["customers_seen"] += len(customers)
-                page_num += 1
-
-                for customer in customers:
-                    customer_id = customer.get("id")
-                    if not customer_id:
-                        continue
-
-                    user = db.query(User).filter(User.public_id == customer_id).first()
-                    if not user:
-                        stats["skipped_no_user"] += 1
-                        continue
-
-                    _backfill_customer_subscriptions(client, project_id, customer_id, user, db, stats)
-
-                customers_url = data.get("next_page")
-                customers_params = {}
-
-                if page_num % 10 == 0:
-                    print(f"progress: page={page_num} {stats}")
+            for i, user in enumerate(users, start=1):
+                if not user.public_id:
+                    continue
+                _backfill_customer_subscriptions(client, project_id, user.public_id, user, db, stats)
+                if i % 25 == 0 or i == len(users):
+                    print(f"progress: {i}/{len(users)} {stats}")
 
     finally:
         db.close()
