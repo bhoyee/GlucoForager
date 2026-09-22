@@ -52,6 +52,7 @@ export default function AdminRecipesList() {
     try {
       const response = await fetch(`${API_URL}/api/admin/recipes`, {
         headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
       });
       if (response.status === 401) {
         localStorage.removeItem('adminToken');
@@ -69,10 +70,29 @@ export default function AdminRecipesList() {
 
   useEffect(() => {
     if (!token) return undefined;
+
+    const refresh = () => loadRecipes(true);
+
+    // Refresh immediately when the admin comes back to this tab/page - e.g. after
+    // generating recipes in the AI Recipe Studio in another tab - instead of waiting
+    // for the next poll.
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('admin-route-refresh', refresh);
+
+    // Background poll for changes made elsewhere (another admin, a scheduled catalog
+    // generation job) while this tab stays open. Skipped while the tab is hidden.
     const timer = setInterval(() => {
-      loadRecipes(true);
+      if (document.visibilityState !== 'visible') return;
+      refresh();
     }, REFRESH_MS);
-    return () => clearInterval(timer);
+
+    return () => {
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('admin-route-refresh', refresh);
+      clearInterval(timer);
+    };
   }, [token]);
 
   const handleDelete = async (recipeId) => {
