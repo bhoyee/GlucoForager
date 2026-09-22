@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from ...core.config import settings
 from ...database import get_db
 from ...models.subscription import Subscription
+from ...models.subscription_event import SubscriptionEvent
 from ...models.user import User
 from ...services.analytics_service import track_event
 from ...services.email_service import send_premium_activated_email
@@ -36,6 +37,16 @@ def _parse_expiry(event: dict) -> datetime | None:
         return None
     try:
         return datetime.utcfromtimestamp(int(expiry_ms) / 1000)
+    except (ValueError, TypeError):
+        return None
+
+
+def _parse_event_timestamp(event: dict) -> datetime | None:
+    ts_ms = event.get("event_timestamp_ms")
+    if not ts_ms:
+        return None
+    try:
+        return datetime.utcfromtimestamp(int(ts_ms) / 1000)
     except (ValueError, TypeError):
         return None
 
@@ -155,6 +166,26 @@ async def revenuecat_webhook(
     subscription.environment = environment or subscription.environment
 
     db.add(subscription)
+    db.flush()  # assign subscription.id for new rows before logging the event
+
+    db.add(
+        SubscriptionEvent(
+            user_id=user.id,
+            subscription_id=subscription.id,
+            event_type=event_type_upper,
+            plan=plan,
+            status=status_value,
+            started_at=subscription.started_at,
+            expires_at=expiry,
+            transaction_id=transaction_id,
+            original_transaction_id=original_transaction_id,
+            product_id=product_id,
+            store=store,
+            environment=environment,
+            occurred_at=_parse_event_timestamp(event) or datetime.utcnow(),
+        )
+    )
+
     refresh_user_tier(db, user)
     db.commit()
 
