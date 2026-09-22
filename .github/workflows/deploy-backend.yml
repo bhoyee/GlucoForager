@@ -52,10 +52,15 @@ jobs:
             git reset --hard origin/main
             docker compose up -d --build
             docker compose run --rm api alembic upgrade head
-            # One-time historical revenue backfill (safe to re-run - skips subscriptions
-            # already backfilled). Remove this line once it has run successfully.
-            docker compose run --rm api python scripts/backfill_revenuecat_history.py
             # Rebuilding glucoforager-api gives it a new container IP. The
             # shared nginx (pingloyal-nginx-1) caches that IP at its own
             # startup and won't notice, so reload it to avoid stale 502s.
             docker exec pingloyal-nginx-1 nginx -s reload || echo "warning: nginx reload failed or container not found"
+            # One-time historical revenue backfill (safe to re-run - skips subscriptions
+            # already backfilled). Runs detached so a long scan (thousands of RevenueCat
+            # customers) can't block this SSH session or its command timeout - that
+            # previously stalled nginx reload above and caused a 502. Remove this block
+            # once the backfill has completed successfully (check backfill.log).
+            nohup docker compose run --rm api python scripts/backfill_revenuecat_history.py \
+              > /home/ubuntu/glucoforager/backfill.log 2>&1 &
+            disown
