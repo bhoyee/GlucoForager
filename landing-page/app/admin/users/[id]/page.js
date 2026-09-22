@@ -461,7 +461,14 @@ export default function AdminUserDetail() {
   };
 
   const confirmContent = getConfirmContent(pendingAction);
-  const transactions = Array.isArray(user.subscriptions) ? user.subscriptions : [];
+  // subscription_events is an append-only history (one row per renewal/cancellation/etc.);
+  // subscriptions only holds current state and is kept as a fallback for older API responses.
+  const hasEventHistory = Array.isArray(user.subscription_events);
+  const transactions = hasEventHistory
+    ? user.subscription_events
+    : Array.isArray(user.subscriptions)
+      ? user.subscriptions
+      : [];
   const filteredTransactions = transactions
     .filter((sub) => {
       if (txStatusFilter === 'all') return true;
@@ -476,6 +483,7 @@ export default function AdminUserDetail() {
         sub.product_id,
         sub.transaction_id,
         sub.store,
+        sub.event_type,
       ]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(term));
@@ -490,6 +498,8 @@ export default function AdminUserDetail() {
         result = getValue(a.plan).localeCompare(getValue(b.plan));
       } else if (txSortKey === 'expires_at') {
         result = getDate(a.expires_at) - getDate(b.expires_at);
+      } else if (hasEventHistory) {
+        result = getDate(a.occurred_at) - getDate(b.occurred_at);
       } else {
         result = getDate(a.started_at) - getDate(b.started_at);
       }
@@ -966,7 +976,11 @@ export default function AdminUserDetail() {
       {activeTab === 'transactions' ? (
         <div className="admin-card" style={{ marginTop: 18 }}>
           <h3 className="admin-title admin-title--sm">Transactions</h3>
-          <p className="admin-subtitle admin-subtitle--sm">Search, filter, and inspect subscription events.</p>
+          <p className="admin-subtitle admin-subtitle--sm">
+            {hasEventHistory
+              ? 'Full event history - one row per renewal, cancellation, expiration, etc.'
+              : 'Search, filter, and inspect subscription events.'}
+          </p>
           <div className="admin-toolbar">
             <input
               className="admin-search-input"
@@ -1013,8 +1027,10 @@ export default function AdminUserDetail() {
             <table className="admin-table">
               <thead>
                 <tr>
+                  {hasEventHistory ? <th>Event</th> : null}
                   <th>Status</th>
                   <th>Plan</th>
+                  {hasEventHistory ? <th>Occurred</th> : null}
                   <th>Started</th>
                   <th>Expires</th>
                   <th>Product</th>
@@ -1026,8 +1042,10 @@ export default function AdminUserDetail() {
                 {txPageItems.length ? (
                   txPageItems.map((sub) => (
                     <tr key={sub.id}>
+                      {hasEventHistory ? <td>{sub.event_type || '--'}</td> : null}
                       <td>{sub.status}</td>
                       <td>{sub.plan}</td>
+                      {hasEventHistory ? <td>{formatDateTime(sub.occurred_at)}</td> : null}
                       <td>{formatDate(sub.started_at)}</td>
                       <td>{formatDate(sub.expires_at)}</td>
                       <td>{sub.product_id || '--'}</td>
@@ -1037,7 +1055,7 @@ export default function AdminUserDetail() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={7}>No subscription history.</td>
+                    <td colSpan={hasEventHistory ? 9 : 7}>No subscription history.</td>
                   </tr>
                 )}
               </tbody>
