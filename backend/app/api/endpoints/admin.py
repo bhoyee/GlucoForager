@@ -35,6 +35,7 @@ from ...models.recipe_history import RecipeHistory
 from ...models.shopping_item import ShoppingItem
 from ...models.refresh_token import RefreshToken
 from ...models.subscription import Subscription
+from ...models.subscription_event import SubscriptionEvent
 from ...models.user import SearchLog, User
 from ...models.user_activity_event import UserActivityEvent
 from ...models.user_daily_challenge import UserDailyChallenge
@@ -972,6 +973,12 @@ def get_user_detail(
         .order_by(Subscription.started_at.desc())
         .all()
     )
+    sub_events = (
+        db.query(SubscriptionEvent)
+        .filter(SubscriptionEvent.user_id == user.id)
+        .order_by(SubscriptionEvent.occurred_at.desc())
+        .all()
+    )
     now = datetime.utcnow()
     billing = next((sub for sub in subs if sub.store != "admin"), None)
     comp = next((sub for sub in subs if sub.store == "admin" and sub.plan == "premium"), None)
@@ -1059,6 +1066,23 @@ def get_user_detail(
                 "environment": sub.environment,
             }
             for sub in subs
+        ],
+        "subscription_events": [
+            {
+                "id": evt.id,
+                "event_type": evt.event_type,
+                "plan": evt.plan,
+                "status": evt.status,
+                "started_at": evt.started_at,
+                "expires_at": evt.expires_at,
+                "transaction_id": evt.transaction_id,
+                "original_transaction_id": evt.original_transaction_id,
+                "product_id": evt.product_id,
+                "store": evt.store,
+                "environment": evt.environment,
+                "occurred_at": evt.occurred_at,
+            }
+            for evt in sub_events
         ],
     }
 
