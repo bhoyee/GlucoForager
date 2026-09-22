@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, Numeric, String
 from sqlalchemy.orm import relationship
 
 from ..database import Base
@@ -30,6 +30,14 @@ class SubscriptionEvent(Base):
     store = Column(String, nullable=True)
     environment = Column(String, nullable=True)
     occurred_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    period_type = Column(String, nullable=True)
+    is_trial_conversion = Column(Boolean, nullable=True)
+    price_usd = Column(Numeric(10, 2), nullable=True)
+    price_in_purchased_currency = Column(Numeric(10, 2), nullable=True)
+    currency = Column(String, nullable=True)
+    # Human-readable classification (Renewal, Trial Converted, Trial Ended, ...),
+    # computed once from event_type/period_type/is_trial_conversion at webhook time.
+    display_type = Column(String, nullable=True)
 
     user = relationship("User")
     subscription = relationship("Subscription")
