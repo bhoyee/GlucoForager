@@ -227,13 +227,13 @@ export default function AdminTransactionsPage() {
             icon="📅"
             label="This year"
             value={summaryLoading ? '--' : formatUsd(summary.current_year)}
-            detail={`Real transactions only, ${new Date().getFullYear()}`}
+            detail={`Revenue dated in ${new Date().getFullYear()}`}
           />
           <SummaryCard
             icon="📈"
             label="This month"
             value={summaryLoading ? '--' : formatUsd(summary.current_month)}
-            detail="Real transactions only, current calendar month"
+            detail="Revenue dated in the current calendar month"
           />
         </div>
       </div>
