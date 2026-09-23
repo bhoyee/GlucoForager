@@ -257,6 +257,9 @@ export default function AdminRecipesList() {
       total: 0,
     };
     for (const recipe of recipes) {
+      // Only count what's actually live in the app - drafts (including AI-generated
+      // ones awaiting review) and archived recipes shouldn't inflate these numbers.
+      if (String(recipe?.status || 'published').toLowerCase() !== 'published') continue;
       counts.total += 1;
       const key = String(recipe?.meal_type || '').toLowerCase();
       if (Object.prototype.hasOwnProperty.call(counts, key)) {
@@ -319,6 +322,10 @@ export default function AdminRecipesList() {
 
       <AutogenSettingsPanel token={token} />
 
+      <p className="admin-subtitle" style={{ fontSize: 12, marginTop: -4, marginBottom: 4 }}>
+        Live counts below reflect published recipes only - drafts (including AI-generated ones
+        awaiting review) aren't included.
+      </p>
       <div className="admin-inline admin-subcards" style={{ marginTop: 0 }}>
         <div className="admin-subcard admin-subcard--breakfast">
           <span>Breakfast</span>
