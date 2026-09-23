@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import os
+from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
 
@@ -34,6 +35,26 @@ AI_LIMIT_FREE_TEXT_PER_MIN_KEY = "ai_limit_free_text_per_min"
 AI_LIMIT_PREMIUM_TEXT_PER_MIN_KEY = "ai_limit_premium_text_per_min"
 AI_LIMIT_FREE_VISION_PER_MIN_KEY = "ai_limit_free_vision_per_min"
 AI_LIMIT_PREMIUM_VISION_PER_MIN_KEY = "ai_limit_premium_vision_per_min"
+RECIPE_AUTOGEN_ENABLED_KEY = "recipe_autogen_enabled"
+RECIPE_AUTOGEN_PER_MEAL_KEY = "recipe_autogen_per_meal"
+RECIPE_AUTOGEN_CUISINES_KEY = "recipe_autogen_cuisines"
+
+# Same cuisine set as RecipeForm.js's "Cuisine fit" options, minus "other" - not a
+# meaningful rotation target for auto-generation.
+RECIPE_AUTOGEN_ALL_CUISINES = [
+    "west_african",
+    "east_african",
+    "mena",
+    "british_irish",
+    "american_canadian",
+    "caribbean",
+    "mediterranean",
+    "south_asian",
+    "east_asian",
+    "southeast_asian",
+    "latin_american",
+    "european",
+]
 
 
 @dataclass(frozen=True)
@@ -65,6 +86,13 @@ class RecipeImageSettings:
 class ScanLimitSettings:
     free_count: int
     free_window_days: int
+
+
+@dataclass(frozen=True)
+class RecipeAutogenSettings:
+    enabled: bool
+    per_meal_type: int
+    cuisines: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -246,6 +274,47 @@ def update_scan_limit_settings(
     _set_value(db, FREE_SCAN_LIMIT_COUNT_KEY, str(int(free_count_norm)))
     _set_value(db, FREE_SCAN_LIMIT_WINDOW_DAYS_KEY, str(int(days)))
     return get_scan_limit_settings(db)
+
+
+def get_recipe_autogen_settings(db: Session) -> RecipeAutogenSettings:
+    enabled_raw = (_get_value(db, RECIPE_AUTOGEN_ENABLED_KEY) or "").strip()
+    if enabled_raw:
+        enabled = enabled_raw == "1"
+    else:
+        # Unset: fall back to whatever the env var (pre-admin-UI behavior) says, default on.
+        env_enabled = (os.getenv("RECIPE_AUTOGEN_ENABLED", "1") or "1").strip().lower()
+        enabled = env_enabled not in {"0", "false", "no"}
+
+    env_per_meal = _to_int(os.getenv("RECIPE_AUTOGEN_PER_MEAL_TYPE"), 2)
+    per_meal = _to_int(_get_value(db, RECIPE_AUTOGEN_PER_MEAL_KEY), env_per_meal)
+    per_meal = max(0, min(int(per_meal), 10))
+
+    cuisines_raw = (_get_value(db, RECIPE_AUTOGEN_CUISINES_KEY) or "").strip()
+    if cuisines_raw:
+        cuisines = [c.strip() for c in cuisines_raw.split(",") if c.strip() in RECIPE_AUTOGEN_ALL_CUISINES]
+    else:
+        cuisines = []
+    # Unset or every selected cuisine turned out invalid: default to the full rotation,
+    # matching pre-admin-UI behavior rather than silently generating nothing.
+    if not cuisines:
+        cuisines = list(RECIPE_AUTOGEN_ALL_CUISINES)
+
+    return RecipeAutogenSettings(enabled=enabled, per_meal_type=per_meal, cuisines=cuisines)
+
+
+def update_recipe_autogen_settings(
+    db: Session,
+    *,
+    enabled: bool,
+    per_meal_type: int,
+    cuisines: list[str],
+) -> RecipeAutogenSettings:
+    _set_value(db, RECIPE_AUTOGEN_ENABLED_KEY, "1" if enabled else "0")
+    per_meal_norm = max(0, min(int(per_meal_type), 10))
+    _set_value(db, RECIPE_AUTOGEN_PER_MEAL_KEY, str(per_meal_norm))
+    valid_cuisines = [c for c in (cuisines or []) if c in RECIPE_AUTOGEN_ALL_CUISINES]
+    _set_value(db, RECIPE_AUTOGEN_CUISINES_KEY, ",".join(valid_cuisines))
+    return get_recipe_autogen_settings(db)
 
 
 def _normalize_limit(value: int, default: int, *, max_value: int = 10000) -> int:

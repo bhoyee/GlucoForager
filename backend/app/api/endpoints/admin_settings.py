@@ -10,17 +10,21 @@ from ...models.admin_user import AdminUser
 from ...services.email_service import send_admin_signup_alert
 from ...services.settings_service import (
     AppUpdateSettings,
+    RecipeAutogenSettings,
     RecipeImageSettings,
     ScanLimitSettings,
     SignupNotificationSettings,
     AIGuardrailSettings,
+    RECIPE_AUTOGEN_ALL_CUISINES,
     get_ai_guardrail_settings,
     get_app_update_settings,
+    get_recipe_autogen_settings,
     get_recipe_image_settings,
     get_scan_limit_settings,
     get_signup_notification_settings,
     update_ai_guardrail_settings,
     update_app_update_settings,
+    update_recipe_autogen_settings,
     update_recipe_image_settings,
     update_scan_limit_settings,
     update_signup_notification_settings,
@@ -55,6 +59,12 @@ class RecipeImagesPayload(BaseModel):
 class ScanLimitsPayload(BaseModel):
     free_count: int = Field(3, ge=0, le=100)
     free_window_days: int = Field(1, ge=1, le=30)
+
+
+class RecipeAutogenPayload(BaseModel):
+    enabled: bool = True
+    per_meal_type: int = Field(2, ge=0, le=10)
+    cuisines: list[str] = Field(default_factory=list, max_length=len(RECIPE_AUTOGEN_ALL_CUISINES))
 
 
 class AIGuardrailsPayload(BaseModel):
@@ -342,3 +352,35 @@ def put_ai_guardrails(
         premium_vision_per_minute=payload.premium_vision_per_minute,
     )
     return _ai_guardrails_payload(settings)
+
+
+def _recipe_autogen_payload(settings: RecipeAutogenSettings) -> dict:
+    return {
+        "enabled": settings.enabled,
+        "per_meal_type": settings.per_meal_type,
+        "cuisines": settings.cuisines,
+        "available_cuisines": RECIPE_AUTOGEN_ALL_CUISINES,
+    }
+
+
+@router.get("/recipe-autogen")
+def get_recipe_autogen(
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    return _recipe_autogen_payload(get_recipe_autogen_settings(db))
+
+
+@router.put("/recipe-autogen")
+def put_recipe_autogen(
+    payload: RecipeAutogenPayload,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    settings = update_recipe_autogen_settings(
+        db,
+        enabled=payload.enabled,
+        per_meal_type=payload.per_meal_type,
+        cuisines=payload.cuisines,
+    )
+    return _recipe_autogen_payload(settings)
