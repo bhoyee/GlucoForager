@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import AutogenSettingsPanel from './AutogenSettingsPanel';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 const PAGE_SIZE = 8;
@@ -315,6 +316,8 @@ export default function AdminRecipesList() {
         <h2 className="admin-title">Recipes</h2>
         <p className="admin-subtitle">Search, filter, and manage your recipes.</p>
       </div>
+
+      <AutogenSettingsPanel token={token} />
 
       <div className="admin-inline admin-subcards" style={{ marginTop: 0 }}>
         <div className="admin-subcard admin-subcard--breakfast">
