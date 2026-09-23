@@ -15,28 +15,12 @@ from .recipe_generation_service import (
     RecipeGenerationParams,
     generate_recipe_draft_batch,
 )
+from .settings_service import get_recipe_autogen_settings
 
 logger = logging.getLogger(__name__)
 _SCHEDULER: BackgroundScheduler | None = None
 
 _MEAL_TYPES = ["breakfast", "lunch", "dinner", "snack"]
-
-# Rotate through the cuisine list day-by-day so the catalog broadens over time instead
-# of every scheduled run generating the same defaults.
-_CUISINE_ROTATION = [
-    "west_african",
-    "east_african",
-    "mena",
-    "british_irish",
-    "american_canadian",
-    "caribbean",
-    "mediterranean",
-    "south_asian",
-    "east_asian",
-    "southeast_asian",
-    "latin_american",
-    "european",
-]
 
 
 def _lock_path() -> Path:
@@ -71,28 +55,36 @@ def _release_lock() -> None:
         return
 
 
-def _todays_cuisine() -> str:
+def _todays_cuisine(cuisines: list[str]) -> str:
     day_index = datetime.now(timezone.utc).toordinal()
-    return _CUISINE_ROTATION[day_index % len(_CUISINE_ROTATION)]
+    return cuisines[day_index % len(cuisines)]
 
 
 def run_recipe_auto_generation() -> None:
     """Generate a small batch of AI recipe drafts per meal type, rotating cuisine focus
-    day-to-day. Drafts are saved with status="draft" (no image, no auto-publish) - an
-    admin later batch-adds images and bulk-publishes. Safe to call directly (e.g. for
-    a manual/manual-trigger run) as well as from the scheduled job below.
+    day-to-day across whichever cuisines are enabled in admin settings. Drafts are
+    saved with status="draft" (no image, no auto-publish) - an admin later batch-adds
+    images and bulk-publishes. Safe to call directly (e.g. for a manual/manual-trigger
+    run) as well as from the scheduled job below.
     """
     if not _acquire_lock(ttl_seconds=60 * 30):
         logger.warning("Recipe auto-generation already running, skipping this run")
         return
     try:
-        per_meal = int(os.getenv("RECIPE_AUTOGEN_PER_MEAL_TYPE", "2") or "2")
-        cuisine = _todays_cuisine()
         db = SessionLocal()
         total_created = 0
         total_skipped_duplicates = 0
         errors: list[str] = []
         try:
+            autogen = get_recipe_autogen_settings(db)
+            if not autogen.enabled:
+                logger.info("Recipe auto-generation is paused in admin settings, skipping this run")
+                return
+            per_meal = autogen.per_meal_type
+            cuisine = _todays_cuisine(autogen.cuisines)
+            if per_meal <= 0:
+                logger.info("Recipe auto-generation per-meal-type count is 0, skipping this run")
+                return
             for meal_type in _MEAL_TYPES:
                 params = RecipeGenerationParams(
                     count=per_meal,
