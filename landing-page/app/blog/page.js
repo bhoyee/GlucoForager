@@ -7,6 +7,7 @@ import { formatDMY } from '../../lib/formatDate';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 const API_BASE = API_URL.replace(/\/+$/, '');
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.glucoforager.com').replace(/\/+$/, '');
 
 export const metadata = {
   title: 'GlucoForager Blog',
@@ -57,8 +58,26 @@ export default async function BlogIndexPage({ searchParams }) {
   const total = Number(data?.total || 0);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Blog',
+    name: 'GlucoForager Blog',
+    url: `${SITE_URL}/blog`,
+    blogPost: items.map((post) => ({
+      '@type': 'BlogPosting',
+      headline: post.title,
+      url: `${SITE_URL}/blog/${post.slug}`,
+      datePublished: post.published_at || undefined,
+    })),
+  };
+
   return (
     <>
+      <script
+        type="application/ld+json"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <main className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
         <BlogTopBar rightHref="/" rightLabel="Back to home" />
         <div className="container mx-auto max-w-7xl px-4 py-10">

@@ -39,6 +39,7 @@ class BlogPostDetail(BaseModel):
     content: str
     author_name: str | None = None
     published_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class BlogPostsResponse(BaseModel):
@@ -125,6 +126,7 @@ def get_post(slug: str, db: Session = Depends(get_db)):
         content=post.content,
         author_name=post.author_name,
         published_at=post.published_at,
+        updated_at=post.updated_at,
     )
 
 
