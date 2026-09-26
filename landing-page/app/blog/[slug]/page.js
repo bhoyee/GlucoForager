@@ -238,9 +238,34 @@ export default async function BlogPostPage({ params }) {
   const post = await postRes.json();
   const initialComments = commentsRes.ok ? await commentsRes.json() : [];
   const url = `${SITE_URL}/blog/${post.slug}`;
+  const coverUrl = resolveImageUrl(post.image_url);
+  const jsonLdImageUrl = coverUrl || `${url}/opengraph-image`;
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BlogPosting',
+    headline: post.title,
+    description: stripHtml(post.seo_description || post.excerpt || post.title),
+    image: [jsonLdImageUrl],
+    datePublished: post.published_at || undefined,
+    dateModified: post.updated_at || post.published_at || undefined,
+    author: post.author_name
+      ? { '@type': 'Person', name: post.author_name }
+      : { '@type': 'Organization', name: 'GlucoForager' },
+    publisher: {
+      '@type': 'Organization',
+      name: 'GlucoForager',
+      logo: { '@type': 'ImageObject', url: `${SITE_URL}/images/logo.png` },
+    },
+    mainEntityOfPage: { '@type': 'WebPage', '@id': url },
+  };
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
+      <script
+        type="application/ld+json"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <BlogTopBar rightHref="/" rightLabel="Back to home" />
       <div className="container mx-auto max-w-6xl px-4 py-10 space-y-6">
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-8 items-start">
