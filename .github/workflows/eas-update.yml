@@ -1,0 +1,47 @@
+name: EAS Update (OTA)
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'EAS Update branch (matches the channel embedded in the installed build, e.g. "production")'
+        required: true
+        default: 'production'
+      message:
+        description: 'Update message (shown in the EAS dashboard / rollback history)'
+        required: true
+
+concurrency:
+  group: eas-update-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Mobile-GApp
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: Mobile-GApp/package-lock.json
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Setup Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: EAS Update
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: eas update --branch "${{ github.event.inputs.branch }}" --message "${{ github.event.inputs.message }}" --non-interactive
