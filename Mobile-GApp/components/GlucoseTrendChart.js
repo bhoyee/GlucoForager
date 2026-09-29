@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Polyline, Circle, Line, Text as SvgText } from 'react-native-svg';
 import { Colors } from '../constants/Colors';
+import { parseServerDate } from '../utils/dateUtils';
 
 const SPIKE_THRESHOLD_MGDL = 180;
 const CHART_HEIGHT = 130;
@@ -21,15 +22,15 @@ export default function GlucoseTrendChart({ readings = [] }) {
 
   const points = [...readings]
     .filter((r) => r?.logged_at && Number.isFinite(r?.value_mg_dl))
-    .sort((a, b) => new Date(a.logged_at) - new Date(b.logged_at));
+    .sort((a, b) => parseServerDate(a.logged_at) - parseServerDate(b.logged_at));
 
   const canDraw = points.length >= 2 && chartWidth > 0;
 
   const renderChart = () => {
     if (!canDraw) return null;
 
-    const minTime = new Date(points[0].logged_at).getTime();
-    const maxTime = new Date(points[points.length - 1].logged_at).getTime();
+    const minTime = parseServerDate(points[0].logged_at).getTime();
+    const maxTime = parseServerDate(points[points.length - 1].logged_at).getTime();
     const timeSpan = Math.max(maxTime - minTime, 1);
     const plotWidth = chartWidth - PAD_X * 2;
     const plotHeight = CHART_HEIGHT - PAD_TOP - PAD_BOTTOM;
@@ -42,7 +43,7 @@ export default function GlucoseTrendChart({ readings = [] }) {
     };
 
     const svgPoints = points
-      .map((p) => `${xFor(new Date(p.logged_at).getTime())},${yFor(p.value_mg_dl)}`)
+      .map((p) => `${xFor(parseServerDate(p.logged_at).getTime())},${yFor(p.value_mg_dl)}`)
       .join(' ');
     const thresholdY = yFor(SPIKE_THRESHOLD_MGDL);
 
@@ -73,7 +74,7 @@ export default function GlucoseTrendChart({ readings = [] }) {
         {points.map((p, idx) => (
           <Circle
             key={idx}
-            cx={xFor(new Date(p.logged_at).getTime())}
+            cx={xFor(parseServerDate(p.logged_at).getTime())}
             cy={yFor(p.value_mg_dl)}
             r={3.5}
             fill={p.is_spike ? Colors.danger : Colors.primary}
