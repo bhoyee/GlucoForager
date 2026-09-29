@@ -191,6 +191,19 @@ class GlucoseLogPayload(BaseModel):
         return cleaned
 
 
+def _iso_utc(value: datetime | None) -> str | None:
+    """logged_at is stored as a naive UTC datetime (datetime.utcnow()) - .isoformat() on
+    that alone omits any timezone marker, which a mobile client's `new Date(...)`
+    then parses as *device local* time instead of UTC, silently shifting every
+    displayed time by the user's UTC offset. Mark it as UTC explicitly before
+    serializing so clients convert to local time correctly."""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.isoformat()
+
+
 def _serialize_meal(meal: MealLogEntry) -> dict:
     return {
         "id": meal.id,
@@ -198,7 +211,7 @@ def _serialize_meal(meal: MealLogEntry) -> dict:
         "source": meal.source,
         "carbs_g": meal.carbs_g,
         "calories": meal.calories,
-        "logged_at": meal.logged_at.isoformat(),
+        "logged_at": _iso_utc(meal.logged_at),
     }
 
 
@@ -208,7 +221,7 @@ def _serialize_reading(reading: GlucoseReading) -> dict:
         "value_mg_dl": reading.value_mg_dl,
         "note": reading.note,
         "context": reading.context,
-        "logged_at": reading.logged_at.isoformat(),
+        "logged_at": _iso_utc(reading.logged_at),
     }
 
 
