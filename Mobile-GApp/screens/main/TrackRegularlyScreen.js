@@ -9,6 +9,7 @@ import { Colors } from '../../constants/Colors';
 import { apiFetch } from '../../utils/api';
 import { API_URL } from '../../config/api';
 import StatRing from '../../components/StatRing';
+import { parseServerDate } from '../../utils/dateUtils';
 
 const RANGE_OPTIONS = [
   { key: 7, label: '7 days' },
@@ -44,7 +45,7 @@ const BUCKET_COLOR = { inRange: Colors.success, high: '#D97706', severe: Colors.
 const BUCKET_LABEL = { inRange: 'In range', high: 'High', severe: 'High' };
 
 function formatRelativeDateTime(value) {
-  const date = new Date(value);
+  const date = parseServerDate(value);
   const now = new Date();
   const time = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(date);
   const isSameDay = date.toDateString() === now.toDateString();
@@ -262,13 +263,13 @@ export default function TrackRegularlyScreen() {
     }, [days, load])
   );
 
-  const sorted = [...readings].sort((a, b) => new Date(a.logged_at) - new Date(b.logged_at));
+  const sorted = [...readings].sort((a, b) => parseServerDate(a.logged_at) - parseServerDate(b.logged_at));
 
   // One point per calendar day (the day's average) so a 30/90-day chart stays
   // readable instead of plotting every single raw reading.
   const byDay = new Map();
   sorted.forEach((r) => {
-    const d = new Date(r.logged_at);
+    const d = parseServerDate(r.logged_at);
     const dateKey = d.toDateString();
     if (!byDay.has(dateKey)) byDay.set(dateKey, { total: 0, count: 0, date: d });
     const bucket = byDay.get(dateKey);
@@ -309,7 +310,7 @@ export default function TrackRegularlyScreen() {
   const rangeLabel = `${dateFormatter.format(windowStart)} - ${dateFormatter.format(now)}`;
 
   const recentReadings = [...readings]
-    .sort((a, b) => new Date(b.logged_at) - new Date(a.logged_at))
+    .sort((a, b) => parseServerDate(b.logged_at) - parseServerDate(a.logged_at))
     .slice(0, 3);
 
   return (

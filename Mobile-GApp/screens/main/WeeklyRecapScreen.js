@@ -11,6 +11,7 @@ import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
 import { useAuth } from '../../context/authContext';
 import StatRing from '../../components/StatRing';
+import { parseServerDate } from '../../utils/dateUtils';
 
 const FEELING_META = {
   great: { emoji: '🙂', label: 'Great' },
@@ -41,19 +42,19 @@ function GlucoseSparkline({ readings, unit }) {
   const [width, setWidth] = useState(0);
   const points = [...readings]
     .filter((r) => r?.logged_at && Number.isFinite(r?.value_mg_dl))
-    .sort((a, b) => new Date(a.logged_at) - new Date(b.logged_at));
+    .sort((a, b) => parseServerDate(a.logged_at) - parseServerDate(b.logged_at));
 
   const plotWidth = Math.max(width - SPARK_PAD_X * 2, 1);
   const plotHeight = SPARK_HEIGHT - SPARK_PAD_Y * 2;
-  const minTime = points.length ? new Date(points[0].logged_at).getTime() : 0;
-  const maxTime = points.length ? new Date(points[points.length - 1].logged_at).getTime() : 0;
+  const minTime = points.length ? parseServerDate(points[0].logged_at).getTime() : 0;
+  const maxTime = points.length ? parseServerDate(points[points.length - 1].logged_at).getTime() : 0;
   const timeSpan = Math.max(maxTime - minTime, 1);
 
   const xFor = (t) => (points.length <= 1 ? SPARK_PAD_X : SPARK_PAD_X + ((t - minTime) / timeSpan) * plotWidth);
   const yFor = (v) => SPARK_PAD_Y + plotHeight - (Math.min(v, SPARK_Y_MAX) / SPARK_Y_MAX) * plotHeight;
   const bandTop = yFor(TARGET_HIGH);
   const bandBottom = yFor(TARGET_LOW);
-  const svgPoints = points.map((p) => `${xFor(new Date(p.logged_at).getTime())},${yFor(p.value_mg_dl)}`).join(' ');
+  const svgPoints = points.map((p) => `${xFor(parseServerDate(p.logged_at).getTime())},${yFor(p.value_mg_dl)}`).join(' ');
 
   return (
     <View style={styles.sparkSlot} onLayout={(e) => setWidth(Math.round(e.nativeEvent.layout.width))}>
@@ -76,7 +77,7 @@ function GlucoseSparkline({ readings, unit }) {
             return (
               <Circle
                 key={idx}
-                cx={xFor(new Date(p.logged_at).getTime())}
+                cx={xFor(parseServerDate(p.logged_at).getTime())}
                 cy={yFor(p.value_mg_dl)}
                 r={4}
                 fill={isHigh || isLow ? Colors.danger : Colors.success}

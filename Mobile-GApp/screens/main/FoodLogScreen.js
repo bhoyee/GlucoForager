@@ -8,11 +8,12 @@ import { Colors } from '../../constants/Colors';
 import { apiFetch } from '../../utils/api';
 import { API_URL } from '../../config/api';
 import GlucoseTrendChart from '../../components/GlucoseTrendChart';
+import { parseServerDate } from '../../utils/dateUtils';
 
 function formatDateTime(value) {
   if (!value) return '';
   try {
-    return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+    return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(parseServerDate(value));
   } catch {
     return '';
   }
@@ -70,7 +71,7 @@ export default function FoodLogScreen() {
       const merged = [
         ...meals.map((m) => ({ ...m, kind: 'meal', key: `meal-${m.id}` })),
         ...readings.map((r) => ({ ...r, kind: 'glucose', key: `glucose-${r.id}` })),
-      ].sort((a, b) => new Date(b.logged_at) - new Date(a.logged_at));
+      ].sort((a, b) => parseServerDate(b.logged_at) - parseServerDate(a.logged_at));
 
       setEntries(merged);
       setGlucoseReadings(readings);
