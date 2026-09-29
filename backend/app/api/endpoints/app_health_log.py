@@ -93,6 +93,32 @@ def _enforce_log_rate_limit(user_id: int, kind: str) -> None:
         )
 
 
+# Unlike the AI scan endpoints, barcode lookups have no AI/model cost - this is purely
+# a burst/abuse guard (a scripted client hammering the endpoint, or accidentally
+# proxying load onto Open Food Facts). The daily cap is generous - well above what
+# anyone would hit shopping normally - to stay out of the way of real use.
+BARCODE_RATE_LIMIT_PER_MINUTE = 30
+BARCODE_DAILY_LIMIT = 200
+
+
+def _enforce_barcode_rate_limit(user_id: int) -> None:
+    minute_key = f"barcode:rl:v1:user:{user_id}"
+    if cache.incr(minute_key, ttl_seconds=60) > BARCODE_RATE_LIMIT_PER_MINUTE:
+        raise HTTPException(
+            status_code=429,
+            detail={"code": "rate_limited", "message": "Scanning too fast - wait a moment and try again."},
+        )
+    day_key = f"barcode:daily:v1:user:{user_id}:{datetime.utcnow().date().isoformat()}"
+    if cache.incr(day_key, ttl_seconds=90000) > BARCODE_DAILY_LIMIT:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "code": "daily_limit",
+                "message": f"You've reached today's {BARCODE_DAILY_LIMIT}-scan limit. Try again tomorrow.",
+            },
+        )
+
+
 # Primary duplicate guard: a client-generated idempotency key (regenerated on the
 # mobile side whenever the user actually edits a field, kept stable across a retry
 # of the exact same tap). This is the correct fix for "double-tap / retry after a
@@ -552,8 +578,10 @@ def _diabetes_note(nutrition: dict, product: dict) -> dict:
 @router.get("/barcode/{barcode}")
 def lookup_barcode(
     barcode: str,
-    current_user: User = Depends(get_current_user),  # noqa: ARG001
+    current_user: User = Depends(get_current_user),
 ):
+    _enforce_barcode_rate_limit(current_user.id)
+
     code = "".join(ch for ch in barcode if ch.isdigit())
     if not code:
         return {"found": False, "barcode": barcode}

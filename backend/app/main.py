@@ -211,13 +211,20 @@ def _client_ip(request: Request) -> str:
 
 
 def _skip_rate_limit(request: Request) -> bool:
-    # Avoid counting CORS preflight and internal/admin polling requests.
+    # Avoid counting CORS preflight requests.
     if request.method == "OPTIONS":
         return True
 
     path = request.url.path or ""
-    if path.startswith("/api/admin"):
-        return True
+
+    # NOTE: this used to also blanket-skip every /api/admin path "to avoid counting
+    # ... admin polling requests" - but that ran *before* abuse_guard's own
+    # path.startswith("/api/admin/...") branches below, which set specific (and in
+    # the login/password-reset/MFA cases, much stricter IP-based) limits. The skip
+    # made all of those dead code: no rate limiting was ever applied to any admin
+    # endpoint. The 180/min general admin-API limit (and higher per-route limits)
+    # comfortably covers normal polling (dashboards refresh every 15-20s, nowhere
+    # near 180/min), so there's no need to exempt admin traffic at all.
 
     # RevenueCat webhook should not be throttled by per-IP limits.
     if path.startswith("/api/revenuecat/webhook"):

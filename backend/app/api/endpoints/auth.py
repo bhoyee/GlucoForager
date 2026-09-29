@@ -21,6 +21,7 @@ from ...database import get_db
 from ...models.password_reset import PasswordResetToken
 from ...models.refresh_token import RefreshToken
 from ...models.user import User
+from ...services.cache_service import CacheService
 from ...services.email_service import send_admin_signup_alert, send_password_reset_code, send_welcome_email
 from ...services.login_throttler import LoginThrottler
 from ...services.settings_service import get_signup_notification_settings
@@ -30,6 +31,30 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
 login_throttler = LoginThrottler()
 RESET_CODE_LENGTH = 8
+
+_forgot_password_cache = CacheService()
+# Email-scoped: stops someone spamming a specific person's inbox with reset codes.
+# IP-scoped: stops one source from probing many emails (also mitigates the account-
+# enumeration signal from forgot-password's differing success/not-found response).
+FORGOT_PASSWORD_EMAIL_LIMIT_PER_HOUR = 3
+FORGOT_PASSWORD_IP_LIMIT_PER_HOUR = 10
+
+
+def _enforce_forgot_password_rate_limit(email: str, request: Request) -> None:
+    email_key = f"forgot_pw:rl:email:v1:{email}"
+    if _forgot_password_cache.incr(email_key, ttl_seconds=3600) > FORGOT_PASSWORD_EMAIL_LIMIT_PER_HOUR:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many reset requests for this email. Please wait before trying again.",
+        )
+    forwarded = request.headers.get("x-forwarded-for") or ""
+    ip = forwarded.split(",")[0].strip() or (request.client.host if request.client else "unknown")
+    ip_key = f"forgot_pw:rl:ip:v1:{ip[:64]}"
+    if _forgot_password_cache.incr(ip_key, ttl_seconds=3600) > FORGOT_PASSWORD_IP_LIMIT_PER_HOUR:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many reset requests. Please wait before trying again.",
+        )
 
 
 class Token(BaseModel):
@@ -398,11 +423,12 @@ def logout(payload: RefreshTokenPayload, db: Session = Depends(get_db)):
 
 
 @router.post("/forgot-password")
-def forgot_password(payload: ForgotPasswordPayload, db: Session = Depends(get_db)):
+def forgot_password(payload: ForgotPasswordPayload, request: Request, db: Session = Depends(get_db)):
     if not settings.smtp_host or not settings.smtp_username or not settings.smtp_password:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Email service not configured")
 
     email = _normalize_email(payload.email)
+    _enforce_forgot_password_rate_limit(email, request)
     user = db.query(User).filter(User.email == email).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No account found for this email.")
