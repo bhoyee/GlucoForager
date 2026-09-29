@@ -23,6 +23,45 @@ const CONTEXTS = [
   { key: 'bedtime', label: 'Bedtime', icon: 'moon-outline', color: '#2563EB' },
 ];
 
+// Rotating pools instead of one fixed line each, so the post-log message doesn't feel
+// like the same canned popup every time - especially the in-range case, which fires
+// on most logs and needs to read as genuine encouragement rather than a repeated toast.
+const NORMAL_MESSAGES = [
+  'Nice, right in range.',
+  'Good control - keep it up.',
+  "That's a solid reading.",
+  'Right where you want it to be.',
+  'Steady as it goes - nice work.',
+  'In range. Small consistent wins add up.',
+];
+
+const LOW_MESSAGES = [
+  "This reading is on the low side. If you're feeling unwell, treat it the way you normally would.",
+  'A bit low - listen to your body and treat it if you need to.',
+  'On the lower end. If symptoms show up, go ahead and treat as usual.',
+  'Low side today. Keep an eye on how you feel over the next little while.',
+  "That's below your usual range - treat it the way you normally would if needed.",
+];
+
+const HIGH_MESSAGES = [
+  'This reading is quite high on its own, whether or not it followed a meal - worth keeping an eye on.',
+  "That's on the higher side. Worth noting what led up to it.",
+  'A high one - if this keeps happening, it might be worth flagging to your care team.',
+  'Higher than your usual range. No need to panic - just something to watch.',
+  "That's elevated. Keep tabs on how it trends over the next few readings.",
+];
+
+const spikeMessages = (mealDescription) => [
+  `This is higher than usual, and follows "${mealDescription}" - worth keeping an eye on if it happens again.`,
+  `Bit of a jump after "${mealDescription}". One reading isn't a pattern, but worth watching.`,
+  `This one's elevated following "${mealDescription}". If it repeats, that meal might be worth adjusting.`,
+  `Higher than expected after "${mealDescription}" - good to know for next time.`,
+];
+
+function pickRandom(pool) {
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
 export default function LogGlucoseScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -131,7 +170,7 @@ export default function LogGlucoseScreen() {
       if (data?.is_spike && data?.flagged_meal) {
         Alert.alert(
           'Reading logged',
-          `This is higher than usual, and follows "${data.flagged_meal.description}" - worth keeping an eye on if it happens again.`,
+          pickRandom(spikeMessages(data.flagged_meal.description)),
           [{ text: 'Got it', onPress: () => navigation.goBack() }]
         );
         return;
@@ -139,14 +178,14 @@ export default function LogGlucoseScreen() {
       if (data?.general_alert === 'low' || data?.general_alert === 'high') {
         Alert.alert(
           'Reading logged',
-          data.general_alert === 'low'
-            ? "This reading is on the low side. If you're feeling unwell, treat it the way you normally would."
-            : "This reading is quite high on its own, whether or not it followed a meal - worth keeping an eye on.",
+          pickRandom(data.general_alert === 'low' ? LOW_MESSAGES : HIGH_MESSAGES),
           [{ text: 'Got it', onPress: () => navigation.goBack() }]
         );
         return;
       }
-      navigation.goBack();
+      Alert.alert('Reading logged', pickRandom(NORMAL_MESSAGES), [
+        { text: 'Got it', onPress: () => navigation.goBack() },
+      ]);
     } catch {
       Alert.alert('Unable to log reading', 'Network request failed. Please check your connection.');
     } finally {
