@@ -9,6 +9,7 @@ import { Colors } from '../../constants/Colors';
 import { apiFetch } from '../../utils/api';
 import { API_URL } from '../../config/api';
 import { trackEvent } from '../../utils/analytics';
+import NutritionFactBadges from '../../components/NutritionFactBadges';
 
 let Camera;
 let CameraView;
@@ -366,12 +367,13 @@ export default function PhotoScanScreen() {
               </View>
 
               {result.carbs_g != null || result.calories != null ? (
-                <Text style={styles.resultMeta}>
-                  {result.carbs_g != null ? `~${result.carbs_g}g carbs` : ''}
-                  {result.net_carbs_g != null ? ` (${result.net_carbs_g}g net)` : ''}
-                  {result.sugars_g != null ? ` • ~${result.sugars_g}g sugar` : ''}
-                  {result.calories != null ? ` • ~${result.calories} cal` : ''}
-                </Text>
+                <NutritionFactBadges
+                  carbsG={result.carbs_g}
+                  netCarbsG={result.net_carbs_g}
+                  sugarsG={result.sugars_g}
+                  calories={result.calories}
+                  estimated
+                />
               ) : (
                 <Text style={styles.resultMeta}>Couldn't estimate nutrition for this one.</Text>
               )}
@@ -526,6 +528,15 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: { opacity: 0.7 },
   primaryButtonText: { color: 'white', fontSize: 15, fontWeight: '800' },
-  secondaryButton: { marginTop: 10, height: 46, alignItems: 'center', justifyContent: 'center' },
-  secondaryButtonText: { color: Colors.textLight, fontSize: 14, fontWeight: '700' },
+  secondaryButton: {
+    marginTop: 10,
+    height: 46,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: `${Colors.primary}12`,
+    borderWidth: 1,
+    borderColor: `${Colors.primary}30`,
+  },
+  secondaryButtonText: { color: Colors.primary, fontSize: 14, fontWeight: '800' },
 });
