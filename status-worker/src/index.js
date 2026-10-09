@@ -30,10 +30,13 @@ async function readState(env) {
 
 async function checkHealth(url) {
   try {
-    const res = await fetch(url, {
+    // Never let Cloudflare serve a cached /health: a stale 200 would hide a real outage.
+    // (cf.cacheTtl must NOT be used here - it forces caching rather than disabling it.)
+    const bust = `${url.includes('?') ? '&' : '?'}_t=${Date.now()}`;
+    const res = await fetch(url + bust, {
       signal: AbortSignal.timeout(10000),
-      headers: { 'User-Agent': 'glucoforager-status-worker' },
-      cf: { cacheTtl: 0 },
+      cache: 'no-store',
+      headers: { 'User-Agent': 'glucoforager-status-worker', 'Cache-Control': 'no-cache' },
     });
     if (!res.ok) return { ok: false, detail: `HTTP ${res.status}` };
     const body = await res.json().catch(() => null);
