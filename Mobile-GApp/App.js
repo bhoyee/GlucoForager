@@ -20,6 +20,7 @@ import {
   syncMealRemindersOnAppStart,
 } from './utils/mealReminders';
 import { checkForAppUpdate, dismissUpdateForVersion, openStoreForUpdate } from './utils/appUpdate';
+import ServiceStatusBanner from './components/ServiceStatusBanner';
 
 // Import screens
 import SplashScreen from './screens/SplashScreen';
@@ -444,6 +445,7 @@ export default function App() {
         <RevenueCatBootstrap />
         <MealRemindersBootstrap />
         <AppNavigator />
+        <ServiceStatusBanner />
       </AuthProvider>
     </SafeAreaProvider>
   );

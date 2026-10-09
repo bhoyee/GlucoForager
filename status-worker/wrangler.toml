@@ -1,0 +1,21 @@
+name = "glucoforager-status"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+# Check the API every minute.
+[triggers]
+crons = ["* * * * *"]
+
+[vars]
+HEALTH_URL = "https://api.glucoforager.com/health"
+# Consecutive failed checks (one per minute) before declaring an outage.
+FAILURES_BEFORE_DOWN = "3"
+ALERT_FROM = "GlucoForager Monitor <hello@salisu.dev>"
+
+# Secrets (set with `npx wrangler secret put <NAME>`):
+#   RESEND_API_KEY  - Resend key used to email admin alerts
+#   ALERT_TO        - comma-separated admin email addresses
+
+[[kv_namespaces]]
+binding = "STATUS"
+id = "498098d898aa43da91cfe2227d078a83"
