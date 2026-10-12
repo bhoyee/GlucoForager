@@ -1,5 +1,6 @@
 import { addDebugLog } from './debugLogger';
 import { Alert } from 'react-native';
+import { reportApiReachable, reportApiUnreachable } from './serviceStatus';
 
 let authRefreshHandler = null;
 let lastRateLimitAlertAt = 0;
@@ -134,6 +135,12 @@ export const apiFetch = async (
   try {
     const response = await fetch(url, { ...fetchOptions, signal: controller.signal });
     const safeResponse = withSafeBodyParsing(response);
+    // 502/503/504 = nginx is up but the API behind it isn't: check the outage banner.
+    if ([502, 503, 504].includes(response.status)) {
+      reportApiUnreachable();
+    } else {
+      reportApiReachable();
+    }
     if (response.status === 401 && authRefreshHandler && !_retry) {
       const newToken = await authRefreshHandler();
       if (newToken) {
@@ -210,6 +217,7 @@ export const apiFetch = async (
         { onUnauthorized, timeoutMs: Math.min(Number(timeoutMs || 10000) + 7000, 25000) }
       );
     }
+    reportApiUnreachable();
     const ms = Date.now() - startedAt;
     if (!shouldSuppressFailureDebugLog(url)) {
       addDebugLog({

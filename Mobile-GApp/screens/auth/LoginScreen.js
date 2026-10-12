@@ -19,6 +19,18 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "../../context/authContext"; // Use the hook instead of useContext directly
 import { API_ENDPOINTS, API_URL } from "../../config/api";
 import { getClientInfo } from "../../utils/clientInfo";
+import { getServiceStatus, isServiceDisrupted, refreshServiceStatus } from "../../utils/serviceStatus";
+
+const OUTAGE_LOGIN_MESSAGE =
+  "GlucoForager is temporarily unavailable, so we can't sign you in right now. Your account and data are safe — please try again shortly.";
+
+const showOutageAlert = () => {
+  const { status, message } = getServiceStatus();
+  Alert.alert(
+    status === 'maintenance' ? 'Scheduled maintenance' : 'Service unavailable',
+    message || OUTAGE_LOGIN_MESSAGE
+  );
+};
 
 export default function LoginScreen() {
   const navigation = useNavigation();
@@ -47,15 +59,27 @@ export default function LoginScreen() {
       return;
     }
 
+    // Known outage: explain it immediately instead of waiting on a request that can't succeed.
+    if (isServiceDisrupted()) {
+      showOutageAlert();
+      return;
+    }
+
     setIsLoading(true);
     setLoadingLabel('Signing In...');
-    
+
+    // Without a timeout, a dead server can leave the button spinning for over a minute.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
+    let reachedServer = false;
     try {
       const response = await fetch(`${API_URL}${API_ENDPOINTS.LOGIN}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, client: getClientInfo() }),
+        signal: controller.signal,
       });
+      reachedServer = response.status < 502;
 
       const data = await response.json();
       if (!response.ok) {
@@ -64,8 +88,22 @@ export default function LoginScreen() {
 
       await signIn(data.access_token, data.public_id, data.refresh_token, data.profile_completed);
     } catch (error) {
+      if (!reachedServer) {
+        // Network error, timeout or gateway error: check whether it's a known outage.
+        const status = await refreshServiceStatus({ force: true });
+        if (isServiceDisrupted(status)) {
+          showOutageAlert();
+          return;
+        }
+        Alert.alert(
+          "Can't connect",
+          "We couldn't reach GlucoForager. Please check your internet connection and try again."
+        );
+        return;
+      }
       Alert.alert('Error', error.message || 'Login failed. Please try again.');
     } finally {
+      clearTimeout(timeoutId);
       setLoadingLabel('Signing In...');
       setIsLoading(false);
     }
