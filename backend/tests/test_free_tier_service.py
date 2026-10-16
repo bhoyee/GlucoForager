@@ -82,7 +82,7 @@ class RecordUsePostgresTest(unittest.TestCase):
 
         self.assertEqual(ft.get_used(self.db, uid, ft.GLUCOGUIDE, now=now), 2)
         self.assertEqual(ft.get_remaining(self.db, uid, ft.GLUCOGUIDE, now=now), 1)
-        self.assertEqual(ft.get_remaining(self.db, uid, ft.SWAPS, now=now), 1)
+        self.assertEqual(ft.get_remaining(self.db, uid, ft.SWAPS, now=now), 2)
         # Next week starts fresh.
         next_week = now + timedelta(days=7)
         self.assertEqual(ft.get_remaining(self.db, uid, ft.GLUCOGUIDE, now=next_week), 3)
@@ -93,7 +93,7 @@ class RecordUsePostgresTest(unittest.TestCase):
         for _ in range(5):
             ft.record_use(self.db, uid, ft.INGREDIENT_SCAN, now=now)
         summary = ft.usage_summary(self.db, uid, now=now)
-        self.assertEqual(summary["features"][ft.INGREDIENT_SCAN], {"limit": 2, "used": 2, "remaining": 0})
+        self.assertEqual(summary["features"][ft.INGREDIENT_SCAN], {"limit": 3, "used": 3, "remaining": 0})
 
     def test_record_use_if_free_skips_users_with_access(self):
         self.user.trial_grace_ends_at = datetime.utcnow() + timedelta(days=7)

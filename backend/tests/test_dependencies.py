@@ -159,7 +159,7 @@ class FreeTierAccessTest(unittest.TestCase):
         self.assertEqual(ctx.exception.status_code, 402)
         self.assertEqual(ctx.exception.detail["code"], "free_limit_reached")
         self.assertEqual(ctx.exception.detail["feature"], free_tier_service.INGREDIENT_SCAN)
-        self.assertEqual(ctx.exception.detail["limit"], 2)
+        self.assertEqual(ctx.exception.detail["limit"], 3)
         self.assertTrue(ctx.exception.detail["upgrade"])
 
     def test_premium_only_feature_never_uses_free_tier(self):

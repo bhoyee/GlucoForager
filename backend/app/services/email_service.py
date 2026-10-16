@@ -928,9 +928,8 @@ def send_welcome_week_ended_email(to_email: str, full_name: str | None, user_id:
       <p style="line-height:1.6;">Your Premium welcome week has ended, but GlucoForager isn't going anywhere.
       Every week you still get free uses of our AI features:</p>
       <ul style="line-height:1.7;">
-        <li><strong>3</strong> GlucoGuide questions</li>
-        <li><strong>3</strong> recipe generations</li>
-        <li><strong>2</strong> fridge scans, <strong>2</strong> food scans and <strong>2</strong> food swap searches</li>
+        <li><strong>3</strong> GlucoGuide questions and <strong>3</strong> recipe generations</li>
+        <li><strong>3</strong> fridge scans, <strong>3</strong> food scans and <strong>3</strong> food swap searches</li>
       </ul>
       <p style="line-height:1.6;">Glucose and meal logging stay free, always. Free uses refresh every Monday.</p>
       <p style="line-height:1.6;">Want unlimited access and your daily meal planner back? Upgrade anytime.</p>

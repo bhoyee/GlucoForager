@@ -27,10 +27,10 @@ SWAPS = "swaps"
 # Features missing from this map (e.g. the daily meal planner) are Premium-only.
 FREE_WEEKLY_LIMITS: dict[str, int] = {
     GLUCOGUIDE: 3,
-    INGREDIENT_SCAN: 2,
+    INGREDIENT_SCAN: 3,
     RECIPE_GENERATION: 3,
-    FOOD_SCAN: 2,
-    SWAPS: 2,
+    FOOD_SCAN: 3,
+    SWAPS: 3,
 }
 
 FEATURE_LABELS: dict[str, tuple[str, str]] = {
