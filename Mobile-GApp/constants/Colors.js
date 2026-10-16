@@ -12,6 +12,9 @@ export const Colors = {
   brandTeal: "#35C0BD",
   brandLeaf: "#56C75D",
   brandOrange: "#FAA124",
+  // Wordmark navy ("Forager") and the cream background of the loading artwork.
+  brandNavy: "#0F2A3A",
+  brandCream: "#FEFDF3",
   secondary: "#3182CE",
   secondaryLight: "#63B3ED",
   accent: "#ED8936",

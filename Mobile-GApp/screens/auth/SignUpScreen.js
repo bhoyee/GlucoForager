@@ -20,6 +20,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "../../context/authContext";
 import { API_ENDPOINTS, API_URL } from "../../config/api";
 import { getClientInfo } from "../../utils/clientInfo";
+import BrandWordmark from '../../components/BrandWordmark';
 
 export default function SignUpScreen() {
   const navigation = useNavigation();
@@ -130,8 +131,8 @@ export default function SignUpScreen() {
             resizeMode="contain"
           />
           <Text style={styles.kicker}>Create your account</Text>
-          <Text style={styles.title}>GlucoForager</Text>
-          <Text style={styles.subtitle}>Set your food preferences and get your first week of Premium free. No card needed.</Text>
+          <BrandWordmark style={styles.title} />
+          <Text style={styles.subtitle}>Diabetes-friendly meal ideas, made around how you eat.</Text>
         </View>
 
         {/* Form */}
@@ -310,7 +311,7 @@ export default function SignUpScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.brandCream,
   },
   scrollContent: {
     flexGrow: 1,
