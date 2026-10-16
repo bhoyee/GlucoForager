@@ -51,9 +51,9 @@ const onboardingData = [
     title: 'Ask GlucoGuide AI',
     description: 'Get simple guidance when you are unsure what to eat.',
     subDescription:
-      'Browse recipes and favorites free, then start a 7-day Premium trial for scans, typed ingredients, swaps, and planning.',
+      'Your first week of Premium is free, no card needed. After that you still get free uses every week, or upgrade for unlimited access.',
     color: '#ED8936',
-    chips: ['GlucoGuide AI', '7-day trial', 'Premium access'],
+    chips: ['GlucoGuide AI', 'Free first week', 'No card needed'],
   },
 ];
 

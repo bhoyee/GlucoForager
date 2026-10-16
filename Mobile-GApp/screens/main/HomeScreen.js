@@ -494,8 +494,8 @@ export default function HomeScreen() {
           ? 'Welcome week'
           : 'Trial active';
     }
-    if (currentAccessStatus === 'expired') return 'Start your 7-day free trial';
-    return 'Premium required';
+    if (currentAccessStatus === 'expired') return 'Free plan · Upgrade to Premium';
+    return 'Upgrade to Premium';
   };
 
   const openPremiumPaywall = useCallback(() => {
@@ -697,12 +697,12 @@ export default function HomeScreen() {
           return;
         }
         Alert.alert(
-          'Start your 7-day free trial',
-          data?.detail?.message || 'Start your 7-day free trial to use scan and recipe generation.',
+          'Upgrade to Premium',
+          'Upgrade to Premium to use scan and recipe generation.',
           [
             { text: 'OK', style: 'cancel' },
             {
-              text: 'Start Trial',
+              text: 'Upgrade',
               onPress: openPremiumPaywall
             }
           ]
@@ -817,12 +817,16 @@ export default function HomeScreen() {
   const getAccessBadgeLabel = () => {
     if (userIsPremium || currentAccessStatus === 'premium') return 'Premium';
     const days = Number(trialDaysLeft);
+    const isWelcomeWeek = ['legacy_grace', 'grace'].includes(currentAccessStatus);
     if (['trialing', 'trial', 'legacy_grace', 'grace', 'cancelled_active'].includes(currentAccessStatus) && Number.isFinite(days) && days > 0) {
-      return `${days} day${days === 1 ? '' : 's'} trial left`;
+      return isWelcomeWeek
+        ? `${days} free Premium day${days === 1 ? '' : 's'} left`
+        : `${days} day${days === 1 ? '' : 's'} trial left`;
     }
-    if (['trialing', 'trial', 'legacy_grace', 'grace'].includes(currentAccessStatus)) return 'Trial active';
+    if (isWelcomeWeek) return 'Welcome week';
+    if (['trialing', 'trial'].includes(currentAccessStatus)) return 'Trial active';
     if (currentAccessStatus === 'cancelled_active') return 'Active until expiry';
-    return 'Start trial';
+    return 'Free plan';
   };
 
   if (isLoading && isInitialLoad) {
@@ -955,15 +959,15 @@ export default function HomeScreen() {
           {!hasCurrentFeatureAccess ? (
             <View style={styles.heroUsageWrap}>
               <View style={styles.heroUsageTop}>
-                <Text style={styles.heroUsageLabel}>Access required</Text>
-                <Text style={styles.heroUsageCount}>7 days free</Text>
+                <Text style={styles.heroUsageLabel}>Free plan</Text>
+                <Text style={styles.heroUsageCount}>Resets Monday</Text>
               </View>
               <Text style={styles.heroUsageBody}>
-                Start your free trial to unlock recipes (scan, type, or auto-generate), your meal planner,
-                GlucoGuide AI, and food swaps.
+                You get free uses of GlucoGuide, scans, recipes and food swaps every week. Upgrade for unlimited
+                access and your daily meal planner.
               </Text>
               <TouchableOpacity style={styles.heroUpgradeButton} onPress={handleUpgradePaywall} activeOpacity={0.9}>
-                <Text style={styles.heroUpgradeText}>Start 7-day trial</Text>
+                <Text style={styles.heroUpgradeText}>Upgrade to Premium</Text>
                 <Ionicons name="arrow-forward" size={15} color="white" />
               </TouchableOpacity>
             </View>

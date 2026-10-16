@@ -15,7 +15,7 @@ export default function Sitemap() {
       links: [
         { name: 'Home', path: '/', description: 'Main landing page with hero section and app overview' },
         { name: 'Features', path: '/features', description: 'Barcode & photo food scanning, glucose logging, daily carb goal, meal planning, and more' },
-        { name: 'Pricing', path: '/pricing', description: 'Free forever plan plus a 7-day trial for Premium AI features' },
+        { name: 'Pricing', path: '/pricing', description: 'Free forever plan, a free first week of Premium, and weekly free AI uses' },
         { name: 'Blog', path: '/blog', description: 'Diabetes-friendly cooking tips, low-glycemic recipes, and product updates' },
         { name: 'Download the App', path: '/download', description: 'Get GlucoForager on iOS or Android' },
         { name: 'Careers', path: '/careers', description: 'Open roles at GlucoForager' },
@@ -143,8 +143,8 @@ export default function Sitemap() {
             <div>
               <h3 className="text-lg font-semibold text-gray-800 mb-2">Mobile App</h3>
               <p className="text-gray-700">
-                The GlucoForager mobile app is live now on iOS and Android - free to start, with a 7-day trial for
-                Premium features like AI photo scanning and the Daily Meal Planner.
+                The GlucoForager mobile app is live now on iOS and Android - free to start, with your first week of
+                Premium free (no card needed) and free weekly uses of our AI features after that.
               </p>
             </div>
           </div>

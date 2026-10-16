@@ -47,5 +47,5 @@ def upgrade_to_premium(
 ):
     raise HTTPException(
         status_code=status.HTTP_410_GONE,
-        detail="Premium is managed through App Store or Google Play. Start the 7-day trial in the app.",
+        detail="Premium is managed through App Store or Google Play. Upgrade in the app.",
     )

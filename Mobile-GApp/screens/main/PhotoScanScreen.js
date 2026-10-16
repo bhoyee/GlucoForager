@@ -168,7 +168,7 @@ export default function PhotoScanScreen() {
           );
           trackEvent('photo_scan_result', { blocked_reason: 'free_limit' });
         } else if (response.status === 402) {
-          Alert.alert('Start your 7-day free trial', data?.detail?.message || 'Food scanning is a premium feature.');
+          Alert.alert('Upgrade to Premium', 'Food scanning is a Premium feature.');
           trackEvent('photo_scan_result', { blocked_reason: 'paywall' });
         } else if (response.status === 429) {
           Alert.alert('Slow down', data?.detail?.message || 'Please try again shortly.');

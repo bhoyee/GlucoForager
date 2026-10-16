@@ -150,14 +150,14 @@ export default function ScanScreen() {
   const showUpgradeAlert = (usage = freeUsage) => {
     const usedFreeScans = Boolean(usage);
     Alert.alert(
-      usedFreeScans ? "You've used this week's free scans" : 'Start your 7-day free trial',
+      usedFreeScans ? "You've used this week's free scans" : 'Upgrade to Premium',
       usedFreeScans
         ? 'Upgrade to Premium for unlimited ingredient scans, or come back on Monday for more free scans.'
-        : 'Start your 7-day free trial to scan ingredients and generate recipes.',
+        : 'Upgrade to Premium to scan ingredients and generate recipes.',
       [
         { text: 'OK', style: 'cancel' },
         {
-          text: usedFreeScans ? 'Upgrade' : 'Start Trial',
+          text: 'Upgrade',
           onPress: openPremiumPaywall
         }
       ]
@@ -442,7 +442,7 @@ export default function ScanScreen() {
               {userIsPremium || accessStatus === 'premium'
                 ? 'Premium active'
                 : accessStatus === 'expired'
-                  ? 'Start your 7-day free trial'
+                  ? (freeUsage ? 'Free plan' : 'Upgrade to Premium')
                   : Number(trialDaysLeft) > 0
                     ? `${trialDaysLeft} day${Number(trialDaysLeft) === 1 ? '' : 's'} left`
                     : 'Trial active'}
@@ -505,7 +505,7 @@ export default function ScanScreen() {
             <View style={styles.upgradeContent}>
               <Ionicons name="diamond-outline" size={16} color={Colors.primary} />
               <Text style={styles.upgradeText}>
-                {freeUsage ? 'Upgrade for unlimited scans' : 'Start your 7-day free trial'}
+                {freeUsage ? 'Upgrade for unlimited scans' : 'Upgrade to Premium'}
               </Text>
             </View>
           </TouchableOpacity>

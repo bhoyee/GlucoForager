@@ -536,7 +536,7 @@ export default function ManualInputScreen() {
         const message = detail?.message || detail || 'Unable to generate recipes.';
         const title =
           detail?.code === 'trial_expired'
-            ? 'Start your 7-day free trial'
+            ? 'Upgrade to Premium'
             : detail?.code === 'needs_clarification'
               ? 'Check ingredient'
               : 'Request failed';
@@ -544,7 +544,7 @@ export default function ManualInputScreen() {
           detail?.code === 'trial_expired'
             ? [
                 { text: 'Not now', style: 'cancel' },
-                { text: 'Start Trial', onPress: openPremiumPaywall },
+                { text: 'Upgrade', onPress: openPremiumPaywall },
               ]
             : undefined;
         Alert.alert(title, message, buttons);
@@ -853,7 +853,7 @@ export default function ManualInputScreen() {
                 <>
                   <Ionicons name="lock-closed-outline" size={20} color={Colors.textLight} />
                   <Text style={[styles.findButtonText, styles.findButtonTextLimit]}>
-                    {scanStatus.freeUsage ? 'Free recipes used · more on Monday' : 'Start your 7-day free trial'}
+                    {scanStatus.freeUsage ? 'Free recipes used · more on Monday' : 'Upgrade to Premium'}
                   </Text>
                 </>
               ) : (

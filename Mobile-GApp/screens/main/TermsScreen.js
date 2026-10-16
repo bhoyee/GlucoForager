@@ -59,11 +59,11 @@ export default function TermsScreen({ navigation }) {
 
         <Text style={styles.sectionTitle}>4. Subscription Plans</Text>
         <Text style={styles.paragraph}>
-          GlucoForager includes a 7-day free trial for new users. After the trial, Premium is required
-          to continue using AI-powered scans, ingredient recipe generation, GlucoGuide, meal planning,
-          and food swaps. Premium subscriptions automatically renew unless canceled at least 24 hours
-          before the end of the current period. You can cancel subscriptions through your app store
-          account settings.
+          New users receive a free welcome period with full Premium access, with no payment details
+          required. After that, free accounts include a limited number of uses of AI-powered features each
+          week, and the daily meal planner requires Premium. Premium subscriptions unlock unlimited use,
+          automatically renew unless canceled at least 24 hours before the end of the current period, and
+          can be canceled through your app store account settings. Free allowances may change over time.
         </Text>
 
         <Text style={styles.sectionTitle}>5. Intellectual Property</Text>

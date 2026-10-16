@@ -149,7 +149,7 @@ def free_limit_detail(feature: str, now: datetime | None = None, db: Session | N
             "Upgrade to Premium for unlimited access, or come back on Monday for more free uses."
         )
     else:
-        message = "This feature is part of GlucoForager Premium. Start your free trial to unlock it."
+        message = "This feature is part of GlucoForager Premium. Upgrade to unlock it."
     return {
         "code": "free_limit_reached" if limit else "premium_feature",
         "message": message,
