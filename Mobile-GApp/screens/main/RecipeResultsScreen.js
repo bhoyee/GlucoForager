@@ -24,6 +24,7 @@ import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
 import { useAuth } from '../../context/authContext';
 import { addDebugLog } from '../../utils/debugLogger';
+import { isFreeLimitDetail, showFreeLimitAlert } from '../../utils/freeTier';
 
 export default function RecipeResultsScreen() {
   const navigation = useNavigation();
@@ -430,9 +431,15 @@ export default function RecipeResultsScreen() {
               message: 'Text recipe job start failed',
               details: JSON.stringify({ status: response.status, message }),
             });
-            Alert.alert(recipeFailureTitle(error), message, [
-              { text: 'OK', onPress: () => navigation.goBack() },
-            ]);
+            if (isFreeLimitDetail(detail)) {
+              showFreeLimitAlert(detail, () =>
+                navigation.navigate('Profile', { screen: 'ProfileMain', params: { openPremium: true } })
+              );
+            } else {
+              Alert.alert(recipeFailureTitle(error), message, [
+                { text: 'OK', onPress: () => navigation.goBack() },
+              ]);
+            }
           }
           return;
         }

@@ -24,7 +24,11 @@ class User(Base):
     subscription_tier = Column(String, default="free")
     trial_started_at = Column(DateTime, nullable=True)
     trial_ends_at = Column(DateTime, nullable=True)
+    # No-card access window. Originally the "legacy grace" for users from the free era;
+    # now also the 7-day welcome week every new signup gets.
     trial_grace_ends_at = Column(DateTime, nullable=True)
+    welcome_reminder_email_at = Column(DateTime, nullable=True)
+    welcome_ended_email_at = Column(DateTime, nullable=True)
     dunning_started_at = Column(DateTime, nullable=True)
     dunning_emails_sent = Column(Integer, nullable=False, default=0, server_default="0")
     last_dunning_email_at = Column(DateTime, nullable=True)

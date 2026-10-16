@@ -10,8 +10,8 @@ const ACCESS_META = {
   trialing: { label: 'Store trial', tone: 'success' },
   trial: { label: 'Store trial', tone: 'success' },
   cancelled_active: { label: 'Cancelled active', tone: 'warning' },
-  legacy_grace: { label: 'Legacy grace', tone: 'warning' },
-  grace: { label: 'Legacy grace', tone: 'warning' },
+  legacy_grace: { label: 'Welcome week', tone: 'warning' },
+  grace: { label: 'Welcome week', tone: 'warning' },
   expired: { label: 'Expired', tone: 'danger' },
   blocked: { label: 'Blocked', tone: 'danger' },
   suspended: { label: 'Suspended', tone: 'warning' },
@@ -857,7 +857,7 @@ export default function AdminUserDetail() {
                 <div className="admin-kv-value">{formatDateTime(user.trial_ends_at)}</div>
               </div>
               <div className="admin-kv-row">
-                <div className="admin-kv-label">Legacy grace ends</div>
+                <div className="admin-kv-label">Welcome week ends</div>
                 <div className="admin-kv-value">{formatDateTime(user.trial_grace_ends_at)}</div>
               </div>
               <div className="admin-kv-row">

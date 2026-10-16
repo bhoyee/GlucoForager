@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from ...api.dependencies import get_current_user, require_ai_feature_access
+from ...services import free_tier_service
 from ...core.config import settings
 from ...database import get_db
 from ...models.favorite import Favorite
@@ -131,7 +132,7 @@ def _sse_event(event: str, data: dict) -> str:
 
 
 def _prepare_agent_chat(payload: AgentChatPayload, db: Session, current_user: User) -> dict:
-    require_ai_feature_access(current_user, db)
+    require_ai_feature_access(current_user, db, feature=free_tier_service.GLUCOGUIDE)
     tier = get_effective_subscription_tier(db, current_user) or "free"
     rl = check_ai_rate_limit(user_id=current_user.id, tier=tier, kind="text", db=db)
     if not rl.allowed:
@@ -229,6 +230,17 @@ User context:
     }
 
 
+def _record_free_glucoguide_use(db: Session, user: User) -> None:
+    # Never let usage accounting break a delivered answer.
+    try:
+        free_tier_service.record_use_if_free(db, user, free_tier_service.GLUCOGUIDE)
+    except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+
 @router.post("/chat")
 def chat_with_agent(
     payload: AgentChatPayload,
@@ -243,6 +255,7 @@ def chat_with_agent(
         raise HTTPException(status_code=503, detail="GlucoGuide is unavailable right now. Please try again.") from exc
 
     answer = response.choices[0].message.content or ""
+    _record_free_glucoguide_use(db, current_user)
     usage = getattr(response, "usage", None)
     tokens_used = int(getattr(usage, "total_tokens", 0) or 0)
     try:
@@ -313,6 +326,7 @@ def stream_chat_with_agent(
             return
 
         answer = "".join(answer_parts).strip()
+        _record_free_glucoguide_use(db, current_user)
         try:
             record_ai_request(
                 db,

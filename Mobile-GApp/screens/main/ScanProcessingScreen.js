@@ -17,6 +17,7 @@ import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
 import { addDebugLog } from '../../utils/debugLogger';
 import * as ImageManipulator from 'expo-image-manipulator';
+import { isFreeLimitDetail, showFreeLimitAlert } from '../../utils/freeTier';
 
 const LAST_INGREDIENTS_KEY = 'last_used_ingredients_v1';
 
@@ -203,8 +204,14 @@ export default function ScanProcessingScreen() {
             message: 'Scan analysis start failed',
             details: JSON.stringify({ endpoint, status: response.status, message }),
           });
-          Alert.alert('Scan failed', message);
           navigation.goBack();
+          if (isFreeLimitDetail(detail)) {
+            showFreeLimitAlert(detail, () =>
+              navigation.navigate('Profile', { screen: 'ProfileMain', params: { openPremium: true } })
+            );
+            return;
+          }
+          Alert.alert('Scan failed', message);
           return;
         }
 

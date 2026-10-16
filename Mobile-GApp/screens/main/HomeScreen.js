@@ -33,6 +33,7 @@ import { scheduleDailyPlanNotifications } from '../../utils/mealReminders';
 import CarbGoalRing, { getCarbGoalRingColor } from '../../components/CarbGoalRing';
 import { getCarbGoalTitle, getCarbGoalSubtitle, getCarbGoalDisclaimer } from '../../utils/carbGoal';
 import { trackEvent } from '../../utils/analytics';
+import { FREE_FEATURES, getFreeUsage, hasFreeUsesLeft, showFreeLimitAlert } from '../../utils/freeTier';
 
 const LAST_INGREDIENTS_KEY = 'last_used_ingredients_v1';
 
@@ -490,7 +491,7 @@ export default function HomeScreen() {
       return Number.isFinite(days) && days > 0
         ? `${days} day${days === 1 ? '' : 's'} left`
         : currentAccessStatus === 'legacy_grace' || currentAccessStatus === 'grace'
-          ? 'Grace active'
+          ? 'Welcome week'
           : 'Trial active';
     }
     if (currentAccessStatus === 'expired') return 'Start your 7-day free trial';
@@ -652,9 +653,12 @@ export default function HomeScreen() {
       }
       const data = await response.json();
       const isPremium = data.is_premium === true || data.subscription_tier === 'premium';
-      const allowed = hasActiveAccess(data);
+      const fullAccess = hasActiveAccess(data);
+      // Free users can still go ahead while they have this week's free uses left.
+      const freeFeature = source === 'scan' ? FREE_FEATURES.INGREDIENT_SCAN : FREE_FEATURES.RECIPE_GENERATION;
+      const allowed = fullAccess || hasFreeUsesLeft(data, freeFeature);
       setUserIsPremium(isPremium);
-      setAccessStatus(data.access_status || (allowed ? 'premium' : 'expired'));
+      setAccessStatus(data.access_status || (fullAccess ? 'premium' : 'expired'));
       setTrialDaysLeft(data.trial_days_left ?? null);
 
       if (allowed) {
@@ -678,7 +682,20 @@ export default function HomeScreen() {
           navigation.navigate('Scan', { screen: 'ScanMain' });
         }
       } else {
-        trackEvent('get_recipes_blocked', { source, reason: 'paywall' });
+        trackEvent('get_recipes_blocked', { source, reason: getFreeUsage(data, freeFeature) ? 'free_limit' : 'paywall' });
+        if (getFreeUsage(data, freeFeature)) {
+          showFreeLimitAlert(
+            {
+              code: 'free_limit_reached',
+              message:
+                source === 'scan'
+                  ? "You've used this week's free ingredient scans. Upgrade to Premium for unlimited access, or come back on Monday for more."
+                  : "You've used this week's free recipe generations. Upgrade to Premium for unlimited access, or come back on Monday for more.",
+            },
+            openPremiumPaywall
+          );
+          return;
+        }
         Alert.alert(
           'Start your 7-day free trial',
           data?.detail?.message || 'Start your 7-day free trial to use scan and recipe generation.',
