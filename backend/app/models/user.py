@@ -29,6 +29,10 @@ class User(Base):
     trial_grace_ends_at = Column(DateTime, nullable=True)
     welcome_reminder_email_at = Column(DateTime, nullable=True)
     welcome_ended_email_at = Column(DateTime, nullable=True)
+    # "My targets" for glucose readings (mg/dL); NULL = ADA defaults (glucose_targets.py).
+    glucose_target_premeal_low_mgdl = Column(Integer, nullable=True)
+    glucose_target_premeal_high_mgdl = Column(Integer, nullable=True)
+    glucose_target_postmeal_high_mgdl = Column(Integer, nullable=True)
     dunning_started_at = Column(DateTime, nullable=True)
     dunning_emails_sent = Column(Integer, nullable=False, default=0, server_default="0")
     last_dunning_email_at = Column(DateTime, nullable=True)

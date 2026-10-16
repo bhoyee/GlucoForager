@@ -816,6 +816,17 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
         </TouchableOpacity>
 
+        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('GlucoseTargets')}>
+          <View style={styles.menuItemLeft}>
+            <Ionicons name="pulse-outline" size={22} color={Colors.text} />
+            <View style={styles.menuTextStack}>
+              <Text style={[styles.menuText, { marginLeft: 0, flex: 0 }]}>My glucose targets</Text>
+              <Text style={styles.menuSubtext}>The ranges your readings are checked against</Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
+        </TouchableOpacity>
+
         <TouchableOpacity style={styles.menuItem} onPress={handleManageSubscription}>
           <View style={styles.menuItemLeft}>
             <Ionicons name="card-outline" size={22} color={Colors.text} />

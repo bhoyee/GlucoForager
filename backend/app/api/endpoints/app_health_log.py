@@ -11,6 +11,7 @@ from ...models.glucose_reading import GlucoseReading
 from ...models.meal_log_entry import MealLogEntry
 from ...models.user import User
 from ...services.cache_service import CacheService
+from ...services import glucose_targets
 from ...services.diabetes_food_note import build_diabetes_note
 from ...services.user_activity_service import add_user_activity
 from ..dependencies import get_current_user
@@ -524,6 +525,7 @@ def get_today_health_log_summary(
     )
     carbs_logged_today = sum(m.carbs_g for m in meals_today if m.carbs_g is not None)
     carb_goal_g, carb_goal_mode = _carb_goal_for_user(current_user)
+    glucose = _glucose_summary(db, current_user, readings_today)
     return {
         "meals_logged_today": len(meals_today),
         "readings_logged_today": len(readings_today),
@@ -532,7 +534,85 @@ def get_today_health_log_summary(
         "carb_goal_g": carb_goal_g,
         "carb_goal_mode": carb_goal_mode,
         "last_reading": _serialize_reading(readings_today[0]) if readings_today else None,
+        "glucose": glucose,
     }
+
+
+def _in_range_stats(readings: list[GlucoseReading], targets) -> dict:
+    counts = {k: 0 for k in ("in_range", "above", "below", "low", "very_high")}
+    for r in readings:
+        counts[glucose_targets.classify(r.value_mg_dl, r.context, targets)["status"]] += 1
+    total = len(readings)
+    return {
+        "readings": total,
+        **counts,
+        "in_range_pct": round(100 * counts["in_range"] / total) if total else None,
+    }
+
+
+def _glucose_summary(db: Session, user: User, readings_today: list[GlucoseReading]) -> dict:
+    """Home "Track today" glucose block: today's readings vs target, the latest reading's
+    status, and this week vs last week (rolling 7-day windows) to show progress."""
+    targets = glucose_targets.targets_for(user)
+    now = datetime.utcnow()
+    last_14 = (
+        db.query(GlucoseReading)
+        .filter(GlucoseReading.user_id == user.id, GlucoseReading.logged_at >= now - timedelta(days=14))
+        .all()
+    )
+    week_cut = now - timedelta(days=7)
+    this_week = [r for r in last_14 if r.logged_at >= week_cut]
+    prev_week = [r for r in last_14 if r.logged_at < week_cut]
+    last = None
+    if readings_today:
+        latest = readings_today[0]
+        last = {**_serialize_reading(latest), **glucose_targets.classify(latest.value_mg_dl, latest.context, targets)}
+    return {
+        "today": _in_range_stats(readings_today, targets),
+        "last": last,
+        "week": _in_range_stats(this_week, targets),
+        "prev_week": _in_range_stats(prev_week, targets),
+        "targets": targets.to_dict(),
+    }
+
+
+class GlucoseTargetsPayload(BaseModel):
+    premeal_low: int = Field(..., ge=40, le=300)
+    premeal_high: int = Field(..., ge=40, le=300)
+    postmeal_high: int = Field(..., ge=40, le=400)
+
+
+@router.get("/health-log/glucose-targets")
+def get_glucose_targets(current_user: User = Depends(get_current_user)):
+    return glucose_targets.targets_for(current_user).to_dict()
+
+
+@router.put("/health-log/glucose-targets")
+def put_glucose_targets(
+    payload: GlucoseTargetsPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    error = glucose_targets.validate_targets(payload.premeal_low, payload.premeal_high, payload.postmeal_high)
+    if error:
+        raise HTTPException(status_code=422, detail={"code": "invalid_targets", "message": error})
+    current_user.glucose_target_premeal_low_mgdl = payload.premeal_low
+    current_user.glucose_target_premeal_high_mgdl = payload.premeal_high
+    current_user.glucose_target_postmeal_high_mgdl = payload.postmeal_high
+    db.add(current_user)
+    db.commit()
+    return glucose_targets.targets_for(current_user).to_dict()
+
+
+@router.delete("/health-log/glucose-targets")
+def reset_glucose_targets(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Back to the ADA defaults."""
+    current_user.glucose_target_premeal_low_mgdl = None
+    current_user.glucose_target_premeal_high_mgdl = None
+    current_user.glucose_target_postmeal_high_mgdl = None
+    db.add(current_user)
+    db.commit()
+    return glucose_targets.targets_for(current_user).to_dict()
 
 
 def _extract_nutrition(product: dict) -> dict:
