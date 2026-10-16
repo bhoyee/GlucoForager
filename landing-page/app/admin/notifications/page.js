@@ -41,6 +41,17 @@ export default function AdminNotificationsPage() {
     free_vision_per_minute: 2,
     premium_vision_per_minute: 6,
   });
+  // Weekly free AI uses after the welcome week (0 = Premium-only) + welcome week length.
+  const [freeTier, setFreeTier] = useState({
+    glucoguide: 3,
+    recipe_generation: 3,
+    ingredient_scan: 3,
+    food_scan: 3,
+    swaps: 3,
+    welcome_week_days: 7,
+  });
+  const [freeTierBusy, setFreeTierBusy] = useState(false);
+  const [freeTierMessage, setFreeTierMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -268,6 +279,49 @@ export default function AdminNotificationsPage() {
     }
   };
 
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${API_URL}/api/admin/settings/free-tier`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!data) return;
+        setFreeTier((current) =>
+          Object.fromEntries(Object.entries(current).map(([key, fallback]) => [key, safeNumber(data[key], fallback)]))
+        );
+      })
+      .catch(() => setFreeTierMessage('Failed to load free weekly allowances.'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  const setFreeTierValue = (key, value) => {
+    setFreeTier((current) => ({ ...current, [key]: safeNumber(value, 0) }));
+  };
+
+  const saveFreeTier = async () => {
+    setFreeTierBusy(true);
+    setFreeTierMessage('');
+    try {
+      const res = await fetch(`${API_URL}/api/admin/settings/free-tier`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(freeTier),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setFreeTierMessage(typeof data?.detail === 'string' ? data.detail : 'Failed to save free weekly allowances.');
+        return;
+      }
+      setFreeTier((current) =>
+        Object.fromEntries(Object.entries(current).map(([key, fallback]) => [key, safeNumber(data[key], fallback)]))
+      );
+      setFreeTierMessage('Free weekly allowances saved. They apply immediately.');
+    } catch {
+      setFreeTierMessage('Failed to save free weekly allowances.');
+    } finally {
+      setFreeTierBusy(false);
+    }
+  };
+
   const setAiGuardrail = (key, value, fallback = 0) => {
     setAiGuardrails((current) => ({
       ...current,
@@ -484,42 +538,96 @@ export default function AdminNotificationsPage() {
       </div>
 
       <div className="admin-card" style={{ marginTop: 16 }}>
-        <h3 className="admin-title">Free usage limits</h3>
+        <h3 className="admin-title">Free weekly allowances</h3>
         <p className="admin-subtitle">
-          Control how many scans/searches free users can do before they need to upgrade.
+          How many times users without Premium can use each AI feature per week (after their welcome week) before the
+          upgrade prompt. Resets every Monday 00:00 UTC. Set a feature to 0 to make it Premium-only. The daily meal
+          planner is always Premium-only. Changes apply immediately.
         </p>
 
         <div className="admin-grid" style={{ marginTop: 12 }}>
           <div className="admin-field">
-            <label>Free scans/searches allowed</label>
+            <label>GlucoGuide questions / week</label>
             <input
               type="number"
               min={0}
-              max={100}
-              value={freeScanLimitCount}
-              onChange={(event) => setFreeScanLimitCount(Number(event.target.value) ?? 0)}
-              disabled={busy}
+              max={1000}
+              value={freeTier.glucoguide}
+              onChange={(event) => setFreeTierValue('glucoguide', event.target.value)}
+              disabled={freeTierBusy}
             />
           </div>
           <div className="admin-field">
-            <label>Window (days)</label>
+            <label>Recipe generations / week</label>
             <input
               type="number"
-              min={1}
-              max={30}
-              value={freeScanLimitWindowDays}
-              onChange={(event) => setFreeScanLimitWindowDays(Number(event.target.value) ?? 1)}
-              disabled={busy}
+              min={0}
+              max={1000}
+              value={freeTier.recipe_generation}
+              onChange={(event) => setFreeTierValue('recipe_generation', event.target.value)}
+              disabled={freeTierBusy}
             />
             <small className="admin-subtitle" style={{ display: 'block', marginTop: 6 }}>
-              Example: 1 day = per day, 7 days = per week (rolling window).
+              Typed ingredients, Surprise me, Quick meal and "more recipes".
+            </small>
+          </div>
+          <div className="admin-field">
+            <label>Ingredient (fridge) scans / week</label>
+            <input
+              type="number"
+              min={0}
+              max={1000}
+              value={freeTier.ingredient_scan}
+              onChange={(event) => setFreeTierValue('ingredient_scan', event.target.value)}
+              disabled={freeTierBusy}
+            />
+          </div>
+          <div className="admin-field">
+            <label>Food photo scans / week</label>
+            <input
+              type="number"
+              min={0}
+              max={1000}
+              value={freeTier.food_scan}
+              onChange={(event) => setFreeTierValue('food_scan', event.target.value)}
+              disabled={freeTierBusy}
+            />
+          </div>
+          <div className="admin-field">
+            <label>Food swap searches / week</label>
+            <input
+              type="number"
+              min={0}
+              max={1000}
+              value={freeTier.swaps}
+              onChange={(event) => setFreeTierValue('swaps', event.target.value)}
+              disabled={freeTierBusy}
+            />
+          </div>
+        </div>
+
+        <div className="admin-grid">
+          <div className="admin-field">
+            <label>Welcome week length (days)</label>
+            <input
+              type="number"
+              min={0}
+              max={90}
+              value={freeTier.welcome_week_days}
+              onChange={(event) => setFreeTierValue('welcome_week_days', event.target.value)}
+              disabled={freeTierBusy}
+            />
+            <small className="admin-subtitle" style={{ display: 'block', marginTop: 6 }}>
+              Full Premium with no card for new sign-ups. 0 turns the welcome week off. Applies to new sign-ups only.
             </small>
           </div>
         </div>
 
+        {freeTierMessage ? <p className="admin-subtitle" style={{ marginTop: 8 }}>{freeTierMessage}</p> : null}
+
         <div className="admin-actions" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <button className="admin-button" type="button" onClick={save} disabled={busy}>
-            {busy ? 'Working...' : 'Save'}
+          <button className="admin-button" type="button" onClick={saveFreeTier} disabled={freeTierBusy}>
+            {freeTierBusy ? 'Saving...' : 'Save allowances'}
           </button>
         </div>
       </div>
@@ -527,7 +635,8 @@ export default function AdminNotificationsPage() {
       <div className="admin-card" style={{ marginTop: 16 }}>
         <h3 className="admin-title">AI abuse guardrails</h3>
         <p className="admin-subtitle">
-          Control GlucoGuide, premium recipe generation, swaps, meal planner, and burst limits. Free scan, type-ingredient, and eat-now recipe usage is controlled by Free scans/searches allowed above.
+          Anti-abuse caps that apply on top of the free weekly allowances above: daily caps per user and per-minute
+          burst limits. Users in their welcome week use the free caps; Premium users use the premium caps.
         </p>
 
         <div className="admin-grid" style={{ marginTop: 12 }}>

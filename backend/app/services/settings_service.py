@@ -417,3 +417,44 @@ def update_ai_guardrail_settings(
     for key, value in values.items():
         _set_value(db, key, str(int(max(0, value))))
     return get_ai_guardrail_settings(db)
+
+
+# ── Free tier: weekly free AI uses + welcome week length ──────────────────────
+# Editable in admin (Notifications > Free weekly allowances). Defaults live in
+# free_tier_service.DEFAULT_FREE_WEEKLY_LIMITS; 0 makes a feature Premium-only.
+
+FREE_WEEKLY_KEY_PREFIX = "free_weekly_"
+WELCOME_WEEK_DAYS_KEY = "welcome_week_days"
+
+
+@dataclass(frozen=True)
+class FreeTierSettings:
+    weekly_limits: dict[str, int]
+    welcome_week_days: int
+
+
+def get_free_tier_settings(db: Session) -> FreeTierSettings:
+    from .free_tier_service import DEFAULT_FREE_WEEKLY_LIMITS, DEFAULT_WELCOME_WEEK_DAYS
+
+    keys = [FREE_WEEKLY_KEY_PREFIX + f for f in DEFAULT_FREE_WEEKLY_LIMITS] + [WELCOME_WEEK_DAYS_KEY]
+    stored = {row.key: row.value for row in db.query(AppSetting).filter(AppSetting.key.in_(keys)).all()}
+    limits = {
+        feature: _normalize_limit(
+            _to_int(stored.get(FREE_WEEKLY_KEY_PREFIX + feature), default), default, max_value=1000
+        )
+        for feature, default in DEFAULT_FREE_WEEKLY_LIMITS.items()
+    }
+    days = _normalize_limit(
+        _to_int(stored.get(WELCOME_WEEK_DAYS_KEY), DEFAULT_WELCOME_WEEK_DAYS), DEFAULT_WELCOME_WEEK_DAYS, max_value=90
+    )
+    return FreeTierSettings(weekly_limits=limits, welcome_week_days=days)
+
+
+def update_free_tier_settings(db: Session, *, weekly_limits: dict[str, int], welcome_week_days: int) -> FreeTierSettings:
+    from .free_tier_service import DEFAULT_FREE_WEEKLY_LIMITS
+
+    for feature in DEFAULT_FREE_WEEKLY_LIMITS:
+        if feature in weekly_limits:
+            _set_value(db, FREE_WEEKLY_KEY_PREFIX + feature, str(_normalize_limit(weekly_limits[feature], 0, max_value=1000)))
+    _set_value(db, WELCOME_WEEK_DAYS_KEY, str(_normalize_limit(welcome_week_days, 7, max_value=90)))
+    return get_free_tier_settings(db)

@@ -108,25 +108,28 @@ def _send_email(to_email: str, subject: str, html_body: str, reply_to: str | Non
         return
 
 
-def send_welcome_email(to_email: str, full_name: str | None = None) -> None:
+def send_welcome_email(to_email: str, full_name: str | None = None, *, welcome_days: int = 7) -> None:
+    if welcome_days <= 0:
+        return _send_plain_welcome_email(to_email, full_name)
+    period = _days_phrase(welcome_days)
     body = f"""
       <p>Hi {_first_name(full_name)},</p>
       <p style="line-height:1.6;">Welcome to GlucoForager. Deciding what to eat with diabetes shouldn't mean guessing,
       and that's exactly what we're here to help with.</p>
-      <p style="line-height:1.6;">For your first 7 days, <strong>everything in Premium is unlocked, no card needed.</strong>
+      <p style="line-height:1.6;">For your first {period}, <strong>everything in Premium is unlocked, no card needed.</strong>
       Every meal idea and answer is shaped around the food profile you set up.</p>
       <p style="line-height:1.6;">The best way to start: open the app and ask it what to eat today.</p>
     """
     html = _welcome_week_shell(
         to_email=to_email,
         user_id=None,
-        heading="Your first week of Premium is on us",
+        heading=f"Your first {period} of Premium is on us",
         body_html=body,
         button_label="Open GlucoForager",
         button_url=_site_url(),
-        footer_note="After your first week, you'll still get free uses every week, and you can upgrade anytime.",
+        footer_note=f"After your first {period}, you'll still get free uses every week, and you can upgrade anytime.",
     )
-    _send_email(to_email, "Your first week of GlucoForager Premium is on us", html)
+    _send_email(to_email, f"Your first {period} of GlucoForager Premium is on us", html)
     logger.info("Sent welcome email to %s", to_email)
 
 
@@ -930,16 +933,27 @@ def send_welcome_week_reminder_email(to_email: str, full_name: str | None, user_
     return _send_email(to_email, f"{days} left of your GlucoForager welcome week", html)
 
 
-def send_welcome_week_ended_email(to_email: str, full_name: str | None, user_id: int) -> str | None:
-    """Day 7: the welcome week is over - here's what stays free."""
+def send_welcome_week_ended_email(
+    to_email: str, full_name: str | None, user_id: int, *, weekly_limits: dict[str, int]
+) -> str | None:
+    """Day 7: the welcome week is over - here's what stays free (live admin limits)."""
+    labels = [
+        ("glucoguide", "GlucoGuide question", "GlucoGuide questions"),
+        ("recipe_generation", "recipe generation", "recipe generations"),
+        ("ingredient_scan", "fridge scan", "fridge scans"),
+        ("food_scan", "food scan", "food scans"),
+        ("swaps", "food swap search", "food swap searches"),
+    ]
+    items = "".join(
+        f"<li><strong>{n}</strong> {one if n == 1 else many}</li>"
+        for key, one, many in labels
+        if (n := int(weekly_limits.get(key, 0))) > 0
+    )
     body = f"""
       <p>Hi {_first_name(full_name)},</p>
       <p style="line-height:1.6;">Your Premium welcome week has ended, but GlucoForager isn't going anywhere.
       Every week you still get free uses of our AI features:</p>
-      <ul style="line-height:1.7;">
-        <li><strong>3</strong> GlucoGuide questions and <strong>3</strong> recipe generations</li>
-        <li><strong>3</strong> fridge scans, <strong>3</strong> food scans and <strong>3</strong> food swap searches</li>
-      </ul>
+      <ul style="line-height:1.7;">{items}</ul>
       <p style="line-height:1.6;">Glucose and meal logging stay free, always. Free uses refresh every Monday.</p>
       <p style="line-height:1.6;">Want unlimited access and your daily meal planner back? Upgrade anytime.</p>
     """
@@ -954,21 +968,45 @@ def send_welcome_week_ended_email(to_email: str, full_name: str | None, user_id:
     return _send_email(to_email, "Your welcome week has ended. Here's what's still free", html)
 
 
-def send_welcome_week_relaunch_email(to_email: str, full_name: str | None, user_id: int) -> str | None:
+def send_welcome_week_relaunch_email(to_email: str, full_name: str | None, user_id: int, *, welcome_days: int = 7) -> str | None:
     """One-off: existing non-paying users get a fresh welcome week."""
+    period = f"{welcome_days} day{'' if welcome_days == 1 else 's'}"
     body = f"""
       <p>Hi {_first_name(full_name)},</p>
       <p style="line-height:1.6;">You set up GlucoForager a while ago, and we'd love for you to see what it can really do.</p>
-      <p style="line-height:1.6;">For the next 7 days, <strong>everything in Premium is unlocked, free, with no card needed.</strong>
+      <p style="line-height:1.6;">For the next {period}, <strong>everything in Premium is unlocked, free, with no card needed.</strong>
       It's already active on your account, and every suggestion is shaped around your food profile.</p>
       <p style="line-height:1.6;">Open the app and ask it what to eat today.</p>
     """
     html = _welcome_week_shell(
         to_email=to_email,
         user_id=user_id,
-        heading="We've unlocked Premium for you, free for 7 days",
+        heading=f"We've unlocked Premium for you, free for {period}",
         body_html=body,
         button_label="Open GlucoForager",
         button_url=_site_url(),
     )
-    return _send_email(to_email, "We've unlocked GlucoForager Premium for you, free for 7 days", html)
+    return _send_email(to_email, f"We've unlocked GlucoForager Premium for you, free for {period}", html)
+
+
+def _days_phrase(days: int) -> str:
+    """7 -> "week", 14 -> "2 weeks", 3 -> "3 days" (admin-configurable welcome week length)."""
+    if days % 7 == 0:
+        weeks = days // 7
+        return "week" if weeks == 1 else f"{weeks} weeks"
+    return "day" if days == 1 else f"{days} days"
+
+
+def _send_plain_welcome_email(to_email: str, full_name: str | None) -> None:
+    """Welcome week switched off in admin (0 days): plain welcome, no Premium promise."""
+    body = f"""
+      <p>Hi {_first_name(full_name)},</p>
+      <p style="line-height:1.6;">Welcome to GlucoForager. Deciding what to eat with diabetes shouldn't mean guessing,
+      and that's exactly what we're here to help with.</p>
+      <p style="line-height:1.6;">Open the app and ask it what to eat today. Every week you get free uses of our AI features.</p>
+    """
+    html = _welcome_week_shell(
+        to_email=to_email, user_id=None, heading="Welcome to GlucoForager", body_html=body,
+        button_label="Open GlucoForager", button_url=_site_url(),
+    )
+    _send_email(to_email, "Welcome to GlucoForager", html)

@@ -34,6 +34,10 @@ describe('freeTier', () => {
       'No free recipe generations left this week · more on Monday'
     );
     expect(freeUsesLabel(null, FREE_FEATURES.SWAPS)).toBeNull();
+    // Admin set the allowance to 0: the feature is Premium-only.
+    expect(freeUsesLabel({ limit: 0, used: 0, remaining: 0 }, FREE_FEATURES.FOOD_SCAN)).toBe(
+      'Premium feature · upgrade to unlock'
+    );
   });
 
   it('recognises free-limit errors but not the old trial paywall', () => {

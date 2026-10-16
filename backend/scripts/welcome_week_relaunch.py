@@ -25,6 +25,7 @@ from app.database import SessionLocal  # noqa: E402
 from app.models.user import User  # noqa: E402
 from app.services.email_service import send_welcome_week_relaunch_email  # noqa: E402
 from app.services.free_tier_service import start_welcome_week  # noqa: E402
+from app.services.settings_service import get_free_tier_settings  # noqa: E402
 from app.services.trial_access_service import get_access_snapshot  # noqa: E402
 
 # Paying customers who'd find a "free Premium week" email unfair.
@@ -69,15 +70,16 @@ def main() -> None:
             print("\nNothing changed. Re-run with --send to grant the welcome week and email these users.")
             return
 
+        days = get_free_tier_settings(db).welcome_week_days
         sent = failed = 0
         for user in included:
             try:
-                start_welcome_week(user)
+                start_welcome_week(user, days=days)
                 user.welcome_reminder_email_at = None
                 user.welcome_ended_email_at = None
                 db.add(user)
                 db.commit()
-                send_welcome_week_relaunch_email(user.email, user.full_name, user.id)
+                send_welcome_week_relaunch_email(user.email, user.full_name, user.id, welcome_days=days)
                 sent += 1
             except Exception as exc:  # noqa: BLE001
                 db.rollback()

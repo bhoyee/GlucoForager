@@ -9,6 +9,8 @@ from ...database import get_db
 from ...models.admin_user import AdminUser
 from ...services.email_service import send_admin_signup_alert
 from ...services.settings_service import (
+    get_free_tier_settings,
+    update_free_tier_settings,
     AppUpdateSettings,
     RecipeAutogenSettings,
     RecipeImageSettings,
@@ -80,6 +82,17 @@ class AIGuardrailsPayload(BaseModel):
     premium_text_per_minute: int = Field(10, ge=0, le=1000)
     free_vision_per_minute: int = Field(2, ge=0, le=1000)
     premium_vision_per_minute: int = Field(6, ge=0, le=1000)
+
+
+class FreeTierPayload(BaseModel):
+    # Weekly free AI uses for users without Premium (0 = Premium-only). Resets Monday 00:00 UTC.
+    glucoguide: int = Field(3, ge=0, le=1000)
+    recipe_generation: int = Field(3, ge=0, le=1000)
+    ingredient_scan: int = Field(3, ge=0, le=1000)
+    food_scan: int = Field(3, ge=0, le=1000)
+    swaps: int = Field(3, ge=0, le=1000)
+    # No-card full Premium for new signups (0 = off).
+    welcome_week_days: int = Field(7, ge=0, le=90)
 
 
 class TipSettingsPayload(BaseModel):
@@ -352,6 +365,31 @@ def put_ai_guardrails(
         premium_vision_per_minute=payload.premium_vision_per_minute,
     )
     return _ai_guardrails_payload(settings)
+
+
+def _free_tier_payload(db: Session) -> dict:
+    settings = get_free_tier_settings(db)
+    return {**settings.weekly_limits, "welcome_week_days": settings.welcome_week_days}
+
+
+@router.get("/free-tier")
+def get_free_tier(
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    return _free_tier_payload(db)
+
+
+@router.put("/free-tier")
+def put_free_tier(
+    payload: FreeTierPayload,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    data = payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
+    welcome_days = data.pop("welcome_week_days")
+    update_free_tier_settings(db, weekly_limits=data, welcome_week_days=welcome_days)
+    return _free_tier_payload(db)
 
 
 def _recipe_autogen_payload(settings: RecipeAutogenSettings) -> dict:
