@@ -1,0 +1,122 @@
+name: Oracle A1 capacity hunt
+
+# Free Oracle A1 (ARM) capacity in uk-london-1 is scarce; this retries creating the
+# instance on a schedule until a slot opens, emails the admin, then disables itself.
+# Note: GitHub only runs schedules from the default branch, and pauses them after
+# 60 days without repo activity.
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: oci-a1-retry
+  cancel-in-progress: false
+
+permissions:
+  actions: write # lets the job disable this workflow once it succeeds
+
+jobs:
+  try-launch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING: 'True'
+      INSTANCE_NAME: glucoforager-arm
+    steps:
+      - name: Install OCI CLI
+        run: pip install --quiet oci-cli
+
+      - name: Write OCI config
+        env:
+          OCI_KEY: ${{ secrets.OCI_KEY }}
+          OCI_USER: ${{ secrets.OCI_USER }}
+          OCI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
+          OCI_TENANCY: ${{ secrets.OCI_TENANCY }}
+          OCI_REGION: ${{ secrets.OCI_REGION }}
+        run: |
+          mkdir -p ~/.oci
+          printf '%s\n' "$OCI_KEY" > ~/.oci/key.pem
+          chmod 600 ~/.oci/key.pem
+          cat > ~/.oci/config <<EOF
+          [DEFAULT]
+          user=$OCI_USER
+          fingerprint=$OCI_FINGERPRINT
+          tenancy=$OCI_TENANCY
+          region=$OCI_REGION
+          key_file=~/.oci/key.pem
+          EOF
+          chmod 600 ~/.oci/config
+
+      - name: Try to launch A1 instance
+        id: launch
+        env:
+          T: ${{ secrets.OCI_TENANCY }}
+          SUBNET: ${{ secrets.OCI_SUBNET }}
+          SSH_PUBKEY: ${{ secrets.OCI_SSH_PUBKEY }}
+        run: |
+          set -u
+          # Never create a second one (e.g. if a previous run succeeded but couldn't disable the workflow).
+          existing=$(oci compute instance list -c "$T" --display-name "$INSTANCE_NAME" \
+            --query "data[?\"lifecycle-state\"!='TERMINATED' && \"lifecycle-state\"!='TERMINATING'].id | [0]" --raw-output 2>/dev/null || true)
+          if [ -n "$existing" ] && [ "$existing" != "null" ]; then
+            echo "Instance already exists: $existing"
+            echo "result=exists" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Latest Ubuntu 24.04 ARM image (resolved each run so it never goes stale).
+          IMAGE=$(oci compute image list -c "$T" --operating-system "Canonical Ubuntu" --operating-system-version "24.04" \
+            --shape VM.Standard.A1.Flex --sort-by TIMECREATED --sort-order DESC \
+            --query 'data[?!contains("display-name", `Minimal`)] | [0].id' --raw-output)
+          printf '%s\n' "$SSH_PUBKEY" > /tmp/key.pub
+
+          for size in "2 12" "2 6" "1 6" "1 4"; do
+            set -- $size
+            for ad in 1 2; do
+              out=$(oci compute instance launch -c "$T" --availability-domain "iKjF:UK-LONDON-1-AD-$ad" \
+                --shape VM.Standard.A1.Flex --shape-config "{\"ocpus\":$1,\"memoryInGBs\":$2}" \
+                --subnet-id "$SUBNET" --image-id "$IMAGE" --assign-public-ip true \
+                --display-name "$INSTANCE_NAME" --boot-volume-size-in-gbs 50 \
+                --ssh-authorized-keys-file /tmp/key.pub --no-retry \
+                --query 'data.id' --raw-output 2>&1) || true
+              if [[ "$out" == ocid1.instance* ]]; then
+                echo "SUCCESS: AD-$ad ${1} OCPU / ${2} GB -> $out"
+                {
+                  echo "result=created"
+                  echo "detail=AD-$ad, ${1} OCPU / ${2} GB"
+                } >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              msg=$(echo "$out" | grep -oE '"message": "[^"]{0,90}' | head -1)
+              echo "AD-$ad ${1}/${2}: ${msg:-$(echo "$out" | tail -1 | cut -c1-150)}"
+              if echo "$out" | grep -qiE 'NotAuthenticated|NotAuthorized'; then
+                echo "::error::OCI authentication failed - check the OCI_* secrets"
+                exit 1
+              fi
+              sleep 5
+            done
+          done
+          echo "result=no-capacity" >> "$GITHUB_OUTPUT"
+
+      - name: Email admin
+        if: steps.launch.outputs.result == 'created'
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          ALERT_TO: ${{ secrets.ALERT_TO }}
+          DETAIL: ${{ steps.launch.outputs.detail }}
+        run: |
+          jq -n --arg to "$ALERT_TO" --arg detail "$DETAIL" '{
+            from: "GlucoForager Monitor <hello@salisu.dev>",
+            to: ($to | split(",") | map(gsub("^\\s+|\\s+$"; ""))),
+            subject: "🎉 Oracle A1 server created",
+            text: ("The free ARM server \"glucoforager-arm\" was created (" + $detail + ").\n\nNext: attach the restored disk and migrate GlucoForager to it. This workflow has disabled itself.")
+          }' | curl -sS -X POST https://api.resend.com/emails \
+            -H "Authorization: Bearer $RESEND_API_KEY" -H "Content-Type: application/json" -d @-
+
+      - name: Disable this workflow
+        if: steps.launch.outputs.result == 'created' || steps.launch.outputs.result == 'exists'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow disable "${{ github.workflow }}" --repo "${{ github.repository }}"
