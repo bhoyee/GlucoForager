@@ -26,7 +26,6 @@ const onboardingData = [
   {
     id: '1',
     icon: 'calendar',
-    image: require('../../assets/images/onboarding/plan-your-day.jpg'),
     title: 'Plan your day with less guesswork',
     description: 'Get diabetes-friendly meal ideas, tips, and daily challenges.',
     subDescription:
