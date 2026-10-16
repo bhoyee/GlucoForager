@@ -4,7 +4,7 @@
 // is drawn on top. If layered artwork (separate bowl/leaves) is supplied later, those layers can
 // be animated individually here.
 import React, { useEffect, useRef } from 'react';
-import { Animated, Easing, ImageBackground, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Animated, Easing, Image, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -43,9 +43,9 @@ export default function SplashScreen() {
     <View style={styles.container} accessibilityRole="progressbar" accessibilityLabel="Loading GlucoForager">
       <StatusBar style="dark" />
       <Animated.View style={[StyleSheet.absoluteFill, { opacity: sceneOpacity, transform: [{ scale: sceneScale }] }]}>
-        <ImageBackground
+        <Image
           source={require('../assets/images/loading-screen.jpg')}
-          style={StyleSheet.absoluteFill}
+          style={{ width, height }}
           resizeMode="cover"
         />
       </Animated.View>
