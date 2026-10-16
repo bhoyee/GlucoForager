@@ -21,6 +21,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
+import { FREE_FEATURES, freeUsesLabel, getFreeUsage } from '../../utils/freeTier';
 
 let Camera;
 let CameraView;
@@ -52,6 +53,8 @@ export default function ScanScreen() {
   const [hasFeatureAccess, setHasFeatureAccess] = useState(true);
   const [accessStatus, setAccessStatus] = useState('expired');
   const [trialDaysLeft, setTrialDaysLeft] = useState(null);
+  // Weekly free scans for users without Premium (null = unlimited).
+  const [freeUsage, setFreeUsage] = useState(null);
   const [isScanning, setIsScanning] = useState(false);
   const [capturedImages, setCapturedImages] = useState([]);
   const [showPreview, setShowPreview] = useState(false);
@@ -115,11 +118,14 @@ export default function ScanScreen() {
       isPremium ||
       ['premium', 'trialing', 'trial', 'cancelled_active', 'legacy_grace', 'grace'].includes(String(data.access_status || '').toLowerCase()) ||
       data.searches_left === 'unlimited';
+    const usage = allowed ? null : getFreeUsage(data, FREE_FEATURES.INGREDIENT_SCAN);
+    setFreeUsage(usage);
+    const canScan = allowed || (usage?.remaining || 0) > 0;
     setUserIsPremium(isPremium);
-    setHasFeatureAccess(allowed);
+    setHasFeatureAccess(canScan);
     setAccessStatus(data.access_status || (allowed ? 'premium' : 'expired'));
     setTrialDaysLeft(data.trial_days_left ?? null);
-    setRemainingScans(allowed ? 1 : 0);
+    setRemainingScans(canScan ? 1 : 0);
   }, [signOut]);
 
   useEffect(() => {
@@ -141,14 +147,17 @@ export default function ScanScreen() {
     }
   }, [isFocused, autoLaunched]);
 
-  const showUpgradeAlert = () => {
+  const showUpgradeAlert = (usage = freeUsage) => {
+    const usedFreeScans = Boolean(usage);
     Alert.alert(
-      'Start your 7-day free trial',
-      'Start your 7-day free trial to scan ingredients and generate recipes.',
+      usedFreeScans ? "You've used this week's free scans" : 'Start your 7-day free trial',
+      usedFreeScans
+        ? 'Upgrade to Premium for unlimited ingredient scans, or come back on Monday for more free scans.'
+        : 'Start your 7-day free trial to scan ingredients and generate recipes.',
       [
         { text: 'OK', style: 'cancel' },
-        { 
-          text: 'Start Trial',
+        {
+          text: usedFreeScans ? 'Upgrade' : 'Start Trial',
           onPress: openPremiumPaywall
         }
       ]
@@ -178,13 +187,16 @@ export default function ScanScreen() {
         isPremium ||
         ['premium', 'trialing', 'trial', 'cancelled_active', 'legacy_grace', 'grace'].includes(String(data.access_status || '').toLowerCase()) ||
         data.searches_left === 'unlimited';
+      const usage = allowed ? null : getFreeUsage(data, FREE_FEATURES.INGREDIENT_SCAN);
+      setFreeUsage(usage);
+      const canScan = allowed || (usage?.remaining || 0) > 0;
       setUserIsPremium(isPremium);
-      setHasFeatureAccess(allowed);
+      setHasFeatureAccess(canScan);
       setAccessStatus(data.access_status || (allowed ? 'premium' : 'expired'));
       setTrialDaysLeft(data.trial_days_left ?? null);
-      setRemainingScans(allowed ? 1 : 0);
-      if (!allowed && capturedImages.length === 0) {
-        showUpgradeAlert();
+      setRemainingScans(canScan ? 1 : 0);
+      if (!canScan && capturedImages.length === 0) {
+        showUpgradeAlert(usage);
         return false;
       }
       return true;
@@ -474,6 +486,16 @@ export default function ScanScreen() {
           </TouchableOpacity>
         )}
 
+        {/* Weekly free scans left (free users only) */}
+        {freeUsage && hasFeatureAccess && capturedImages.length === 0 && (
+          <TouchableOpacity style={styles.upgradePrompt} onPress={openPremiumPaywall}>
+            <View style={styles.upgradeContent}>
+              <Ionicons name="sparkles-outline" size={16} color={Colors.primary} />
+              <Text style={styles.upgradeText}>{freeUsesLabel(freeUsage, FREE_FEATURES.INGREDIENT_SCAN)}</Text>
+            </View>
+          </TouchableOpacity>
+        )}
+
         {/* Premium Upgrade Prompt */}
         {!hasFeatureAccess && capturedImages.length === 0 && (
           <TouchableOpacity 
@@ -483,7 +505,7 @@ export default function ScanScreen() {
             <View style={styles.upgradeContent}>
               <Ionicons name="diamond-outline" size={16} color={Colors.primary} />
               <Text style={styles.upgradeText}>
-                Start your 7-day free trial
+                {freeUsage ? 'Upgrade for unlimited scans' : 'Start your 7-day free trial'}
               </Text>
             </View>
           </TouchableOpacity>

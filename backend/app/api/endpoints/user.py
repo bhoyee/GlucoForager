@@ -24,6 +24,7 @@ from ...models.user import SearchLog, User
 from ...models.user_daily_challenge import UserDailyChallenge
 from ...models.user_activity_event import UserActivityEvent
 from ..dependencies import check_user_access, get_current_user
+from ...services import free_tier_service
 from ...services.subscription_service import get_effective_subscription_tier
 from ...services.trial_access_service import get_access_snapshot
 
@@ -44,6 +45,7 @@ def _access_payload(db: Session, user: User) -> dict:
         "trial_grace_active": access.trial_grace_active,
         "trial_grace_ends_at": access.trial_grace_ends_at,
         "trial_days_left": access.trial_days_left,
+        "free_usage": None if access.allowed else free_tier_service.usage_summary(db, user.id),
     }
 
 
@@ -256,6 +258,7 @@ def scans_today(
         "trial_grace_ends_at": access.get("trial_grace_ends_at"),
         "trial_days_left": access.get("trial_days_left"),
         "detail": access.get("detail"),
+        "free_usage": access.get("free_usage"),
         "premium_access_blocked": bool(getattr(current_user, "premium_access_blocked_at", None)),
         "premium_access_blocked_until": getattr(current_user, "premium_access_blocked_until", None),
     }

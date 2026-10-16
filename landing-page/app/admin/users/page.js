@@ -11,8 +11,8 @@ const ACCESS_META = {
   trialing: { label: 'Store trial', badge: 'success' },
   trial: { label: 'Store trial', badge: 'success' },
   cancelled_active: { label: 'Cancelled active', badge: 'warning' },
-  legacy_grace: { label: 'Legacy grace', badge: 'warning' },
-  grace: { label: 'Legacy grace', badge: 'warning' },
+  legacy_grace: { label: 'Welcome week', badge: 'warning' },
+  grace: { label: 'Welcome week', badge: 'warning' },
   expired: { label: 'Expired', badge: 'danger' },
   blocked: { label: 'Blocked', badge: 'danger' },
   suspended: { label: 'Suspended', badge: 'danger' },
@@ -588,7 +588,7 @@ export default function AdminUsersPage() {
           <option value="trialing">Store trial</option>
           <option value="cancelled_active">Cancelled active</option>
           <option value="free">Free</option>
-          <option value="legacy_grace">Legacy grace</option>
+          <option value="legacy_grace">Welcome week</option>
           <option value="expired">Expired</option>
           <option value="premium">Premium</option>
           <option value="blocked">Blocked</option>

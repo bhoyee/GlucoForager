@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from ..core.security import decode_access_token
 from ..database import get_db
 from ..models.user import User
+from ..services import free_tier_service
 from ..services.subscription_service import get_effective_subscription_tier
 from ..services.trial_access_service import get_access_snapshot, trial_required_detail
 from ..services.user_activity_service import touch_user_activity
@@ -58,14 +59,23 @@ def check_user_access(user: User, db: Session, device_id: str | None = None) -> 
         "trial_grace_ends_at": snapshot.trial_grace_ends_at,
         "trial_days_left": snapshot.trial_days_left,
         "detail": None if snapshot.allowed else trial_required_detail(snapshot),
+        # Weekly free AI uses for users without full access (None = unlimited).
+        "free_usage": None if snapshot.allowed else free_tier_service.usage_summary(db, user.id),
     }
 
 
-def require_ai_feature_access(user: User, db: Session, device_id: str | None = None) -> dict:
+def require_ai_feature_access(
+    user: User, db: Session, device_id: str | None = None, *, feature: str | None = None
+) -> dict:
+    """Allow the AI call if the user has full access, or - when `feature` is given -
+    a free use left this week. Callers must call free_tier_service.record_use_if_free
+    after the AI call succeeds."""
     access = check_user_access(user, db, device_id)
     if access["allowed"]:
         return access
+    if feature and free_tier_service.get_remaining(db, user.id, feature) > 0:
+        return {**access, "free_tier_feature": feature}
     raise HTTPException(
         status_code=status.HTTP_402_PAYMENT_REQUIRED,
-        detail=access.get("detail") or trial_required_detail(),
+        detail=free_tier_service.free_limit_detail(feature) if feature else trial_required_detail(),
     )

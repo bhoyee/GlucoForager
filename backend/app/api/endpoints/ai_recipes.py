@@ -22,6 +22,7 @@ from ...services.recipe_image_attach_service import attach_recipe_images
 from ...services.rate_limit_service import check_ai_rate_limit
 from ...services.recipe_fingerprint import recipe_fingerprint as stable_recipe_fingerprint
 from ...services.settings_service import get_recipe_image_settings
+from ...services import free_tier_service
 from ...services.subscription_service import get_effective_subscription_tier
 from ...models.recipe_history import RecipeHistory
 from ...services.redis_ai_queue import RedisAIQueue
@@ -265,6 +266,8 @@ def _run_vision_job(job_id: str) -> None:
             "warning": result.get("warning"),
         }
         job.status = "completed"
+        # Async scans count against the free allowance only once they succeed.
+        free_tier_service.record_use_if_free(db, job.user_id, free_tier_service.INGREDIENT_SCAN)
         job.error = None
         add_user_activity(
             db,
@@ -350,7 +353,7 @@ def generate_from_vision(
     current_user: User = Depends(get_current_user),
     device_id: str = Header(..., alias="X-Device-Id"),
 ):
-    access = require_ai_feature_access(current_user, db, device_id)
+    access = require_ai_feature_access(current_user, db, device_id, feature=free_tier_service.INGREDIENT_SCAN)
     tier = get_effective_subscription_tier(db, current_user) or "free"
     cache_key = _vision_cache_key(
         current_user.id,
@@ -453,6 +456,8 @@ def generate_from_vision(
             warning.setdefault("code", exc.code)
             warning.setdefault("message", exc.message)
     cache.set(cache_key, json.dumps(result), ttl_seconds=VISION_CACHE_TTL_SECONDS)
+    # Only fresh results count against the free allowance (cache hits above are free).
+    free_tier_service.record_use_if_free(db, current_user, free_tier_service.INGREDIENT_SCAN)
     return {
         "results": result.get("recipes", []),
         "detected": result.get("detected", []),
@@ -473,7 +478,7 @@ def generate_from_vision_batch(
     current_user: User = Depends(get_current_user),
     device_id: str = Header(..., alias="X-Device-Id"),
 ):
-    access = require_ai_feature_access(current_user, db, device_id)
+    access = require_ai_feature_access(current_user, db, device_id, feature=free_tier_service.INGREDIENT_SCAN)
     tier = get_effective_subscription_tier(db, current_user) or "free"
     cache_key = _vision_cache_key(
         current_user.id,
@@ -575,6 +580,7 @@ def generate_from_vision_batch(
             warning.setdefault("code", exc.code)
             warning.setdefault("message", exc.message)
     cache.set(cache_key, json.dumps(result), ttl_seconds=VISION_CACHE_TTL_SECONDS)
+    free_tier_service.record_use_if_free(db, current_user, free_tier_service.INGREDIENT_SCAN)
     return {
         "results": result.get("recipes", []),
         "detected": result.get("detected", []),
@@ -597,7 +603,7 @@ def generate_from_vision_async(
     current_user: User = Depends(get_current_user),
     device_id: str = Header(..., alias="X-Device-Id"),
 ):
-    access = require_ai_feature_access(current_user, db, device_id)
+    access = require_ai_feature_access(current_user, db, device_id, feature=free_tier_service.INGREDIENT_SCAN)
 
     tier = get_effective_subscription_tier(db, current_user) or "free"
     rl = check_ai_rate_limit(user_id=current_user.id, tier=tier, kind="vision", db=db)
@@ -670,7 +676,7 @@ def generate_from_vision_batch_async(
     current_user: User = Depends(get_current_user),
     device_id: str = Header(..., alias="X-Device-Id"),
 ):
-    access = require_ai_feature_access(current_user, db, device_id)
+    access = require_ai_feature_access(current_user, db, device_id, feature=free_tier_service.INGREDIENT_SCAN)
 
     tier = get_effective_subscription_tier(db, current_user) or "free"
     rl = check_ai_rate_limit(user_id=current_user.id, tier=tier, kind="vision_batch", db=db)
@@ -772,7 +778,17 @@ def generate_recipe_image(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    require_ai_feature_access(current_user, db)
+    try:
+        require_ai_feature_access(current_user, db)
+    except HTTPException as exc:
+        # Free users get images for recipes they generated with this week's free uses,
+        # so their free results look the same as Premium ones.
+        used_free_recipes = any(
+            free_tier_service.get_used(db, current_user.id, feature) > 0
+            for feature in (free_tier_service.RECIPE_GENERATION, free_tier_service.INGREDIENT_SCAN)
+        )
+        if exc.status_code != status.HTTP_402_PAYMENT_REQUIRED or not used_free_recipes:
+            raise
     tier = get_effective_subscription_tier(db, current_user) or "free"
     settings = get_recipe_image_settings(db)
     if not settings.enabled:

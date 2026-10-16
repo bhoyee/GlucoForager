@@ -372,7 +372,8 @@ export default function GlucoGuideScreen({ navigation }) {
         const detail = detailObj?.message || detailObj || 'GlucoGuide is unavailable right now. Please try again.';
         replaceAssistant(String(detail));
         if (needsUpgrade) {
-          setLatestActions([{ label: 'Start free trial', target: 'Profile', kind: 'premium' }]);
+          const label = detailObj?.code === 'free_limit_reached' ? 'Upgrade to Premium' : 'Start free trial';
+          setLatestActions([{ label, target: 'Profile', kind: 'premium' }]);
         }
         return;
       }

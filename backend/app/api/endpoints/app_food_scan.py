@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from ...api.dependencies import get_current_user, require_ai_feature_access
+from ...services import free_tier_service
 from ...database import get_db
 from ...models.user import User
 from ...services.ai_vision import AIVisionService
@@ -45,7 +46,7 @@ def scan_food_photo(
     current_user: User = Depends(get_current_user),
     device_id: str | None = Header(None, alias="X-Device-Id"),
 ):
-    require_ai_feature_access(current_user, db, device_id)
+    require_ai_feature_access(current_user, db, device_id, feature=free_tier_service.FOOD_SCAN)
     tier = get_effective_subscription_tier(db, current_user) or "free"
 
     minute_key = f"food_scan:rl:v1:user:{current_user.id}"
@@ -86,6 +87,8 @@ def scan_food_photo(
     fiber = _num(result.get("fiber_g"))
     calories = _num(result.get("calories"))
 
+    # Only recognised food counts against the free allowance.
+    free_tier_service.record_use_if_free(db, current_user, free_tier_service.FOOD_SCAN)
     diabetes_note = build_diabetes_note(carbs_g=carbs, sugars_g=sugars, fiber_g=fiber)
     track_event(
         current_user.public_id,

@@ -51,3 +51,4 @@ from .admin_push_campaign import AdminPushCampaign  # noqa: F401
 from .admin_push_send import AdminPushSend, AdminPushSendFailure  # noqa: F401
 from .meal_log_entry import MealLogEntry  # noqa: F401
 from .glucose_reading import GlucoseReading  # noqa: F401
+from .feature_usage import FeatureUsageWeekly  # noqa: F401

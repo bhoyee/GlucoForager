@@ -74,7 +74,7 @@ ACCESS_STATUS_LABELS = {
     "trialing": "Store trial",
     "trial": "Store trial",
     "cancelled_active": "Cancelled - active until expiry",
-    "legacy_grace": "Legacy grace",
+    "legacy_grace": "Welcome week",
     "grace": "Legacy grace",
     "expired": "Expired / no active subscription",
     "blocked": "Blocked",

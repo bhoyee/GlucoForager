@@ -22,6 +22,7 @@ from ...models.password_reset import PasswordResetToken
 from ...models.refresh_token import RefreshToken
 from ...models.user import User
 from ...services.cache_service import CacheService
+from ...services import free_tier_service
 from ...services.email_service import send_admin_signup_alert, send_password_reset_code, send_welcome_email
 from ...services.login_throttler import LoginThrottler
 from ...services.settings_service import get_signup_notification_settings
@@ -183,6 +184,8 @@ def signup(payload: UserCreate, background_tasks: BackgroundTasks, request: Requ
             registered_os_version=client.os_version if client else None,
             registered_device_model=client.device_model if client else None,
         )
+        # 7 days of full Premium with no card, so new users see the AI work before any paywall.
+        free_tier_service.start_welcome_week(user)
         db.add(user)
         db.commit()
         db.refresh(user)

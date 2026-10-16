@@ -119,6 +119,7 @@ from .services.staff_rbac_service import StaffRBACService
 from .services.system_log_service import log_system_event
 from .services.backup_scheduler import start_backup_scheduler
 from .services.dunning_scheduler import start_dunning_scheduler
+from .services.welcome_week_scheduler import start_welcome_week_scheduler
 from .services.streak_nudge_scheduler import start_streak_nudge_scheduler
 from .services.recipe_auto_generation_scheduler import start_recipe_auto_generation_scheduler
 from .services.user_activity_maintenance import start_user_activity_cleanup_scheduler
@@ -369,6 +370,10 @@ def on_startup():
         start_dunning_scheduler()
     except Exception as exc:  # noqa: BLE001
         logger.warning("Dunning email scheduler start failed: %s", exc)
+    try:
+        start_welcome_week_scheduler()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Welcome-week email scheduler start failed: %s", exc)
     try:
         start_streak_nudge_scheduler()
     except Exception as exc:  # noqa: BLE001

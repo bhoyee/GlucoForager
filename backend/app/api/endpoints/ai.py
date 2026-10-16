@@ -7,6 +7,7 @@ from ...database import get_db
 from ...models.user import SearchLog, User
 from ...services.ai_recipe_generator import AIRecipeGenerator
 from ...services.ai_vision import AIVisionService
+from ...services import free_tier_service
 from ...services.cost_tracker import record_ai_request
 from ...services.subscription_service import get_effective_subscription_tier
 from ...services.user_activity_service import add_user_activity
@@ -31,13 +32,14 @@ def analyze_vision(
     current_user: User = Depends(get_current_user),
     device_id: str = Header(..., alias="X-Device-Id"),
 ):
-    access = require_ai_feature_access(current_user, db, device_id)
+    access = require_ai_feature_access(current_user, db, device_id, feature=free_tier_service.INGREDIENT_SCAN)
     if not vision_service.enabled:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Vision service not configured")
     try:
         result = vision_service.analyze_fridge(payload.image_base64)
         tier = get_effective_subscription_tier(db, current_user) or "free"
         record_ai_request(db, current_user.id, tier, "vision", model_used=tier, tokens_used=0, cost_estimate=0, device_id=device_id)
+        free_tier_service.record_use_if_free(db, current_user, free_tier_service.INGREDIENT_SCAN)
         return {"result": result, "access": access}
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
@@ -50,7 +52,7 @@ def generate_recipes(
     current_user: User = Depends(get_current_user),
     device_id: str = Header(..., alias="X-Device-Id"),
 ):
-    access = require_ai_feature_access(current_user, db, device_id)
+    access = require_ai_feature_access(current_user, db, device_id, feature=free_tier_service.RECIPE_GENERATION)
 
     if not recipe_service.enabled:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Recipe AI not configured")
@@ -70,4 +72,5 @@ def generate_recipes(
         metadata={"ingredients_count": len(payload.ingredients or []), "query": query[:160]},
     )
     db.commit()
+    free_tier_service.record_use_if_free(db, current_user, free_tier_service.RECIPE_GENERATION)
     return {"results": recipes, "access": access}

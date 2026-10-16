@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from ...api.dependencies import get_current_user, require_ai_feature_access
+from ...services import free_tier_service
 from ...database import get_db
 from ...models.user import User
 from ...services.ai_swaps_service import AISwapsService
@@ -113,7 +114,7 @@ def generate_food_swaps(
             trace_id=trace_id,
         )
 
-    require_ai_feature_access(user, db)
+    require_ai_feature_access(user, db, feature=free_tier_service.SWAPS)
     tier = get_effective_subscription_tier(db, user)
     per_minute_limit = 3 if tier != "premium" else 8
 
@@ -326,6 +327,8 @@ def generate_food_swaps(
             cost_estimate=0.0,
             device_id=device_id,
         )
+        # Only real swap results count against the free allowance (not clarifications or cache hits).
+        free_tier_service.record_use_if_free(db, user, free_tier_service.SWAPS)
 
         # Do not expose model/provider in the app response.
         response_payload = {

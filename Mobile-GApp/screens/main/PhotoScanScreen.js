@@ -10,6 +10,7 @@ import { apiFetch } from '../../utils/api';
 import { API_URL } from '../../config/api';
 import { trackEvent } from '../../utils/analytics';
 import NutritionFactBadges from '../../components/NutritionFactBadges';
+import { isFreeLimitDetail, showFreeLimitAlert } from '../../utils/freeTier';
 
 let Camera;
 let CameraView;
@@ -161,7 +162,12 @@ export default function PhotoScanScreen() {
       );
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
-        if (response.status === 402) {
+        if (response.status === 402 && isFreeLimitDetail(data?.detail)) {
+          showFreeLimitAlert(data.detail, () =>
+            navigation.navigate('Profile', { screen: 'ProfileMain', params: { openPremium: true } })
+          );
+          trackEvent('photo_scan_result', { blocked_reason: 'free_limit' });
+        } else if (response.status === 402) {
           Alert.alert('Start your 7-day free trial', data?.detail?.message || 'Food scanning is a premium feature.');
           trackEvent('photo_scan_result', { blocked_reason: 'paywall' });
         } else if (response.status === 429) {

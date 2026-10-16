@@ -23,6 +23,7 @@ from ...services.cost_tracker import record_ai_request
 from ...services.ingredient_classifier import IngredientClassifier, IngredientNormalizer
 from ...services.recipe_image_attach_service import attach_recipe_images
 from ...services.rate_limit_service import check_ai_daily_limit, check_ai_rate_limit, daily_limit_detail
+from ...services import free_tier_service
 from ...services.subscription_service import get_effective_subscription_tier
 from ...core.config import settings
 from ...services.redis_ai_queue import RedisAIQueue
@@ -745,6 +746,8 @@ def _run_text_job(job_id: str) -> None:
             },
         }
         job.status = "completed"
+        # Async generations count against the free allowance only once they succeed.
+        free_tier_service.record_use_if_free(db, job.user_id, free_tier_service.RECIPE_GENERATION)
         job.error = None
         add_user_activity(
             db,
@@ -849,7 +852,7 @@ def generate_from_text(
     current_user: User = Depends(get_current_user),
     device_id: str = Header(..., alias="X-Device-Id"),
 ):
-    access = require_ai_feature_access(current_user, db, device_id)
+    access = require_ai_feature_access(current_user, db, device_id, feature=free_tier_service.RECIPE_GENERATION)
     tier = get_effective_subscription_tier(db, current_user) or "free"
     daily = check_ai_daily_limit(
         db,
@@ -952,6 +955,7 @@ def generate_from_text(
     except RuntimeError as exc:
         # AI not configured (missing keys) or other pipeline errors
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    free_tier_service.record_use_if_free(db, current_user, free_tier_service.RECIPE_GENERATION)
     if use_cache:
         cache.set(cache_key, json.dumps(recipes), ttl_seconds=TEXT_CACHE_TTL_SECONDS)
     return {
@@ -985,7 +989,7 @@ def generate_from_text_async(
         len(payload.ingredients or []),
         device_id,
     )
-    access = require_ai_feature_access(current_user, db, device_id)
+    access = require_ai_feature_access(current_user, db, device_id, feature=free_tier_service.RECIPE_GENERATION)
 
     tier = get_effective_subscription_tier(db, current_user) or "free"
     rl = check_ai_rate_limit(user_id=current_user.id, tier=tier, kind="text", db=db)

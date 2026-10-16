@@ -22,6 +22,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
+import { FREE_FEATURES, freeUsesLabel, getFreeUsage, isFreeLimitDetail, showFreeLimitAlert } from '../../utils/freeTier';
 
 export default function ManualInputScreen() {
   const navigation = useNavigation();
@@ -55,12 +56,14 @@ export default function ManualInputScreen() {
     hasAccess: true,
     accessStatus: 'expired',
     trialDaysLeft: null,
+    // Weekly free recipe generations for users without Premium (null = unlimited).
+    freeUsage: null,
   });
   const lastPrefillTokenRef = useRef(null);
   const loadingPulse = useRef(new Animated.Value(0)).current;
   const loadingRotate = useRef(new Animated.Value(0)).current;
   const loadingSweep = useRef(new Animated.Value(0)).current;
-  const limitReached = scanStatus.hasAccess === false || scanStatus.accessStatus === 'expired';
+  const limitReached = scanStatus.hasAccess === false;
   const allowedIngredientPattern = /^[A-Za-z0-9][A-Za-z0-9\s\-'/%%]*$/;
   const keyboardVisible = keyboardHeight > 0;
   const typingActive = activeIngredientIndex !== null || keyboardVisible;
@@ -172,18 +175,21 @@ export default function ManualInputScreen() {
         return;
       }
         const data = await response.json();
+        const fullAccess =
+          data?.has_feature_access === true ||
+          data?.is_premium === true ||
+          ['premium', 'trialing', 'trial', 'cancelled_active', 'legacy_grace', 'grace'].includes(
+            String(data?.access_status || '').toLowerCase()
+          ) ||
+          data?.searches_left === 'unlimited';
+        const freeUsage = fullAccess ? null : getFreeUsage(data, FREE_FEATURES.RECIPE_GENERATION);
         setScanStatus({
           remaining: data?.searches_left ?? null,
           isPremium: Boolean(data?.is_premium),
-          hasAccess:
-            data?.has_feature_access === true ||
-            data?.is_premium === true ||
-            ['premium', 'trialing', 'trial', 'cancelled_active', 'legacy_grace', 'grace'].includes(
-              String(data?.access_status || '').toLowerCase()
-            ) ||
-            data?.searches_left === 'unlimited',
+          hasAccess: fullAccess || (freeUsage?.remaining || 0) > 0,
           accessStatus: data?.access_status || (data?.is_premium || data?.has_feature_access ? 'premium' : 'expired'),
           trialDaysLeft: data?.trial_days_left ?? null,
+          freeUsage,
         });
       } catch (error) {
         setScanStatus({ remaining: null, isPremium: false, hasAccess: true, accessStatus: 'expired', trialDaysLeft: null });
@@ -522,6 +528,11 @@ export default function ManualInputScreen() {
           setScanStatus((prev) => ({ ...prev, hasAccess: false, accessStatus: 'expired', trialDaysLeft: 0 }));
         }
         const detail = data?.detail;
+        if (isFreeLimitDetail(detail)) {
+          showFreeLimitAlert(detail, openPremiumPaywall);
+          setIsLoading(false);
+          return;
+        }
         const message = detail?.message || detail || 'Unable to generate recipes.';
         const title =
           detail?.code === 'trial_expired'
@@ -724,10 +735,18 @@ export default function ManualInputScreen() {
                 : scanStatus.accessStatus === 'cancelled_active'
                   ? 'Active until period ends'
                   : scanStatus.accessStatus === 'legacy_grace' || scanStatus.accessStatus === 'grace'
-                    ? 'Grace active'
+                    ? 'Welcome week'
                     : 'Trial active'}
             </Text>
           </View>
+        ) : null}
+        {scanStatus.freeUsage ? (
+          <TouchableOpacity style={styles.scanBadge} onPress={openPremiumPaywall} activeOpacity={0.8}>
+            <Ionicons name="sparkles-outline" size={16} color={Colors.primary} />
+            <Text style={styles.scanBadgeText}>
+              {freeUsesLabel(scanStatus.freeUsage, FREE_FEATURES.RECIPE_GENERATION)}
+            </Text>
+          </TouchableOpacity>
         ) : null}
         {scanStatus.isPremium && (
           <View style={styles.scanBadge}>
@@ -834,7 +853,7 @@ export default function ManualInputScreen() {
                 <>
                   <Ionicons name="lock-closed-outline" size={20} color={Colors.textLight} />
                   <Text style={[styles.findButtonText, styles.findButtonTextLimit]}>
-                    Start your 7-day free trial
+                    {scanStatus.freeUsage ? 'Free recipes used · more on Monday' : 'Start your 7-day free trial'}
                   </Text>
                 </>
               ) : (
