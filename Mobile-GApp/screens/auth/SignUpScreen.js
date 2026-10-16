@@ -132,7 +132,9 @@ export default function SignUpScreen() {
           />
           <Text style={styles.kicker}>Create your account</Text>
           <BrandWordmark style={styles.title} />
-          <Text style={styles.subtitle}>Diabetes-friendly meal ideas, made around how you eat.</Text>
+          <Text style={styles.subtitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
+            Diabetes-friendly meals, made for you.
+          </Text>
         </View>
 
         {/* Form */}
