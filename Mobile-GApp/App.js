@@ -276,7 +276,7 @@ function AppNavigator() {
                   paddingVertical: 10,
                   paddingHorizontal: 14,
                   borderRadius: 999,
-                  backgroundColor: '#0D9488',
+                  backgroundColor: '#1D7C7A',
                   opacity: mealPromptBusy ? 0.65 : 1,
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -353,7 +353,7 @@ function AppNavigator() {
                   paddingVertical: 10,
                   paddingHorizontal: 14,
                   borderRadius: 999,
-                  backgroundColor: '#0D9488',
+                  backgroundColor: '#1D7C7A',
                 }}
               >
                 <Text style={{ fontWeight: '700', color: 'white' }}>Update</Text>

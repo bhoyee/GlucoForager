@@ -814,6 +814,12 @@ export default function HomeScreen() {
     return "Let's find your next meal";
   };
 
+  // Welcome week / store trial running out: shown as a red badge so the deadline is noticed.
+  const isAccessCountdown =
+    !userIsPremium &&
+    ['trialing', 'trial', 'legacy_grace', 'grace'].includes(currentAccessStatus) &&
+    Number(trialDaysLeft) > 0;
+
   const getAccessBadgeLabel = () => {
     if (userIsPremium || currentAccessStatus === 'premium') return 'Premium';
     const days = Number(trialDaysLeft);
@@ -873,7 +879,8 @@ export default function HomeScreen() {
               <Text style={styles.subGreeting} numberOfLines={1} ellipsizeMode="tail">
                 {getSubGreeting()}
               </Text>
-              <View style={styles.accessBadge}>
+              <View style={[styles.accessBadge, isAccessCountdown && styles.accessBadgeUrgent]}>
+                {isAccessCountdown ? <Ionicons name="time-outline" size={12} color="white" style={{ marginRight: 4 }} /> : null}
                 <Text style={styles.accessBadgeText} numberOfLines={1} ellipsizeMode="tail">
                   {getAccessBadgeLabel()}
                 </Text>
@@ -1579,6 +1586,8 @@ const styles = StyleSheet.create({
   },
   accessBadge: {
     maxWidth: '62%',
+    flexDirection: 'row',
+    alignItems: 'center',
     borderRadius: 999,
     paddingHorizontal: 9,
     paddingVertical: 4,
@@ -1586,7 +1595,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.24)',
   },
+  accessBadgeUrgent: {
+    backgroundColor: '#C53030',
+    borderColor: 'rgba(255,255,255,0.35)',
+  },
   accessBadgeText: {
+    flexShrink: 1,
     fontSize: 11,
     lineHeight: 14,
     fontWeight: '900',
