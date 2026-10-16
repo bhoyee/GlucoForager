@@ -8,7 +8,7 @@ const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.glucoforager.
 export const metadata = {
   title: "Pricing",
   description:
-    "GlucoForager pricing: barcode scanning and glucose tracking are free forever. Start a 7-day free trial for AI recipes and photo food scanning, or go Premium.",
+    "GlucoForager pricing: barcode scanning and glucose tracking are free forever. Your first week of Premium is free with no card, then free weekly AI uses, or go Premium for unlimited.",
   alternates: { canonical: "/pricing" },
   openGraph: {
     title: "GlucoForager Pricing — Free & Premium Plans",
@@ -35,9 +35,9 @@ export default function PricingPage() {
         <header className="space-y-2">
           <h1 className="text-4xl font-extrabold text-gray-900">Clear, fair pricing</h1>
           <p className="text-gray-600">
-            Barcode scanning, glucose logging, and your daily carb goal are free forever, no trial needed. Start your
-            7-day free trial to unlock AI recipe generation and AI photo food scanning, or go Premium for higher
-            usage limits and the Daily Meal Planner.
+            Barcode scanning, glucose logging, and your daily carb goal are free forever. Your first week of Premium
+            is free with no card needed, and after that you still get free weekly uses of our AI features. Go Premium
+            for unlimited use and the Daily Meal Planner.
           </p>
         </header>
         <PricingTable />

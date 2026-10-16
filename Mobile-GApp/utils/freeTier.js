@@ -40,6 +40,7 @@ export const hasFreeUsesLeft = (accessData, feature) => (getFreeUsage(accessData
 export const freeUsesLabel = (usage, feature) => {
   if (!usage) return null;
   const [singular, plural] = LABELS[feature] || ['free use', 'free uses'];
+  if (usage.limit <= 0) return 'Premium feature · upgrade to unlock';
   if (usage.remaining <= 0) return `No ${plural} left this week · more on Monday`;
   return `${usage.remaining} of ${usage.limit} ${usage.limit === 1 ? singular : plural} left this week`;
 };

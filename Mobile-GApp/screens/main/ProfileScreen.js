@@ -457,7 +457,7 @@ export default function ProfileScreen() {
           return;
         }
         setPremiumModalError(
-          'Your trial is confirmed. We are still syncing access. Please try again in a moment.'
+          'Your purchase is confirmed. We are still syncing access. Please try again in a moment.'
         );
         return;
       }
@@ -607,8 +607,8 @@ export default function ProfileScreen() {
     if (profile.subscriptionTier === 'premium' || status === 'premium') return 'Premium Plan';
     if (status === 'trialing' || status === 'trial') return 'Store Trial Active';
     if (status === 'cancelled_active') return 'Active Until Period Ends';
-    if (status === 'legacy_grace' || status === 'grace') return 'Legacy Grace Access';
-    return 'Premium Required';
+    if (status === 'legacy_grace' || status === 'grace') return 'Welcome Week';
+    return 'Free Plan';
   };
 
   return (
@@ -665,10 +665,10 @@ export default function ProfileScreen() {
                 )}
               </View>
 
-              <Text style={styles.premiumModalSubtitle}>7-day free trial, then monthly subscription</Text>
+              <Text style={styles.premiumModalSubtitle}>Monthly subscription. Cancel anytime.</Text>
 
               <View style={styles.premiumInfoRow}>
-                <Text style={styles.premiumInfoLabel}>After trial</Text>
+                <Text style={styles.premiumInfoLabel}>Price</Text>
                 <Text
                   style={[
                     styles.premiumInfoValue,
@@ -682,14 +682,10 @@ export default function ProfileScreen() {
                       : 'Price shown in Google Play during purchase'}
                 </Text>
               </View>
-              <View style={styles.premiumInfoRow}>
-                <Text style={styles.premiumInfoLabel}>Trial</Text>
-                <Text style={styles.premiumInfoValue}>7 days free</Text>
-              </View>
 
               <View style={styles.premiumBenefits}>
                 <Text style={styles.premiumBenefitsTitle}>What you get:</Text>
-                <Text style={styles.premiumBenefitItem}>- Scan and type ingredients without daily free limits</Text>
+                <Text style={styles.premiumBenefitItem}>- Unlimited GlucoGuide, scans, recipes and food swaps (no weekly limits)</Text>
                 <Text style={styles.premiumBenefitItem}>- Daily meal planner (incl. snacks)</Text>
                 <Text style={styles.premiumBenefitItem}>- Food swaps for meals, snacks & drinks</Text>
                 <Text style={styles.premiumBenefitItem}>- Daily challenges to build healthy habits</Text>
@@ -732,7 +728,7 @@ export default function ProfileScreen() {
                 {premiumModalBusy ? (
                   <ActivityIndicator size="small" color={Colors.white} />
                 ) : (
-                  <Text style={styles.premiumButtonTextPrimary}>Start 7-Day Free Trial</Text>
+                  <Text style={styles.premiumButtonTextPrimary}>Upgrade to Premium</Text>
                 )}
               </TouchableOpacity>
               <TouchableOpacity
@@ -784,8 +780,8 @@ export default function ProfileScreen() {
       {profile.subscriptionTier !== 'premium' && (
         <TouchableOpacity style={styles.upgradeCard} onPress={handleUpgrade} disabled={isUpgrading}>
           <View>
-            <Text style={styles.upgradeTitle}>Start 7-day free trial</Text>
-            <Text style={styles.upgradeSubtitle}>7-day free trial, then monthly</Text>
+            <Text style={styles.upgradeTitle}>Upgrade to Premium</Text>
+            <Text style={styles.upgradeSubtitle}>Unlimited AI features, monthly</Text>
           </View>
           {isUpgrading ? (
             <ActivityIndicator size="small" color={Colors.primary} />

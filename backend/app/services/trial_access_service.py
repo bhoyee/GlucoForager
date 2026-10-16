@@ -16,7 +16,7 @@ from ..services.subscription_service import (
 
 
 TRIAL_EXPIRED_MESSAGE = (
-    "Start your 7-day free trial with Premium to continue using GlucoForager."
+    "Upgrade to GlucoForager Premium to use this feature."
 )
 
 

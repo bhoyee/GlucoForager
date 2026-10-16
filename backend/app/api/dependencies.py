@@ -77,5 +77,5 @@ def require_ai_feature_access(
         return {**access, "free_tier_feature": feature}
     raise HTTPException(
         status_code=status.HTTP_402_PAYMENT_REQUIRED,
-        detail=free_tier_service.free_limit_detail(feature) if feature else trial_required_detail(),
+        detail=free_tier_service.free_limit_detail(feature, db=db) if feature else trial_required_detail(),
     )

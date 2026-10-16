@@ -131,7 +131,7 @@ export default function SignUpScreen() {
           />
           <Text style={styles.kicker}>Create your account</Text>
           <Text style={styles.title}>GlucoForager</Text>
-          <Text style={styles.subtitle}>Set your food preferences, then start your 7-day free trial.</Text>
+          <Text style={styles.subtitle}>Set your food preferences and get your first week of Premium free. No card needed.</Text>
         </View>
 
         {/* Form */}
@@ -139,7 +139,7 @@ export default function SignUpScreen() {
           <View style={styles.formCard}>
             <View style={styles.formHeader}>
               <Text style={styles.formTitle}>Account details</Text>
-              <Text style={styles.formSubtitle}>Your trial is linked securely to this account.</Text>
+              <Text style={styles.formSubtitle}>Your access is linked securely to this account.</Text>
             </View>
           {/* Full Name */}
           <View style={styles.inputContainer}>

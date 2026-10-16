@@ -24,8 +24,10 @@ RECIPE_GENERATION = "recipe_generation"
 FOOD_SCAN = "food_scan"
 SWAPS = "swaps"
 
-# Features missing from this map (e.g. the daily meal planner) are Premium-only.
-FREE_WEEKLY_LIMITS: dict[str, int] = {
+# Defaults only - the live values are admin-editable (settings_service.get_free_tier_settings).
+# Features missing from this map (e.g. the daily meal planner) are always Premium-only;
+# setting a feature's limit to 0 in admin makes it Premium-only too.
+DEFAULT_FREE_WEEKLY_LIMITS: dict[str, int] = {
     GLUCOGUIDE: 3,
     INGREDIENT_SCAN: 3,
     RECIPE_GENERATION: 3,
@@ -42,7 +44,19 @@ FEATURE_LABELS: dict[str, tuple[str, str]] = {
     SWAPS: ("food swap search", "food swap searches"),
 }
 
-WELCOME_WEEK_DAYS = 7
+DEFAULT_WELCOME_WEEK_DAYS = 7
+
+
+def weekly_limits(db: Session | None) -> dict[str, int]:
+    if db is None:
+        return dict(DEFAULT_FREE_WEEKLY_LIMITS)
+    from .settings_service import get_free_tier_settings
+
+    return get_free_tier_settings(db).weekly_limits
+
+
+def limit_for(db: Session | None, feature: str) -> int:
+    return int(weekly_limits(db).get(feature, 0))
 
 
 def week_start(now: datetime | None = None) -> date:
@@ -69,7 +83,9 @@ def get_used(db: Session, user_id: int, feature: str, now: datetime | None = Non
 
 
 def get_remaining(db: Session, user_id: int, feature: str, now: datetime | None = None) -> int:
-    limit = FREE_WEEKLY_LIMITS.get(feature, 0)
+    limit = limit_for(db, feature)
+    if limit <= 0:
+        return 0
     return max(0, limit - get_used(db, user_id, feature, now))
 
 
@@ -88,7 +104,7 @@ def usage_summary(db: Session, user_id: int, now: datetime | None = None) -> dic
                 "used": min(limit, used_by_feature.get(feature, 0)),
                 "remaining": max(0, limit - used_by_feature.get(feature, 0)),
             }
-            for feature, limit in FREE_WEEKLY_LIMITS.items()
+            for feature, limit in weekly_limits(db).items()
         },
     }
 
@@ -113,7 +129,7 @@ def record_use(db: Session, user_id: int, feature: str, now: datetime | None = N
 def record_use_if_free(db: Session, user: User | int, feature: str | None) -> None:
     """Count a successful AI use against the weekly allowance, but only for users
     without Premium/trial/welcome access (whose usage is unlimited and uncounted)."""
-    if not feature or feature not in FREE_WEEKLY_LIMITS:
+    if not feature or feature not in DEFAULT_FREE_WEEKLY_LIMITS:
         return
     if isinstance(user, int):
         user = db.query(User).filter(User.id == user).first()
@@ -124,8 +140,8 @@ def record_use_if_free(db: Session, user: User | int, feature: str | None) -> No
     record_use(db, user.id, feature)
 
 
-def free_limit_detail(feature: str, now: datetime | None = None) -> dict:
-    limit = FREE_WEEKLY_LIMITS.get(feature, 0)
+def free_limit_detail(feature: str, now: datetime | None = None, db: Session | None = None) -> dict:
+    limit = limit_for(db, feature)
     singular, plural = FEATURE_LABELS.get(feature, ("use", "uses"))
     if limit:
         message = (
@@ -133,7 +149,7 @@ def free_limit_detail(feature: str, now: datetime | None = None) -> dict:
             "Upgrade to Premium for unlimited access, or come back on Monday for more free uses."
         )
     else:
-        message = "This feature is part of GlucoForager Premium. Start your free trial to unlock it."
+        message = "This feature is part of GlucoForager Premium. Upgrade to unlock it."
     return {
         "code": "free_limit_reached" if limit else "premium_feature",
         "message": message,
@@ -146,10 +162,12 @@ def free_limit_detail(feature: str, now: datetime | None = None) -> dict:
     }
 
 
-def start_welcome_week(user: User, now: datetime | None = None) -> None:
+def start_welcome_week(user: User, now: datetime | None = None, *, days: int = DEFAULT_WELCOME_WEEK_DAYS) -> None:
     """Give a user the no-card welcome week (uses the trial_grace_ends_at window).
-    Never shortens an existing, longer window. Caller commits."""
-    end = (now or datetime.utcnow()) + timedelta(days=WELCOME_WEEK_DAYS)
+    Never shortens an existing, longer window. days=0 skips it. Caller commits."""
+    if days <= 0:
+        return
+    end = (now or datetime.utcnow()) + timedelta(days=days)
     current = user.trial_grace_ends_at
     if current is None or current < end:
         user.trial_grace_ends_at = end

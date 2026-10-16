@@ -23,6 +23,7 @@ from ...models.refresh_token import RefreshToken
 from ...models.user import User
 from ...services.cache_service import CacheService
 from ...services import free_tier_service
+from ...services.settings_service import get_free_tier_settings
 from ...services.email_service import send_admin_signup_alert, send_password_reset_code, send_welcome_email
 from ...services.login_throttler import LoginThrottler
 from ...services.settings_service import get_signup_notification_settings
@@ -184,15 +185,16 @@ def signup(payload: UserCreate, background_tasks: BackgroundTasks, request: Requ
             registered_os_version=client.os_version if client else None,
             registered_device_model=client.device_model if client else None,
         )
-        # 7 days of full Premium with no card, so new users see the AI work before any paywall.
-        free_tier_service.start_welcome_week(user)
+        # Welcome week: full Premium with no card (length set in admin), so new users see the AI work first.
+        welcome_days = get_free_tier_settings(db).welcome_week_days
+        free_tier_service.start_welcome_week(user, days=welcome_days)
         db.add(user)
         db.commit()
         db.refresh(user)
         access_token = create_access_token({"sub": str(user.id)})
         refresh_token = _issue_refresh_token(db, user.id)
         try:
-            background_tasks.add_task(send_welcome_email, payload.email, payload.full_name)
+            background_tasks.add_task(send_welcome_email, payload.email, payload.full_name, welcome_days=welcome_days)
             notif = get_signup_notification_settings(db)
             if notif.enabled and notif.recipients:
                 ip = request.client.host if request.client else None

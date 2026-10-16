@@ -16,6 +16,7 @@ from apscheduler.triggers.cron import CronTrigger
 from ..database import SessionLocal
 from ..models.user import User
 from .email_service import send_welcome_week_ended_email, send_welcome_week_reminder_email
+from .settings_service import get_free_tier_settings
 from .trial_access_service import get_access_snapshot
 
 logger = logging.getLogger(__name__)
@@ -63,7 +64,9 @@ def run_welcome_week_job() -> dict:
                         user.welcome_reminder_email_at = now
                         sent["reminder"] += 1
                 elif user.welcome_ended_email_at is None:
-                    send_welcome_week_ended_email(user.email, user.full_name, user.id)
+                    send_welcome_week_ended_email(
+                        user.email, user.full_name, user.id, weekly_limits=get_free_tier_settings(db).weekly_limits
+                    )
                     user.welcome_ended_email_at = now
                     sent["ended"] += 1
                 db.add(user)
