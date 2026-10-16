@@ -13,11 +13,12 @@ const ACCESS_META = {
   cancelled_active: { label: 'Cancelled active', badge: 'warning' },
   legacy_grace: { label: 'Welcome week', badge: 'warning' },
   grace: { label: 'Welcome week', badge: 'warning' },
-  expired: { label: 'Expired', badge: 'danger' },
+  // Free plan users who once had a store trial or subscription (win-back audience).
+  expired: { label: 'Lapsed', badge: 'warning' },
   blocked: { label: 'Blocked', badge: 'danger' },
   suspended: { label: 'Suspended', badge: 'danger' },
   deleted: { label: 'Deleted', badge: 'danger' },
-  free: { label: 'Free', badge: 'plan-free' },
+  free: { label: 'Free plan', badge: 'plan-free' },
 };
 
 const getAccessMeta = (status) => ACCESS_META[String(status || 'free').toLowerCase()] || ACCESS_META.free;
@@ -55,6 +56,7 @@ export default function AdminUsersPage() {
   const [totalItems, setTotalItems] = useState(0);
   const [platformSummary, setPlatformSummary] = useState({ ios: 0, android: 0, total: 0 });
   const [accessSummary, setAccessSummary] = useState({
+    legacy_grace: 0,
     trialing: 0,
     cancelled_active: 0,
     free: 0,
@@ -510,11 +512,13 @@ export default function AdminUsersPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, margin: '0 0 18px' }}>
         {[
-          ['trialing', 'Store trials', accessSummary.trialing, '#dcfce7', '#166534'],
-          ['cancelled_active', 'Cancelled active', accessSummary.cancelled_active, '#fff7ed', '#9a3412'],
-          ['free', 'Free', accessSummary.free, '#f1f5f9', '#334155'],
-          ['expired', 'Expired', accessSummary.expired, '#fef2f2', '#991b1b'],
+          ['legacy_grace', 'Welcome week', accessSummary.legacy_grace, '#ecfeff', '#0e7490'],
+          ['free', 'Free plan', accessSummary.free, '#f1f5f9', '#334155'],
+          ['expired', 'Lapsed', accessSummary.expired, '#fef9c3', '#854d0e'],
           ['premium', 'Premium', accessSummary.premium, '#fff7ed', '#9a3412'],
+          ['cancelled_active', 'Cancelled active', accessSummary.cancelled_active, '#fff7ed', '#9a3412'],
+          // Store trials were retired (Oct 2026); only shown while legacy trials are still running.
+          ...(accessSummary.trialing > 0 ? [['trialing', 'Store trials', accessSummary.trialing, '#dcfce7', '#166534']] : []),
           ['blocked', 'Blocked', accessSummary.blocked, '#f8fafc', '#334155'],
           ['suspended', 'Suspended', accessSummary.suspended, '#f5f3ff', '#6d28d9'],
           ['deleted', 'Deleted', accessSummary.deleted, '#fef2f2', '#991b1b'],
@@ -585,11 +589,11 @@ export default function AdminUsersPage() {
           aria-label="Filter by access status"
         >
           <option value="all">All access</option>
-          <option value="trialing">Store trial</option>
-          <option value="cancelled_active">Cancelled active</option>
-          <option value="free">Free</option>
           <option value="legacy_grace">Welcome week</option>
-          <option value="expired">Expired</option>
+          <option value="free">Free plan</option>
+          <option value="expired">Lapsed (past trial or subscription)</option>
+          <option value="cancelled_active">Cancelled active</option>
+          <option value="trialing">Store trial (legacy)</option>
           <option value="premium">Premium</option>
           <option value="blocked">Blocked</option>
           <option value="suspended">Suspended</option>
