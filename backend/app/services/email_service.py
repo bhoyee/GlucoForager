@@ -109,29 +109,24 @@ def _send_email(to_email: str, subject: str, html_body: str, reply_to: str | Non
 
 
 def send_welcome_email(to_email: str, full_name: str | None = None) -> None:
-
-    subject = "Welcome to GlucoForager"
-    greeting_name = full_name.strip().split(" ")[0] if full_name else "there"
-    html_body = f"""
-    <html>
-      <body style="font-family: Arial, sans-serif; color: #0C1824;">
-        <div style="max-width:520px; margin:0 auto; border:1px solid #e5e7eb; border-radius:12px; padding:20px;">
-          <h2 style="color:#0FB7A5; margin-top:0;">Your Premium welcome week has started</h2>
-          <p>Hi {greeting_name},</p>
-          <p>Welcome to GlucoForager. For your first 7 days, every Premium feature is unlocked, no card needed.</p>
-          <p style="margin-bottom:6px;"><strong>Three things to try today:</strong></p>
-          <ul style="line-height:1.6;">
-            <li><strong>Scan your fridge</strong> and get diabetes-friendly meals from what you already have</li>
-            <li><strong>Ask GlucoGuide</strong> anything about a food or meal you're unsure about</li>
-            <li><strong>Plan tomorrow's meals</strong> with your personal daily meal planner</li>
-          </ul>
-          <p style="margin-top:16px;">After your welcome week, you'll still get free uses of our AI features every week, and you can upgrade anytime.</p>
-          <p style="margin-top:24px; color:#6b7280;">Stay steady, eat well.<br/>The GlucoForager team</p>
-        </div>
-      </body>
-    </html>
+    body = f"""
+      <p>Hi {_first_name(full_name)},</p>
+      <p style="line-height:1.6;">Welcome to GlucoForager. Deciding what to eat with diabetes shouldn't mean guessing,
+      and that's exactly what we're here to help with.</p>
+      <p style="line-height:1.6;">For your first 7 days, <strong>everything in Premium is unlocked, no card needed.</strong>
+      Every meal idea and answer is shaped around the food profile you set up.</p>
+      <p style="line-height:1.6;">The best way to start: open the app and ask it what to eat today.</p>
     """
-    _send_email(to_email, subject, html_body)
+    html = _welcome_week_shell(
+        to_email=to_email,
+        user_id=None,
+        heading="Your first week of Premium is on us",
+        body_html=body,
+        button_label="Open GlucoForager",
+        button_url=_site_url(),
+        footer_note="After your first week, you'll still get free uses every week, and you can upgrade anytime.",
+    )
+    _send_email(to_email, "Your first week of GlucoForager Premium is on us", html)
     logger.info("Sent welcome email to %s", to_email)
 
 
@@ -862,11 +857,26 @@ def send_dunning_template_email(
 
 
 def _welcome_week_shell(
-    *, to_email: str, user_id: int, heading: str, body_html: str, button_label: str, button_url: str
+    *,
+    to_email: str,
+    user_id: int | None,
+    heading: str,
+    body_html: str,
+    button_label: str,
+    button_url: str,
+    footer_note: str | None = None,
 ) -> str:
+    """user_id=None for transactional mail (the signup welcome), which has no unsubscribe link."""
     site_url = (settings.site_url or "https://www.glucoforager.com").rstrip("/")
     logo_url = f"{site_url}/images/logo.png"
-    unsubscribe_url = f"{site_url}/unsubscribe?type=dunning&token={make_dunning_unsubscribe_token(user_id, to_email)}"
+    note_html = f'<p style="line-height:1.6; color:#374151;">{footer_note}</p>' if footer_note else ""
+    unsubscribe_html = ""
+    if user_id is not None:
+        unsubscribe_url = f"{site_url}/unsubscribe?type=dunning&token={make_dunning_unsubscribe_token(user_id, to_email)}"
+        unsubscribe_html = (
+            '<p style="margin-top:24px; color:#6b7280; font-size:12px;">'
+            f"Don't want these emails? <a href=\"{unsubscribe_url}\" style=\"color:#0FB7A5;\">Unsubscribe</a></p>"
+        )
     return f"""
     <html>
       <body style="font-family: Arial, sans-serif; color: #0C1824;">
@@ -882,10 +892,9 @@ def _welcome_week_shell(
               {button_label}
             </a>
           </p>
+          {note_html}
           <p style="margin-top:20px; color:#6b7280;">Stay steady, eat well.<br/>The GlucoForager team</p>
-          <p style="margin-top:24px; color:#6b7280; font-size:12px;">
-            Don't want these emails? <a href="{unsubscribe_url}" style="color:#0FB7A5;">Unsubscribe</a>
-          </p>
+          {unsubscribe_html}
         </div>
       </body>
     </html>
@@ -949,14 +958,10 @@ def send_welcome_week_relaunch_email(to_email: str, full_name: str | None, user_
     """One-off: existing non-paying users get a fresh welcome week."""
     body = f"""
       <p>Hi {_first_name(full_name)},</p>
-      <p style="line-height:1.6;">We've unlocked <strong>GlucoForager Premium for you for the next 7 days, free and with no card needed.</strong></p>
-      <p style="margin-bottom:6px;"><strong>Try these while it's unlocked:</strong></p>
-      <ul style="line-height:1.6;">
-        <li><strong>Scan your fridge</strong> and get diabetes-friendly meals from what you already have</li>
-        <li><strong>Ask GlucoGuide</strong> anything about a food or meal you're unsure about</li>
-        <li><strong>Plan tomorrow's meals</strong> with your personal daily meal planner</li>
-      </ul>
-      <p style="line-height:1.6;">Just open the app. Your Premium access is already active.</p>
+      <p style="line-height:1.6;">You set up GlucoForager a while ago, and we'd love for you to see what it can really do.</p>
+      <p style="line-height:1.6;">For the next 7 days, <strong>everything in Premium is unlocked, free, with no card needed.</strong>
+      It's already active on your account, and every suggestion is shaped around your food profile.</p>
+      <p style="line-height:1.6;">Open the app and ask it what to eat today.</p>
     """
     html = _welcome_week_shell(
         to_email=to_email,
