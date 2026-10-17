@@ -1036,7 +1036,7 @@ export default function HomeScreen() {
               <Text style={styles.hSectionLink}>View log ›</Text>
             </TouchableOpacity>
           </View>
-          <View style={styles.hCard}>
+          <View style={[styles.hCard, styles.hTrackCard]}>
             <View style={styles.hRings}>
               <TouchableOpacity
                 style={styles.hRingCol}
@@ -1046,7 +1046,7 @@ export default function HomeScreen() {
                 }}
                 activeOpacity={0.8}
               >
-                <CarbGoalRing carbsLogged={carbsLoggedToday} carbGoal={carbGoalToday} mode={carbGoalMode} size={84} />
+                <CarbGoalRing carbsLogged={carbsLoggedToday} carbGoal={carbGoalToday} mode={carbGoalMode} size={100} />
                 <View style={styles.hRingTitleRow}>
                   <Text style={styles.hRingTitle}>Carbs</Text>
                   <Pressable hitSlop={10} onPress={showCarbGoalDisclaimer}>
@@ -1067,7 +1067,7 @@ export default function HomeScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.hRingCol} onPress={handleOpenLogGlucose} activeOpacity={0.8}>
-                <GlucoseRangeRing today={glucose?.today} size={84} />
+                <GlucoseRangeRing today={glucose?.today} size={100} />
                 <Text style={[styles.hRingTitle, { marginTop: 8 }]}>Glucose</Text>
                 {lastReading ? (
                   <>
@@ -1372,6 +1372,7 @@ const styles = StyleSheet.create({
   hSectionLink: { fontSize: 13.5, fontWeight: '800', color: Colors.primary },
   hShuffle: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   hCard: { backgroundColor: 'white', borderRadius: 20, borderWidth: 1, borderColor: '#E9ECE4', padding: 14 },
+  hTrackCard: { marginHorizontal: -10, paddingHorizontal: 12, paddingVertical: 16 },
   hRings: { flexDirection: 'row', gap: 8 },
   hRingCol: { flex: 1, alignItems: 'center' },
   hRingTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 },

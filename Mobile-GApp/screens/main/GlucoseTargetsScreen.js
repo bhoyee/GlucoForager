@@ -22,7 +22,9 @@ import { Colors } from '../../constants/Colors';
 import { API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
 import { useAuth } from '../../context/authContext';
-import { formatGlucose, fromUnitValue, getGlucoseUnit, toUnitValue } from '../../utils/glucose';
+import { formatGlucose, fromUnitValue, getGlucoseUnit, setGlucoseUnit, toUnitValue } from '../../utils/glucose';
+
+const UNITS = ['mg/dL', 'mmol/L'];
 
 const ENDPOINT = '/api/app/health-log/glucose-targets';
 const FIELDS = [
@@ -99,6 +101,21 @@ export default function GlucoseTargetsScreen() {
     }
   };
 
+  const handleUnitChange = (nextUnit) => {
+    if (nextUnit === unit) return;
+    setValues((current) =>
+      Object.fromEntries(
+        FIELDS.map(({ key }) => {
+          const n = parseFloat(String(current[key] || '').replace(',', '.'));
+          if (!Number.isFinite(n)) return [key, current[key]];
+          return [key, String(toUnitValue(fromUnitValue(n, unit), nextUnit))];
+        })
+      )
+    );
+    setUnit(nextUnit);
+    setGlucoseUnit(nextUnit);
+  };
+
   const handleSave = () => {
     const parsed = {};
     for (const { key, label } of FIELDS) {
@@ -142,6 +159,25 @@ export default function GlucoseTargetsScreen() {
                 Use the targets agreed with your healthcare team.{' '}
                 {targets.is_default ? 'You are using the standard ranges (ADA general targets for adults).' : 'You are using your own targets.'}
               </Text>
+            </View>
+
+            <View style={styles.unitBlock}>
+              <Text style={styles.unitTitle}>Units</Text>
+              <View style={styles.segment}>
+                {UNITS.map((u) => (
+                  <TouchableOpacity
+                    key={u}
+                    style={[styles.segmentItem, unit === u && styles.segmentItemActive]}
+                    onPress={() => handleUnitChange(u)}
+                    disabled={saving}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: unit === u }}
+                  >
+                    <Text style={[styles.segmentText, unit === u && styles.segmentTextActive]}>{u}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={styles.unitHint}>Also used on Home and when you log glucose.</Text>
             </View>
 
             {FIELDS.map(({ key, label, hint }) => (
@@ -196,6 +232,14 @@ const styles = StyleSheet.create({
   body: { padding: 18, gap: 12 },
   note: { flexDirection: 'row', gap: 10, padding: 12, borderRadius: 14, backgroundColor: '#E8F4F3' },
   noteText: { flex: 1, fontSize: 13, color: Colors.brandNavy, lineHeight: 19 },
+  unitBlock: { backgroundColor: 'white', borderRadius: 16, borderWidth: 1, borderColor: '#E9ECE4', padding: 14 },
+  unitTitle: { fontSize: 15, fontWeight: '800', color: Colors.brandNavy, marginBottom: 10 },
+  segment: { flexDirection: 'row', backgroundColor: '#F1F5F9', borderRadius: 12, padding: 4 },
+  segmentItem: { flex: 1, height: 40, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  segmentItemActive: { backgroundColor: Colors.primary },
+  segmentText: { fontSize: 14.5, fontWeight: '800', color: Colors.brandNavy },
+  segmentTextActive: { color: 'white' },
+  unitHint: { fontSize: 12, color: Colors.textLight, marginTop: 8 },
   field: { backgroundColor: 'white', borderRadius: 16, borderWidth: 1, borderColor: '#E9ECE4', padding: 14 },
   label: { fontSize: 15, fontWeight: '800', color: Colors.brandNavy },
   hint: { fontSize: 12, color: Colors.textLight, marginTop: 2 },

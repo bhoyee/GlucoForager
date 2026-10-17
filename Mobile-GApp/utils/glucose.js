@@ -16,6 +16,15 @@ export const getGlucoseUnit = async () => {
   }
 };
 
+// Shared with Log glucose, so a change in either place applies everywhere.
+export const setGlucoseUnit = async (unit) => {
+  try {
+    await AsyncStorage.setItem(UNIT_PREF_KEY, unit === 'mmol/L' ? 'mmol/L' : 'mg/dL');
+  } catch {
+    // Non-fatal: the screen still shows the chosen unit for this session.
+  }
+};
+
 export const toUnitValue = (mgDl, unit) =>
   unit === 'mmol/L' ? Math.round((Number(mgDl) / MGDL_PER_MMOL) * 10) / 10 : Math.round(Number(mgDl));
 
