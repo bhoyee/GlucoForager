@@ -225,3 +225,119 @@ def delete_all_user_activity(
     deleted = query.delete(synchronize_session=False)
     db.commit()
     return {"deleted_count": int(deleted or 0)}
+
+
+# ── Feature usage (admin "Activity" chart) ────────────────────────────────────
+# Raw event names over-count: one recipe generation logs started/running/completed,
+# and "ai.request" mixes every AI call (incl. automatic recipe images). So usage is
+# counted per *feature*, once per real use, from exactly one event each.
+FEATURE_DEFS: list[tuple[str, str, str, str | None]] = [
+    # (key, label, event_type, ai request_type or None)
+    ("recipes", "Recipe ideas", "recipe_generation.started", None),
+    ("fridge_scan", "Fridge scans", "scan_analysis.started", None),
+    ("glucoguide", "GlucoGuide questions", "ai.request", "agent"),
+    ("food_scan", "Food photo scans", "ai.request", "food_scan"),
+    ("barcode", "Barcode scans", "barcode.scanned", None),
+    ("swaps", "Food swaps", "ai.request", "swaps"),
+    ("meal_plan", "Meal plans", "daily_plan.created", None),
+    ("meal_log", "Meals logged", "meal_log.created", None),
+    ("glucose_log", "Glucose logged", "glucose_reading.created", None),
+    ("challenge", "Challenge tasks done", "challenge.task_completed", None),
+    ("favorite", "Favourites saved", "favorite.saved", None),
+    ("login", "Logins", "auth.login", None),
+]
+
+
+def _feature_key(event_type: str, metadata) -> str | None:
+    request_type = metadata.get("request_type") if isinstance(metadata, dict) else None
+    for key, _label, ev, rt in FEATURE_DEFS:
+        if event_type == ev and (rt is None or rt == request_type):
+            return key
+    return None
+
+
+@router.get("/feature-usage")
+def feature_usage(
+    days: int = 7,
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("users.read")),  # noqa: ARG001
+):
+    """Uses + unique users per feature for the last `days` days vs the period before,
+    plus a daily series for the trend chart. Days are UTC calendar days."""
+    from datetime import datetime, timedelta
+
+    # Activity events are kept ~2 months, so the period + the one before it must fit in 60 days.
+    days_value = days if days in (7, 14, 30) else 7
+    today = datetime.utcnow().date()
+    start_day = today - timedelta(days=days_value - 1)
+    prev_start_day = start_day - timedelta(days=days_value)
+    window_start = datetime.combine(prev_start_day, datetime.min.time())
+
+    rows = (
+        db.query(
+            UserActivityEvent.user_id,
+            UserActivityEvent.event_type,
+            UserActivityEvent.metadata_json,
+            UserActivityEvent.created_at,
+        )
+        .filter(
+            UserActivityEvent.created_at >= window_start,
+            UserActivityEvent.event_type.in_({ev for _k, _l, ev, _rt in FEATURE_DEFS}),
+        )
+        .all()
+    )
+
+    dates = [(start_day + timedelta(days=i)).isoformat() for i in range(days_value)]
+    day_index = {d: i for i, d in enumerate(dates)}
+    stats = {key: {"uses": 0, "users": set(), "prev_uses": 0, "prev_users": set()} for key, *_ in FEATURE_DEFS}
+    series = {key: [0] * days_value for key, *_ in FEATURE_DEFS}
+    active_users: set[int] = set()
+    prev_active_users: set[int] = set()
+
+    for user_id, event_type, metadata, created_at in rows:
+        key = _feature_key(event_type, metadata)
+        if not key or created_at is None:
+            continue
+        day = created_at.date()
+        if day >= start_day:
+            stats[key]["uses"] += 1
+            stats[key]["users"].add(user_id)
+            active_users.add(user_id)
+            idx = day_index.get(day.isoformat())
+            if idx is not None:
+                series[key][idx] += 1
+        else:
+            stats[key]["prev_uses"] += 1
+            stats[key]["prev_users"].add(user_id)
+            prev_active_users.add(user_id)
+
+    def change_pct(now: int, before: int) -> int | None:
+        if before == 0:
+            return None
+        return round(100 * (now - before) / before)
+
+    features = []
+    for key, label, _ev, _rt in FEATURE_DEFS:
+        s = stats[key]
+        features.append(
+            {
+                "key": key,
+                "label": label,
+                "uses": s["uses"],
+                "users": len(s["users"]),
+                "prev_uses": s["prev_uses"],
+                "prev_users": len(s["prev_users"]),
+                "change_pct": change_pct(s["uses"], s["prev_uses"]),
+            }
+        )
+    features.sort(key=lambda f: (-f["uses"], -f["users"], f["label"]))
+
+    return {
+        "days": days_value,
+        "generated_at": _utc_iso(datetime.utcnow()),
+        "active_users": len(active_users),
+        "prev_active_users": len(prev_active_users),
+        "features": features,
+        "dates": dates,
+        "series": series,
+    }

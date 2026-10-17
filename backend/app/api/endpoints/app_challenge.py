@@ -6,6 +6,7 @@ from ...api.dependencies import get_current_user
 from ...database import get_db
 from ...models.user import User
 from ...services.daily_challenge_service import get_challenge_view, set_task_completed
+from ...services.user_activity_service import add_user_activity
 
 
 router = APIRouter(prefix="/app", tags=["app"])
@@ -41,4 +42,14 @@ def complete_challenge_task(
         )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
+    if payload.completed:
+        add_user_activity(
+            db,
+            user_id=user.id,
+            event_type="challenge.task_completed",
+            label="Completed a challenge task",
+            source="mobile",
+            metadata={"task_id": payload.task_id},
+            commit=True,
+        )
     return {"challenge": view}
