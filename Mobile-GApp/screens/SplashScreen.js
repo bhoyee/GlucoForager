@@ -1,17 +1,64 @@
 // screens/SplashScreen.js
-import React from 'react';
-import { View, Text, StyleSheet, Image } from 'react-native';
-import { Colors } from '../constants/Colors';
+// Loading screen shown while the app restores the session (App.js keeps it up for at least 1.2s).
+// The artwork is one flat image, so the scene fades/settles in as a whole and the progress bar
+// is drawn on top. If layered artwork (separate bowl/leaves) is supplied later, those layers can
+// be animated individually here.
+import React, { useEffect, useRef } from 'react';
+import { Animated, Easing, Image, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const BACKGROUND = '#FEFDF3'; // matches the artwork's cream background (no flash while it loads)
+const TEAL = '#07A393';
+const TRACK = '#D0DBD4';
 
 export default function SplashScreen() {
+  const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const sceneOpacity = useRef(new Animated.Value(0)).current;
+  const sceneScale = useRef(new Animated.Value(1.06)).current;
+  const progress = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(sceneOpacity, { toValue: 1, duration: 350, useNativeDriver: true }),
+      Animated.timing(sceneScale, {
+        toValue: 1,
+        duration: 1600,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Fill most of the bar quickly, then creep, so it never looks "done" while still loading.
+    Animated.sequence([
+      Animated.timing(progress, { toValue: 0.75, duration: 1100, easing: Easing.out(Easing.quad), useNativeDriver: false }),
+      Animated.timing(progress, { toValue: 0.95, duration: 4000, easing: Easing.linear, useNativeDriver: false }),
+    ]).start();
+  }, [progress, sceneOpacity, sceneScale]);
+
+  const trackWidth = Math.min(width * 0.45, 280);
+
   return (
-    <View style={styles.container}>
-      <Image
-        source={require('../assets/logo.png')}
-        style={styles.logo}
-      />
-      <Text style={styles.title}>GlucoForager</Text>
-      <Text style={styles.subtitle}>Loading...</Text>
+    <View style={styles.container} accessibilityRole="progressbar" accessibilityLabel="Loading GlucoForager">
+      <StatusBar style="dark" />
+      <Animated.View style={[StyleSheet.absoluteFill, { opacity: sceneOpacity, transform: [{ scale: sceneScale }] }]}>
+        <Image
+          source={require('../assets/images/loading-screen.jpg')}
+          style={{ width, height }}
+          resizeMode="cover"
+        />
+      </Animated.View>
+      <View style={[styles.trackWrap, { bottom: insets.bottom + height * 0.07 }]}>
+        <View style={[styles.track, { width: trackWidth }]}>
+          <Animated.View
+            style={[
+              styles.fill,
+              { width: progress.interpolate({ inputRange: [0, 1], outputRange: [0, trackWidth] }) },
+            ]}
+          />
+        </View>
+      </View>
     </View>
   );
 }
@@ -19,24 +66,23 @@ export default function SplashScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.primary,
-    justifyContent: 'center',
+    backgroundColor: BACKGROUND,
+  },
+  trackWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
     alignItems: 'center',
   },
-  logo: {
-    width: 96,
-    height: 96,
-    marginBottom: 16,
+  track: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: TRACK,
+    overflow: 'hidden',
   },
-  title: {
-    fontSize: 32,
-    color: 'white',
-    fontWeight: 'bold',
-    marginBottom: 10,
-  },
-  subtitle: {
-    fontSize: 18,
-    color: 'white',
-    opacity: 0.8,
+  fill: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: TEAL,
   },
 });

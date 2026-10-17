@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import FeatureUsage from './FeatureUsage';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 const PAGE_SIZE = 25;
@@ -193,6 +194,11 @@ export default function AdminUserActivityPage() {
           <option value="daily_plan.created">Daily plan created</option>
           <option value="daily_plan.updated">Daily plan updated</option>
           <option value="favorite.saved">Favorite saved</option>
+          <option value="scan_analysis.started">Fridge scan</option>
+          <option value="barcode.scanned">Barcode scan</option>
+          <option value="meal_log.created">Meal logged</option>
+          <option value="glucose_reading.created">Glucose logged</option>
+          <option value="challenge.task_completed">Challenge task completed</option>
         </select>
         <select value={source} onChange={(e) => setSource(e.target.value)}>
           <option value="">All sources</option>
@@ -203,6 +209,14 @@ export default function AdminUserActivityPage() {
       </form>
 
       {message ? <div className="admin-message error">{message}</div> : null}
+
+      <FeatureUsage
+        token={token}
+        onUnauthorized={() => {
+          localStorage.removeItem('adminToken');
+          router.push('/admin');
+        }}
+      />
 
       <section className="admin-card admin-activity-card">
         <div className="admin-card-header">

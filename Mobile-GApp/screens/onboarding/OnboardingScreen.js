@@ -3,16 +3,24 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Dimensions,
   FlatList,
+  Image,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 
-const { width } = Dimensions.get('window');
+const { width, height: screenHeight } = Dimensions.get('window');
+// Photo card height: generous on tall phones, compact on small ones so text + badges still fit.
+const IMAGE_HEIGHT = Math.round(Math.min(screenHeight * 0.3, 260));
+
+// Slides with a photo show it full-width at the top; slides without one (until real
+// photography is supplied) fall back to the icon card.
 
 const onboardingData = [
   {
@@ -32,7 +40,7 @@ const onboardingData = [
     description: 'Scan your fridge or type ingredients by hand.',
     subDescription:
       'Review detected foods, add missing items, and let the app focus on diabetes-friendlier choices.',
-    color: '#3182CE',
+    color: '#2B6CB0',
     chips: ['Scan fridge', 'Type ingredients', 'Review foods'],
   },
   {
@@ -42,7 +50,7 @@ const onboardingData = [
     description: 'Find better options for meals, snacks, and drinks.',
     subDescription:
       'Keep familiar foods in your life while making choices that are easier on blood sugar.',
-    color: '#0EA5A4',
+    color: Colors.primaryDark,
     chips: ['Food swaps', 'Safer choices', 'Practical tips'],
   },
   {
@@ -52,7 +60,7 @@ const onboardingData = [
     description: 'Get simple guidance when you are unsure what to eat.',
     subDescription:
       'Your first week of Premium is free, no card needed. After that you still get free uses every week, or upgrade for unlimited access.',
-    color: '#ED8936',
+    color: '#C05621',
     chips: ['GlucoGuide AI', 'Free first week', 'No card needed'],
   },
 ];
@@ -61,6 +69,7 @@ export default function OnboardingScreen() {
   const navigation = useNavigation();
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef(null);
+  const insets = useSafeAreaInsets();
 
   const markOnboardingComplete = async () => {
     await AsyncStorage.setItem('hasCompletedOnboarding', 'true');
@@ -95,25 +104,35 @@ export default function OnboardingScreen() {
   };
 
   const renderItem = ({ item }) => (
-    <View style={[styles.slide, { width }]}>
-      <View
-        style={[
-          styles.visualCard,
-          { borderColor: `${item.color}25`, shadowColor: item.color },
-        ]}
-      >
-        <View style={[styles.visualAccent, { backgroundColor: `${item.color}12` }]} />
-        <View style={[styles.visualRing, { borderColor: `${item.color}20` }]} />
-        <View style={[styles.iconCircle, { backgroundColor: item.color }]}>
-          <Ionicons name={item.icon} size={38} color="white" />
+    <ScrollView
+      style={{ width }}
+      contentContainerStyle={[styles.slide, { paddingTop: insets.top + 64 }]}
+      showsVerticalScrollIndicator={false}
+      bounces={false}
+    >
+      {item.image ? (
+        <View style={[styles.photoCard, { shadowColor: item.color }]}>
+          <Image source={item.image} style={styles.photo} resizeMode="cover" />
         </View>
-      </View>
+      ) : (
+        <View
+          style={[
+            styles.visualCard,
+            { borderColor: `${item.color}25`, shadowColor: item.color },
+          ]}
+        >
+          <View style={[styles.visualAccent, { backgroundColor: `${item.color}12` }]} />
+          <View style={[styles.visualRing, { borderColor: `${item.color}20` }]} />
+          <View style={[styles.iconCircle, { backgroundColor: item.color }]}>
+            <Ionicons name={item.icon} size={38} color="white" />
+          </View>
+        </View>
+      )}
 
       <View style={styles.content}>
         <Text style={styles.kicker}>GlucoForager</Text>
         <Text style={styles.slideTitle}>{item.title}</Text>
         <Text style={styles.slideDescription}>{item.description}</Text>
-        <Text style={styles.slideSubDescription}>{item.subDescription}</Text>
 
         <View style={styles.chipRow}>
           {item.chips.map((chip) => (
@@ -128,6 +147,8 @@ export default function OnboardingScreen() {
             </View>
           ))}
         </View>
+
+        <Text style={styles.slideSubDescription}>{item.subDescription}</Text>
 
         <View style={styles.featureDots}>
           {onboardingData.map((_, idx) => (
@@ -144,12 +165,12 @@ export default function OnboardingScreen() {
           ))}
         </View>
       </View>
-    </View>
+    </ScrollView>
   );
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity style={styles.skipButton} onPress={goToLogin} activeOpacity={0.85}>
+      <TouchableOpacity style={[styles.skipButton, { top: insets.top + 12 }]} onPress={goToLogin} activeOpacity={0.85}>
         <Text style={styles.skipText}>Skip</Text>
       </TouchableOpacity>
 
@@ -251,7 +272,23 @@ const styles = StyleSheet.create({
   slide: {
     justifyContent: 'flex-start',
     alignItems: 'center',
-    paddingTop: 92,
+    paddingBottom: 12,
+  },
+  photoCard: {
+    width: width - 40,
+    height: IMAGE_HEIGHT,
+    borderRadius: 28,
+    overflow: 'hidden',
+    backgroundColor: Colors.surface,
+    marginBottom: 22,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
+    elevation: 5,
+  },
+  photo: {
+    width: '100%',
+    height: '100%',
   },
   visualCard: {
     width: 136,
@@ -266,7 +303,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 16,
     elevation: 4,
-    marginBottom: 30,
+    marginBottom: 22,
   },
   visualAccent: {
     position: 'absolute',
@@ -308,35 +345,34 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   slideTitle: {
-    fontSize: 30,
+    fontSize: 27,
     fontWeight: '900',
     color: Colors.text,
     textAlign: 'center',
-    marginBottom: 14,
-    lineHeight: 36,
+    marginBottom: 10,
+    lineHeight: 33,
   },
   slideDescription: {
-    fontSize: 18,
+    fontSize: 17,
     color: Colors.text,
     textAlign: 'center',
-    marginBottom: 10,
+    marginBottom: 14,
     fontWeight: '800',
-    lineHeight: 25,
+    lineHeight: 24,
   },
   slideSubDescription: {
-    fontSize: 15,
+    fontSize: 14,
     color: Colors.textLight,
     textAlign: 'center',
-    lineHeight: 22,
-    paddingHorizontal: 10,
-    marginBottom: 22,
+    lineHeight: 21,
+    paddingHorizontal: 6,
   },
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
     gap: 8,
-    marginBottom: 10,
+    marginBottom: 14,
   },
   chip: {
     borderWidth: 1,
@@ -352,7 +388,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 20,
+    marginTop: 16,
   },
   featureDot: {
     height: 8,
@@ -361,14 +397,14 @@ const styles = StyleSheet.create({
   },
   navigation: {
     paddingHorizontal: 20,
-    paddingBottom: 64,
-    paddingTop: 20,
+    paddingBottom: 36,
+    paddingTop: 12,
   },
   buttonContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 16,
   },
   backButton: {
     flexDirection: 'row',
@@ -415,7 +451,7 @@ const styles = StyleSheet.create({
   progressContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 16,
   },
   progressBar: {
     flex: 1,

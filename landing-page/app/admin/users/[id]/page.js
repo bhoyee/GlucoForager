@@ -12,11 +12,11 @@ const ACCESS_META = {
   cancelled_active: { label: 'Cancelled active', tone: 'warning' },
   legacy_grace: { label: 'Welcome week', tone: 'warning' },
   grace: { label: 'Welcome week', tone: 'warning' },
-  expired: { label: 'Expired', tone: 'danger' },
+  expired: { label: 'Lapsed (free plan)', tone: 'warning' },
   blocked: { label: 'Blocked', tone: 'danger' },
   suspended: { label: 'Suspended', tone: 'warning' },
   deleted: { label: 'Deleted', tone: 'danger' },
-  free: { label: 'Free', tone: 'neutral' },
+  free: { label: 'Free plan', tone: 'neutral' },
 };
 
 const getAccessMeta = (status) => ACCESS_META[String(status || 'free').toLowerCase()] || ACCESS_META.free;

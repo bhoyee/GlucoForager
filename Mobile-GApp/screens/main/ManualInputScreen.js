@@ -1263,7 +1263,7 @@ const styles = StyleSheet.create({
     height: 104,
     borderRadius: 52,
     borderWidth: 1,
-    borderColor: 'rgba(29,158,117,0.20)',
+    borderColor: 'rgba(53,192,189,0.20)',
   },
   loadingOrbitDot: {
     position: 'absolute',
@@ -1334,7 +1334,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 14,
     borderWidth: 1,
-    borderColor: 'rgba(29,158,117,0.12)',
+    borderColor: 'rgba(53,192,189,0.12)',
   },
   loadingStepRow: {
     flexDirection: 'row',

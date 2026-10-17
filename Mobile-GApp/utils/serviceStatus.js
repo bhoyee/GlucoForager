@@ -48,7 +48,8 @@ export const refreshServiceStatus = async ({ force = false } = {}) => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     try {
-      const res = await fetch(STATUS_URL, { signal: controller.signal, headers: { 'Cache-Control': 'no-cache' } });
+      // Cache-bust via the URL (a Cache-Control header would trigger a CORS preflight on web).
+      const res = await fetch(`${STATUS_URL}?t=${Date.now()}`, { signal: controller.signal });
       if (!res.ok) return current;
       const body = await res.json();
       const next = {

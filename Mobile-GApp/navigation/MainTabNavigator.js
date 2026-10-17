@@ -35,6 +35,7 @@ import PhotoScanScreen from '../screens/main/PhotoScanScreen';
 import FoodLogScreen from '../screens/main/FoodLogScreen';
 import TrackRegularlyScreen from '../screens/main/TrackRegularlyScreen';
 import CarbGoalScreen from '../screens/main/CarbGoalScreen';
+import GlucoseTargetsScreen from '../screens/main/GlucoseTargetsScreen';
 import TodayTipScreen from '../screens/main/TodayTipScreen';
 import TipsArchiveScreen from '../screens/main/TipsArchiveScreen';
 import FoodPreferencesScreen from '../screens/main/FoodPreferencesScreen';
@@ -71,6 +72,7 @@ function HomeStackNavigator() {
       <HomeStack.Screen name="FoodLog" component={FoodLogScreen} />
       <HomeStack.Screen name="TrackRegularly" component={TrackRegularlyScreen} />
       <HomeStack.Screen name="CarbGoal" component={CarbGoalScreen} />
+      <HomeStack.Screen name="GlucoseTargets" component={GlucoseTargetsScreen} />
       <HomeStack.Screen name="TodayTip" component={TodayTipScreen} />
       <HomeStack.Screen name="TipsArchive" component={TipsArchiveScreen} />
     </HomeStack.Navigator>
@@ -130,6 +132,7 @@ function ProfileStackNavigator() {
       <ProfileStack.Screen name="ProfileMain" component={ProfileScreen} />
       <ProfileStack.Screen name="PersonalInfo" component={PersonalInfoScreen} />
       <ProfileStack.Screen name="FoodPreferences" component={FoodPreferencesScreen} />
+      <ProfileStack.Screen name="GlucoseTargets" component={GlucoseTargetsScreen} />
       <ProfileStack.Screen name="ShoppingList" component={ShoppingListScreen} />
       <ProfileStack.Screen name="WeeklyRecap" component={WeeklyRecapScreen} />
       <ProfileStack.Screen name="TrackRegularly" component={TrackRegularlyScreen} />

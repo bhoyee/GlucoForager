@@ -523,7 +523,7 @@ export default function RecipeResultsScreen() {
     return (
       <View style={styles.loadingContainer}>
         <LinearGradient
-          colors={['#071D18', '#0F6E56', '#1D9E75']}
+          colors={['#062A27', '#0B5A46', '#1D7C7A']}
           style={styles.loadingGradient}
         >
           <View style={styles.loadingTopBadge}>
@@ -1096,7 +1096,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 14,
     borderWidth: 1,
-    borderColor: 'rgba(29,158,117,0.12)',
+    borderColor: 'rgba(53, 192, 189,0.12)',
   },
   loadingStepRow: {
     flexDirection: 'row',
