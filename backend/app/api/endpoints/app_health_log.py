@@ -578,6 +578,7 @@ def _diabetes_note(nutrition: dict, product: dict) -> dict:
 @router.get("/barcode/{barcode}")
 def lookup_barcode(
     barcode: str,
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     _enforce_barcode_rate_limit(current_user.id)
@@ -585,6 +586,21 @@ def lookup_barcode(
     code = "".join(ch for ch in barcode if ch.isdigit())
     if not code:
         return {"found": False, "barcode": barcode}
+    result = _lookup_barcode_product(code)
+    # Feature-usage tracking (admin Activity chart). Never fail the lookup over it.
+    add_user_activity(
+        db,
+        user_id=current_user.id,
+        event_type="barcode.scanned",
+        label="Scanned a barcode",
+        source="mobile",
+        metadata={"found": bool(result.get("found"))},
+        commit=True,
+    )
+    return result
+
+
+def _lookup_barcode_product(code: str) -> dict:
 
     try:
         with httpx.Client(timeout=8.0) as client:
