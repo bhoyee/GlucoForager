@@ -13,6 +13,7 @@ from ..models.glucose_reading import GlucoseReading
 from ..models.meal_log_entry import MealLogEntry
 from ..models.recipe_history import RecipeHistory
 from ..models.subscription import Subscription
+from ..models.subscription_event import SubscriptionEvent
 from ..models.user import User
 from .email_service import send_dunning_template_email
 from .subscription_service import is_premium_blocked
@@ -78,10 +79,10 @@ FALLBACK_TEMPLATES = {
             "<p>Hi {{name}},</p>"
             "<p style=\"line-height:1.6;\">{{usage_summary}} - that's real progress, and we'd love to help "
             "you keep it going.</p>"
-            "<p style=\"line-height:1.6;\">Resubscribing brings back GlucoGuide AI, your Daily Meal Planner, "
-            "recipe generation, and unlimited photo &amp; ingredient scanning - right where you left off.</p>"
-            "<p style=\"line-height:1.6;\">Your barcode scans, food swaps, and glucose/carb tracking never "
-            "stopped - they're still free and still yours.</p>"
+            "<p style=\"line-height:1.6;\">Premium brings back unlimited GlucoGuide AI, recipe ideas and "
+            "photo &amp; ingredient scans, plus your Daily Meal Planner - right where you left off.</p>"
+            "<p style=\"line-height:1.6;\">Your free plan still includes a few of those each week, along with "
+            "barcode scans, your meal diary and glucose insights - all still yours.</p>"
             "<p style=\"line-height:1.6;\">One tap brings the rest back. We'd love to see you again.</p>"
         ),
     },
@@ -98,17 +99,15 @@ FALLBACK_TEMPLATES = {
         ),
     },
     "day14": {
-        "subject": "Have you tried asking GlucoGuide yet?",
-        "heading": "The one Premium feature people miss trying",
+        "subject": "Have you asked GlucoGuide lately?",
+        "heading": "Real answers when you're unsure what to eat",
         "body_html": (
             "<p>Hi {{name}},</p>"
-            "<p style=\"line-height:1.6;\">A lot of people don't get to try GlucoGuide AI during a short "
-            "trial - it's built to answer real food questions on the spot, personalized to your profile, the "
-            "moment you're unsure what to eat.</p>"
-            "<p style=\"line-height:1.6;\">It comes right back with your Daily Meal Planner and recipe "
-            "generation when you resubscribe.</p>"
-            "<p style=\"line-height:1.6;\">Your barcode scans, food swaps, and glucose/carb tracking are "
-            "still free in the meantime.</p>"
+            "<p style=\"line-height:1.6;\">GlucoGuide AI answers real food questions on the spot, "
+            "personalised to your profile - the moment you're unsure what to eat.</p>"
+            "<p style=\"line-height:1.6;\">Your free plan includes a few GlucoGuide questions each week. "
+            "Premium makes them unlimited and brings back your Daily Meal Planner and unlimited recipe "
+            "ideas.</p>"
         ),
     },
     "day21": {
@@ -154,6 +153,34 @@ def _batch_subscriptions(db, user_ids: list[int]) -> tuple[dict[int, Subscriptio
     return latest_billing, latest_comp
 
 
+# A real payment, not a free trial or a sandbox test. Win-back is only for people who
+# paid and then left: never-paid ex-trial users get the welcome-week relaunch email
+# instead, and free-plan users get value-led messages, never "come back and pay".
+PAID_EVENT_TYPES = ("INITIAL_PURCHASE", "RENEWAL", "NON_RENEWING_PURCHASE", "PRODUCT_CHANGE")
+
+
+def _paid_user_ids(db, user_ids: list[int]) -> set[int]:
+    if not user_ids:
+        return set()
+    rows = (
+        db.query(SubscriptionEvent.user_id, SubscriptionEvent.event_type, SubscriptionEvent.period_type,
+                 SubscriptionEvent.is_trial_conversion, SubscriptionEvent.price_usd, SubscriptionEvent.environment)
+        .filter(SubscriptionEvent.user_id.in_(user_ids))
+        .all()
+    )
+    paid = set()
+    for user_id, event_type, period_type, is_trial_conversion, price_usd, environment in rows:
+        if (environment or "").upper() == "SANDBOX":
+            continue
+        if (
+            is_trial_conversion
+            or (price_usd or 0) > 0
+            or ((event_type or "").upper() in PAID_EVENT_TYPES and (period_type or "").upper() == "NORMAL")
+        ):
+            paid.add(user_id)
+    return paid
+
+
 def _due_stage(user: User, now: datetime) -> str | None:
     emails_sent = user.dunning_emails_sent or 0
 
@@ -194,12 +221,16 @@ def run_dunning_job() -> dict:
         templates = {row.stage: row for row in db.query(DunningEmailTemplate).all()}
 
         latest_billing, latest_comp = _batch_subscriptions(db, [u.id for u in candidates])
+        paid_ids = _paid_user_ids(db, [u.id for u in candidates])
 
         for user in candidates:
             billing = latest_billing.get(user.id)
             comp = latest_comp.get(user.id)
             if billing is None and comp is None:
                 # Never started a trial or purchase - nothing to win back.
+                continue
+            if user.id not in paid_ids:
+                # Trial-only or admin-granted Premium: never paid, so no win-back.
                 continue
             if is_premium_blocked(user, now=now):
                 continue
