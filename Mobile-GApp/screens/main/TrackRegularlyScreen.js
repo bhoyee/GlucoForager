@@ -1,4 +1,8 @@
-import React, { useCallback, useEffect, useState } from 'react';
+// screens/main/TrackRegularlyScreen.js
+// "Glucose trends": glucose over 7/30/90 days. Every reading is judged by the backend
+// against the user's own targets (services/glucose_targets.py), so "on target" here
+// means exactly what it means on Home and in the meal diary.
+import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,50 +14,49 @@ import { apiFetch } from '../../utils/api';
 import { API_URL } from '../../config/api';
 import StatRing from '../../components/StatRing';
 import { parseServerDate } from '../../utils/dateUtils';
+import {
+  CONTEXT_LABELS,
+  MGDL_PER_MMOL,
+  formatGlucose,
+  getGlucoseUnit,
+  setGlucoseUnit,
+  statusMeta,
+  toUnitValue,
+} from '../../utils/glucose';
 
 const RANGE_OPTIONS = [
   { key: 7, label: '7 days' },
   { key: 30, label: '30 days' },
   { key: 90, label: '90 days' },
 ];
+const UNITS = ['mg/dL', 'mmol/L'];
+const AMBER = '#B7791F';
+const RED = '#C53030';
 
-const UNIT_PREF_KEY = 'glucose_unit_pref_v1';
-const MGDL_PER_MMOL = 18.0182;
+// Same fixed safety bands as the backend; the upper edge of the chart band is the
+// user's after-meal target (the widest "on target" range across the day).
+const LOW_MGDL = 70;
+const VERY_HIGH_MGDL = 250;
 
-const TARGET_LOW = 70;
-const TARGET_HIGH = 180;
-const SEVERE_HIGH = 220;
+const num = (mgDl, unit) => String(toUnitValue(mgDl, unit));
 
-// Everything is stored and bucketed in mg/dL - this only converts what's shown on
-// screen, same split already used by LogGlucoseScreen/FoodLogScreen.
-function formatGlucose(valueMgDl, unit) {
-  if (unit === 'mmol/L') return (valueMgDl / MGDL_PER_MMOL).toFixed(1);
-  return String(Math.round(valueMgDl));
+function verdict(reading, unit) {
+  if (reading.status === 'in_range') return 'On target';
+  if (reading.status === 'low') return 'Low';
+  if (reading.status === 'very_high') return 'Very high';
+  const delta = Number(reading.delta_mg_dl) || 0;
+  const amount = unit === 'mmol/L' ? (delta / MGDL_PER_MMOL).toFixed(1) : `${Math.round(delta)}`;
+  return `${amount} ${reading.status} target`;
 }
-
-// Simple 3-tier bucketing purely for this trends view (not the same thing as the
-// backend's is_spike/general_alert, which are about meal-linkage and urgent-only
-// bands) - this is a plain "where does this value sit vs. the standard 70-180
-// target range" view, matching how most glucose trend charts are read at a glance.
-function bucketFor(value) {
-  if (value < TARGET_LOW || value >= SEVERE_HIGH) return 'severe';
-  if (value > TARGET_HIGH) return 'high';
-  return 'inRange';
-}
-
-const BUCKET_COLOR = { inRange: Colors.success, high: '#D97706', severe: Colors.danger };
-const BUCKET_LABEL = { inRange: 'In range', high: 'High', severe: 'High' };
 
 function formatRelativeDateTime(value) {
   const date = parseServerDate(value);
   const now = new Date();
   const time = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(date);
-  const isSameDay = date.toDateString() === now.toDateString();
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
-  const isYesterday = date.toDateString() === yesterday.toDateString();
-  if (isSameDay) return `Today, ${time}`;
-  if (isYesterday) return `Yesterday, ${time}`;
+  if (date.toDateString() === now.toDateString()) return `Today, ${time}`;
+  if (date.toDateString() === yesterday.toDateString()) return `Yesterday, ${time}`;
   return `${new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date)}, ${time}`;
 }
 
@@ -63,38 +66,27 @@ const PAD_X = 6;
 const PAD_TOP = 16;
 const PAD_BOTTOM = 26;
 
-function GlucoseTrendCard({ dayPoints, average, rangeLabel, unit, windowStartMs, windowEndMs, days }) {
+function GlucoseTrendCard({ dayPoints, average, rangeLabel, unit, windowStartMs, windowEndMs, days, bandHigh }) {
   const [chartWidth, setChartWidth] = useState(0);
   const plotWidth = Math.max(chartWidth - PAD_X * 2, 1);
   const plotHeight = CHART_HEIGHT - PAD_TOP - PAD_BOTTOM;
 
   const yFor = (v) => PAD_TOP + plotHeight - (Math.min(v, CHART_Y_MAX) / CHART_Y_MAX) * plotHeight;
-  // Positioned by real elapsed time within the selected window, not by index among
-  // however many days happen to have data - otherwise 2 readings from the same
-  // week render identically whether you picked 7, 30, or 90 days, since evenly
-  // spacing 2 points always fills the same width regardless of the real time gap.
+  // Positioned by real time within the selected window, so 7/30/90 days look different.
   const windowSpan = Math.max(windowEndMs - windowStartMs, 1);
-  const xFor = (ms) => {
-    const ratio = Math.min(1, Math.max(0, (ms - windowStartMs) / windowSpan));
-    return PAD_X + ratio * plotWidth;
-  };
+  const xFor = (ms) => PAD_X + Math.min(1, Math.max(0, (ms - windowStartMs) / windowSpan)) * plotWidth;
 
-  const bandTop = yFor(TARGET_HIGH);
-  const bandBottom = yFor(TARGET_LOW);
+  const dotColor = (v) => (v < LOW_MGDL || v >= VERY_HIGH_MGDL ? RED : v >= bandHigh ? AMBER : Colors.success);
+  const bandTop = yFor(bandHigh);
+  const bandBottom = yFor(LOW_MGDL);
   const svgPoints = dayPoints.map((p) => `${xFor(p.dateMs)},${yFor(p.value)}`).join(' ');
-  // Built as one plain string, not interleaved JSX text+expression children -
-  // react-native-svg's <Text> only reliably renders the first child fragment when
-  // given several separate ones, which was silently dropping everything after
-  // "Target ".
-  const targetLabel = `Target ${formatGlucose(TARGET_LOW, unit)}-${formatGlucose(TARGET_HIGH, unit)} ${unit}`;
+  // One plain string: react-native-svg's <Text> drops interleaved children.
+  const targetLabel = `Target ${num(LOW_MGDL, unit)}–${num(bandHigh, unit)} ${unit}`;
+  const gridValues = [300, bandHigh, LOW_MGDL, 0];
 
-  // X-axis ticks are evenly spaced across the selected window itself (not tied to
-  // which days actually have a reading), so the axis always reflects what you
-  // picked - one tick per day for a week, otherwise a handful spread across it.
   const tickCount = days <= 7 ? days : 6;
   const ticks = Array.from({ length: tickCount }, (_, i) => {
-    const ratio = tickCount === 1 ? 0 : i / (tickCount - 1);
-    const ms = windowStartMs + ratio * windowSpan;
+    const ms = windowStartMs + (tickCount === 1 ? 0 : i / (tickCount - 1)) * windowSpan;
     return { ms, label: new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(ms)) };
   });
 
@@ -102,12 +94,12 @@ function GlucoseTrendCard({ dayPoints, average, rangeLabel, unit, windowStartMs,
     <View style={styles.card}>
       <View style={styles.cardHeaderRow}>
         <View>
-          <Text style={styles.cardTitle}>Glucose trend</Text>
+          <Text style={styles.cardTitle}>Daily average</Text>
           <Text style={styles.cardSubtitle}>{rangeLabel}</Text>
         </View>
         {average != null ? (
           <View style={styles.averageBadge}>
-            <Text style={styles.averageValue}>{formatGlucose(average, unit)}</Text>
+            <Text style={styles.averageValue}>{num(average, unit)}</Text>
             <Text style={styles.averageLabel}>Average{'\n'}{unit}</Text>
           </View>
         ) : null}
@@ -119,35 +111,17 @@ function GlucoseTrendCard({ dayPoints, average, rangeLabel, unit, windowStartMs,
         <>
           <View style={styles.yAxisRow}>
             <View style={styles.yAxisLabels}>
-              {[300, 180, 70, 0].map((y) => (
-                <Text key={y} style={styles.yAxisLabel}>
-                  {formatGlucose(y, unit)}
-                </Text>
+              {gridValues.map((y) => (
+                <Text key={y} style={styles.yAxisLabel}>{num(y, unit)}</Text>
               ))}
             </View>
             <View style={styles.chartArea} onLayout={(e) => setChartWidth(Math.round(e.nativeEvent.layout.width))}>
               {chartWidth > 0 ? (
                 <Svg width={chartWidth} height={CHART_HEIGHT} viewBox={`0 0 ${chartWidth} ${CHART_HEIGHT}`}>
-                  <Rect
-                    x={0}
-                    y={bandTop}
-                    width={chartWidth}
-                    height={Math.max(bandBottom - bandTop, 0)}
-                    fill={`${Colors.success}1A`}
-                  />
-                  {/* Horizontal gridlines matching the y-axis ticks (300/180/70/0) */}
-                  {[300, 180, 70, 0].map((y) => (
-                    <Line
-                      key={`h-${y}`}
-                      x1={0}
-                      y1={yFor(y)}
-                      x2={chartWidth}
-                      y2={yFor(y)}
-                      stroke={Colors.border}
-                      strokeWidth={1}
-                    />
+                  <Rect x={0} y={bandTop} width={chartWidth} height={Math.max(bandBottom - bandTop, 0)} fill={`${Colors.success}1A`} />
+                  {gridValues.map((y) => (
+                    <Line key={`h-${y}`} x1={0} y1={yFor(y)} x2={chartWidth} y2={yFor(y)} stroke="#EEF0EA" strokeWidth={1} />
                   ))}
-                  {/* Vertical gridlines at each axis tick across the selected window */}
                   {ticks.map((t, i) => (
                     <Line
                       key={`v-${i}`}
@@ -155,31 +129,16 @@ function GlucoseTrendCard({ dayPoints, average, rangeLabel, unit, windowStartMs,
                       y1={PAD_TOP}
                       x2={xFor(t.ms)}
                       y2={CHART_HEIGHT - PAD_BOTTOM}
-                      stroke={Colors.border}
+                      stroke="#EEF0EA"
                       strokeWidth={1}
                       strokeDasharray="3,4"
                     />
                   ))}
                   {dayPoints.length > 1 ? (
-                    <Polyline
-                      points={svgPoints}
-                      fill="none"
-                      stroke={Colors.primary}
-                      strokeWidth={2}
-                      strokeLinejoin="round"
-                      strokeLinecap="round"
-                    />
+                    <Polyline points={svgPoints} fill="none" stroke={Colors.primary} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
                   ) : null}
                   {dayPoints.map((p) => (
-                    <Circle
-                      key={p.dateKey}
-                      cx={xFor(p.dateMs)}
-                      cy={yFor(p.value)}
-                      r={5}
-                      fill={BUCKET_COLOR[bucketFor(p.value)]}
-                      stroke="white"
-                      strokeWidth={1.5}
-                    />
+                    <Circle key={p.dateKey} cx={xFor(p.dateMs)} cy={yFor(p.value)} r={5} fill={dotColor(p.value)} stroke="white" strokeWidth={1.5} />
                   ))}
                   <SvgText
                     x={chartWidth - 4}
@@ -195,12 +154,9 @@ function GlucoseTrendCard({ dayPoints, average, rangeLabel, unit, windowStartMs,
               ) : null}
             </View>
           </View>
-
           <View style={styles.xAxisRow}>
             {ticks.map((t, i) => (
-              <Text key={i} style={styles.xAxisLabel}>
-                {t.label}
-              </Text>
+              <Text key={i} style={styles.xAxisLabel}>{t.label}</Text>
             ))}
           </View>
         </>
@@ -212,29 +168,22 @@ function GlucoseTrendCard({ dayPoints, average, rangeLabel, unit, windowStartMs,
 export default function TrackRegularlyScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const headerPaddingTop = Math.max(insets.top, 16);
 
   const [days, setDays] = useState(7);
   const [readings, setReadings] = useState([]);
+  const [targets, setTargets] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [unit, setUnit] = useState('mg/dL');
 
-  useEffect(() => {
-    AsyncStorage.getItem(UNIT_PREF_KEY)
-      .then((stored) => {
-        if (stored === 'mg/dL' || stored === 'mmol/L') setUnit(stored);
-      })
-      .catch(() => {});
-  }, []);
-
   const switchUnit = (nextUnit) => {
     setUnit(nextUnit);
-    AsyncStorage.setItem(UNIT_PREF_KEY, nextUnit).catch(() => {});
+    setGlucoseUnit(nextUnit);
   };
 
   const load = useCallback(async (selectedDays) => {
     setIsLoading(true);
     try {
+      setUnit(await getGlucoseUnit());
       const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         setReadings([]);
@@ -247,6 +196,7 @@ export default function TrackRegularlyScreen() {
       );
       const data = response.ok ? await response.json() : null;
       setReadings(data?.items || []);
+      setTargets(data?.targets || null);
     } catch {
       setReadings([]);
     } finally {
@@ -254,9 +204,7 @@ export default function TrackRegularlyScreen() {
     }
   }, []);
 
-  // Refetches every time this screen comes into focus (not just on first mount) -
-  // so returning here after logging a new reading elsewhere always shows current
-  // data, the same pattern HomeScreen uses for its own stats.
+  // Refetch on every focus, so a reading logged elsewhere shows on return.
   useFocusEffect(
     useCallback(() => {
       load(days);
@@ -265,8 +213,7 @@ export default function TrackRegularlyScreen() {
 
   const sorted = [...readings].sort((a, b) => parseServerDate(a.logged_at) - parseServerDate(b.logged_at));
 
-  // One point per calendar day (the day's average) so a 30/90-day chart stays
-  // readable instead of plotting every single raw reading.
+  // One point per calendar day (the day's average) keeps 30/90 days readable.
   const byDay = new Map();
   sorted.forEach((r) => {
     const d = parseServerDate(r.logged_at);
@@ -282,174 +229,187 @@ export default function TrackRegularlyScreen() {
     value: Math.round(b.total / b.count),
   }));
 
-  // The window is always exactly what was picked (today back `days` days), not
-  // just the span between the earliest and latest reading - otherwise a 30 or
-  // 90-day pick collapses back to "however many days actually have data",
-  // making all three range tabs look identical whenever your data is recent.
+  // The window is exactly what was picked, not just the span that has data.
   const now = new Date();
-  const windowEndMs = now.getTime();
   const windowStart = new Date(now);
   windowStart.setDate(windowStart.getDate() - (days - 1));
   windowStart.setHours(0, 0, 0, 0);
-  const windowStartMs = windowStart.getTime();
   const dateFormatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
+  const rangeLabel = `${dateFormatter.format(windowStart)} – ${dateFormatter.format(now)}`;
 
   const average = readings.length
     ? Math.round(readings.reduce((sum, r) => sum + r.value_mg_dl, 0) / readings.length)
     : null;
 
-  // "High" here is any value above target, including the "severe" ones bucketFor()
-  // separates out for chart-dot coloring - the two-tier split only matters for the
-  // dot's shade, not for whether it counts toward the High ring.
-  const inRangeCount = readings.filter((r) => r.value_mg_dl >= TARGET_LOW && r.value_mg_dl <= TARGET_HIGH).length;
-  const highCount = readings.filter((r) => r.value_mg_dl > TARGET_HIGH).length;
-  const lowCount = readings.filter((r) => r.value_mg_dl < TARGET_LOW).length;
+  const onTarget = readings.filter((r) => r.status === 'in_range').length;
+  const above = readings.filter((r) => r.status === 'above' || r.status === 'very_high').length;
+  const below = readings.filter((r) => r.status === 'below' || r.status === 'low').length;
+  const lows = readings.filter((r) => r.status === 'low').length;
+  const veryHighs = readings.filter((r) => r.status === 'very_high').length;
   const total = readings.length || 1;
   const pct = (n) => Math.round((n / total) * 100);
 
-  const rangeLabel = `${dateFormatter.format(windowStart)} - ${dateFormatter.format(now)}`;
-
-  const recentReadings = [...readings]
-    .sort((a, b) => parseServerDate(b.logged_at) - parseServerDate(a.logged_at))
-    .slice(0, 3);
+  const bandHigh = targets?.postmeal_high || 180;
+  const recentReadings = [...sorted].reverse().slice(0, 5);
+  const openAllReadings = () => navigation.navigate('FoodLog', { initialFilter: 'glucose' });
 
   return (
     <View style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
-          <View style={styles.header}>
-            <TouchableOpacity style={styles.headerButton} onPress={() => navigation.goBack()} activeOpacity={0.85}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}>
+        <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) }]}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity style={styles.back} onPress={() => navigation.goBack()} activeOpacity={0.85}>
               <Ionicons name="arrow-back" size={22} color="white" />
             </TouchableOpacity>
-            <View style={styles.headerText}>
-              <Text style={styles.headerTitle}>Track regularly</Text>
-              <Text style={styles.headerSubtitle}>See your glucose patterns over time</Text>
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={styles.headerTitle}>Glucose trends</Text>
+              <Text style={styles.headerSubtitle}>How your readings compare with your targets</Text>
             </View>
-            <TouchableOpacity
-              style={styles.headerButton}
-              onPress={() => navigation.navigate('FoodLog', { initialFilter: 'glucose' })}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="calendar-outline" size={20} color="white" />
-            </TouchableOpacity>
           </View>
 
-          <View style={styles.unitSwitcher}>
-            <TouchableOpacity
-              style={[styles.unitOption, unit === 'mg/dL' && styles.unitOptionActive]}
-              onPress={() => switchUnit('mg/dL')}
-            >
-              <Text style={[styles.unitOptionText, unit === 'mg/dL' && styles.unitOptionTextActive]}>mg/dL</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.unitOption, unit === 'mmol/L' && styles.unitOptionActive]}
-              onPress={() => switchUnit('mmol/L')}
-            >
-              <Text style={[styles.unitOptionText, unit === 'mmol/L' && styles.unitOptionTextActive]}>mmol/L</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.rangeRow}>
-            {RANGE_OPTIONS.map((opt) => {
-              const selected = days === opt.key;
-              return (
-                <TouchableOpacity
-                  key={opt.key}
-                  style={[styles.rangeChip, selected && styles.rangeChipActive]}
-                  onPress={() => setDays(opt.key)}
-                  activeOpacity={0.85}
-                >
-                  <Text style={[styles.rangeChipText, selected && styles.rangeChipTextActive]}>{opt.label}</Text>
-                </TouchableOpacity>
-              );
-            })}
+          <View style={styles.controls}>
+            <View style={[styles.segment, { flex: 1 }]}>
+              {RANGE_OPTIONS.map((opt) => {
+                const active = days === opt.key;
+                return (
+                  <TouchableOpacity
+                    key={opt.key}
+                    style={[styles.segmentItem, active && styles.segmentItemActive]}
+                    onPress={() => setDays(opt.key)}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{opt.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <View style={styles.segment}>
+              {UNITS.map((u) => {
+                const active = unit === u;
+                return (
+                  <TouchableOpacity
+                    key={u}
+                    style={[styles.unitItem, active && styles.segmentItemActive]}
+                    onPress={() => switchUnit(u)}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={[styles.unitText, active && styles.segmentTextActive]}>{u}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
         </View>
 
         <View style={styles.content}>
-          {isLoading ? (
-            <View style={styles.loadingState}>
-              <ActivityIndicator size="large" color={Colors.primary} />
+          {isLoading && !readings.length ? (
+            <ActivityIndicator style={{ paddingVertical: 60 }} size="large" color={Colors.primary} />
+          ) : readings.length === 0 ? (
+            <View style={styles.empty}>
+              <View style={styles.emptyIcon}>
+                <Ionicons name="trending-up" size={28} color={Colors.primary} />
+              </View>
+              <Text style={styles.emptyTitle}>No readings in the last {days} days</Text>
+              <Text style={styles.emptyBody}>Log your glucose and your trends will build up here.</Text>
+              <TouchableOpacity style={styles.primaryBtn} onPress={() => navigation.navigate('LogGlucose')} activeOpacity={0.88}>
+                <Ionicons name="water" size={16} color="white" />
+                <Text style={styles.primaryBtnText}>Log glucose</Text>
+              </TouchableOpacity>
             </View>
           ) : (
             <>
+              <View style={styles.statsCard}>
+                <Text style={styles.statsTitle}>
+                  {onTarget} of {readings.length} reading{readings.length === 1 ? '' : 's'} on target
+                </Text>
+                <View style={styles.statsRow}>
+                  {[
+                    { label: 'On target', n: onTarget, color: Colors.success },
+                    { label: 'Above target', n: above, color: AMBER },
+                    { label: 'Below target', n: below, color: RED },
+                  ].map((s, i) => (
+                    <React.Fragment key={s.label}>
+                      {i ? <View style={styles.statDivider} /> : null}
+                      <View style={styles.statColumn}>
+                        <StatRing percent={pct(s.n)} color={s.color} />
+                        <Text style={styles.statPercent}>{pct(s.n)}%</Text>
+                        <Text style={styles.statLabel}>{s.label}</Text>
+                        <Text style={styles.statSublabel}>{s.n} reading{s.n === 1 ? '' : 's'}</Text>
+                      </View>
+                    </React.Fragment>
+                  ))}
+                </View>
+                {lows || veryHighs ? (
+                  <View style={styles.alertRow}>
+                    <Ionicons name="alert-circle" size={15} color={RED} />
+                    <Text style={styles.alertText}>
+                      {[lows ? `${lows} low` : null, veryHighs ? `${veryHighs} very high` : null].filter(Boolean).join(' · ')}
+                      {' '}in this period. If this keeps happening, talk to your healthcare team.
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+
               <GlucoseTrendCard
                 dayPoints={dayPoints}
                 average={average}
                 rangeLabel={rangeLabel}
                 unit={unit}
-                windowStartMs={windowStartMs}
-                windowEndMs={windowEndMs}
+                windowStartMs={windowStart.getTime()}
+                windowEndMs={now.getTime()}
                 days={days}
+                bandHigh={bandHigh}
               />
 
-              <View style={styles.statsCard}>
-                <View style={styles.statColumn}>
-                  <StatRing percent={pct(inRangeCount)} color={Colors.success} />
-                  <Text style={styles.statPercent}>{pct(inRangeCount)}%</Text>
-                  <Text style={styles.statLabel}>In range</Text>
-                  <Text style={styles.statSublabel}>
-                    {formatGlucose(TARGET_LOW, unit)} - {formatGlucose(TARGET_HIGH, unit)} {unit}
-                  </Text>
-                </View>
-                <View style={styles.statDivider} />
-                <View style={styles.statColumn}>
-                  <StatRing percent={pct(highCount)} color="#D97706" />
-                  <Text style={styles.statPercent}>{pct(highCount)}%</Text>
-                  <Text style={styles.statLabel}>High</Text>
-                  <Text style={styles.statSublabel}>&gt; {formatGlucose(TARGET_HIGH, unit)} {unit}</Text>
-                </View>
-                <View style={styles.statDivider} />
-                <View style={styles.statColumn}>
-                  <StatRing percent={pct(lowCount)} color={Colors.danger} />
-                  <Text style={styles.statPercent}>{pct(lowCount)}%</Text>
-                  <Text style={styles.statLabel}>Low</Text>
-                  <Text style={styles.statSublabel}>&lt; {formatGlucose(TARGET_LOW, unit)} {unit}</Text>
-                </View>
-              </View>
+              {targets ? (
+                <TouchableOpacity style={styles.targetsCard} onPress={() => navigation.navigate('GlucoseTargets')} activeOpacity={0.85}>
+                  <Ionicons name="flag-outline" size={18} color={Colors.primary} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.targetsTitle}>{targets.is_default ? 'Standard targets' : 'Your targets'}</Text>
+                    <Text style={styles.targetsText}>
+                      Before meals {num(targets.premeal_low, unit)}–{num(targets.premeal_high, unit)} · after meals under{' '}
+                      {formatGlucose(targets.postmeal_high, unit)}
+                    </Text>
+                  </View>
+                  <Text style={styles.link}>Edit</Text>
+                </TouchableOpacity>
+              ) : null}
 
-              <View style={styles.recentCard}>
-                <View style={styles.recentHeaderRow}>
+              <View style={styles.card}>
+                <View style={styles.cardHeaderRow}>
                   <Text style={styles.cardTitle}>Recent readings</Text>
-                  <TouchableOpacity
-                    onPress={() => navigation.navigate('FoodLog', { initialFilter: 'glucose' })}
-                    activeOpacity={0.8}
-                  >
-                    <View style={styles.seeAllRow}>
-                      <Text style={styles.seeAllText}>See all</Text>
-                      <Ionicons name="chevron-forward" size={14} color={Colors.primary} />
-                    </View>
+                  <TouchableOpacity onPress={openAllReadings} hitSlop={8}>
+                    <Text style={styles.link}>See all ›</Text>
                   </TouchableOpacity>
                 </View>
-
-                {recentReadings.length === 0 ? (
-                  <Text style={styles.emptyText}>No readings yet.</Text>
-                ) : (
-                  recentReadings.map((r, idx) => {
-                    const bucket = bucketFor(r.value_mg_dl);
-                    return (
-                      <TouchableOpacity
-                        key={r.id}
-                        style={[styles.recentRow, idx === recentReadings.length - 1 && { borderBottomWidth: 0 }]}
-                        onPress={() => navigation.navigate('FoodLog', { initialFilter: 'glucose' })}
-                        activeOpacity={0.75}
-                      >
-                        <View style={[styles.recentDot, { backgroundColor: BUCKET_COLOR[bucket] }]} />
-                        <Text style={styles.recentValue} numberOfLines={1} adjustsFontSizeToFit>
-                          {formatGlucose(r.value_mg_dl, unit)} <Text style={styles.recentValueUnit}>{unit}</Text>
+                {recentReadings.map((r, idx) => {
+                  const meta = statusMeta(r.status);
+                  return (
+                    <TouchableOpacity
+                      key={r.id}
+                      style={[styles.recentRow, idx === recentReadings.length - 1 && { borderBottomWidth: 0 }]}
+                      onPress={openAllReadings}
+                      activeOpacity={0.75}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.recentValue}>{formatGlucose(r.value_mg_dl, unit)}</Text>
+                        <Text style={styles.recentTime} numberOfLines={1}>
+                          {formatRelativeDateTime(r.logged_at)}
+                          {r.context ? ` · ${CONTEXT_LABELS[r.context] || r.context}` : ''}
                         </Text>
-                        <Text style={styles.recentTime}>{formatRelativeDateTime(r.logged_at)}</Text>
-                        <View style={[styles.recentBadge, { backgroundColor: `${BUCKET_COLOR[bucket]}1A` }]}>
-                          <Text style={[styles.recentBadgeText, { color: BUCKET_COLOR[bucket] }]}>
-                            {BUCKET_LABEL[bucket]}
-                          </Text>
-                        </View>
-                        <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
-                      </TouchableOpacity>
-                    );
-                  })
-                )}
+                      </View>
+                      <View style={[styles.pill, { backgroundColor: `${meta.color}1A` }]}>
+                        <Text style={[styles.pillText, { color: meta.color }]}>{verdict(r, unit)}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
+
+              <TouchableOpacity style={styles.primaryBtnWide} onPress={() => navigation.navigate('LogGlucose')} activeOpacity={0.88}>
+                <Ionicons name="add" size={18} color="white" />
+                <Text style={styles.primaryBtnText}>Log a reading</Text>
+              </TouchableOpacity>
             </>
           )}
         </View>
@@ -460,113 +420,58 @@ export default function TrackRegularlyScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  headerPanel: {
-    backgroundColor: Colors.primaryDark,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
-  },
-  header: { flexDirection: 'row', alignItems: 'center' },
-  headerButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.16)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerText: { flex: 1, marginLeft: 12, marginRight: 12 },
+  header: { backgroundColor: Colors.primaryDark, paddingHorizontal: 20, paddingBottom: 18, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
+  headerRow: { flexDirection: 'row', alignItems: 'center' },
+  back: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.16)', alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 20, fontWeight: '900', color: 'white' },
   headerSubtitle: { marginTop: 3, fontSize: 12, color: 'rgba(255,255,255,0.78)', fontWeight: '700' },
-  rangeRow: { flexDirection: 'row', gap: 8, marginTop: 18 },
-  rangeChip: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-  },
-  rangeChipActive: { backgroundColor: 'white' },
-  rangeChipText: { fontSize: 13, fontWeight: '800', color: 'rgba(255,255,255,0.8)' },
-  rangeChipTextActive: { color: Colors.primaryDark },
-  unitSwitcher: {
-    flexDirection: 'row',
-    alignSelf: 'flex-start',
-    marginTop: 10,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 999,
-    padding: 3,
-  },
-  unitOption: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
-  unitOptionActive: { backgroundColor: 'white' },
-  unitOptionText: { fontSize: 11.5, fontWeight: '800', color: 'rgba(255,255,255,0.8)' },
-  unitOptionTextActive: { color: Colors.primaryDark },
-  content: { padding: 20, gap: 16 },
-  loadingState: { paddingVertical: 60, alignItems: 'center' },
-  card: {
-    padding: 18,
-    borderRadius: 20,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
+  controls: { flexDirection: 'row', gap: 8, marginTop: 14 },
+  segment: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 12, padding: 4 },
+  segmentItem: { flex: 1, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  unitItem: { height: 34, paddingHorizontal: 9, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  segmentItemActive: { backgroundColor: 'white' },
+  segmentText: { fontSize: 13, fontWeight: '800', color: 'rgba(255,255,255,0.85)' },
+  unitText: { fontSize: 11.5, fontWeight: '800', color: 'rgba(255,255,255,0.85)' },
+  segmentTextActive: { color: Colors.primaryDark },
+  content: { padding: 16, gap: 12 },
+  card: { padding: 16, borderRadius: 18, backgroundColor: 'white', borderWidth: 1, borderColor: '#E9ECE4' },
   cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  cardTitle: { fontSize: 17, fontWeight: '900', color: Colors.text },
-  cardSubtitle: { marginTop: 3, fontSize: 12.5, fontWeight: '700', color: Colors.textLight },
-  averageBadge: {
-    alignItems: 'center',
-    backgroundColor: `${Colors.success}18`,
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  averageValue: { fontSize: 22, fontWeight: '900', color: Colors.text },
-  averageLabel: { fontSize: 10.5, fontWeight: '700', color: Colors.textLight, textAlign: 'center', marginTop: 1 },
-  emptyText: { marginTop: 12, fontSize: 13, color: Colors.textLight, fontWeight: '600' },
-  yAxisRow: { flexDirection: 'row', marginTop: 18 },
+  cardTitle: { fontSize: 16, fontWeight: '900', color: Colors.brandNavy },
+  cardSubtitle: { marginTop: 3, fontSize: 12.5, fontWeight: '600', color: Colors.textLight },
+  averageBadge: { alignItems: 'center', backgroundColor: '#E8F4F3', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6 },
+  averageValue: { fontSize: 20, fontWeight: '900', color: Colors.brandNavy },
+  averageLabel: { fontSize: 10, fontWeight: '700', color: Colors.textLight, textAlign: 'center' },
+  emptyText: { marginTop: 12, fontSize: 13, color: Colors.textLight },
+  yAxisRow: { flexDirection: 'row', marginTop: 14 },
   yAxisLabels: { justifyContent: 'space-between', paddingBottom: 26, paddingTop: 16, height: CHART_HEIGHT },
   yAxisLabel: { fontSize: 10.5, fontWeight: '700', color: Colors.textMuted, width: 34 },
   chartArea: { flex: 1, height: CHART_HEIGHT },
   xAxisRow: { flexDirection: 'row', marginLeft: 34 },
   xAxisLabel: { flex: 1, textAlign: 'center', fontSize: 10.5, fontWeight: '700', color: Colors.textMuted },
-  statsCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 18,
-    borderRadius: 20,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  statColumn: { flex: 1, alignItems: 'center', gap: 6 },
-  statDivider: { width: 1, alignSelf: 'stretch', backgroundColor: Colors.border, marginHorizontal: 4 },
-  statPercent: { fontSize: 16, fontWeight: '900', color: Colors.text },
-  statLabel: { fontSize: 12, fontWeight: '800', color: Colors.text },
-  statSublabel: { fontSize: 10, fontWeight: '600', color: Colors.textMuted, textAlign: 'center' },
-  recentCard: {
-    padding: 18,
-    borderRadius: 20,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  recentHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  seeAllRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  seeAllText: { fontSize: 13, fontWeight: '800', color: Colors.primary },
-  recentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.background,
-  },
-  recentDot: { width: 10, height: 10, borderRadius: 5 },
-  recentValue: { fontSize: 13, fontWeight: '800', color: Colors.text, width: 92 },
-  recentValueUnit: { fontSize: 10.5, fontWeight: '700', color: Colors.textLight },
-  recentTime: { flex: 1, fontSize: 12.5, fontWeight: '600', color: Colors.textLight },
-  recentBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
-  recentBadgeText: { fontSize: 11.5, fontWeight: '800' },
+  statsCard: { padding: 16, borderRadius: 18, backgroundColor: 'white', borderWidth: 1, borderColor: '#E9ECE4' },
+  statsTitle: { fontSize: 16, fontWeight: '900', color: Colors.brandNavy, marginBottom: 14 },
+  statsRow: { flexDirection: 'row', alignItems: 'center' },
+  statColumn: { flex: 1, alignItems: 'center', gap: 5 },
+  statDivider: { width: 1, alignSelf: 'stretch', backgroundColor: '#EEF0EA', marginHorizontal: 4 },
+  statPercent: { fontSize: 16, fontWeight: '900', color: Colors.brandNavy },
+  statLabel: { fontSize: 12, fontWeight: '800', color: Colors.brandNavy },
+  statSublabel: { fontSize: 10.5, color: Colors.textMuted },
+  alertRow: { flexDirection: 'row', gap: 8, marginTop: 14, padding: 10, borderRadius: 12, backgroundColor: '#FFF5F5' },
+  alertText: { flex: 1, fontSize: 12.5, color: '#9B2C2C', lineHeight: 17 },
+  targetsCard: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 16, backgroundColor: '#E8F4F3' },
+  targetsTitle: { fontSize: 13.5, fontWeight: '900', color: Colors.brandNavy },
+  targetsText: { fontSize: 12, color: Colors.brandNavy, marginTop: 2 },
+  link: { fontSize: 13, fontWeight: '900', color: Colors.primary },
+  recentRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F0F2EC' },
+  recentValue: { fontSize: 14.5, fontWeight: '800', color: Colors.brandNavy },
+  recentTime: { fontSize: 12, color: Colors.textLight, marginTop: 2 },
+  pill: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999 },
+  pillText: { fontSize: 11.5, fontWeight: '800' },
+  empty: { alignItems: 'center', paddingTop: 40, paddingHorizontal: 12 },
+  emptyIcon: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#E8F4F3', alignItems: 'center', justifyContent: 'center' },
+  emptyTitle: { fontSize: 17, fontWeight: '900', color: Colors.brandNavy, marginTop: 14, textAlign: 'center' },
+  emptyBody: { fontSize: 13.5, color: Colors.textLight, marginTop: 6, textAlign: 'center' },
+  primaryBtn: { flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: Colors.primary, borderRadius: 12, paddingHorizontal: 18, height: 46, marginTop: 18 },
+  primaryBtnWide: { flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.primary, borderRadius: 14, height: 50 },
+  primaryBtnText: { color: 'white', fontWeight: '900', fontSize: 15 },
 });

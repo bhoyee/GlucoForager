@@ -35,7 +35,7 @@ import { trackEvent } from '../../utils/analytics';
 import { FREE_FEATURES, getFreeUsage, hasFreeUsesLeft, showFreeLimitAlert } from '../../utils/freeTier';
 import BrandWordmark from '../../components/BrandWordmark';
 import GlucoseRangeRing from '../../components/GlucoseRangeRing';
-import { CONTEXT_LABELS, SAFETY_LINES, describeReading, formatGlucose, getGlucoseUnit, statusMeta, timeAgo } from '../../utils/glucose';
+import { SAFETY_LINES, describeReading, formatGlucose, getGlucoseUnit, statusMeta, timeAgo } from '../../utils/glucose';
 
 // "Last used" ingredients older than this are hidden - fridge contents change.
 const LAST_USED_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -878,18 +878,19 @@ export default function HomeScreen() {
   const week = glucose?.week || null;
   const prevWeek = glucose?.prev_week || null;
 
+  // Counts, not percentages: "4 of 4" is honest about how few readings there are,
+  // where "100%" from two readings oversells it. Windows are rolling 7 days.
   const getWeeklyInsight = () => {
     if (!week?.readings) {
       return { text: 'Log your glucose to see how your week is going.', tone: 'neutral' };
     }
-    const pct = week.in_range_pct;
-    if (!prevWeek?.readings) {
-      return { text: `This week: ${pct}% of readings in range`, tone: 'neutral', pct };
-    }
-    const prev = prevWeek.in_range_pct;
-    if (pct > prev) return { text: `This week: ${pct}% in range, up from ${prev}%`, tone: 'up', pct };
-    if (pct < prev) return { text: `This week: ${pct}% in range (last week ${prev}%)`, tone: 'down', pct };
-    return { text: `This week: ${pct}% in range, same as last week`, tone: 'neutral', pct };
+    const text = `Last 7 days: ${week.in_range} of ${week.readings} reading${week.readings === 1 ? '' : 's'} on target`;
+    if (!prevWeek?.readings) return { text, tone: 'neutral' };
+    const sub = `Previous 7 days: ${prevWeek.in_range} of ${prevWeek.readings}`;
+    // Tone compares the share on target, so more readings logged doesn't look like a drop.
+    const pct = week.in_range / week.readings;
+    const prev = prevWeek.in_range / prevWeek.readings;
+    return { text, sub, tone: pct > prev ? 'up' : pct < prev ? 'down' : 'neutral' };
   };
   const insight = getWeeklyInsight();
   const greeting = getGreeting();
@@ -1033,7 +1034,7 @@ export default function HomeScreen() {
           <View style={styles.hSectionHead}>
             <Text style={styles.hSectionTitle}>Track Today</Text>
             <TouchableOpacity onPress={() => navigation.navigate('FoodLog')} hitSlop={10}>
-              <Text style={styles.hSectionLink}>View log ›</Text>
+              <Text style={styles.hSectionLink}>Meal diary ›</Text>
             </TouchableOpacity>
           </View>
           <View style={[styles.hCard, styles.hTrackCard]}>
@@ -1066,21 +1067,21 @@ export default function HomeScreen() {
                 </Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.hRingCol} onPress={handleOpenLogGlucose} activeOpacity={0.8}>
+              {/* With a reading today the ring opens the glucose details; empty, it goes straight to logging. */}
+              <TouchableOpacity
+                style={styles.hRingCol}
+                onPress={lastReading ? () => navigation.navigate('TrackRegularly') : handleOpenLogGlucose}
+                activeOpacity={0.8}
+              >
                 <GlucoseRangeRing today={glucose?.today} size={100} />
                 <Text style={[styles.hRingTitle, { marginTop: 8 }]}>Glucose</Text>
                 {lastReading ? (
                   <>
                     <Text style={styles.hRingValue} numberOfLines={1}>
-                      <Text style={{ color: lastMeta.color }}>● </Text>
                       {formatGlucose(lastReading.value_mg_dl, glucoseUnit)}
                     </Text>
                     <Text style={[styles.hRingSub, { color: lastMeta.color }]} numberOfLines={1}>
                       {describeReading(lastReading, glucoseUnit)}
-                    </Text>
-                    <Text style={styles.hRingMeta} numberOfLines={1}>
-                      {CONTEXT_LABELS[lastReading.context] ? `${CONTEXT_LABELS[lastReading.context]} · ` : ''}
-                      {timeAgo(lastReading.logged_at)}
                     </Text>
                   </>
                 ) : (
@@ -1108,7 +1109,10 @@ export default function HomeScreen() {
                 size={16}
                 color={insight.tone === 'up' ? Colors.success : insight.tone === 'down' ? '#B7791F' : Colors.primary}
               />
-              <Text style={styles.hInsightText} numberOfLines={2}>{insight.text}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.hInsightText} numberOfLines={2}>{insight.text}</Text>
+                {insight.sub ? <Text style={styles.hInsightSub}>{insight.sub}</Text> : null}
+              </View>
               <TouchableOpacity onPress={handleOpenGlucoseTargets} hitSlop={8}>
                 <Text style={styles.hInsightLink}>Targets</Text>
               </TouchableOpacity>
@@ -1379,13 +1383,13 @@ const styles = StyleSheet.create({
   hRingTitle: { fontSize: 14, fontWeight: '900', color: Colors.brandNavy },
   hRingValue: { fontSize: 13.5, fontWeight: '900', color: Colors.brandNavy, marginTop: 2 },
   hRingSub: { fontSize: 12, fontWeight: '800', textAlign: 'center', marginTop: 2 },
-  hRingMeta: { fontSize: 11, color: Colors.textLight, marginTop: 1 },
   hSafety: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, padding: 10, borderRadius: 12, backgroundColor: '#FFF5F5', borderWidth: 1, borderColor: '#FED7D7' },
   hSafetyText: { flex: 1, fontSize: 12.5, color: '#9B2C2C', fontWeight: '600' },
   hInsight: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, paddingVertical: 9, paddingHorizontal: 12, borderRadius: 12, backgroundColor: '#F1F5F9' },
   hInsightUp: { backgroundColor: '#E7F4E8' },
   hInsightDown: { backgroundColor: '#FFF8E6' },
-  hInsightText: { flex: 1, fontSize: 12.5, color: Colors.brandNavy, fontWeight: '600' },
+  hInsightText: { fontSize: 12.5, color: Colors.brandNavy, fontWeight: '700' },
+  hInsightSub: { fontSize: 11.5, color: Colors.textLight, marginTop: 1 },
   hInsightLink: { fontSize: 12.5, fontWeight: '900', color: Colors.primary },
   hTiles: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 8, marginTop: 12 },
   hTile: { width: '48.8%', flexDirection: 'row', alignItems: 'center', gap: 9, borderRadius: 14, padding: 10 },

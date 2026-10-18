@@ -39,7 +39,7 @@ export const formatGlucose = (mgDl, unit) => {
 // Amber for a normal miss (common after meals, shouldn't feel like failing); red only for
 // the two states that need attention: lows and very highs.
 export const GLUCOSE_STATUS = {
-  in_range: { label: 'In range', color: Colors.success, tone: 'good' },
+  in_range: { label: 'On target', color: Colors.success, tone: 'good' },
   above: { label: 'Above target', color: '#B7791F', tone: 'warn' },
   below: { label: 'Below target', color: '#B7791F', tone: 'warn' },
   very_high: { label: 'Very high', color: '#C53030', tone: 'alert' },
@@ -48,7 +48,7 @@ export const GLUCOSE_STATUS = {
 
 export const statusMeta = (status) => GLUCOSE_STATUS[status] || GLUCOSE_STATUS.in_range;
 
-// "In range" / "2.0 above target" / "36 below target" - the distance is in the user's unit,
+// "On target" / "2.0 above target" / "36 below target" - the distance is in the user's unit,
 // which is already shown next to the reading itself.
 export const describeReading = (last, unit) => {
   if (!last) return null;

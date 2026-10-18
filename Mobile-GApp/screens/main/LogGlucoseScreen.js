@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -64,13 +64,15 @@ function pickRandom(pool) {
 
 export default function LogGlucoseScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
   const insets = useSafeAreaInsets();
   const headerPaddingTop = Math.max(insets.top, 16);
 
   const [unit, setUnit] = useState('mg/dL');
   const [value, setValue] = useState('');
   const [note, setNote] = useState('');
-  const [context, setContext] = useState(null);
+  // The meal diary's 'Log glucose' nudge opens this pre-tagged as an after-meal reading.
+  const [context, setContext] = useState(route.params?.context || null);
   const [minutesAgo, setMinutesAgo] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   // Stays the same across a retry of this exact attempt (e.g. a timeout the user
@@ -167,25 +169,25 @@ export default function LogGlucoseScreen() {
         navigation.goBack();
         return;
       }
+      // After saving, offer the trends screen: the moment people are curious how their week looks.
+      const cameFromTrends = navigation.getState()?.routes?.some((r) => r.name === 'TrackRegularly');
+      const done = (message) =>
+        Alert.alert('Reading logged', message, [
+          {
+            text: 'See trends',
+            onPress: () => (cameFromTrends ? navigation.goBack() : navigation.replace('TrackRegularly')),
+          },
+          { text: 'Got it', onPress: () => navigation.goBack() },
+        ]);
       if (data?.is_spike && data?.flagged_meal) {
-        Alert.alert(
-          'Reading logged',
-          pickRandom(spikeMessages(data.flagged_meal.description)),
-          [{ text: 'Got it', onPress: () => navigation.goBack() }]
-        );
+        done(pickRandom(spikeMessages(data.flagged_meal.description)));
         return;
       }
       if (data?.general_alert === 'low' || data?.general_alert === 'high') {
-        Alert.alert(
-          'Reading logged',
-          pickRandom(data.general_alert === 'low' ? LOW_MESSAGES : HIGH_MESSAGES),
-          [{ text: 'Got it', onPress: () => navigation.goBack() }]
-        );
+        done(pickRandom(data.general_alert === 'low' ? LOW_MESSAGES : HIGH_MESSAGES));
         return;
       }
-      Alert.alert('Reading logged', pickRandom(NORMAL_MESSAGES), [
-        { text: 'Got it', onPress: () => navigation.goBack() },
-      ]);
+      done(pickRandom(NORMAL_MESSAGES));
     } catch {
       Alert.alert('Unable to log reading', 'Network request failed. Please check your connection.');
     } finally {
@@ -295,21 +297,9 @@ export default function LogGlucoseScreen() {
             <Text style={styles.saveButtonText}>{isSaving ? 'Logging...' : 'Log reading'}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.trackCard}
-            onPress={() => navigation.navigate('TrackRegularly')}
-            activeOpacity={0.85}
-          >
-            <View style={styles.trackIcon}>
-              <Ionicons name="trending-up" size={18} color={Colors.success} />
-            </View>
-            <View style={styles.trackTextBlock}>
-              <Text style={styles.trackTitle}>Track regularly</Text>
-              <Text style={styles.trackSubtitle}>
-                See how your food, activity and habits affect your blood sugar over time.
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+          <TouchableOpacity style={styles.trendsLink} onPress={() => navigation.navigate('TrackRegularly')} hitSlop={8}>
+            <Ionicons name="trending-up" size={15} color={Colors.primary} />
+            <Text style={styles.trendsLinkText}>See your glucose trends</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -402,26 +392,6 @@ const styles = StyleSheet.create({
   },
   saveButtonDisabled: { opacity: 0.7 },
   saveButtonText: { color: 'white', fontSize: 15, fontWeight: '800' },
-  trackCard: {
-    marginTop: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 14,
-    borderRadius: 16,
-    backgroundColor: `${Colors.success}0F`,
-    borderWidth: 1,
-    borderColor: `${Colors.success}33`,
-  },
-  trackIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: `${Colors.success}1A`,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  trackTextBlock: { flex: 1, minWidth: 0 },
-  trackTitle: { fontSize: 14.5, fontWeight: '800', color: Colors.text },
-  trackSubtitle: { marginTop: 2, fontSize: 12, lineHeight: 17, color: Colors.textLight, fontWeight: '600' },
+  trendsLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14 },
+  trendsLinkText: { fontSize: 14, fontWeight: '800', color: Colors.primary },
 });

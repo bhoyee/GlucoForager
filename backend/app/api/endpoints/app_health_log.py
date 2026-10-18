@@ -11,7 +11,7 @@ from ...models.glucose_reading import GlucoseReading
 from ...models.meal_log_entry import MealLogEntry
 from ...models.user import User
 from ...services.cache_service import CacheService
-from ...services import glucose_targets
+from ...services import glucose_targets, meal_diary
 from ...services.diabetes_food_note import build_diabetes_note
 from ...services.user_activity_service import add_user_activity
 from ..dependencies import get_current_user
@@ -454,6 +454,8 @@ def list_glucose(
         .limit(1000)
         .all()
     )
+    # Judged against the user's own targets (same rules as Home and the meal diary).
+    targets = glucose_targets.targets_for(current_user)
     items = []
     for reading in readings:
         preceding_meal = (
@@ -464,8 +466,38 @@ def list_glucose(
         entry["is_spike"] = is_spike
         entry["flagged_meal"] = _serialize_meal(preceding_meal) if is_spike else None
         entry["general_alert"] = _general_alert(reading.value_mg_dl)
+        entry.update(glucose_targets.classify(reading.value_mg_dl, reading.context, targets))
         items.append(entry)
-    return {"items": items}
+    return {"items": items, "targets": targets.to_dict()}
+
+
+@router.get("/health-log/diary")
+def get_meal_diary(
+    days: int = Query(LOG_HISTORY_DAYS, ge=1, le=30),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Meals paired with their before/after readings, plus standalone readings, all
+    judged against the user's own targets. Grouping into days happens on the phone
+    (local time)."""
+    since = datetime.utcnow() - timedelta(days=days)
+    meals = (
+        db.query(MealLogEntry)
+        .filter(MealLogEntry.user_id == current_user.id, MealLogEntry.logged_at >= since)
+        .order_by(MealLogEntry.logged_at.desc())
+        .limit(300)
+        .all()
+    )
+    readings = (
+        db.query(GlucoseReading)
+        .filter(GlucoseReading.user_id == current_user.id, GlucoseReading.logged_at >= since)
+        .order_by(GlucoseReading.logged_at.desc())
+        .limit(1000)
+        .all()
+    )
+    targets = glucose_targets.targets_for(current_user)
+    items = meal_diary.build_diary(meals, readings, targets, _serialize_meal, _serialize_reading)
+    return {"days": days, "targets": targets.to_dict(), "items": items}
 
 
 @router.delete("/glucose/{reading_id}")

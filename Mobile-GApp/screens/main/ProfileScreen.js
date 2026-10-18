@@ -851,7 +851,15 @@ export default function ProfileScreen() {
         <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('TrackRegularly')}>
           <View style={styles.menuItemLeft}>
             <Ionicons name="trending-up-outline" size={22} color={Colors.text} />
-            <Text style={styles.menuText}>Track Regularly</Text>
+            <Text style={styles.menuText}>Glucose Trends</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('FoodLog')}>
+          <View style={styles.menuItemLeft}>
+            <Ionicons name="book-outline" size={22} color={Colors.text} />
+            <Text style={styles.menuText}>Meal Diary</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
         </TouchableOpacity>

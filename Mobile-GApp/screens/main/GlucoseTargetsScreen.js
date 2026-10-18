@@ -139,9 +139,9 @@ export default function GlucoseTargetsScreen() {
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
-        <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) + 6 }]}>
+        <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) }]}>
           <TouchableOpacity style={styles.back} onPress={() => navigation.goBack()} activeOpacity={0.85}>
-            <Ionicons name="arrow-back" size={22} color={Colors.brandNavy} />
+            <Ionicons name="arrow-back" size={22} color="white" />
           </TouchableOpacity>
           <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={styles.title}>My glucose targets</Text>
@@ -224,11 +224,11 @@ export default function GlucoseTargetsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.brandCream },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingBottom: 8 },
-  back: { width: 42, height: 42, borderRadius: 21, backgroundColor: 'white', borderWidth: 1, borderColor: '#E9ECE4', alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: 20, fontWeight: '900', color: Colors.brandNavy },
-  subtitle: { fontSize: 12.5, color: Colors.textLight, marginTop: 2 },
+  container: { flex: 1, backgroundColor: Colors.background },
+  header: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.primaryDark, paddingHorizontal: 20, paddingBottom: 18, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
+  back: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.16)', alignItems: 'center', justifyContent: 'center' },
+  title: { fontSize: 20, fontWeight: '900', color: 'white' },
+  subtitle: { marginTop: 3, fontSize: 12, color: 'rgba(255,255,255,0.78)', fontWeight: '700' },
   body: { padding: 18, gap: 12 },
   note: { flexDirection: 'row', gap: 10, padding: 12, borderRadius: 14, backgroundColor: '#E8F4F3' },
   noteText: { flex: 1, fontSize: 13, color: Colors.brandNavy, lineHeight: 19 },
