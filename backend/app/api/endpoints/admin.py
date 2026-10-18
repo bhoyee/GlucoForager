@@ -76,6 +76,7 @@ ACCESS_STATUS_LABELS = {
     "cancelled_active": "Cancelled - active until expiry",
     "legacy_grace": "Welcome week",
     "grace": "Welcome week",
+    "free": "Free plan",
     "expired": "Lapsed - free plan (past trial or subscription)",
     "blocked": "Blocked",
     "suspended": "Suspended",
@@ -481,9 +482,14 @@ def _admin_user_access_payload(
         if use_prefetched_subscriptions
         else get_access_snapshot(db, user, now=now)
     )
+    status_value = snapshot.access_status
+    # No access left, but never had a trial or subscription (e.g. welcome week over):
+    # that's simply the free plan, not "lapsed". Same split as users_access_summary.
+    if status_value == "expired" and user.trial_started_at is None:
+        status_value = "free"
     return {
-        "access_status": snapshot.access_status,
-        "access_label": ACCESS_STATUS_LABELS.get(snapshot.access_status, snapshot.access_status),
+        "access_status": status_value,
+        "access_label": ACCESS_STATUS_LABELS.get(status_value, status_value),
         "has_feature_access": snapshot.allowed,
         "trial_active": snapshot.trial_active,
         "trial_started_at": user.trial_started_at,
@@ -786,10 +792,7 @@ def users_access_summary(
             use_prefetched_subscriptions=True,
         )
         status_value = payload.get("access_status")
-        if status_value == "expired":
-            bucket = "free" if user.trial_started_at is None else "expired"
-            counts[bucket] += 1
-        elif status_value in counts:
+        if status_value in counts:
             counts[status_value] += 1
         elif status_value == "trial":
             counts["trialing"] += 1
