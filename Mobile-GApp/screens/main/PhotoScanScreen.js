@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Colors } from '../../constants/Colors';
 import { apiFetch } from '../../utils/api';
+import { afterMealLogged } from '../../utils/afterMealCheck';
 import { API_URL } from '../../config/api';
 import { trackEvent } from '../../utils/analytics';
 import NutritionFactBadges from '../../components/NutritionFactBadges';
@@ -272,6 +273,10 @@ export default function PhotoScanScreen() {
         const data = await response.json().catch(() => ({}));
         Alert.alert('Unable to log meal', data?.detail?.message || data?.detail || 'Please try again.');
         return;
+      }
+      const saved = await response.json().catch(() => ({}));
+      if (saved?.meal && !saved.duplicate) {
+        afterMealLogged({ description: saved.meal.description, loggedAt: saved.meal.logged_at });
       }
       navigation.navigate('Home', { screen: 'HomeMain' });
     } catch {

@@ -246,7 +246,7 @@ export default function WeeklyRecapScreen() {
                 <View style={styles.section}>
                   <View style={styles.sectionHeaderRow}>
                     <Text style={styles.sectionTitle}>Glucose this week</Text>
-                    <TouchableOpacity onPress={() => navigation.navigate('TrackRegularly')} activeOpacity={0.8}>
+                    <TouchableOpacity onPress={() => navigation.navigate('GlucoseInsights')} activeOpacity={0.8}>
                       <View style={styles.seeAllRow}>
                         <Text style={styles.seeAllText}>Full trends</Text>
                         <Ionicons name="chevron-forward" size={13} color={Colors.primary} />

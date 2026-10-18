@@ -1,6 +1,7 @@
 // App.js - COMPLETE FIXED VERSION
 import React, { useEffect, useState } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
+import * as Notifications from 'expo-notifications';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ActivityIndicator, Alert, Linking, LogBox, Modal, Pressable, View, Text } from 'react-native';
@@ -21,6 +22,7 @@ import {
 } from './utils/mealReminders';
 import { checkForAppUpdate, dismissUpdateForVersion, openStoreForUpdate } from './utils/appUpdate';
 import ServiceStatusBanner from './components/ServiceStatusBanner';
+import { AFTER_MEAL_CHECK_TYPE } from './utils/afterMealCheck';
 
 // Import screens
 import SplashScreen from './screens/SplashScreen';
@@ -37,6 +39,15 @@ import FoodPreferencesScreen from './screens/main/FoodPreferencesScreen';
 import MainTabNavigator from './navigation/MainTabNavigator';
 
 const Stack = createNativeStackNavigator();
+const navigationRef = createNavigationContainerRef();
+
+// "Time for a glucose check" notification -> Log glucose, pre-tagged as after a meal.
+function openFromNotification(response) {
+  if (response?.notification?.request?.content?.data?.type !== AFTER_MEAL_CHECK_TYPE) return false;
+  if (!navigationRef.isReady()) return false;
+  navigationRef.navigate('MainTabs', { screen: 'Home', params: { screen: 'LogGlucose', params: { context: 'after_meal' } } });
+  return true;
+}
 
 // Universal Links / App Links config - lets a tapped https://www.glucoforager.com/resubscribe
 // link (e.g. from the win-back email sequence) open straight to the in-app paywall instead of
@@ -125,6 +136,15 @@ function AppNavigator() {
   const [mealPromptVisible, setMealPromptVisible] = useState(false);
   const [mealPromptBusy, setMealPromptBusy] = useState(false);
 
+  // Handles taps while the app is running, and the tap that cold-started it.
+  useEffect(() => {
+    if (!userToken || isLoading || !minimumSplashDone) return undefined;
+    const sub = Notifications.addNotificationResponseReceivedListener(openFromNotification);
+    const pending = Notifications.getLastNotificationResponse?.();
+    if (pending && openFromNotification(pending)) Notifications.clearLastNotificationResponse?.();
+    return () => sub.remove();
+  }, [userToken, isLoading, minimumSplashDone]);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       setMinimumSplashDone(true);
@@ -190,7 +210,14 @@ function AppNavigator() {
   devLog('Showing main navigation. User token:', userToken ? 'Present' : 'None');
 
   return (
-    <NavigationContainer linking={linking}>
+    <NavigationContainer
+      linking={linking}
+      ref={navigationRef}
+      onReady={() => {
+        const pending = userToken ? Notifications.getLastNotificationResponse?.() : null;
+        if (pending && openFromNotification(pending)) Notifications.clearLastNotificationResponse?.();
+      }}
+    >
     <AnalyticsBoundary>
       <Modal
         transparent

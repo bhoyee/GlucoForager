@@ -11,7 +11,7 @@ from ...models.glucose_reading import GlucoseReading
 from ...models.meal_log_entry import MealLogEntry
 from ...models.user import User
 from ...services.cache_service import CacheService
-from ...services import glucose_targets, meal_diary
+from ...services import glucose_insights, glucose_targets, meal_diary
 from ...services.diabetes_food_note import build_diabetes_note
 from ...services.user_activity_service import add_user_activity
 from ..dependencies import get_current_user
@@ -375,16 +375,24 @@ def delete_meal(
     return {"detail": "Deleted"}
 
 
-def _glucose_response(db: Session, user_id: int, reading: GlucoseReading, *, duplicate: bool) -> dict:
+def _glucose_response(db: Session, user_id: int, reading: GlucoseReading, *, duplicate: bool, targets=None) -> dict:
     # A reading explicitly tagged "fasting" isn't a post-meal reading no matter what
     # the time-window heuristic would otherwise infer from a nearby meal log.
     preceding_meal = None if reading.context == "fasting" else _find_preceding_meal(db, user_id, reading.logged_at)
     is_spike = reading.value_mg_dl >= SPIKE_THRESHOLD_MGDL and preceding_meal is not None
+    # "Your reading after <meal> was on target": the same pairing the meal diary uses.
+    paired = preceding_meal if reading.context not in ("fasting", "before_meal") else None
     return {
         "reading": _serialize_reading(reading),
         "is_spike": is_spike,
         "flagged_meal": _serialize_meal(preceding_meal) if is_spike else None,
         "general_alert": _general_alert(reading.value_mg_dl),
+        "paired_meal": _serialize_meal(paired) if paired else None,
+        "after_meal_result": (
+            glucose_targets.classify(reading.value_mg_dl, "after_meal", targets or glucose_targets.GlucoseTargets())
+            if paired
+            else None
+        ),
         "duplicate": duplicate,
     }
 
@@ -407,13 +415,13 @@ def log_glucose(
         if cached_id:
             cached_reading = db.query(GlucoseReading).filter(GlucoseReading.id == int(cached_id)).first()
             if cached_reading:
-                return _glucose_response(db, current_user.id, cached_reading, duplicate=True)
+                return _glucose_response(db, current_user.id, cached_reading, duplicate=True, targets=glucose_targets.targets_for(current_user))
     else:
         # No idempotency key from this client - fall back to the tight content+time
         # window guard so an old app build isn't left with zero duplicate protection.
         duplicate = _recent_duplicate_glucose(db, current_user.id, payload.value_mg_dl, payload.context)
         if duplicate:
-            return _glucose_response(db, current_user.id, duplicate, duplicate=True)
+            return _glucose_response(db, current_user.id, duplicate, duplicate=True, targets=glucose_targets.targets_for(current_user))
 
     logged_at = payload.logged_at or datetime.utcnow()
     reading = GlucoseReading(
@@ -437,7 +445,7 @@ def log_glucose(
     if idem_key:
         cache.set(idem_key, str(reading.id), ttl_seconds=IDEMPOTENCY_TTL_SECONDS)
 
-    return _glucose_response(db, current_user.id, reading, duplicate=False)
+    return _glucose_response(db, current_user.id, reading, duplicate=False, targets=glucose_targets.targets_for(current_user))
 
 
 @router.get("/glucose")
@@ -473,7 +481,7 @@ def list_glucose(
 
 @router.get("/health-log/diary")
 def get_meal_diary(
-    days: int = Query(LOG_HISTORY_DAYS, ge=1, le=30),
+    days: int = Query(LOG_HISTORY_DAYS, ge=1, le=90),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -498,6 +506,35 @@ def get_meal_diary(
     targets = glucose_targets.targets_for(current_user)
     items = meal_diary.build_diary(meals, readings, targets, _serialize_meal, _serialize_reading)
     return {"days": days, "targets": targets.to_dict(), "items": items}
+
+
+@router.get("/health-log/insights")
+def get_glucose_insights(
+    days: int = Query(30, ge=7, le=90),
+    tz_offset_minutes: int = Query(0, ge=-840, le=840, description="Phone's offset from UTC, minutes east"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Glucose insights (Trends / Food impact / Patterns) and the one highlight for Home.
+    Rules only, from the user's own data - see services/glucose_insights.py."""
+    now = datetime.utcnow()
+    since = now - timedelta(days=days)
+    meals = (
+        db.query(MealLogEntry)
+        .filter(MealLogEntry.user_id == current_user.id, MealLogEntry.logged_at >= since)
+        .limit(1000)
+        .all()
+    )
+    readings = (
+        db.query(GlucoseReading)
+        .filter(GlucoseReading.user_id == current_user.id, GlucoseReading.logged_at >= since - timedelta(days=days))
+        .limit(5000)
+        .all()
+    )
+    current = [r for r in readings if r.logged_at >= since]
+    previous = [r for r in readings if r.logged_at < since]
+    targets = glucose_targets.targets_for(current_user)
+    return glucose_insights.build_insights(meals, current, previous, targets, days, tz_offset_minutes)
 
 
 @router.delete("/glucose/{reading_id}")

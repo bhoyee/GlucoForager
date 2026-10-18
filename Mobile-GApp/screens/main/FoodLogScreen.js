@@ -95,6 +95,11 @@ export default function FoodLogScreen() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [filter, setFilter] = useState(route.params?.initialFilter === 'glucose' ? 'glucose' : 'all');
   const [selected, setSelected] = useState(null);
+  // Opened from Glucose insights > Food impact: show just the meals behind that insight.
+  const [focus, setFocus] = useState(
+    route.params?.mealIds?.length ? { ids: new Set(route.params.mealIds), title: route.params.focusTitle || 'Selected meals' } : null
+  );
+  const diaryDays = focus ? 90 : 14;
 
   const load = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setIsLoading(true);
@@ -103,7 +108,7 @@ export default function FoodLogScreen() {
       const token = await AsyncStorage.getItem('userToken');
       if (!token) return;
       const res = await apiFetch(
-        `${API_URL}/api/app/health-log/diary?days=14`,
+        `${API_URL}/api/app/health-log/diary?days=${diaryDays}`,
         { headers: { Authorization: `Bearer ${token}` } },
         { timeoutMs: 12000 }
       );
@@ -117,7 +122,7 @@ export default function FoodLogScreen() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, []);
+  }, [diaryDays]);
 
   // Reload on focus so a reading logged from a "Log glucose" nudge shows up on return.
   useFocusEffect(
@@ -132,7 +137,8 @@ export default function FoodLogScreen() {
 
   const sections = useMemo(() => {
     let visible;
-    if (filter === 'meal') visible = items.filter((i) => i.kind === 'meal');
+    if (focus) visible = items.filter((i) => i.kind === 'meal' && focus.ids.has(i.id));
+    else if (filter === 'meal') visible = items.filter((i) => i.kind === 'meal');
     else if (filter === 'glucose') {
       // Every reading on its own, including ones paired with a meal.
       visible = items
@@ -167,7 +173,7 @@ export default function FoodLogScreen() {
       if (carbs) parts.push(`${Math.round(carbs)}g carbs`);
       return { ...section, title: dayTitle(section.date), summary: parts.join(' · ') };
     });
-  }, [items, filter]);
+  }, [items, filter, focus]);
 
   const logGlucoseAfter = () => navigation.navigate('LogGlucose', { context: 'after_meal' });
 
@@ -317,7 +323,7 @@ export default function FoodLogScreen() {
 
   const trendsLink =
     filter === 'glucose' && hasReadings ? (
-      <TouchableOpacity style={styles.tip} onPress={() => navigation.navigate('TrackRegularly')} activeOpacity={0.85}>
+      <TouchableOpacity style={styles.tip} onPress={() => navigation.navigate('GlucoseInsights')} activeOpacity={0.85}>
         <Ionicons name="trending-up" size={18} color={Colors.primary} />
         <Text style={styles.tipText}>Averages, charts and how often you're on target.</Text>
         <Text style={styles.tipLink}>See trends</Text>
@@ -345,9 +351,19 @@ export default function FoodLogScreen() {
           </TouchableOpacity>
           <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={styles.headerTitle}>Meal diary</Text>
-            <Text style={styles.headerSubtitle}>How your meals affect your glucose · last 14 days</Text>
+            <Text style={styles.headerSubtitle}>{focus ? focus.title : 'How your meals affect your glucose · last 14 days'}</Text>
           </View>
         </View>
+        {focus ? (
+          <View style={styles.focusBar}>
+            <Text style={styles.focusText} numberOfLines={1}>
+              {sections.reduce((n, sec) => n + sec.data.length, 0)} meals: {focus.title}
+            </Text>
+            <TouchableOpacity style={styles.focusBtn} onPress={() => setFocus(null)} activeOpacity={0.85}>
+              <Text style={styles.focusBtnText}>Show all</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
         <View style={styles.segment}>
           {FILTERS.map((f) => {
             const active = filter === f.key;
@@ -364,6 +380,7 @@ export default function FoodLogScreen() {
             );
           })}
         </View>
+        )}
       </View>
 
       {isLoading && !items.length ? (
@@ -380,7 +397,7 @@ export default function FoodLogScreen() {
             </View>
           )}
           stickySectionHeadersEnabled={false}
-          ListHeaderComponent={tip || trendsLink}
+          ListHeaderComponent={focus ? null : tip || trendsLink}
           ListEmptyComponent={
             items.length && filter !== 'all' ? (
               <Text style={styles.filterEmpty}>
@@ -476,6 +493,10 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 20, fontWeight: '900', color: 'white' },
   headerSubtitle: { marginTop: 3, fontSize: 12, color: 'rgba(255,255,255,0.78)', fontWeight: '700' },
   segment: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 12, padding: 4, marginTop: 14 },
+  focusBar: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 12, paddingVertical: 6, paddingLeft: 12, paddingRight: 6 },
+  focusText: { flex: 1, color: 'white', fontWeight: '800', fontSize: 13.5 },
+  focusBtn: { backgroundColor: 'white', borderRadius: 9, paddingHorizontal: 12, paddingVertical: 7 },
+  focusBtnText: { color: Colors.primaryDark, fontWeight: '900', fontSize: 12.5 },
   segmentItem: { flex: 1, height: 36, borderRadius: 9, flexDirection: 'row', gap: 5, alignItems: 'center', justifyContent: 'center' },
   segmentItemActive: { backgroundColor: 'white' },
   segmentText: { fontSize: 13.5, fontWeight: '800', color: 'rgba(255,255,255,0.85)' },

@@ -35,6 +35,7 @@ import { trackEvent } from '../../utils/analytics';
 import { FREE_FEATURES, getFreeUsage, hasFreeUsesLeft, showFreeLimitAlert } from '../../utils/freeTier';
 import BrandWordmark from '../../components/BrandWordmark';
 import GlucoseRangeRing from '../../components/GlucoseRangeRing';
+import { parseServerDate } from '../../utils/dateUtils';
 import { SAFETY_LINES, describeReading, formatGlucose, getGlucoseUnit, statusMeta, timeAgo } from '../../utils/glucose';
 
 // "Last used" ingredients older than this are hidden - fridge contents change.
@@ -64,6 +65,7 @@ export default function HomeScreen() {
   const [serverTodayTip, setServerTodayTip] = useState(null);
   const [dailyChallenge, setDailyChallenge] = useState(null);
   const [healthLogSummary, setHealthLogSummary] = useState(null);
+  const [insightHighlight, setInsightHighlight] = useState(null);
   const todayTip = useMemo(() => {
     if (serverTodayTip?.title && (serverTodayTip?.tip || serverTodayTip?.body)) return serverTodayTip;
     return getTodayTip(new Date(), { blockedTipIds });
@@ -192,6 +194,24 @@ export default function HomeScreen() {
       setHealthLogSummary(data);
     } catch {
       // ignore network errors
+    }
+  };
+
+  // The one insight worth showing on Home (Glucose insights, last 30 days).
+  const loadInsightHighlight = async () => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) return;
+      const tz = -new Date().getTimezoneOffset();
+      const response = await apiFetch(
+        `${API_URL}/api/app/health-log/insights?days=30&tz_offset_minutes=${tz}`,
+        { method: 'GET', headers: { Authorization: `Bearer ${token}` } },
+        { timeoutMs: 12000 }
+      );
+      if (!response.ok) return;
+      setInsightHighlight((await response.json())?.highlight || null);
+    } catch {
+      // Optional card: Home works without it.
     }
   };
 
@@ -333,6 +353,7 @@ export default function HomeScreen() {
         loadTodayTip(),
         loadDailyChallenge(),
         loadHealthLogSummary(),
+        loadInsightHighlight(),
         loadGlucoseUnit(),
         loadLastUsed(),
       ]);
@@ -893,6 +914,51 @@ export default function HomeScreen() {
     return { text, sub, tone: pct > prev ? 'up' : pct < prev ? 'down' : 'neutral' };
   };
   const insight = getWeeklyInsight();
+
+  // Home insight card: a meal waiting for its after-meal reading (act now), a real
+  // insight, or a nudge that teaches the meal -> reading loop. Chosen by the backend.
+  const getHighlightCard = () => {
+    const h = insightHighlight;
+    if (!h) return null;
+    if (h.kind === 'check_meal' && h.meal) {
+      const checkAt = parseServerDate(h.check_at);
+      const when =
+        checkAt.getTime() <= Date.now()
+          ? 'now'
+          : `around ${new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(checkAt)}`;
+      return {
+        title: 'Check your glucose',
+        text: `Check your glucose ${when} to see how ${h.meal.description} affects you.`,
+        link: 'Log ›',
+        icon: 'time-outline',
+        iconColor: Colors.primary,
+        iconBg: '#D5ECEA',
+        style: styles.hInsightCardCheck,
+        onPress: () => navigation.navigate('LogGlucose', { context: 'after_meal' }),
+      };
+    }
+    if (h.kind === 'insight') {
+      return {
+        title: 'Your insight',
+        text: h.text,
+        link: 'See all ›',
+        icon: 'bulb',
+        iconColor: '#C05621',
+        onPress: () => navigation.navigate('GlucoseInsights', { tab: h.tab || 'trends' }),
+      };
+    }
+    return {
+      title: 'How it works',
+      text: h.text,
+      link: 'Log meal ›',
+      icon: 'sparkles-outline',
+      iconColor: Colors.primary,
+      iconBg: '#E8F4F3',
+      style: styles.hInsightCardNudge,
+      onPress: handleOpenLogMeal,
+    };
+  };
+  const highlightCard = getHighlightCard();
   const greeting = getGreeting();
   const showFreeLine = !hasCurrentFeatureAccess && freeRecipeUsage;
 
@@ -1070,7 +1136,7 @@ export default function HomeScreen() {
               {/* With a reading today the ring opens the glucose details; empty, it goes straight to logging. */}
               <TouchableOpacity
                 style={styles.hRingCol}
-                onPress={lastReading ? () => navigation.navigate('TrackRegularly') : handleOpenLogGlucose}
+                onPress={lastReading ? () => navigation.navigate('GlucoseInsights', { tab: 'trends' }) : handleOpenLogGlucose}
                 activeOpacity={0.8}
               >
                 <GlucoseRangeRing today={glucose?.today} size={100} />
@@ -1137,6 +1203,23 @@ export default function HomeScreen() {
               ))}
             </View>
           </View>
+
+          {highlightCard ? (
+            <TouchableOpacity
+              style={[styles.hInsightCard, highlightCard.style]}
+              onPress={highlightCard.onPress}
+              activeOpacity={0.85}
+            >
+              <View style={[styles.hInsightBulb, highlightCard.iconBg && { backgroundColor: highlightCard.iconBg }]}>
+                <Ionicons name={highlightCard.icon} size={18} color={highlightCard.iconColor} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.hInsightCardTitle, { color: highlightCard.iconColor }]}>{highlightCard.title}</Text>
+                <Text style={styles.hInsightCardText}>{highlightCard.text}</Text>
+              </View>
+              <Text style={styles.hSectionLink}>{highlightCard.link}</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         {/* 3 picks */}
@@ -1385,6 +1468,12 @@ const styles = StyleSheet.create({
   hRingSub: { fontSize: 12, fontWeight: '800', textAlign: 'center', marginTop: 2 },
   hSafety: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, padding: 10, borderRadius: 12, backgroundColor: '#FFF5F5', borderWidth: 1, borderColor: '#FED7D7' },
   hSafetyText: { flex: 1, fontSize: 12.5, color: '#9B2C2C', fontWeight: '600' },
+  hInsightCard: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12, padding: 14, borderRadius: 18, backgroundColor: '#FFF8EE', borderWidth: 1, borderColor: '#FBE3C4' },
+  hInsightCardNudge: { backgroundColor: 'white', borderColor: '#E9ECE4' },
+  hInsightCardCheck: { backgroundColor: '#E8F4F3', borderColor: '#BFE0DD' },
+  hInsightBulb: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#FFEBD2', alignItems: 'center', justifyContent: 'center' },
+  hInsightCardTitle: { fontSize: 12, fontWeight: '900', color: '#C05621', textTransform: 'uppercase', letterSpacing: 0.4 },
+  hInsightCardText: { fontSize: 13.5, fontWeight: '700', color: Colors.brandNavy, marginTop: 2, lineHeight: 19 },
   hInsight: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, paddingVertical: 9, paddingHorizontal: 12, borderRadius: 12, backgroundColor: '#F1F5F9' },
   hInsightUp: { backgroundColor: '#E7F4E8' },
   hInsightDown: { backgroundColor: '#FFF8E6' },

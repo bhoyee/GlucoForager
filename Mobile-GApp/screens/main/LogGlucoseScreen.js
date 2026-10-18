@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/Colors';
 import { apiFetch } from '../../utils/api';
+import { cancelAfterMealCheck } from '../../utils/afterMealCheck';
 import { API_URL } from '../../config/api';
 import { trackEvent } from '../../utils/analytics';
 import TimeAgoSelector, { TIME_AGO_OPTIONS, loggedAtFromMinutesAgo } from '../../components/TimeAgoSelector';
@@ -152,6 +153,7 @@ export default function LogGlucoseScreen() {
         return;
       }
       const data = await response.json();
+      if (context !== 'fasting' && context !== 'before_meal') cancelAfterMealCheck();
       // The actual reading value is never sent - only that a reading was logged,
       // and whether it was flagged as a spike (a state, not a health value).
       trackEvent('glucose_logged', {
@@ -169,13 +171,13 @@ export default function LogGlucoseScreen() {
         navigation.goBack();
         return;
       }
-      // After saving, offer the trends screen: the moment people are curious how their week looks.
-      const cameFromTrends = navigation.getState()?.routes?.some((r) => r.name === 'TrackRegularly');
-      const done = (message) =>
+      // After saving, offer insights: the moment people are curious how they're doing.
+      const cameFromInsights = navigation.getState()?.routes?.some((r) => r.name === 'GlucoseInsights');
+      const done = (message, tab = 'trends') =>
         Alert.alert('Reading logged', message, [
           {
-            text: 'See trends',
-            onPress: () => (cameFromTrends ? navigation.goBack() : navigation.replace('TrackRegularly')),
+            text: 'See insights',
+            onPress: () => (cameFromInsights ? navigation.goBack() : navigation.replace('GlucoseInsights', { tab })),
           },
           { text: 'Got it', onPress: () => navigation.goBack() },
         ]);
@@ -185,6 +187,18 @@ export default function LogGlucoseScreen() {
       }
       if (data?.general_alert === 'low' || data?.general_alert === 'high') {
         done(pickRandom(data.general_alert === 'low' ? LOW_MESSAGES : HIGH_MESSAGES));
+        return;
+      }
+      // A reading 30 min - 3 h after a logged meal: tell them how that meal did.
+      if (data?.paired_meal && data?.after_meal_result) {
+        const result = data.after_meal_result;
+        const outcome =
+          result.status === 'in_range'
+            ? 'was on target'
+            : result.status === 'below' || result.status === 'low'
+              ? 'was below target'
+              : 'was above target';
+        done(`Your reading after "${data.paired_meal.description}" ${outcome}. It's now in your meal diary and food impact.`, 'food');
         return;
       }
       done(pickRandom(NORMAL_MESSAGES));
@@ -297,9 +311,9 @@ export default function LogGlucoseScreen() {
             <Text style={styles.saveButtonText}>{isSaving ? 'Logging...' : 'Log reading'}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.trendsLink} onPress={() => navigation.navigate('TrackRegularly')} hitSlop={8}>
+          <TouchableOpacity style={styles.trendsLink} onPress={() => navigation.navigate('GlucoseInsights')} hitSlop={8}>
             <Ionicons name="trending-up" size={15} color={Colors.primary} />
-            <Text style={styles.trendsLinkText}>See your glucose trends</Text>
+            <Text style={styles.trendsLinkText}>See your glucose insights</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

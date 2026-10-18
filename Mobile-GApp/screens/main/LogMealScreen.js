@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/Colors';
 import { apiFetch } from '../../utils/api';
+import { afterMealLogged } from '../../utils/afterMealCheck';
 import { API_URL } from '../../config/api';
 import { trackEvent } from '../../utils/analytics';
 import TimeAgoSelector, { TIME_AGO_OPTIONS, loggedAtFromMinutesAgo } from '../../components/TimeAgoSelector';
@@ -58,6 +59,7 @@ export default function LogMealScreen() {
         return;
       }
       const data = await response.json().catch(() => ({}));
+      if (!data?.duplicate) afterMealLogged({ description: data?.meal?.description || trimmed, loggedAt: data?.meal?.logged_at });
       // Description text itself is never sent - only that a meal was logged.
       trackEvent('meal_logged', {
         source: 'manual',

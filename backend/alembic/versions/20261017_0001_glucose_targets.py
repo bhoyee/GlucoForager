@@ -1,7 +1,7 @@
 """per-user glucose targets ("My targets"); NULL = ADA defaults
 
 Revision ID: 20261017_0001
-Revises: 20261016_0001
+Revises: 20261018_0001
 Create Date: 2026-10-17
 """
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 revision = "20261017_0001"
-down_revision = "20261016_0001"
+down_revision = "20261018_0001"
 branch_labels = None
 depends_on = None
 

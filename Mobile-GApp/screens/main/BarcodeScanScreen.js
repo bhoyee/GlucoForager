@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/Colors';
 import { apiFetch } from '../../utils/api';
+import { afterMealLogged } from '../../utils/afterMealCheck';
 import { API_URL } from '../../config/api';
 import { trackEvent } from '../../utils/analytics';
 import NutritionFactBadges from '../../components/NutritionFactBadges';
@@ -158,6 +159,10 @@ export default function BarcodeScanScreen() {
         const data = await response.json().catch(() => ({}));
         Alert.alert('Unable to log meal', data?.detail?.message || data?.detail || 'Please try again.');
         return;
+      }
+      const saved = await response.json().catch(() => ({}));
+      if (saved?.meal && !saved.duplicate) {
+        afterMealLogged({ description: saved.meal.description, loggedAt: saved.meal.logged_at });
       }
       // This screen is reachable from two different tab stacks (Scan tab's mode
       // switcher, and the Log Meal screen's "scan barcode" link) - always land back
