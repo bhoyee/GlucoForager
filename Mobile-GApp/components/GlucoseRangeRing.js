@@ -58,7 +58,7 @@ export default function GlucoseRangeRing({ today, size = 92 }) {
               {today.in_range}
               <Text style={styles.of}> of {total}</Text>
             </Text>
-            <Text style={styles.small}>in range</Text>
+            <Text style={styles.small}>on target</Text>
           </>
         ) : (
           <Text style={[styles.small, { textAlign: 'center' }]}>No{'\n'}readings</Text>

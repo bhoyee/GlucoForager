@@ -26,7 +26,7 @@ import { API_URL } from '../../config/api';
 import { parseServerDate } from '../../utils/dateUtils';
 import { CONTEXT_LABELS, MGDL_PER_MMOL, formatGlucose, getGlucoseUnit, statusMeta } from '../../utils/glucose';
 
-const SOURCE_LABEL = { manual: 'Typed', barcode: 'Barcode', photo: 'Photo' };
+const SOURCE_LABEL = { manual: 'Typed', barcode: 'Barcode', photo: 'Photo', recipe: 'Recipe' };
 const FILTERS = [
   { key: 'all', label: 'All', icon: 'apps-outline' },
   { key: 'meal', label: 'Meals', icon: 'restaurant-outline' },
@@ -235,7 +235,7 @@ export default function FoodLogScreen() {
             <Text style={styles.title} numberOfLines={2}>{item.description}</Text>
             <Text style={styles.meta}>
               {timeOf(item.logged_at)}
-              {item.carbs_g != null ? ` · ${Math.round(item.carbs_g)}g carbs` : ''}
+              {item.carbs_g != null ? ` · ${item.carbs_estimated ? 'about ' : ''}${Math.round(item.carbs_g)}g carbs` : ''}
             </Text>
           </View>
         </View>
@@ -441,7 +441,7 @@ export default function FoodLogScreen() {
                 {selIsMeal ? (
                   <>
                     <Row label="Logged via" value={SOURCE_LABEL[sel.source] || sel.source || 'Typed'} />
-                    {sel.carbs_g != null ? <Row label="Carbs" value={`${Math.round(sel.carbs_g)}g`} /> : null}
+                    {sel.carbs_g != null ? <Row label="Carbs" value={`${sel.carbs_estimated ? 'About ' : ''}${Math.round(sel.carbs_g)}g${sel.carbs_estimated ? ' (estimate)' : ''}`} /> : null}
                     {sel.calories != null ? <Row label="Calories" value={`${Math.round(sel.calories)}`} /> : null}
                     {sel.before ? (
                       <Row label="Before" value={`${formatGlucose(sel.before.value_mg_dl, unit)} · ${verdict(sel.before, unit)}`} />

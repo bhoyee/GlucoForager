@@ -98,7 +98,8 @@ export function planAfterMealCheck(mealTime, now = new Date(), countToday = 0) {
   return { fireAt };
 }
 
-/** Called after a meal is saved. `loggedAt` is when the meal was eaten (server time). */
+/** Called after a meal is saved. `loggedAt` is when the meal was eaten (server time).
+ * Returns when the reminder will fire (a Date), or null if none was scheduled. */
 export async function scheduleAfterMealCheck({ description, loggedAt }) {
   try {
     if (!(await getAfterMealCheckEnabled())) return null;
@@ -131,7 +132,7 @@ export async function scheduleAfterMealCheck({ description, loggedAt }) {
     await writeJson(KEYS.pending, { id, fireAt: plan.fireAt.toISOString() });
     const day = localDay(plan.fireAt);
     await writeJson(KEYS.daily, { day, count: (daily?.day === day ? daily.count : 0) + 1 });
-    return id;
+    return plan.fireAt;
   } catch {
     return null; // A reminder is a nice-to-have; never block logging a meal.
   }
@@ -156,18 +157,21 @@ export async function requestAfterMealCheckPermission() {
  * it, the first time a meal would actually get one, it offers the reminder in context
  * (people say yes far more often when the reason is right in front of them).
  */
+// Returns { status: 'scheduled', fireAt } | { status: 'asked' } (permission question shown)
+// | { status: 'none' }, so the caller can tell the user what happens next.
 export async function afterMealLogged(meal) {
+  const none = { status: 'none' };
   try {
-    if (!(await getAfterMealCheckEnabled())) return;
+    if (!(await getAfterMealCheckEnabled())) return none;
     const perms = await Notifications.getPermissionsAsync();
     if (perms?.granted) {
-      await scheduleAfterMealCheck(meal);
-      return;
+      const fireAt = await scheduleAfterMealCheck(meal);
+      return fireAt ? { status: 'scheduled', fireAt } : none;
     }
-    if (perms?.canAskAgain === false) return;
-    if ((await AsyncStorage.getItem(KEYS.asked)) === '1') return;
+    if (perms?.canAskAgain === false) return none;
+    if ((await AsyncStorage.getItem(KEYS.asked)) === '1') return none;
     const mealTime = new Date(meal.loggedAt || Date.now());
-    if (!planAfterMealCheck(mealTime).fireAt) return; // wait for a meal that would get one
+    if (!planAfterMealCheck(mealTime).fireAt) return none; // wait for a meal that would get one
     await AsyncStorage.setItem(KEYS.asked, '1');
     Alert.alert(
       'Want a reminder in 2 hours?',
@@ -182,8 +186,9 @@ export async function afterMealLogged(meal) {
         },
       ]
     );
+    return { status: 'asked' };
   } catch {
-    // Never block logging a meal.
+    return none; // Never block logging a meal.
   }
 }
 

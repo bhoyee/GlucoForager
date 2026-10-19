@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/Colors';
 import { apiFetch } from '../../utils/api';
 import { cancelAfterMealCheck } from '../../utils/afterMealCheck';
+import { DEFAULT_TARGETS, classifyReading, statusMeta } from '../../utils/glucose';
 import { API_URL } from '../../config/api';
 import { trackEvent } from '../../utils/analytics';
 import TimeAgoSelector, { TIME_AGO_OPTIONS, loggedAtFromMinutesAgo } from '../../components/TimeAgoSelector';
@@ -18,11 +20,14 @@ const MGDL_RANGE = { min: 20, max: 600 };
 const MMOL_RANGE = { min: 1.1, max: 33.3 };
 
 const CONTEXTS = [
-  { key: 'fasting', label: 'Fasting', icon: 'sunny-outline', color: '#16A34A' },
-  { key: 'before_meal', label: 'Before meal', icon: 'restaurant-outline', color: '#D97706' },
-  { key: 'after_meal', label: 'After meal', icon: 'restaurant-outline', color: '#7C3AED' },
-  { key: 'bedtime', label: 'Bedtime', icon: 'moon-outline', color: '#2563EB' },
+  { key: 'fasting', label: 'Fasting', hint: 'On waking', icon: 'sunny', color: '#D97706', bg: '#FFF4E0' },
+  { key: 'before_meal', label: 'Before meal', hint: 'Up to 1h before', icon: 'restaurant-outline', color: '#2C8632', bg: '#E9F6EA' },
+  { key: 'after_meal', label: 'After meal', hint: '1-2h after eating', icon: 'restaurant', color: '#6B46C1', bg: '#F0EBFB' },
+  { key: 'bedtime', label: 'Bedtime', hint: 'Before sleep', icon: 'moon', color: '#2B6CB0', bg: '#E6F0FB' },
 ];
+const BLUE = '#2B6CB0';
+const TEAL = '#1D7C7A';
+const VIOLET = '#6B46C1';
 
 // Rotating pools instead of one fixed line each, so the post-log message doesn't feel
 // like the same canned popup every time - especially the in-range case, which fires
@@ -76,6 +81,7 @@ export default function LogGlucoseScreen() {
   const [context, setContext] = useState(route.params?.context || null);
   const [minutesAgo, setMinutesAgo] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
+  const [targets, setTargets] = useState(DEFAULT_TARGETS);
   // Stays the same across a retry of this exact attempt (e.g. a timeout the user
   // responds to by tapping Log reading again), but regenerates whenever the actual
   // entry changes - so a real second reading is never mistaken for a retry.
@@ -84,6 +90,24 @@ export default function LogGlucoseScreen() {
   useEffect(() => {
     setIdempotencyKey(generateIdempotencyKey());
   }, [value, unit, note, context, minutesAgo]);
+
+  // The user's own targets, for the live "On target" preview while typing.
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = await AsyncStorage.getItem('userToken');
+        if (!token) return;
+        const res = await apiFetch(
+          `${API_URL}/api/app/health-log/glucose-targets`,
+          { headers: { Authorization: `Bearer ${token}` } },
+          { timeoutMs: 8000 }
+        );
+        if (res.ok) setTargets({ ...DEFAULT_TARGETS, ...(await res.json()) });
+      } catch {
+        // Defaults are fine for a preview.
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     AsyncStorage.getItem(UNIT_PREF_KEY)
@@ -209,10 +233,21 @@ export default function LogGlucoseScreen() {
     }
   };
 
-  const spikeHint =
-    unit === 'mmol/L'
-      ? `${(180 / MGDL_PER_MMOL).toFixed(1)} mmol/L`
-      : '180 mg/dL';
+  // Live preview of how this reading compares with the user's targets.
+  const parsed = parseFloat(value);
+  const range = unit === 'mmol/L' ? MMOL_RANGE : MGDL_RANGE;
+  const validValue = Number.isFinite(parsed) && parsed >= range.min && parsed <= range.max;
+  const previewMgDl = validValue ? (unit === 'mmol/L' ? parsed * MGDL_PER_MMOL : parsed) : null;
+  const preview = previewMgDl != null ? classifyReading(previewMgDl, context, targets) : null;
+  const previewMeta = preview ? statusMeta(preview.status) : null;
+  const previewText = (() => {
+    if (!preview) return '';
+    if (preview.status === 'in_range') return 'On target';
+    if (preview.status === 'low') return 'Low';
+    if (preview.status === 'very_high') return 'Very high';
+    const d = unit === 'mmol/L' ? (preview.delta_mg_dl / MGDL_PER_MMOL).toFixed(1) : Math.round(preview.delta_mg_dl);
+    return `${d} ${preview.status} target`;
+  })();
 
   return (
     <View style={styles.container}>
@@ -235,80 +270,113 @@ export default function LogGlucoseScreen() {
         </View>
 
         <View style={styles.content}>
-          <View style={styles.labelRow}>
-            <Text style={styles.label}>Reading</Text>
-            <View style={styles.unitSwitcher}>
-              <TouchableOpacity
-                style={[styles.unitOption, unit === 'mg/dL' && styles.unitOptionActive]}
-                onPress={() => switchUnit('mg/dL')}
-              >
-                <Text style={[styles.unitOptionText, unit === 'mg/dL' && styles.unitOptionTextActive]}>mg/dL</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.unitOption, unit === 'mmol/L' && styles.unitOptionActive]}
-                onPress={() => switchUnit('mmol/L')}
-              >
-                <Text style={[styles.unitOptionText, unit === 'mmol/L' && styles.unitOptionTextActive]}>mmol/L</Text>
-              </TouchableOpacity>
+          <View style={styles.card}>
+            <View style={styles.cardHeadRow}>
+              <SectionHead icon="water" color={BLUE} title="Your reading" />
+              <View style={styles.unitSwitcher}>
+                {['mg/dL', 'mmol/L'].map((u) => (
+                  <TouchableOpacity
+                    key={u}
+                    style={[styles.unitOption, unit === u && styles.unitOptionActive]}
+                    onPress={() => switchUnit(u)}
+                  >
+                    <Text style={[styles.unitOptionText, unit === u && styles.unitOptionTextActive]}>{u}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
-          </View>
-          <TextInput
-            style={styles.valueInput}
-            placeholder={unit === 'mmol/L' ? 'e.g. 7.9' : 'e.g. 142'}
-            placeholderTextColor={Colors.textMuted}
-            value={value}
-            onChangeText={handleValueChange}
-            keyboardType="decimal-pad"
-            maxLength={unit === 'mmol/L' ? 5 : 3}
-            autoFocus
-          />
-
-          <Text style={[styles.label, { marginTop: 20, marginBottom: 10 }]}>How long ago was this?</Text>
-          <TimeAgoSelector value={minutesAgo} onChange={setMinutesAgo} />
-
-          <Text style={[styles.label, { marginTop: 20, marginBottom: 10 }]}>Reading context (optional)</Text>
-          <View style={styles.contextRow}>
-            {CONTEXTS.map((c) => {
-              const selected = context === c.key;
-              return (
-                <TouchableOpacity
-                  key={c.key}
-                  style={[
-                    styles.contextChip,
-                    { backgroundColor: selected ? c.color : `${c.color}18` },
-                  ]}
-                  onPress={() => setContext(selected ? null : c.key)}
-                  activeOpacity={0.85}
-                >
-                  <Ionicons name={c.icon} size={14} color={selected ? 'white' : c.color} />
-                  <Text style={[styles.contextChipText, { color: selected ? 'white' : c.color }]}>{c.label}</Text>
-                </TouchableOpacity>
-              );
-            })}
+            <View style={[styles.valueBox, previewMeta && { borderColor: previewMeta.color }]}>
+              <TextInput
+                style={styles.valueInput}
+                placeholder={unit === 'mmol/L' ? '7.9' : '142'}
+                placeholderTextColor="#C5CCD3"
+                value={value}
+                onChangeText={handleValueChange}
+                keyboardType="decimal-pad"
+                maxLength={unit === 'mmol/L' ? 5 : 3}
+                autoFocus
+              />
+              <Text style={styles.valueUnit}>{unit}</Text>
+            </View>
+            {preview ? (
+              <View style={[styles.previewPill, { backgroundColor: `${previewMeta.color}1A` }]}>
+                <Ionicons
+                  name={preview.status === 'in_range' ? 'checkmark-circle' : 'alert-circle'}
+                  size={16}
+                  color={previewMeta.color}
+                />
+                <Text style={[styles.previewText, { color: previewMeta.color }]}>
+                  {previewText}
+                  {context ? '' : ' · general range'}
+                </Text>
+              </View>
+            ) : (
+              <Text style={styles.valueHint}>Type the number from your meter</Text>
+            )}
           </View>
 
-          <Text style={[styles.label, { marginTop: 20 }]}>Note (optional)</Text>
-          <TextInput
-            style={styles.noteInput}
-            placeholder="e.g. Before lunch, felt fine"
-            placeholderTextColor={Colors.textMuted}
-            value={note}
-            onChangeText={setNote}
-            multiline
-          />
+          <View style={styles.card}>
+            <SectionHead icon="time" color={TEAL} title="When was it taken?" subtitle="Helps compare it with the right target" />
+            <View style={styles.contextGrid}>
+              {CONTEXTS.map((c) => {
+                const selected = context === c.key;
+                return (
+                  <TouchableOpacity
+                    key={c.key}
+                    style={[
+                      styles.contextTile,
+                      { backgroundColor: selected ? c.color : c.bg, borderColor: selected ? c.color : 'transparent' },
+                    ]}
+                    onPress={() => setContext(selected ? null : c.key)}
+                    activeOpacity={0.85}
+                  >
+                    <View style={[styles.contextIcon, { backgroundColor: selected ? 'rgba(255,255,255,0.22)' : 'white' }]}>
+                      <Ionicons name={c.icon} size={16} color={selected ? 'white' : c.color} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.contextLabel, { color: selected ? 'white' : Colors.brandNavy }]} numberOfLines={1}>
+                        {c.label}
+                      </Text>
+                      <Text style={[styles.contextHint, { color: selected ? 'rgba(255,255,255,0.85)' : c.color }]} numberOfLines={1}>
+                        {c.hint}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <Text style={styles.rowLabel}>How long ago?</Text>
+            <TimeAgoSelector value={minutesAgo} onChange={setMinutesAgo} />
+          </View>
 
-          <Text style={styles.hint}>
-            If this follows a logged meal by 30 minutes to 3 hours and reads {spikeHint} or higher, we'll flag
-            that meal so you can spot patterns over time.
-          </Text>
+          <View style={styles.card}>
+            <SectionHead icon="create" color={VIOLET} title="Note" subtitle="Optional" />
+            <TextInput
+              style={styles.noteInput}
+              placeholder="e.g. Felt shaky, after a walk"
+              placeholderTextColor={Colors.textMuted}
+              value={note}
+              onChangeText={setNote}
+              multiline
+            />
+          </View>
 
-          <TouchableOpacity
-            style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
-            onPress={handleSave}
-            disabled={isSaving}
-            activeOpacity={0.9}
-          >
-            <Text style={styles.saveButtonText}>{isSaving ? 'Logging...' : 'Log reading'}</Text>
+          <TouchableOpacity onPress={handleSave} disabled={isSaving} activeOpacity={0.9} style={styles.saveShadow}>
+            <LinearGradient
+              colors={['#23807E', '#0B5A46']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
+            >
+              {isSaving ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle" size={20} color="white" />
+                  <Text style={styles.saveButtonText}>Log reading{validValue ? ` · ${value} ${unit}` : ''}</Text>
+                </>
+              )}
+            </LinearGradient>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.trendsLink} onPress={() => navigation.navigate('GlucoseInsights')} hitSlop={8}>
@@ -317,6 +385,21 @@ export default function LogGlucoseScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+    </View>
+  );
+}
+
+// Card heading: coloured icon badge, title and a one-line explanation.
+function SectionHead({ icon, color, title, subtitle }) {
+  return (
+    <View style={styles.sectionHead}>
+      <View style={[styles.sectionIcon, { backgroundColor: color }]}>
+        <Ionicons name={icon} size={16} color="white" />
+      </View>
+      <View style={{ flexShrink: 1 }}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        {subtitle ? <Text style={styles.sectionSubtitle}>{subtitle}</Text> : null}
+      </View>
     </View>
   );
 }
@@ -342,70 +425,91 @@ const styles = StyleSheet.create({
   headerText: { flex: 1, marginLeft: 12 },
   headerTitle: { fontSize: 20, fontWeight: '900', color: 'white' },
   headerSubtitle: { marginTop: 3, fontSize: 12, color: 'rgba(255,255,255,0.78)', fontWeight: '700' },
-  content: { padding: 20 },
-  labelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  label: { fontSize: 15, fontWeight: '800', color: Colors.text },
-  unitSwitcher: {
-    flexDirection: 'row',
-    backgroundColor: Colors.background,
-    borderRadius: 999,
-    padding: 3,
+  content: { padding: 16, gap: 12 },
+  card: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#EDF0EA',
+    shadowColor: '#0F2A3A',
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
-  unitOption: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
-  unitOptionActive: { backgroundColor: Colors.primary },
+  cardHeadRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
+  sectionHead: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12, flexShrink: 1 },
+  sectionIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  sectionTitle: { fontSize: 15.5, fontWeight: '900', color: Colors.brandNavy },
+  sectionSubtitle: { fontSize: 12, color: Colors.textLight, marginTop: 1 },
+  unitSwitcher: { flexDirection: 'row', backgroundColor: '#F1F5F9', borderRadius: 999, padding: 3 },
+  unitOption: { paddingHorizontal: 11, paddingVertical: 6, borderRadius: 999 },
+  unitOptionActive: { backgroundColor: BLUE },
   unitOptionText: { fontSize: 12, fontWeight: '800', color: Colors.textLight },
   unitOptionTextActive: { color: 'white' },
-  valueInput: {
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 24,
-    fontWeight: '800',
-    color: Colors.text,
+  valueBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: '#E3EAF2',
+    backgroundColor: '#F6F9FC',
+    paddingVertical: 10,
   },
+  valueInput: { minWidth: 110, fontSize: 46, fontWeight: '900', color: Colors.brandNavy, textAlign: 'center', paddingVertical: 4 },
+  valueUnit: { fontSize: 16, fontWeight: '800', color: Colors.textLight },
+  valueHint: { fontSize: 12.5, color: Colors.textLight, textAlign: 'center', marginTop: 10 },
+  previewPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'center',
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  previewText: { fontSize: 13, fontWeight: '800', flexShrink: 1 },
+  contextGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 8, marginBottom: 14 },
+  contextTile: {
+    width: '48.8%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 10,
+    borderRadius: 14,
+    borderWidth: 1.5,
+  },
+  contextIcon: { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  contextLabel: { fontSize: 13.5, fontWeight: '900' },
+  contextHint: { fontSize: 11, fontWeight: '700', marginTop: 1 },
+  rowLabel: { fontSize: 11.5, fontWeight: '800', color: Colors.textLight, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
   noteInput: {
     minHeight: 64,
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    backgroundColor: '#F7F8F5',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#E6EAE2',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     fontSize: 15,
     color: Colors.text,
     textAlignVertical: 'top',
   },
-  contextRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  contextChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-  },
-  contextChipText: { fontSize: 12.5, fontWeight: '800' },
-  hint: { marginTop: 14, fontSize: 12, lineHeight: 18, color: Colors.textLight, fontWeight: '600' },
-  saveButton: {
-    marginTop: 24,
-    height: 52,
+  saveShadow: {
     borderRadius: 16,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+    shadowColor: '#0B5A46',
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 4,
   },
+  saveButton: { height: 54, borderRadius: 16, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center' },
   saveButtonDisabled: { opacity: 0.7 },
-  saveButtonText: { color: 'white', fontSize: 15, fontWeight: '800' },
-  trendsLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14 },
+  saveButtonText: { color: 'white', fontSize: 16, fontWeight: '900' },
+  trendsLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8 },
   trendsLinkText: { fontSize: 14, fontWeight: '800', color: Colors.primary },
 });

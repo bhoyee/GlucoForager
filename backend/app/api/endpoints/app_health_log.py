@@ -8,10 +8,13 @@ from sqlalchemy.orm import Session
 
 from ...database import get_db
 from ...models.glucose_reading import GlucoseReading
+from ...models.favorite import Favorite
 from ...models.meal_log_entry import MealLogEntry
+from ...models.recipe_history import RecipeHistory
 from ...models.user import User
 from ...services.cache_service import CacheService
 from ...services import glucose_insights, glucose_targets, meal_diary
+from ...services.meal_carb_estimate import MODEL as MEAL_ESTIMATE_MODEL, estimate_meal_carbs
 from ...services.diabetes_food_note import build_diabetes_note
 from ...services.user_activity_service import add_user_activity
 from ..dependencies import get_current_user
@@ -176,9 +179,11 @@ def _recent_duplicate_meal(db: Session, user_id: int, description: str, source: 
 class MealLogPayload(BaseModel):
     description: str = Field(..., min_length=1, max_length=200)
     logged_at: datetime | None = None
-    source: str = Field("manual", pattern="^(manual|barcode|photo)$")
+    source: str = Field("manual", pattern="^(manual|barcode|photo|recipe)$")
     carbs_g: float | None = Field(None, ge=0, le=1000)
     calories: int | None = Field(None, ge=0, le=10000)
+    carbs_estimated: bool = False
+    food_name: str | None = Field(None, max_length=80)
     idempotency_key: str | None = Field(None, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
 
     @field_validator("description")
@@ -218,6 +223,13 @@ class GlucoseLogPayload(BaseModel):
         return cleaned
 
 
+def parse_iso_ts(value: str) -> float:
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _iso_utc(value: datetime | None) -> str | None:
     """logged_at is stored as a naive UTC datetime (datetime.utcnow()) - .isoformat() on
     that alone omits any timezone marker, which a mobile client's `new Date(...)`
@@ -237,6 +249,8 @@ def _serialize_meal(meal: MealLogEntry) -> dict:
         "description": meal.description,
         "source": meal.source,
         "carbs_g": meal.carbs_g,
+        "carbs_estimated": bool(getattr(meal, "carbs_estimated", False)),
+        "food_name": getattr(meal, "food_name", None),
         "calories": meal.calories,
         "logged_at": _iso_utc(meal.logged_at),
     }
@@ -316,6 +330,8 @@ def log_meal(
         description=description,
         source=payload.source,
         carbs_g=payload.carbs_g,
+        carbs_estimated=bool(payload.carbs_estimated and payload.carbs_g is not None),
+        food_name=(payload.food_name or "").strip() or None,
         calories=payload.calories,
         logged_at=logged_at,
     )
@@ -333,6 +349,132 @@ def log_meal(
     if idem_key:
         cache.set(idem_key, str(meal.id), ttl_seconds=IDEMPOTENCY_TTL_SECONDS)
     return {"meal": _serialize_meal(meal), "duplicate": False}
+
+
+class MealEstimatePayload(BaseModel):
+    description: str = Field(..., min_length=2, max_length=200)
+
+
+# Not counted against the free weekly AI uses: logging meals is the habit the app is
+# built on. These limits only stop abuse; repeats are served from cache for free.
+MEAL_ESTIMATE_PER_MINUTE = 20
+MEAL_ESTIMATE_PER_DAY = 120
+
+
+@router.post("/meals/estimate")
+def estimate_meal(
+    payload: MealEstimatePayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Carb estimate + standard food name for a typed meal. Never blocks logging:
+    on failure the app just saves the meal without carbs."""
+    if cache.incr(f"meal_estimate:rl:min:{current_user.id}", ttl_seconds=60) > MEAL_ESTIMATE_PER_MINUTE:
+        raise HTTPException(status_code=429, detail={"code": "rate_limited", "message": "Slow down a little."})
+    day_key = f"meal_estimate:rl:day:{current_user.id}:{datetime.utcnow().date().isoformat()}"
+    if cache.incr(day_key, ttl_seconds=90000) > MEAL_ESTIMATE_PER_DAY:
+        raise HTTPException(status_code=429, detail={"code": "daily_limit", "message": "Estimate limit reached for today."})
+    result, from_cache = estimate_meal_carbs(payload.description)
+    if result is None:
+        raise HTTPException(status_code=503, detail={"code": "estimate_unavailable", "message": "No estimate right now."})
+    if not from_cache:
+        try:
+            from ...services.cost_tracker import record_ai_request
+
+            record_ai_request(db, current_user.id, "free", "meal_estimate", model_used=MEAL_ESTIMATE_MODEL)
+        except Exception:  # noqa: BLE001 - tracking must never fail the estimate
+            db.rollback()
+    return result
+
+
+@router.get("/meals/recent")
+def recent_meals(
+    limit: int = Query(6, ge=1, le=12),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Meals for one-tap re-logging, from the user's own log (last 60 days).
+    "usual" = meals logged 2+ times (most often first); until there are any, the
+    latest distinct meals are returned as "recent" so the label is always honest."""
+    since = datetime.utcnow() - timedelta(days=60)
+    meals = (
+        db.query(MealLogEntry)
+        .filter(MealLogEntry.user_id == current_user.id, MealLogEntry.logged_at >= since)
+        .order_by(MealLogEntry.logged_at.desc())
+        .limit(300)
+        .all()
+    )
+    groups: dict[str, dict] = {}
+    for meal in meals:  # newest first, so the first one seen is the latest version
+        key = (meal.food_name or meal.description or "").strip().lower()
+        if not key:
+            continue
+        if key not in groups:
+            groups[key] = {**_serialize_meal(meal), "times": 0}
+        groups[key]["times"] += 1
+    usual = [g for g in groups.values() if g["times"] >= 2]
+    if usual:
+        usual.sort(key=lambda g: (-g["times"], -parse_iso_ts(g["logged_at"] or "")))
+        return {"label": "usual", "items": usual[:limit]}
+    recent = list(groups.values())  # insertion order = newest first
+    return {"label": "recent", "items": recent[: min(limit, 5)]}
+
+
+def recipe_carbs_per_serving(recipe: dict) -> float | None:
+    """Carbs per serving from a stored recipe, whichever shape it was saved in."""
+    if not isinstance(recipe, dict):
+        return None
+    for block in ("nutritional_info", "nutrition", "nutrition_per_serving"):
+        info = recipe.get(block)
+        if not isinstance(info, dict):
+            continue
+        for field in ("carbs", "carbohydrates"):
+            raw = info.get(field)
+            try:
+                value = float(str(raw).lower().replace("g", "").strip()) if raw is not None else None
+            except ValueError:
+                value = None
+            if value is not None and 0 <= value <= 400:
+                return round(value)
+    return None
+
+
+@router.get("/meals/recipe-options")
+def recipe_meal_options(
+    limit: int = Query(8, ge=1, le=20),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The user's favourite and recently generated recipes, with carbs per serving,
+    so a cooked recipe can be logged as a meal with exact (not estimated) carbs."""
+    options: list[dict] = []
+    seen: set[str] = set()
+
+    def add(title, recipe, origin):
+        title = (title or "").strip()
+        key = title.lower()
+        if not title or key in seen:
+            return
+        seen.add(key)
+        options.append({"title": title[:120], "carbs_g": recipe_carbs_per_serving(recipe), "origin": origin})
+
+    favorites = (
+        db.query(Favorite).filter(Favorite.user_id == current_user.id).order_by(Favorite.created_at.desc()).limit(20).all()
+    )
+    for fav in favorites:
+        add(fav.title or (fav.recipe or {}).get("title"), fav.recipe or {}, "favorite")
+    histories = (
+        db.query(RecipeHistory)
+        .filter(RecipeHistory.user_id == current_user.id)
+        .order_by(RecipeHistory.created_at.desc())
+        .limit(5)
+        .all()
+    )
+    for history in histories:
+        for recipe in history.recipes if isinstance(history.recipes, list) else []:
+            if isinstance(recipe, dict):
+                add(recipe.get("title") or recipe.get("name"), recipe, "recent")
+    return {"items": options[:limit]}
 
 
 @router.get("/meals")

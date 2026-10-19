@@ -104,6 +104,18 @@ class InsightsTest(unittest.TestCase):
         self.assertIn("Your fasting readings have been coming down.", p["insights"])
 
 
+class FoodNameGroupingTest(unittest.TestCase):
+    def test_standard_food_name_groups_different_wording(self):
+        meals, readings = [], []
+        for d, text in enumerate(["rice and stew", "Stew with rice", "white rice & beef stew"]):
+            m, r = eat_and_check(d, 13, text, 210)
+            m.food_name = "Rice and stew"
+            meals.append(m); readings.append(r)
+        food = run(meals, readings)["food"]
+        self.assertEqual(food["foods_to_watch"][0]["name"], "Rice and stew")
+        self.assertEqual(food["foods_to_watch"][0]["times"], 3)
+
+
 class HighlightTest(unittest.TestCase):
     def test_recent_meal_without_reading_comes_first(self):
         meals, readings = [], []

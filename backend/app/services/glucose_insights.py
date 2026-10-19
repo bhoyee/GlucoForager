@@ -97,7 +97,8 @@ def _food_impact(diary_items) -> dict:
     checked = [i for i in diary_items if i["kind"] == "meal" and i["after"]]
     groups: dict[str, dict] = defaultdict(lambda: {"meals": []})
     for meal in checked:
-        key = food_key(meal["description"])
+        # A standard name (from the typed-meal estimate) groups best; else the text.
+        key = (meal.get("food_name") or "").strip().lower() or food_key(meal["description"])
         if key:
             groups[key]["meals"].append(meal)
 
@@ -284,7 +285,7 @@ def _highlight(trends: dict, food: dict, patterns: dict, diary_items, now: datet
 def build_insights(meals, readings, prev_readings, targets, days: int, tz_offset_minutes: int = 0, now=None) -> dict:
     now = now or datetime.utcnow()
     keep = lambda obj: {  # noqa: E731 - minimal serializers for the pairing step
-        k: getattr(obj, k) for k in ("id", "description", "carbs_g", "value_mg_dl", "context", "logged_at") if hasattr(obj, k)
+        k: getattr(obj, k) for k in ("id", "description", "food_name", "carbs_g", "value_mg_dl", "context", "logged_at") if hasattr(obj, k)
     }
     diary = build_diary(meals, readings, targets, keep, keep)
     trends = _trends(readings, prev_readings, targets, days)

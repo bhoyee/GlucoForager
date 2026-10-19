@@ -11,9 +11,11 @@ import {
   Alert,
   ActivityIndicator,
   Image,
+  useWindowDimensions,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -45,8 +47,20 @@ const PANTRY_BASICS = new Set(['salt', 'pepper', 'black pepper', 'oil', 'olive o
 
 const LAST_INGREDIENTS_KEY = 'last_used_ingredients_v1';
 
+// Home action tiles: soft gradient, tinted border, solid icon badge in the same hue.
+const TILE_THEMES = {
+  green: { accent: '#2C8632', subColor: '#2C7A31', border: '#CBE9CD', gradient: ['#E2F4E3', '#F6FBF6'] },
+  blue: { accent: '#2B6CB0', subColor: '#2B5F99', border: '#CADDF4', gradient: ['#E0ECFB', '#F5F9FE'] },
+  orange: { accent: '#E8890C', subColor: '#B86A05', border: '#F6DDB4', gradient: ['#FFEED5', '#FFF9F0'] },
+  violet: { accent: '#6B46C1', subColor: '#5B3BA6', border: '#DDD3F5', gradient: ['#ECE5FB', '#F8F6FE'] },
+};
+
 export default function HomeScreen() {
   const navigation = useNavigation();
+  // Narrow phones (under ~380dp, e.g. small Androids / iPhone SE): the 2x2 action tiles
+  // stack the icon above the text so labels like "Scan Barcode" never get cut off.
+  const { width: screenWidth } = useWindowDimensions();
+  const compactTiles = screenWidth < 380;
   const { signOut, foodProfileHasPreferences } = useAuth();
   const insets = useSafeAreaInsets();
   const headerPaddingTop = Math.max(insets.top, 16);
@@ -1109,7 +1123,8 @@ export default function HomeScreen() {
                 style={styles.hRingCol}
                 onPress={() => {
                   trackEvent('carb_goal_ring_tapped', { carb_goal_mode: carbGoalMode });
-                  navigation.navigate('CarbGoal');
+                  // Same as the glucose ring: empty goes straight to logging.
+                  navigation.navigate(carbsLoggedToday == null && !mealsLoggedToday ? 'LogMeal' : 'CarbGoal');
                 }}
                 activeOpacity={0.8}
               >
@@ -1125,12 +1140,22 @@ export default function HomeScreen() {
                     {carbGoalMode === 'none' || !carbGoalToday ? `${carbsLoggedToday}g today` : `${carbsLoggedToday}g of ${carbGoalToday}g`}
                   </Text>
                 ) : null}
-                <Text
-                  style={[styles.hRingSub, { color: getCarbGoalRingColor(carbsLoggedToday, carbGoalToday, carbGoalMode) }]}
-                  numberOfLines={2}
-                >
-                  {carbGoalSubtitle || carbGoalTitle}
-                </Text>
+                {carbsLoggedToday == null ? (
+                  mealsLoggedToday ? (
+                    <Text style={[styles.hRingSub, { color: Colors.textLight }]} numberOfLines={2}>
+                      {mealsLoggedToday} meal{mealsLoggedToday === 1 ? '' : 's'}, no carb count
+                    </Text>
+                  ) : (
+                    <Text style={[styles.hRingSub, { color: Colors.primary }]}>Log a meal</Text>
+                  )
+                ) : (
+                  <Text
+                    style={[styles.hRingSub, { color: getCarbGoalRingColor(carbsLoggedToday, carbGoalToday, carbGoalMode) }]}
+                    numberOfLines={2}
+                  >
+                    {carbGoalSubtitle || carbGoalTitle}
+                  </Text>
+                )}
               </TouchableOpacity>
 
               {/* With a reading today the ring opens the glucose details; empty, it goes straight to logging. */}
@@ -1186,19 +1211,36 @@ export default function HomeScreen() {
 
             <View style={styles.hTiles}>
               {[
-                { label: 'Log Meal', sub: 'What you ate', icon: 'restaurant', color: Colors.success, bg: '#E7F4E8', onPress: handleOpenLogMeal },
-                { label: 'Log Glucose', sub: 'Your reading', icon: 'water', color: '#2B6CB0', bg: '#E8F1FB', onPress: handleOpenLogGlucose },
-                { label: 'Snap a Meal', sub: 'See the carbs', icon: 'camera', color: Colors.primary, bg: '#E8F4F3', onPress: handleOpenPhotoScan },
-                { label: 'Scan Barcode', sub: 'Free verdict', icon: 'barcode-outline', color: Colors.brandNavy, bg: '#F1F5F9', onPress: handleOpenBarcodeScan },
+                // One distinct hue per action: green (food), blue (glucose), orange (camera), violet (barcode).
+                { label: 'Log Meal', sub: 'What you ate', icon: 'restaurant', ...TILE_THEMES.green, onPress: handleOpenLogMeal },
+                { label: 'Log Glucose', sub: 'Your reading', icon: 'water', ...TILE_THEMES.blue, onPress: handleOpenLogGlucose },
+                { label: 'Snap a Meal', sub: 'See the carbs', icon: 'camera', ...TILE_THEMES.orange, onPress: handleOpenPhotoScan },
+                { label: 'Scan Barcode', sub: 'Free verdict', icon: 'barcode-outline', ...TILE_THEMES.violet, onPress: handleOpenBarcodeScan },
               ].map((tile) => (
-                <TouchableOpacity key={tile.label} style={[styles.hTile, { backgroundColor: tile.bg }]} onPress={tile.onPress} activeOpacity={0.85}>
-                  <View style={styles.hTileIcon}>
-                    <Ionicons name={tile.icon} size={17} color={tile.color} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.hTileTitle} numberOfLines={1}>{tile.label}</Text>
-                    <Text style={styles.hTileSub} numberOfLines={1}>{tile.sub}</Text>
-                  </View>
+                <TouchableOpacity
+                  key={tile.label}
+                  style={[styles.hTileShell, { borderColor: tile.border, shadowColor: tile.accent }]}
+                  onPress={tile.onPress}
+                  activeOpacity={0.85}
+                >
+                  <LinearGradient
+                    colors={tile.gradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={[styles.hTile, compactTiles && styles.hTileCompact]}
+                  >
+                    <View style={[styles.hTileIcon, { backgroundColor: tile.accent }]}>
+                      <Ionicons name={tile.icon} size={17} color="white" />
+                    </View>
+                    <View style={compactTiles ? styles.hTileTextCompact : { flex: 1 }}>
+                      <Text style={styles.hTileTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
+                        {tile.label}
+                      </Text>
+                      <Text style={[styles.hTileSub, { color: tile.subColor }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
+                        {tile.sub}
+                      </Text>
+                    </View>
+                  </LinearGradient>
                 </TouchableOpacity>
               ))}
             </View>
@@ -1481,10 +1523,23 @@ const styles = StyleSheet.create({
   hInsightSub: { fontSize: 11.5, color: Colors.textLight, marginTop: 1 },
   hInsightLink: { fontSize: 12.5, fontWeight: '900', color: Colors.primary },
   hTiles: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 8, marginTop: 12 },
-  hTile: { width: '48.8%', flexDirection: 'row', alignItems: 'center', gap: 9, borderRadius: 14, padding: 10 },
-  hTileIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: 'white', alignItems: 'center', justifyContent: 'center' },
+  hTileShell: {
+    width: '48.8%',
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: 'hidden',
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+    backgroundColor: 'white',
+  },
+  hTile: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 11 },
+  hTileCompact: { flexDirection: 'column', alignItems: 'flex-start', gap: 7, padding: 11 },
+  hTileTextCompact: { alignSelf: 'stretch' },
+  hTileIcon: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   hTileTitle: { fontSize: 13.5, fontWeight: '800', color: Colors.brandNavy },
-  hTileSub: { fontSize: 11, color: Colors.textLight, fontWeight: '600' },
+  hTileSub: { fontSize: 11, fontWeight: '700', marginTop: 1 },
   hCardsRow: { gap: 10, paddingRight: 18 },
   hPick: { width: 168, backgroundColor: 'white', borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: '#E9ECE4' },
   hPickImage: { width: '100%', height: 108 },

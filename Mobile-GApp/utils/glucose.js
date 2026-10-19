@@ -80,3 +80,22 @@ export const timeAgo = (iso) => {
   const hours = Math.round(mins / 60);
   return hours < 24 ? `${hours}h ago` : `${Math.round(hours / 24)}d ago`;
 };
+
+// Same rules as backend services/glucose_targets.py classify(), for a live preview while
+// typing a reading. The saved result always comes from the backend.
+export const DEFAULT_TARGETS = { premeal_low: 80, premeal_high: 130, postmeal_high: 180 };
+const LOW_MGDL = 70;
+const VERY_HIGH_MGDL = 250;
+const GENERAL_HIGH = 180;
+
+export const classifyReading = (mgDl, context, targets = DEFAULT_TARGETS) => {
+  const value = Math.round(Number(mgDl));
+  const premeal = context === 'fasting' || context === 'before_meal';
+  const low = premeal ? targets.premeal_low : LOW_MGDL;
+  const high = premeal ? targets.premeal_high : context === 'after_meal' ? targets.postmeal_high : GENERAL_HIGH;
+  if (value < LOW_MGDL) return { status: 'low', delta_mg_dl: LOW_MGDL - value };
+  if (value >= VERY_HIGH_MGDL) return { status: 'very_high', delta_mg_dl: value - high };
+  if (premeal ? value > high : value >= high) return { status: 'above', delta_mg_dl: value - high };
+  if (value < low) return { status: 'below', delta_mg_dl: low - value };
+  return { status: 'in_range', delta_mg_dl: 0 };
+};

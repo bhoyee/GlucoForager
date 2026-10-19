@@ -12,6 +12,7 @@ import {
   Dimensions,
   Modal,
   Animated,
+  ActivityIndicator,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons, MaterialIcons, FontAwesome, Feather } from '@expo/vector-icons';
@@ -21,8 +22,11 @@ import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
 import { getRecipeImageSettings } from '../../utils/recipeImageSettings';
 import { trackEvent } from '../../utils/analytics';
+import { confirmMealLogged } from '../../utils/mealLogConfirm';
+import { generateIdempotencyKey } from '../../utils/idempotency';
 import { getCachedRecipeImageUrl, setCachedRecipeImageUrl } from '../../utils/recipeImageCache';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import RecipePlaceholder from '../../assets/images/recipe-placeholder.jpeg';
 import { Colors } from '../../constants/Colors';
 
@@ -111,6 +115,9 @@ const RecipeDetailsScreen = () => {
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [checkInFeeling, setCheckInFeeling] = useState(null);
   const [isSubmittingCheckIn, setIsSubmittingCheckIn] = useState(false);
+  // "I ate this": logs the recipe as a meal with its exact carbs per serving.
+  const [ateLogged, setAteLogged] = useState(false);
+  const [isLoggingAte, setIsLoggingAte] = useState(false);
   const [isAddingToShoppingList, setIsAddingToShoppingList] = useState(false);
 
   useEffect(() => {
@@ -661,6 +668,50 @@ const RecipeDetailsScreen = () => {
     }
   };
 
+  const handleAteThis = async () => {
+    if (isLoggingAte || ateLogged) return;
+    setIsLoggingAte(true);
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        Alert.alert('Sign in required', 'Please sign in to log a meal.');
+        return;
+      }
+      const carbs = parseNutritionNumber(recipe?.nutrition?.carbs);
+      const title = String(recipe?.title || 'Recipe').slice(0, 200);
+      const response = await apiFetch(
+        `${API_URL}/api/app/meals`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            description: title,
+            source: 'recipe',
+            food_name: title.slice(0, 80),
+            ...(carbs != null ? { carbs_g: carbs } : {}),
+            carbs_estimated: false,
+            idempotency_key: generateIdempotencyKey(),
+          }),
+        },
+        { onUnauthorized: signOut, timeoutMs: 8000 }
+      );
+      if (!response.ok) {
+        Alert.alert('Unable to log meal', 'Please try again.');
+        return;
+      }
+      const data = await response.json().catch(() => ({}));
+      setAteLogged(true);
+      trackEvent('meal_logged', { source: 'recipe', has_carbs: carbs != null, carbs_estimated: false });
+      if (!data?.duplicate) {
+        await confirmMealLogged({ name: title, loggedAt: data?.meal?.logged_at, carbs, carbsEstimated: false });
+      }
+    } catch {
+      Alert.alert('Unable to log meal', 'Network request failed. Please check your connection.');
+    } finally {
+      setIsLoggingAte(false);
+    }
+  };
+
   const handleCheckIn = async (feeling) => {
     if (isSubmittingCheckIn || checkInFeeling) return;
     try {
@@ -763,7 +814,7 @@ const RecipeDetailsScreen = () => {
   const renderHeader = () => (
     <View style={[styles.header, { top: headerTop }]}>
       <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-        <Ionicons name="arrow-back" size={24} color="#FFF" />
+        <Ionicons name="arrow-back" size={22} color="#FFF" />
       </TouchableOpacity>
       <View style={styles.headerActions}>
         <TouchableOpacity style={styles.headerIconButton} onPress={handleShare}>
@@ -780,32 +831,42 @@ const RecipeDetailsScreen = () => {
     </View>
   );
 
+  // Bottom actions: one colour each so they're easy to tell apart.
+  const ACTION_THEMES = {
+    save: { color: '#1D7C7A', bg: '#E8F4F3', border: '#CDE7E4' },
+    shop: { color: '#DD6B20', bg: '#FFF1E6', border: '#F8D9BD' },
+    share: { color: '#6B46C1', bg: '#F0EBFB', border: '#DDD3F5' },
+  };
+
+  // Nutrition tiles: carbs first and largest (what matters most here), the rest colour-coded.
+  const NUTRITION_THEME = {
+    Calories: { icon: 'flame', color: '#DD6B20', bg: '#FFF1E6' },
+    Protein: { icon: 'barbell', color: '#6B46C1', bg: '#F0EBFB' },
+    Fat: { icon: 'water', color: '#B7791F', bg: '#FFF8E6' },
+    Fiber: { icon: 'leaf', color: '#2C8632', bg: '#E9F6EA' },
+    Sugar: { icon: 'cube', color: '#C53030', bg: '#FDECEC' },
+  };
+
   const renderHeroSection = () => (
     <View style={styles.heroContainer}>
       {recipe.image && recipe.imageSource !== 'placeholder' && !imageLoadError ? (
-        <Image
-          source={{ uri: recipe.image }}
-          style={styles.recipeImage}
-          onError={() => setImageLoadError(true)}
-        />
+        <Image source={{ uri: recipe.image }} style={styles.recipeImage} onError={() => setImageLoadError(true)} />
       ) : (
         <Image source={RecipePlaceholder} style={styles.recipeImage} />
       )}
+      {/* Top and bottom shading so the buttons and the sheet edge read on any photo. */}
+      <LinearGradient colors={['rgba(0,0,0,0.45)', 'transparent']} style={styles.heroShadeTop} pointerEvents="none" />
+      <LinearGradient colors={['transparent', 'rgba(0,0,0,0.35)']} style={styles.heroShadeBottom} pointerEvents="none" />
       {recipeImagesEnabled && (recipe.imageSource === 'placeholder' || !recipe.image || imageLoadError) ? (
         <View pointerEvents="box-none" style={styles.generateImageOverlay}>
           <TouchableOpacity
-            style={[
-              styles.generateImageButton,
-              styles.generateImageOverlayButton,
-              isGeneratingImage ? styles.generateImageButtonDisabled : null,
-            ]}
+            style={[styles.generateImageButton, styles.generateImageOverlayButton, isGeneratingImage ? styles.generateImageButtonDisabled : null]}
             onPress={handleGenerateImage}
             disabled={isGeneratingImage}
             activeOpacity={0.9}
           >
-            <Text style={styles.generateImageButtonText}>
-              {isGeneratingImage ? 'Generating...' : 'Generate image'}
-            </Text>
+            <Ionicons name="sparkles" size={15} color={Colors.primary} />
+            <Text style={styles.generateImageButtonText}>{isGeneratingImage ? 'Generating...' : 'Generate image'}</Text>
           </TouchableOpacity>
         </View>
       ) : null}
@@ -813,108 +874,75 @@ const RecipeDetailsScreen = () => {
   );
 
   const renderStatsBar = () => (
-    <View style={styles.statsBar}>
-      <View style={styles.statItem}>
-        <Ionicons name="time-outline" size={20} color={Colors.primary} />
-        <Text style={styles.statText}>{recipe.totalTime} mins</Text>
-      </View>
-      <View style={styles.statDivider} />
-      <View style={styles.statItem}>
-        <Feather name="users" size={20} color={Colors.primary} />
-        <Text style={styles.statText}>Serves {servings}</Text>
-      </View>
-      <View style={styles.statDivider} />
-      <View style={styles.statItem}>
-        <MaterialIcons name="speed" size={20} color={Colors.primary} />
-        <Text style={styles.statText}>{recipe.difficulty}</Text>
-      </View>
+    <View style={styles.pStatsRow}>
+      {[
+        { icon: 'time', text: `${recipe.totalTime} mins`, color: '#1D7C7A', bg: '#E8F4F3' },
+        { icon: 'people', text: `Serves ${servings}`, color: '#2B6CB0', bg: '#E6F0FB' },
+        { icon: 'speedometer', text: recipe.difficulty, color: '#DD6B20', bg: '#FFF1E6' },
+      ].map((stat) => (
+        <View key={stat.icon} style={[styles.pStatPill, { backgroundColor: stat.bg }]}>
+          <Ionicons name={stat.icon} size={15} color={stat.color} />
+          <Text style={[styles.pStatText, { color: stat.color }]} numberOfLines={1}>
+            {stat.text}
+          </Text>
+        </View>
+      ))}
     </View>
   );
 
   const renderTitleSection = () => (
-    <View style={styles.titleSection}>
-      {recipeImagesEnabled && recipe.imageSource === 'placeholder' && false ? (
-        <View style={styles.generateImageRow}>
-          <TouchableOpacity
-            style={[styles.generateImageButton, isGeneratingImage ? styles.generateImageButtonDisabled : null]}
-            onPress={handleGenerateImage}
-            disabled={isGeneratingImage}
-          >
-            <Text style={styles.generateImageButtonText}>
-              {isGeneratingImage ? 'Generating...' : 'Generate image'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      ) : null}
-      <Text style={styles.recipeTitle}>{recipe.title}</Text>
-      <Text style={styles.recipeDescription}>{recipe.description}</Text>
+    <View style={styles.pTitleBlock}>
+      <Text style={styles.pTitle}>{recipe.title}</Text>
+      {recipe.description ? <Text style={styles.pDescription}>{recipe.description}</Text> : null}
     </View>
   );
 
   const renderSafetySection = () => {
     const highlights = getSafetyHighlights();
     return (
-    <TouchableOpacity 
-      style={styles.safetyCard}
-      onPress={() => setShowSafetyModal(true)}
-      activeOpacity={0.9}
-    >
-      <View style={styles.safetyHeader}>
-        <View style={styles.safetyIcon}>
-          <FontAwesome name="stethoscope" size={20} color="#FFF" />
-        </View>
-        <View style={styles.safetyTextContainer}>
-          <Text style={styles.safetyTitle}>Why This Is Diabetes-Safe</Text>
-          <Text style={styles.safetySubtitle}>Based on nutrition per serving</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={20} color={Colors.primary} />
-      </View>
-      
-      <View style={styles.safetyHighlights}>
-        {highlights.map((item, index) => (
-          <View key={`${item.text}-${index}`} style={styles.highlightItem}>
-            <Ionicons name={item.icon} size={16} color={Colors.primary} />
-            <Text style={styles.highlightText}>{item.text}</Text>
+      <TouchableOpacity style={styles.pSafetyShadow} onPress={() => setShowSafetyModal(true)} activeOpacity={0.9}>
+        <LinearGradient colors={['#E2F4E3', '#F4FBF4']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.pSafetyCard}>
+          <View style={styles.pSafetyHead}>
+            <View style={styles.pSafetyIcon}>
+              <Ionicons name="shield-checkmark" size={20} color="white" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.pSafetyTitle}>Why this suits diabetes</Text>
+              <Text style={styles.pSafetySubtitle}>Based on nutrition per serving</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#2C8632" />
           </View>
-        ))}
-      </View>
-    </TouchableOpacity>
+          <View style={styles.pSafetyChips}>
+            {highlights.map((item, index) => (
+              <View key={`${item.text}-${index}`} style={styles.pSafetyChip}>
+                <Ionicons name={item.icon} size={14} color="#2C8632" />
+                <Text style={styles.pSafetyChipText}>{item.text}</Text>
+              </View>
+            ))}
+          </View>
+        </LinearGradient>
+      </TouchableOpacity>
     );
   };
 
-  const renderDetailsTabs = () => {
-    const renderTab = ({ key, icon, label }) => {
-      const active = detailsTab === key;
-      return (
-        <Pressable
-          key={key}
-          style={({ pressed }) => [
-            styles.detailsTab,
-            active ? styles.detailsTabActive : null,
-            pressed ? (active ? styles.detailsTabActivePressed : styles.detailsTabPressed) : null,
-          ]}
-          onPress={() => setDetailsTab(key)}
-        >
-          <Text
-            style={[styles.detailsTabText, active ? styles.detailsTabTextActive : null]}
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.78}
-          >
-            {label}
-          </Text>
-        </Pressable>
-      );
-    };
-
-    return (
-      <View style={styles.detailsTabs}>
-        {renderTab({ key: 'nutrition', icon: null, label: 'Nutrition' })}
-        {renderTab({ key: 'ingredients', icon: null, label: 'Ingredients' })}
-        {renderTab({ key: 'instructions', icon: null, label: 'Instructions' })}
-      </View>
-    );
-  };
+  const renderDetailsTabs = () => (
+    <View style={styles.pTabs}>
+      {[
+        { key: 'ingredients', label: 'Ingredients' },
+        { key: 'instructions', label: 'Steps' },
+        { key: 'nutrition', label: 'Nutrition' },
+      ].map((tab) => {
+        const active = detailsTab === tab.key;
+        return (
+          <Pressable key={tab.key} style={[styles.pTab, active && styles.pTabActive]} onPress={() => setDetailsTab(tab.key)}>
+            <Text style={[styles.pTabText, active && styles.pTabTextActive]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+              {tab.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
 
   const renderActiveDetailsSection = () => {
     if (detailsTab === 'nutrition') {
@@ -930,147 +958,139 @@ const RecipeDetailsScreen = () => {
   };
 
   const renderIngredientsSection = () => (
-    <View style={styles.section}>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Ingredients</Text>
-        <TouchableOpacity 
-          style={styles.viewAllButton}
-          onPress={() => setShowIngredientsModal(true)}
-        >
-          <Text style={styles.viewAllText}>View All</Text>
-        </TouchableOpacity>
+    <View style={styles.pCard}>
+      <View style={styles.pCardHead}>
+        <Text style={styles.pCardTitle}>Ingredients</Text>
+        {recipe.ingredients.length > 6 ? (
+          <TouchableOpacity onPress={() => setShowIngredientsModal(true)} hitSlop={8}>
+            <Text style={styles.pLink}>View all {recipe.ingredients.length}</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
-      
-      <View style={styles.ingredientsProgress}>
-        <View style={styles.progressContainer}>
-          <View style={styles.progressLabel}>
-            <Text style={styles.progressText}>
-              You have: {ownedCount} of {totalIngredients} ingredients
-            </Text>
-          </View>
-          <View style={styles.progressBar}>
-            <View 
-              style={[
-                styles.progressFill, 
-                { width: `${ingredientProgress}%` }
-              ]} 
+      {totalIngredients ? (
+        <View style={styles.pHaveBox}>
+          <Text style={styles.pHaveText}>
+            You have <Text style={styles.pHaveStrong}>{ownedCount} of {totalIngredients}</Text> ingredients
+          </Text>
+          <View style={styles.pProgressTrack}>
+            <LinearGradient
+              colors={['#35C0BD', '#1D7C7A']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={[styles.pProgressFill, { width: `${ingredientProgress}%` }]}
             />
           </View>
         </View>
-      </View>
-      
-      <View style={styles.ingredientsGrid}>
-        {recipe.ingredients.length === 0 ? (
-          <Text style={styles.emptyText}>No ingredients listed yet.</Text>
-        ) : (
-          recipe.ingredients.slice(0, 6).map((item) => (
-          <View key={item.id} style={styles.ingredientCard}>
-            <View style={styles.ingredientHeader}>
-              {item.owned ? (
-                <View style={styles.ownedIndicator}>
-                  <Ionicons name="checkmark-circle" size={18} color={Colors.primary} />
-                </View>
-              ) : (
-                <View style={styles.missingIndicator}>
-                  <View style={styles.missingDot} />
-                </View>
-              )}
-              <Text style={styles.ingredientName} numberOfLines={1}>
-                {item.name}
-              </Text>
+      ) : null}
+      {recipe.ingredients.length === 0 ? (
+        <Text style={styles.emptyText}>No ingredients listed yet.</Text>
+      ) : (
+        recipe.ingredients.slice(0, 6).map((item, index, list) => (
+          <View key={item.id} style={[styles.pIngRow, index === list.length - 1 && { borderBottomWidth: 0 }]}>
+            <View style={[styles.pIngCheck, item.owned ? styles.pIngOwned : styles.pIngNeeded]}>
+              <Ionicons name={item.owned ? 'checkmark' : 'add'} size={14} color={item.owned ? 'white' : '#DD6B20'} />
             </View>
-            <Text style={styles.ingredientAmount}>{item.amount}</Text>
+            <Text style={styles.pIngName} numberOfLines={2}>
+              {item.name}
+            </Text>
+            <Text style={styles.pIngAmount}>{item.amount}</Text>
           </View>
-          ))
-        )}
-      </View>
+        ))
+      )}
     </View>
   );
 
   const renderInstructionsSection = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Instructions</Text>
-      
-      <View style={styles.instructionsList}>
+    <View style={styles.pCard}>
+      <View style={styles.pCardHead}>
+        <Text style={styles.pCardTitle}>Steps</Text>
+        {recipe.instructions.length ? <Text style={styles.pCardMeta}>{recipe.instructions.length} steps</Text> : null}
+      </View>
       {recipe.instructions.length === 0 ? (
         <Text style={styles.emptyText}>No instructions available for this recipe yet.</Text>
       ) : (
         recipe.instructions.map((step, index) => (
-          <View key={index} style={styles.instructionStep}>
-            <View style={styles.stepNumber}>
-              <Text style={styles.stepNumberText}>{index + 1}</Text>
+          <View key={index} style={styles.pStep}>
+            <View style={styles.pStepRail}>
+              <LinearGradient colors={['#23807E', '#0B5A46']} style={styles.pStepNum}>
+                <Text style={styles.pStepNumText}>{index + 1}</Text>
+              </LinearGradient>
+              {index < recipe.instructions.length - 1 ? <View style={styles.pStepLine} /> : null}
             </View>
-            <Text style={styles.stepText}>{step}</Text>
+            <Text style={styles.pStepText}>{step}</Text>
           </View>
         ))
       )}
-      </View>
     </View>
   );
 
   const renderTipsSection = () => {
-    if (recipe.source === 'admin') {
-      return null;
-    }
-    if (!Array.isArray(recipe.tips) || recipe.tips.length === 0) {
-      return null;
-    }
+    if (recipe.source === 'admin') return null;
+    if (!Array.isArray(recipe.tips) || recipe.tips.length === 0) return null;
     return (
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Diabetes Management Tips</Text>
-        
-        <View style={styles.tipsContainer}>
-          {recipe.tips.map((tip, index) => (
+      <View style={styles.pCard}>
+        <Text style={[styles.pCardTitle, { marginBottom: 10 }]}>Tips for steady glucose</Text>
+        {recipe.tips.map((tip, index) => {
+          const open = expandedTip === index;
+          return (
             <TouchableOpacity
               key={index}
-              style={styles.tipCard}
-              onPress={() => setExpandedTip(expandedTip === index ? null : index)}
-              activeOpacity={0.8}
+              style={[styles.pTip, open && styles.pTipOpen]}
+              onPress={() => setExpandedTip(open ? null : index)}
+              activeOpacity={0.85}
             >
-              <View style={styles.tipHeader}>
-                <View style={styles.tipIcon}>
-                  <Ionicons name="medical" size={18} color={Colors.primary} />
+              <View style={styles.pTipHead}>
+                <View style={styles.pTipIcon}>
+                  <Ionicons name="bulb" size={15} color="#DD6B20" />
                 </View>
-                <Text style={styles.tipTitle}>Tip {index + 1}</Text>
-                <Ionicons 
-                  name={expandedTip === index ? "chevron-up" : "chevron-down"}
-                  size={18}
-                  color={Colors.textLight}
-                />
+                <Text style={styles.pTipTitle} numberOfLines={open ? undefined : 1}>
+                  {open ? `Tip ${index + 1}` : tip}
+                </Text>
+                <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={Colors.textLight} />
               </View>
-              {expandedTip === index && (
-                <Text style={styles.tipContent}>{tip}</Text>
-              )}
+              {open ? <Text style={styles.pTipText}>{tip}</Text> : null}
             </TouchableOpacity>
-          ))}
-        </View>
+          );
+        })}
       </View>
     );
   };
 
   const renderNutritionSection = () => {
-    const nutritionCards = [
+    const others = [
       { label: 'Calories', value: `${recipe.nutrition.calories} cal` },
-      { label: 'Carbs', value: recipe.nutrition.carbs },
       { label: 'Protein', value: recipe.nutrition.protein },
       { label: 'Fat', value: recipe.nutrition.fat },
       { label: 'Fiber', value: recipe.nutrition.fiber },
       { label: 'Sugar', value: recipe.nutrition.sugar },
     ];
-
     return (
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Nutrition Facts</Text>
-
-        <View style={styles.nutritionGrid}>
-          {nutritionCards.map((item) => (
-            <View key={item.label} style={styles.nutritionCard}>
-              <Text style={styles.nutritionValue}>{item.value}</Text>
-              <Text style={styles.nutritionLabel}>{item.label}</Text>
-            </View>
-          ))}
+      <View style={styles.pCard}>
+        <View style={styles.pCardHead}>
+          <Text style={styles.pCardTitle}>Nutrition</Text>
+          <Text style={styles.pCardMeta}>per serving</Text>
         </View>
-
+        <LinearGradient colors={['#23807E', '#0B5A46']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.pCarbHero}>
+          <View>
+            <Text style={styles.pCarbLabel}>Carbs</Text>
+            <Text style={styles.pCarbValue}>{recipe.nutrition.carbs}</Text>
+          </View>
+          <View style={styles.pCarbIcon}>
+            <Ionicons name="nutrition" size={22} color="white" />
+          </View>
+        </LinearGradient>
+        <View style={styles.pNutriGrid}>
+          {others.map((item) => {
+            const theme = NUTRITION_THEME[item.label];
+            return (
+              <View key={item.label} style={[styles.pNutriTile, { backgroundColor: theme.bg }]}>
+                <Ionicons name={theme.icon} size={15} color={theme.color} />
+                <Text style={styles.pNutriValue}>{item.value}</Text>
+                <Text style={[styles.pNutriLabel, { color: theme.color }]}>{item.label}</Text>
+              </View>
+            );
+          })}
+        </View>
       </View>
     );
   };
@@ -1081,29 +1101,53 @@ const RecipeDetailsScreen = () => {
       { key: 'ok', emoji: '😐', label: 'OK' },
       { key: 'not_great', emoji: '🙁', label: 'Not great' },
     ];
+    const recipeCarbs = parseNutritionNumber(recipe?.nutrition?.carbs);
     return (
-      <View style={styles.checkInCard}>
+      <View style={styles.pCard}>
+        {ateLogged ? (
+          <View style={styles.pLoggedRow}>
+            <Ionicons name="checkmark-circle" size={22} color="#2C8632" />
+            <Text style={styles.pLoggedText}>
+              Logged as a meal{recipeCarbs != null ? ` · ${Math.round(recipeCarbs)}g carbs` : ''}
+            </Text>
+          </View>
+        ) : (
+          <TouchableOpacity onPress={handleAteThis} disabled={isLoggingAte} activeOpacity={0.9} style={styles.pAteShadow}>
+            <LinearGradient colors={['#3FA046', '#2C8632']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.pAteButton}>
+              {isLoggingAte ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <>
+                  <Ionicons name="restaurant" size={18} color="white" />
+                  <Text style={styles.pAteText}>I ate this{recipeCarbs != null ? ` · ${Math.round(recipeCarbs)}g carbs` : ''}</Text>
+                </>
+              )}
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
+        <Text style={styles.pAteHint}>Adds it to today's carbs and reminds you to check your glucose in 2 hours.</Text>
+        <View style={styles.pDivider} />
         {checkInFeeling ? (
-          <View style={styles.checkInThanksRow}>
-            <Ionicons name="checkmark-circle" size={20} color={Colors.primary} />
-            <Text style={styles.checkInThanksText}>
-              Thanks — logged as {options.find((o) => o.key === checkInFeeling)?.label || checkInFeeling}
+          <View style={styles.pLoggedRow}>
+            <Ionicons name="heart" size={20} color={Colors.primary} />
+            <Text style={styles.pLoggedText}>
+              Thanks, you felt {options.find((o) => o.key === checkInFeeling)?.label?.toLowerCase() || checkInFeeling}
             </Text>
           </View>
         ) : (
           <>
-            <Text style={styles.checkInTitle}>Cooked this? How did it make you feel?</Text>
-            <View style={styles.checkInOptionsRow}>
+            <Text style={styles.pFeelTitle}>How did it make you feel?</Text>
+            <View style={styles.pFeelRow}>
               {options.map((option) => (
                 <TouchableOpacity
                   key={option.key}
-                  style={styles.checkInOption}
+                  style={styles.pFeelOption}
                   onPress={() => handleCheckIn(option.key)}
                   disabled={isSubmittingCheckIn}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.checkInEmoji}>{option.emoji}</Text>
-                  <Text style={styles.checkInOptionLabel}>{option.label}</Text>
+                  <Text style={styles.pFeelEmoji}>{option.emoji}</Text>
+                  <Text style={styles.pFeelLabel}>{option.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -1114,40 +1158,51 @@ const RecipeDetailsScreen = () => {
   };
 
   const renderActionsSection = () => (
-    <View style={[styles.section, styles.sectionLast]}>
+    <>
       {renderCheckInSection()}
-      <View style={styles.recipeActions}>
-        <TouchableOpacity style={styles.secondaryActionButton} onPress={handleShare}>
-          <Ionicons name="share-social-outline" size={18} color={Colors.primary} />
-          <Text style={styles.secondaryActionText}>Share</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.primaryActionButton}
-          onPress={toggleBookmark}
-          disabled={isSavingFavorite}
-        >
-          <Ionicons
-            name={recipe.isBookmarked ? 'bookmark' : 'bookmark-outline'}
-            size={18}
-            color="#FFF"
-          />
-          <Text style={styles.primaryActionText}>
-            {recipe.isBookmarked ? 'Saved' : 'Add to Favorites'}
-          </Text>
-        </TouchableOpacity>
+      <View style={styles.pActionsRow}>
+        {[
+          {
+            key: 'save',
+            icon: recipe.isBookmarked ? 'bookmark' : 'bookmark-outline',
+            label: recipe.isBookmarked ? 'Saved' : 'Save',
+            onPress: toggleBookmark,
+            disabled: isSavingFavorite,
+            on: recipe.isBookmarked,
+            ...ACTION_THEMES.save,
+          },
+          {
+            key: 'shop',
+            icon: 'cart-outline',
+            label: isAddingToShoppingList ? 'Adding…' : 'Shopping list',
+            onPress: handleAddToShoppingList,
+            disabled: isAddingToShoppingList,
+            ...ACTION_THEMES.shop,
+          },
+          { key: 'share', icon: 'share-social-outline', label: 'Share', onPress: handleShare, ...ACTION_THEMES.share },
+        ].map((a) => (
+          <TouchableOpacity
+            key={a.key}
+            style={[styles.pAction, { backgroundColor: a.on ? a.color : a.bg, borderColor: a.on ? a.color : a.border }]}
+            onPress={a.onPress}
+            disabled={a.disabled}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.pActionIcon, { backgroundColor: a.on ? 'rgba(255,255,255,0.22)' : 'white' }]}>
+              <Ionicons name={a.icon} size={17} color={a.on ? 'white' : a.color} />
+            </View>
+            <Text
+              style={[styles.pActionText, { color: a.on ? 'white' : a.color }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+            >
+              {a.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
-      <TouchableOpacity
-        style={styles.shoppingListButton}
-        onPress={handleAddToShoppingList}
-        disabled={isAddingToShoppingList}
-        activeOpacity={0.85}
-      >
-        <Ionicons name="cart-outline" size={18} color={Colors.primary} />
-        <Text style={styles.shoppingListButtonText}>
-          {isAddingToShoppingList ? 'Adding...' : 'Add to shopping list'}
-        </Text>
-      </TouchableOpacity>
-    </View>
+    </>
   );
 
   const renderSafetyModal = () => {
@@ -1256,12 +1311,13 @@ const RecipeDetailsScreen = () => {
       {renderHeader()}
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: contentBottomPadding }}
+        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 16) + 16 }}
       >
         {renderHeroSection()}
-        <View style={styles.content}>
-          {renderStatsBar()}
+        {/* Content sheet slides up over the photo, with rounded top corners. */}
+        <View style={styles.pSheet}>
           {renderTitleSection()}
+          {renderStatsBar()}
           {renderSafetySection()}
           {renderDetailsTabs()}
           {renderActiveDetailsSection()}
@@ -1280,48 +1336,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  detailsTabs: {
-    flexDirection: 'row',
-    gap: 6,
-    paddingHorizontal: 16,
-    marginTop: 14,
-    marginBottom: 20,
-  },
-  detailsTab: {
-    flex: 1,
-    minWidth: 0,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 42,
-    paddingVertical: 10,
-    paddingHorizontal: 4,
-    borderRadius: 14,
-    backgroundColor: Colors.background,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  detailsTabActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  detailsTabActivePressed: {
-    backgroundColor: Colors.primaryDark,
-    borderColor: Colors.primaryDark,
-  },
-  detailsTabPressed: {
-    backgroundColor: Colors.background,
-  },
-  detailsTabText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: Colors.text,
-    textAlign: 'center',
-    includeFontPadding: false,
-  },
-  detailsTabTextActive: {
-    color: 'white',
-  },
   header: {
     position: 'absolute',
     left: 0,
@@ -1337,23 +1351,23 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.2)',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(0,0,0,0.35)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerIconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.2)',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(0,0,0,0.35)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   heroContainer: {
-    height: 320,
+    height: 300,
     position: 'relative',
   },
   generateImageOverlay: {
@@ -1371,14 +1385,11 @@ const styles = StyleSheet.create({
     minWidth: 160,
     alignItems: 'center',
   },
-  generateImageRow: {
-    width: '100%',
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginBottom: 10,
-  },
   generateImageButton: {
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.95)',
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 999,
@@ -1400,469 +1411,10 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  recipeImagePlaceholder: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: Colors.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  content: {
-    flex: 1,
-  },
-  statsBar: {
-    flexDirection: 'row',
-    backgroundColor: `${Colors.primary}08`,
-    marginHorizontal: 20,
-    marginTop: -20,
-    borderRadius: 16,
-    paddingVertical: 16,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  statText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.primary,
-    marginLeft: 6,
-  },
-  statDivider: {
-    width: 1,
-    height: '100%',
-    backgroundColor: `${Colors.primary}14`,
-  },
-  titleSection: {
-    paddingHorizontal: 20,
-    marginBottom: 24,
-  },
-  recipeTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: Colors.text,
-    marginBottom: 8,
-    lineHeight: 34,
-  },
-  recipeDescription: {
-    fontSize: 16,
-    color: Colors.textLight,
-    lineHeight: 24,
-    marginBottom: 20,
-  },
-  authorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  authorAvatar: {
-    marginRight: 12,
-  },
-  authorInfo: {
-    flex: 1,
-  },
-  authorName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text,
-    marginBottom: 2,
-  },
-  authorRole: {
-    fontSize: 14,
-    color: Colors.primary,
-  },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF8E1',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  ratingText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.text,
-    marginLeft: 4,
-    marginRight: 4,
-  },
-  reviewCount: {
-    fontSize: 12,
-    color: Colors.textLight,
-  },
-  safetyCard: {
-    backgroundColor: `${Colors.primary}08`,
-    marginHorizontal: 20,
-    marginBottom: 24,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: `${Colors.primary}14`,
-  },
-  safetyHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  safetyIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  safetyTextContainer: {
-    flex: 1,
-  },
-  safetyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.text,
-    marginBottom: 2,
-  },
-  safetySubtitle: {
-    fontSize: 14,
-    color: Colors.textLight,
-  },
-  safetyHighlights: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  highlightItem: {
-    alignItems: 'center',
-  },
-  highlightText: {
-    fontSize: 12,
-    color: Colors.primary,
-    marginTop: 4,
-    fontWeight: '500',
-  },
-  section: {
-    paddingHorizontal: 20,
-    marginBottom: 28,
-  },
-  sectionLast: {
-    marginBottom: 0,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: Colors.text,
-  },
-  viewAllButton: {
-    backgroundColor: `${Colors.primary}14`,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  viewAllText: {
-    fontSize: 14,
-    color: Colors.primary,
-    fontWeight: '600',
-  },
-  ingredientsProgress: {
-    marginBottom: 20,
-  },
-  progressContainer: {
-    backgroundColor: Colors.background,
-    borderRadius: 12,
-    padding: 16,
-  },
-  progressLabel: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  progressText: {
-    fontSize: 14,
-    color: Colors.textLight,
-    fontWeight: '500',
-  },
-  progressBar: {
-    height: 6,
-    backgroundColor: Colors.border,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: Colors.primary,
-    borderRadius: 3,
-  },
-  ingredientsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  ingredientCard: {
-    width: '48%',
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  ingredientHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  ownedIndicator: {
-    marginRight: 8,
-  },
-  missingIndicator: {
-    marginRight: 8,
-  },
-  missingDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: Colors.accent,
-  },
-  ingredientName: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '500',
-    color: Colors.text,
-  },
-  ingredientAmount: {
-    fontSize: 13,
-    color: Colors.primary,
-    fontWeight: '600',
-  },
   emptyText: {
     fontSize: 14,
     color: Colors.textLight,
     paddingVertical: 8,
-  },
-  instructionStep: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 20,
-    backgroundColor: `${Colors.primary}08`,
-    padding: 16,
-    borderRadius: 12,
-    borderLeftWidth: 3,
-    borderLeftColor: Colors.primary,
-  },
-  instructionsList: {
-    marginTop: 12,
-  },
-  stepNumber: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: Colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-    flexShrink: 0,
-  },
-  stepNumberText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  stepText: {
-    flex: 1,
-    flexShrink: 1,
-    fontSize: 15,
-    color: Colors.text,
-    lineHeight: 22,
-  },
-  tipsContainer: {
-    marginTop: 8,
-  },
-  tipCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: `${Colors.primary}14`,
-  },
-  tipHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  tipIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: `${Colors.primary}14`,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  tipTitle: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text,
-  },
-  tipContent: {
-    fontSize: 14,
-    color: Colors.textLight,
-    lineHeight: 20,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  nutritionGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginTop: 12,
-  },
-  nutritionCard: {
-    width: '31%',
-    backgroundColor: `${Colors.primary}08`,
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    marginBottom: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: `${Colors.primary}14`,
-  },
-  nutritionValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.text,
-    marginBottom: 4,
-  },
-  nutritionLabel: {
-    fontSize: 12,
-    color: Colors.textLight,
-    marginBottom: 2,
-    textAlign: 'center',
-    width: '100%',
-  },
-  checkInCard: {
-    backgroundColor: `${Colors.accent}12`,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: `${Colors.accent}40`,
-  },
-  checkInTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.text,
-    marginBottom: 12,
-  },
-  checkInOptionsRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  checkInOption: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: `${Colors.accent}30`,
-  },
-  checkInEmoji: {
-    fontSize: 22,
-    marginBottom: 4,
-  },
-  checkInOptionLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.textLight,
-  },
-  checkInThanksRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  checkInThanksText: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.text,
-  },
-  recipeActions: {
-    flexDirection: 'row',
-    marginTop: 16,
-    gap: 12,
-  },
-  shoppingListButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginTop: 12,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-  },
-  shoppingListButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
-  secondaryActionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.primary,
-    backgroundColor: `${Colors.primary}10`,
-  },
-  secondaryActionText: {
-    marginLeft: 8,
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.primary,
-  },
-  primaryActionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    backgroundColor: Colors.primary,
-  },
-  primaryActionText: {
-    marginLeft: 8,
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#FFF',
-    flexShrink: 1,
-    textAlign: 'center',
   },
   modalContainer: {
     flex: 1,
@@ -1989,6 +1541,131 @@ const styles = StyleSheet.create({
   neededText: {
     color: Colors.accent,
   },
+  // ---- Premium layout ----
+  heroShadeTop: { position: 'absolute', left: 0, right: 0, top: 0, height: 110 },
+  heroShadeBottom: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 90 },
+  pSheet: {
+    marginTop: -26,
+    backgroundColor: Colors.background,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingTop: 22,
+    paddingHorizontal: 16,
+    gap: 14,
+  },
+  pTitleBlock: { paddingHorizontal: 4 },
+  pTitle: { fontSize: 25, fontWeight: '900', color: Colors.brandNavy, lineHeight: 31 },
+  pDescription: { fontSize: 14.5, color: Colors.textLight, lineHeight: 21, marginTop: 6 },
+  pStatsRow: { flexDirection: 'row', gap: 8 },
+  pStatPill: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 14 },
+  pStatText: { fontSize: 13, fontWeight: '800', flexShrink: 1 },
+  pSafetyShadow: {
+    borderRadius: 20,
+    shadowColor: '#2C8632',
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  pSafetyCard: { borderRadius: 20, padding: 16, borderWidth: 1, borderColor: '#CBE9CD' },
+  pSafetyHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  pSafetyIcon: { width: 40, height: 40, borderRadius: 13, backgroundColor: '#2C8632', alignItems: 'center', justifyContent: 'center' },
+  pSafetyTitle: { fontSize: 16, fontWeight: '900', color: '#1F5E24' },
+  pSafetySubtitle: { fontSize: 12, color: '#2C7A31', marginTop: 1 },
+  pSafetyChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
+  pSafetyChip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'white', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
+  pSafetyChipText: { fontSize: 12, fontWeight: '800', color: '#1F5E24' },
+  pTabs: { flexDirection: 'row', backgroundColor: '#E9EDE5', borderRadius: 14, padding: 4 },
+  pTab: { flex: 1, height: 40, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  pTabActive: {
+    backgroundColor: 'white',
+    shadowColor: '#0F2A3A',
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  pTabText: { fontSize: 13.5, fontWeight: '800', color: Colors.textLight },
+  pTabTextActive: { color: Colors.primary },
+  pCard: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#EDF0EA',
+    shadowColor: '#0F2A3A',
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  pCardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  pCardTitle: { fontSize: 17, fontWeight: '900', color: Colors.brandNavy },
+  pCardMeta: { fontSize: 12.5, fontWeight: '700', color: Colors.textLight },
+  pLink: { fontSize: 13, fontWeight: '900', color: Colors.primary },
+  pHaveBox: { backgroundColor: '#F4FAF9', borderRadius: 14, padding: 12, marginBottom: 6 },
+  pHaveText: { fontSize: 13, color: Colors.textLight, marginBottom: 8 },
+  pHaveStrong: { fontWeight: '900', color: Colors.brandNavy },
+  pProgressTrack: { height: 8, borderRadius: 4, backgroundColor: '#DCEBE9', overflow: 'hidden' },
+  pProgressFill: { height: '100%', borderRadius: 4 },
+  pIngRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: '#F0F2EC' },
+  pIngCheck: { width: 24, height: 24, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  pIngOwned: { backgroundColor: Colors.primary },
+  pIngNeeded: { backgroundColor: '#FFF1E6' },
+  pIngName: { flex: 1, fontSize: 14.5, fontWeight: '700', color: Colors.brandNavy },
+  pIngAmount: { fontSize: 13, fontWeight: '800', color: Colors.primary, maxWidth: '40%', textAlign: 'right' },
+  pStep: { flexDirection: 'row', gap: 12 },
+  pStepRail: { alignItems: 'center' },
+  pStepNum: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  pStepNumText: { color: 'white', fontWeight: '900', fontSize: 14 },
+  pStepLine: { width: 2, flex: 1, backgroundColor: '#DCEBE9', marginVertical: 4 },
+  pStepText: { flex: 1, fontSize: 15, lineHeight: 22, color: Colors.brandNavy, paddingBottom: 18, paddingTop: 4 },
+  pTip: { borderRadius: 14, padding: 12, backgroundColor: '#FFF8EE', marginBottom: 8 },
+  pTipOpen: { backgroundColor: '#FFF1DD' },
+  pTipHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  pTipIcon: { width: 28, height: 28, borderRadius: 9, backgroundColor: 'white', alignItems: 'center', justifyContent: 'center' },
+  pTipTitle: { flex: 1, fontSize: 13.5, fontWeight: '800', color: '#7B4A0B' },
+  pTipText: { fontSize: 14, color: '#5C3A0A', lineHeight: 20, marginTop: 8 },
+  pCarbHero: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 16, padding: 16, marginBottom: 10 },
+  pCarbLabel: { fontSize: 12.5, fontWeight: '800', color: 'rgba(255,255,255,0.85)', textTransform: 'uppercase', letterSpacing: 0.5 },
+  pCarbValue: { fontSize: 30, fontWeight: '900', color: 'white', marginTop: 2 },
+  pCarbIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
+  pNutriGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  pNutriTile: { flexGrow: 1, flexBasis: '30%', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 10, alignItems: 'center', gap: 3 },
+  pNutriValue: { fontSize: 16, fontWeight: '900', color: Colors.brandNavy },
+  pNutriLabel: { fontSize: 11.5, fontWeight: '800' },
+  pAteShadow: {
+    borderRadius: 16,
+    shadowColor: '#2C8632',
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 4,
+  },
+  pAteButton: { height: 54, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  pAteText: { color: 'white', fontSize: 16, fontWeight: '900' },
+  pAteHint: { fontSize: 12, color: Colors.textLight, textAlign: 'center', marginTop: 8 },
+  pDivider: { height: 1, backgroundColor: '#F0F2EC', marginVertical: 14 },
+  pLoggedRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 6 },
+  pLoggedText: { fontSize: 14.5, fontWeight: '800', color: Colors.brandNavy },
+  pFeelTitle: { fontSize: 14.5, fontWeight: '900', color: Colors.brandNavy, textAlign: 'center', marginBottom: 10 },
+  pFeelRow: { flexDirection: 'row', gap: 8 },
+  pFeelOption: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 14, backgroundColor: '#F4F6F2', borderWidth: 1, borderColor: '#E6EAE2' },
+  pFeelEmoji: { fontSize: 24 },
+  pFeelLabel: { fontSize: 12.5, fontWeight: '800', color: Colors.brandNavy, marginTop: 4 },
+  pActionsRow: { flexDirection: 'row', gap: 8 },
+  pAction: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    borderRadius: 16,
+    borderWidth: 1.5,
+  },
+  pActionIcon: { width: 32, height: 32, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  pActionText: { fontSize: 12.5, fontWeight: '900' },
 });
 
 export default RecipeDetailsScreen;
