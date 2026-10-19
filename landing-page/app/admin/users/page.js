@@ -37,6 +37,46 @@ const getAccessEndDate = (user) => {
   return user?.expires_at;
 };
 
+const STAT_ICONS = {
+  users: 'M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0Zm-12 9a8 8 0 0 1 16 0',
+  phone: 'M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm3 17h2',
+  spark: 'M12 3v4m0 10v4M3 12h4m10 0h4M6 6l2.5 2.5m7 7L18 18M6 18l2.5-2.5m7-7L18 6',
+};
+
+// One stat card: accent bar, label, big number, share of all users and a one-line hint.
+function StatCard({ label, value, hint, accent, icon, total, live, active, onClick }) {
+  const pct = total ? Math.round((Number(value || 0) / total) * 100) : null;
+  const Tag = onClick ? 'button' : 'div';
+  return (
+    <Tag
+      type={onClick ? 'button' : undefined}
+      onClick={onClick}
+      className={`admin-stat-card${active ? ' is-active' : ''}${onClick ? ' is-clickable' : ''}`}
+      style={{ '--accent': accent }}
+    >
+      <span className="admin-stat-top">
+        <span className="admin-stat-label">
+          {icon ? (
+            <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+              <path d={STAT_ICONS[icon]} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          ) : (
+            <span className="admin-stat-dot" />
+          )}
+          {label}
+        </span>
+        {live ? <span className="admin-stat-live">Live</span> : null}
+      </span>
+      <span className="admin-stat-value">{Number(value || 0).toLocaleString()}</span>
+      <span className="admin-stat-hint">
+        {pct !== null && label !== 'Total users' ? <strong>{pct}%</strong> : null}
+        {pct !== null && label !== 'Total users' ? ' · ' : ''}
+        {hint}
+      </span>
+    </Tag>
+  );
+}
+
 export default function AdminUsersPage() {
   const router = useRouter();
   const token = useMemo(() => {
@@ -46,7 +86,10 @@ export default function AdminUsersPage() {
 
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState('');
-  const [tierFilter, setTierFilter] = useState('all');
+  const [tierFilter, setTierFilter] = useState(() => {
+    if (typeof window === 'undefined') return 'all';
+    return new URLSearchParams(window.location.search).get('tier') || 'all';
+  });
   const [sortKey, setSortKey] = useState('created_at');
   const [sortOrder, setSortOrder] = useState('desc');
   const [page, setPage] = useState(1);
@@ -171,6 +214,7 @@ export default function AdminUsersPage() {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error();
       setAccessSummary({
+        legacy_grace: Number(data.legacy_grace || data.grace || 0),
         trialing: Number(data.trialing || data.trial || 0),
         cancelled_active: Number(data.cancelled_active || 0),
         free: Number(data.free || 0),
@@ -487,65 +531,48 @@ export default function AdminUsersPage() {
 
       {message && <p className="admin-subtitle">{message}</p>}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, margin: '18px 0' }}>
-        <div style={{ border: '1px solid #dbeafe', borderRadius: 16, padding: 16, background: 'linear-gradient(135deg, #eff6ff 0%, #ffffff 100%)' }}>
-          <div className="admin-actions" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontWeight: 800, color: '#1d4ed8' }}>iOS users</span>
-            <span className="admin-badge secondary">Live</span>
-          </div>
-          <div style={{ fontSize: 34, lineHeight: 1, fontWeight: 900, color: '#0f172a', marginTop: 12 }}>{platformSummary.ios}</div>
-          <p className="admin-help" style={{ marginTop: 8 }}>
-            {platformUpdatedAt ? `Updated ${platformUpdatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Updating quietly'}
-          </p>
-        </div>
-        <div style={{ border: '1px solid #dcfce7', borderRadius: 16, padding: 16, background: 'linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%)' }}>
-          <div className="admin-actions" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontWeight: 800, color: '#166534' }}>Android users</span>
-            <span className="admin-badge success">Live</span>
-          </div>
-          <div style={{ fontSize: 34, lineHeight: 1, fontWeight: 900, color: '#0f172a', marginTop: 12 }}>{platformSummary.android}</div>
-          <p className="admin-help" style={{ marginTop: 8 }}>
-            Auto-refreshes in the background
-          </p>
-        </div>
+      {/* Overview: who's here and who has access right now. Refreshes with the table. */}
+      <div className="admin-stat-grid">
+        <StatCard label="Total users" value={accessSummary.total} hint="All accounts" accent="#0f172a" icon="users" />
+        <StatCard label="iOS" value={platformSummary.ios} hint="Last seen on iPhone" accent="#1d4ed8" icon="phone" live />
+        <StatCard label="Android" value={platformSummary.android} hint="Last seen on Android" accent="#15803d" icon="phone" live />
+        <StatCard
+          label="Have access now"
+          value={accessSummary.legacy_grace + accessSummary.premium + accessSummary.cancelled_active + accessSummary.trialing}
+          hint="Welcome week + Premium"
+          accent="#0e7490"
+          icon="spark"
+          total={accessSummary.total}
+        />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, margin: '0 0 18px' }}>
+      {/* Status: click a card to filter the table. */}
+      <div className="admin-stat-grid" style={{ marginBottom: 18 }}>
         {[
-          ['legacy_grace', 'Welcome week', accessSummary.legacy_grace, '#ecfeff', '#0e7490'],
-          ['free', 'Free plan', accessSummary.free, '#f1f5f9', '#334155'],
-          ['expired', 'Lapsed', accessSummary.expired, '#fef9c3', '#854d0e'],
-          ['premium', 'Premium', accessSummary.premium, '#fff7ed', '#9a3412'],
-          ['cancelled_active', 'Cancelled active', accessSummary.cancelled_active, '#fff7ed', '#9a3412'],
+          ['legacy_grace', 'Welcome week', accessSummary.legacy_grace, '#0e7490', 'New users with full access'],
+          ['premium', 'Premium', accessSummary.premium, '#c2410c', 'Paying subscribers'],
+          ['cancelled_active', 'Cancelled active', accessSummary.cancelled_active, '#b45309', 'Access until their period ends'],
+          ['free', 'Free plan', accessSummary.free, '#334155', 'Weekly free uses only'],
+          ['expired', 'Lapsed', accessSummary.expired, '#a16207', 'Trial or subscription ended'],
           // Store trials were retired (Oct 2026); only shown while legacy trials are still running.
-          ...(accessSummary.trialing > 0 ? [['trialing', 'Store trials', accessSummary.trialing, '#dcfce7', '#166534']] : []),
-          ['blocked', 'Blocked', accessSummary.blocked, '#f8fafc', '#334155'],
-          ['suspended', 'Suspended', accessSummary.suspended, '#f5f3ff', '#6d28d9'],
-          ['deleted', 'Deleted', accessSummary.deleted, '#fef2f2', '#991b1b'],
-        ].map(([key, label, value, bg, color]) => (
-          <button
+          ...(accessSummary.trialing > 0 ? [['trialing', 'Store trials (legacy)', accessSummary.trialing, '#166534', 'Old store free trials']] : []),
+          ['blocked', 'Blocked', accessSummary.blocked, '#475569', 'Premium access blocked'],
+          ['suspended', 'Suspended', accessSummary.suspended, '#6d28d9', 'Account suspended'],
+          ['deleted', 'Deleted', accessSummary.deleted, '#991b1b', 'Deleted accounts'],
+        ].map(([key, label, value, accent, hint]) => (
+          <StatCard
             key={key}
-            type="button"
+            label={label}
+            value={value}
+            hint={hint}
+            accent={accent}
+            total={accessSummary.total}
+            active={tierFilter === key}
             onClick={() => {
-              setTierFilter(key);
+              setTierFilter(tierFilter === key ? 'all' : key);
               setPage(1);
             }}
-            style={{
-              textAlign: 'left',
-              border: tierFilter === key ? `1px solid ${color}` : '1px solid #e2e8f0',
-              borderRadius: 14,
-              padding: 14,
-              background: bg,
-              cursor: 'pointer',
-            }}
-          >
-            <span style={{ display: 'block', fontSize: 12, fontWeight: 800, color, textTransform: 'uppercase', letterSpacing: 0 }}>
-              {label}
-            </span>
-            <span style={{ display: 'block', marginTop: 8, fontSize: 26, lineHeight: 1, fontWeight: 900, color: '#0f172a' }}>
-              {value}
-            </span>
-          </button>
+          />
         ))}
       </div>
 

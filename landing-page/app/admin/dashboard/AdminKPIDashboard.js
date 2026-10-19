@@ -98,6 +98,8 @@ export default function AdminKPIDashboard() {
     freeUsers: 0,
     premiumUsers: 0,
     trialUsers: 0,
+    welcomeWeekUsers: 0,
+    lapsedUsers: 0,
     cancelledActiveUsers: 0,
     blockedUsers: 0,
     suspendedUsers: 0,
@@ -384,6 +386,8 @@ export default function AdminKPIDashboard() {
       const accessSummary = accessSummaryData && typeof accessSummaryData === 'object' ? accessSummaryData : {};
       const premiumUsers = Number(accessSummary.premium || 0) || 0;
       const trialUsers = Number(accessSummary.trialing || accessSummary.trial || 0) || 0;
+      const welcomeWeekUsers = Number(accessSummary.legacy_grace || accessSummary.grace || 0) || 0;
+      const lapsedUsers = Number(accessSummary.expired || 0) || 0;
       const cancelledActiveUsers = Number(accessSummary.cancelled_active || 0) || 0;
       const freeUsers = Number(accessSummary.free || 0) || 0;
       const blockedUsers = Number(accessSummary.blocked || 0) || 0;
@@ -394,6 +398,8 @@ export default function AdminKPIDashboard() {
         freeUsers,
         premiumUsers,
         trialUsers,
+        welcomeWeekUsers,
+        lapsedUsers,
         cancelledActiveUsers,
         blockedUsers,
         suspendedUsers,
@@ -421,6 +427,8 @@ export default function AdminKPIDashboard() {
         freeUsers: 0,
         premiumUsers: 0,
         trialUsers: 0,
+        welcomeWeekUsers: 0,
+        lapsedUsers: 0,
         cancelledActiveUsers: 0,
         blockedUsers: 0,
         suspendedUsers: 0,
@@ -485,11 +493,14 @@ export default function AdminKPIDashboard() {
   const trialRate = stats.totalUsers ? (stats.trialUsers / stats.totalUsers) * 100 : 0;
   const cancelledActiveRate = stats.totalUsers ? (stats.cancelledActiveUsers / stats.totalUsers) * 100 : 0;
   const freeRate = stats.totalUsers ? (stats.freeUsers / stats.totalUsers) * 100 : 0;
-  const activeAccessUsers = stats.premiumUsers + stats.trialUsers + stats.cancelledActiveUsers;
+  const welcomeRate = stats.totalUsers ? (stats.welcomeWeekUsers / stats.totalUsers) * 100 : 0;
+  const lapsedRate = stats.totalUsers ? (stats.lapsedUsers / stats.totalUsers) * 100 : 0;
+  // Welcome week users have full access too; legacy store trials (if any) are counted with them.
+  const activeAccessUsers = stats.premiumUsers + stats.welcomeWeekUsers + stats.trialUsers + stats.cancelledActiveUsers;
   const activeAccessRate = stats.totalUsers ? (activeAccessUsers / stats.totalUsers) * 100 : 0;
   const premiumEnd = clampPercent(premiumRate);
-  const trialEnd = clampPercent(premiumRate + trialRate);
-  const cancelledActiveEnd = clampPercent(premiumRate + trialRate + cancelledActiveRate);
+  const trialEnd = clampPercent(premiumRate + welcomeRate + trialRate);
+  const cancelledActiveEnd = clampPercent(premiumRate + welcomeRate + trialRate + cancelledActiveRate);
   const contentTotal = stats.totalRecipes + stats.totalBlogPosts;
   const recipeRate = contentTotal ? (stats.totalRecipes / contentTotal) * 100 : 0;
   const textQueueLength = queueMetrics.redis?.streams?.text?.length ?? 0;
@@ -614,12 +625,12 @@ export default function AdminKPIDashboard() {
           actionLabel="Review"
         />
         <KpiTile
-          label="Store trials"
-          value={formatNumber(stats.trialUsers)}
-          detail={`${Math.round(clampPercent(trialRate))}% of total users`}
+          label="Welcome week"
+          value={formatNumber(stats.welcomeWeekUsers)}
+          detail={`${Math.round(clampPercent(welcomeRate))}% of users · new, full access`}
           tone="orange"
-          href="/admin/users?tier=trialing"
-          actionLabel="Trials"
+          href="/admin/users?tier=legacy_grace"
+          actionLabel="View"
         />
         <KpiTile
           label="Revenue window"
@@ -656,9 +667,13 @@ export default function AdminKPIDashboard() {
             </div>
             <div className="admin-kpi-stack">
               <ProgressBar label="Premium active" value={premiumRate} meta={formatNumber(stats.premiumUsers)} tone="blue" />
-              <ProgressBar label="Store trials" value={trialRate} meta={formatNumber(stats.trialUsers)} tone="orange" />
+              <ProgressBar label="Welcome week" value={welcomeRate} meta={formatNumber(stats.welcomeWeekUsers)} tone="orange" />
+              {stats.trialUsers > 0 ? (
+                <ProgressBar label="Store trials (legacy)" value={trialRate} meta={formatNumber(stats.trialUsers)} tone="orange" />
+              ) : null}
               <ProgressBar label="Cancelled, still active" value={cancelledActiveRate} meta={formatNumber(stats.cancelledActiveUsers)} tone="gold" />
-              <ProgressBar label="Free" value={freeRate} meta={formatNumber(stats.freeUsers)} />
+              <ProgressBar label="Free plan" value={freeRate} meta={formatNumber(stats.freeUsers)} />
+              <ProgressBar label="Lapsed" value={lapsedRate} meta={formatNumber(stats.lapsedUsers)} />
             </div>
           </div>
         </SectionCard>
