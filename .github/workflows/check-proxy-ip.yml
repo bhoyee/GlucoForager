@@ -32,4 +32,6 @@ jobs:
               | sed -E 's/"ip": "([0-9]+)\.([0-9]+)\.[0-9]+\.[0-9]+"/\1.\2.x.x/' \
               | awk '{ if ($0 ~ /^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.)/) t="internal"; else t="public"; c[t" "$0]++ } END { for (k in c) print c[k], k }' \
               | sort -rn | head -20
+            echo "=== API health since last deploy: country database, errors (last 60 min) ==="
+            docker logs --since 60m glucoforager-api 2>&1 | grep -E "IP country database|Traceback|ERROR|Exception" | grep -v -E '"ip": ' | tail -25 || true
             echo "=== done ==="
