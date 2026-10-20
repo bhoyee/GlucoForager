@@ -1,6 +1,5 @@
 import random
 import re
-from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
@@ -14,6 +13,7 @@ from ...services.cache_service import CacheService
 from ...services.food_profile_service import extract_food_profile
 from ...services.recipe_fingerprint import recipe_fingerprint as stable_recipe_fingerprint
 from ...services.recipe_image_attach_service import attach_recipe_images
+from ...services.recipe_image_attach_service import _is_durable_recipe_image_url as _service_is_durable_recipe_image_url
 from .app_recipe_checkins import get_latest_feelings
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
@@ -61,11 +61,13 @@ def _is_placeholder_image_url(url: str | None) -> bool:
 
 
 def _is_durable_recipe_image_url(url: str | None) -> bool:
+    # Same rule as the image service, which also accepts R2-hosted images. This copy
+    # only allowed "/uploads/recipe-images/", so every R2 image looked broken here and
+    # Recent recipes reset it to the placeholder (and saved that over the real image).
     value = str(url or "").strip()
     if not value or _is_placeholder_image_url(value):
         return False
-    path = urlsplit(value).path if value.startswith(("http://", "https://")) else value
-    return isinstance(path, str) and path.startswith("/uploads/recipe-images/")
+    return _service_is_durable_recipe_image_url(value)
 
 
 def _persist_history_recipes(db: Session, history: RecipeHistory, recipes: list[dict]) -> None:
