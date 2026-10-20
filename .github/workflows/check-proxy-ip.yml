@@ -1,0 +1,35 @@
+name: Check Proxy IP
+
+# Read-only diagnostic: does the edge nginx forward the visitor's real IP to the API?
+# Country detection (backend/app/services/geo_country.py) needs it. Prints only whether
+# recent request IPs are public or internal, with the last two parts masked.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect forwarding on Oracle Cloud
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          passphrase: ${{ secrets.DEPLOY_SSH_PASSPHRASE }}
+          port: ${{ secrets.DEPLOY_PORT || 22 }}
+          script: |
+            echo "=== nginx containers ==="
+            docker ps --format "{{.Names}}" | grep -i nginx || echo "none found"
+            for n in $(docker ps --format "{{.Names}}" | grep -i nginx); do
+              echo "=== $n: forwarding headers for the API ==="
+              docker exec "$n" nginx -T 2>/dev/null | grep -i -E "server_name|proxy_pass|proxy_set_header|real_ip|set_real_ip_from" | sed 's/^[ \t]*//' | sort | uniq -c | head -40
+            done
+            echo "=== recent request IPs seen by the API (masked) ==="
+            docker logs --since 24h glucoforager-api 2>&1 \
+              | grep -o '"ip": "[^"]*"' \
+              | sed -E 's/"ip": "([0-9]+)\.([0-9]+)\.[0-9]+\.[0-9]+"/\1.\2.x.x/' \
+              | awk '{ if ($0 ~ /^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.)/) t="internal"; else t="public"; c[t" "$0]++ } END { for (k in c) print c[k], k }' \
+              | sort -rn | head -20
+            echo "=== done ==="
