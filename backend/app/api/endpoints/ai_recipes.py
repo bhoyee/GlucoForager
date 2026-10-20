@@ -1,3 +1,4 @@
+import copy
 import hashlib
 import json
 from datetime import datetime, timezone
@@ -1000,9 +1001,11 @@ def _persist_image_to_history(
         .all()
     )
     for idx, history in enumerate(histories):
-        recipes = history.recipes or []
-        if not isinstance(recipes, list):
+        # Work on a copy: editing the stored JSON list in place and assigning the same
+        # object back is not seen as a change, so the image was never actually saved.
+        if not isinstance(history.recipes, list):
             continue
+        recipes = copy.deepcopy(history.recipes)
         changed = False
         for recipe in recipes:
             if not isinstance(recipe, dict):
@@ -1023,8 +1026,8 @@ def _persist_image_to_history(
             )
             return True
 
-        # Fallback: on the most recent history only, match by title if unique.
-        if idx == 0 and title_norm:
+        # Fallback: match by title if it is unique within that batch of recipes.
+        if title_norm:
             matches = []
             for recipe in recipes:
                 if not isinstance(recipe, dict):
