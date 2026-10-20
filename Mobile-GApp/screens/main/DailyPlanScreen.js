@@ -10,6 +10,7 @@ import { apiFetch } from '../../utils/api';
 import { Colors } from '../../constants/Colors';
 import { trackEvent } from '../../utils/analytics';
 import RecipePlaceholder from '../../assets/images/recipe-placeholder.jpeg';
+import GlucoseImpactCard, { ImpactPill } from '../../components/GlucoseImpactCard';
 
 const isPlaceholderImage = (item) => {
   const src = String(item?.image_source || '').toLowerCase();
@@ -122,6 +123,11 @@ function MealCard({ meal, item, showImageLoading }) {
       </View>
 
       <Text style={styles.mealName}>{item?.title || item?.name || '--'}</Text>
+      {item?.glucose_impact ? (
+        <View style={styles.impactChipRow}>
+          <ImpactPill impact={item.glucose_impact} small />
+        </View>
+      ) : null}
       {typeof item?.description === 'string' && item.description.trim() ? (
         <Text style={styles.mealDescription}>{item.description.trim()}</Text>
       ) : null}
@@ -238,6 +244,11 @@ function CompactMealCard({ meal, item, showImageLoading, onPress }) {
         </View>
         <View style={styles.mealCopy}>
           <Text style={styles.mealName} numberOfLines={2}>{item?.title || item?.name || '--'}</Text>
+          {item?.glucose_impact ? (
+            <View style={styles.impactChipRow}>
+              <ImpactPill impact={item.glucose_impact} small />
+            </View>
+          ) : null}
           <View style={styles.pillRow}>
             {calories ? (
               <View style={[styles.pillNutrition, styles.caloriePill]}>
@@ -316,6 +327,9 @@ function MealPlanDetail({ meal, item, showImageLoading, onBack }) {
           ) : null}
         </View>
         <Text style={styles.detailTitle}>{item?.title || item?.name || '--'}</Text>
+        {item?.glucose_impact ? (
+          <GlucoseImpactCard impact={item.glucose_impact} style={styles.impactCard} />
+        ) : null}
         {typeof item?.description === 'string' && item.description.trim() ? (
           <Text style={styles.detailDescription}>{item.description.trim()}</Text>
         ) : null}
@@ -741,6 +755,8 @@ export default function DailyPlanScreen() {
 }
 
 const styles = StyleSheet.create({
+  impactChipRow: { flexDirection: 'row', marginTop: 6 },
+  impactCard: { marginTop: 14 },
   container: {
     flex: 1,
     backgroundColor: Colors.background,
