@@ -15,14 +15,19 @@ export const isPlaceholderRecipeImageUrl = (url) => {
   );
 };
 
+// Real recipe images live either on the API server (/uploads/recipe-images/...) or on
+// Cloudflare R2 (.../recipethumbnails/...). Only allowing the first made Home drop every
+// R2 image and fall back to the placeholder (matches backend _is_durable_recipe_image_url).
+const DURABLE_IMAGE_PATHS = ['/uploads/recipe-images/', '/recipethumbnails/'];
+
 export const isDurableRecipeImageUrl = (url) => {
   const value = typeof url === 'string' ? url.trim() : '';
   if (!value || isPlaceholderRecipeImageUrl(value)) return false;
   try {
     const path = /^https?:\/\//i.test(value) ? new URL(value).pathname : value;
-    return path.startsWith('/uploads/recipe-images/');
+    return DURABLE_IMAGE_PATHS.some((prefix) => path.startsWith(prefix));
   } catch {
-    return value.includes('/uploads/recipe-images/');
+    return DURABLE_IMAGE_PATHS.some((prefix) => value.includes(prefix));
   }
 };
 

@@ -51,6 +51,12 @@ class User(Base):
     # Food profile (onboarding-driven). All fields are optional so existing users are not forced.
     blood_sugar_profile = Column(String, nullable=True)
     country_code = Column(String, nullable=True)
+    # Detected country: one {"d": date, "c": code} per day for 30 days (never the IP itself),
+    # and the phone's region setting. Used when country_code isn't set (services/geo_country.py).
+    detected_countries = Column(JSON, nullable=True)
+    phone_region = Column(String(2), nullable=True)
+    country_prompt_count = Column(Integer, nullable=False, default=0, server_default="0")
+    country_prompt_snoozed_until = Column(DateTime, nullable=True)
     preferred_cuisines = Column(JSON, nullable=True)
     meal_goals = Column(JSON, nullable=True)
     dietary_pattern = Column(String, nullable=True)

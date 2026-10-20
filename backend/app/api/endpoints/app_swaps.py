@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from ...api.dependencies import get_current_user, require_ai_feature_access
+from ...services import glucose_impact
 from ...services import free_tier_service
 from ...database import get_db
 from ...models.user import User
@@ -130,6 +131,20 @@ def generate_food_swaps(
         """
         return result_payload
 
+    def _impact_for(macros, gi=None):
+        if not isinstance(macros, dict):
+            return None
+        gi_obj = gi if isinstance(gi, dict) else {"min": macros.get("gi_min"), "max": macros.get("gi_max")}
+        lo, hi = gi_obj.get("min"), gi_obj.get("max")
+        gi_mid = (lo + hi) / 2 if isinstance(lo, (int, float)) and isinstance(hi, (int, float)) else (lo if isinstance(lo, (int, float)) else hi)
+        # Swap macros give net carbs; add fibre back so the formula sees total carbs.
+        net, fibre = macros.get("net_carbs_g"), macros.get("fiber_g")
+        carbs = (net + (fibre or 0)) if isinstance(net, (int, float)) else None
+        return glucose_impact.estimate_impact(
+            carbs_g=carbs, fiber_g=fibre, protein_g=macros.get("protein_g"), fat_g=macros.get("fat_g"),
+            sugars_g=macros.get("sugars_g"), gi=gi_mid,
+        )
+
     def _to_client_payload(result_payload: dict) -> dict:
         """
         Mobile UX wants swaps, not an "assessment" object.
@@ -161,10 +176,29 @@ def generate_food_swaps(
 
         swaps = result_payload.get("swaps")
         swaps_obj = swaps if isinstance(swaps, dict) else None
+        # The original food's own assessment, for the "what you searched" card above the swaps.
+        assessment = result_payload.get("assessment") or {}
+        original = None
+        if isinstance(assessment, dict) and assessment.get("summary"):
+            original = {
+                "verdict": assessment.get("verdict"),
+                "summary": assessment.get("summary"),
+                "watch_outs": assessment.get("watch_outs") or [],
+                "pair_with": assessment.get("pair_with") or [],
+                "glucose_impact": _impact_for(assessment.get("original_estimate")),
+                "serving": (assessment.get("original_estimate") or {}).get("serving"),
+            }
+        # Typical glucose impact for each swap, so the app can compare it with the original.
+        if swaps_obj and isinstance(swaps_obj.get("options"), list):
+            swaps_obj = {**swaps_obj, "options": [
+                {**opt, "glucose_impact": _impact_for(opt.get("macros"), opt.get("gi"))} if isinstance(opt, dict) else opt
+                for opt in swaps_obj["options"]
+            ]}
         return {
             "food": str(result_payload.get("food") or food),
             "message": None,
             "suggested_query": None,
+            "original": original,
             "swaps": swaps_obj,
         }
     # Cache key must include the user's profile; otherwise different users can see each other's personalized swaps.
@@ -221,7 +255,7 @@ def generate_food_swaps(
 
     # Cache v11: swaps-only client payload (no assessment fields returned to mobile).
     cache_key_base = f"swaps:cache:v11:tier:{tier}:profile:{profile_hash}:force:{int(bool(payload.force_swaps))}:q:{food.lower()}"
-    cache_key_ai = f"{cache_key_base}:ai"
+    cache_key_ai = f"{cache_key_base}:ai3"  # ai3: original + glucose impact
 
     cached_ai = cache.get(cache_key_ai)
     if cached_ai:

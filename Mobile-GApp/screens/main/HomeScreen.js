@@ -38,6 +38,8 @@ import { FREE_FEATURES, getFreeUsage, hasFreeUsesLeft, showFreeLimitAlert } from
 import BrandWordmark from '../../components/BrandWordmark';
 import GlucoseRangeRing from '../../components/GlucoseRangeRing';
 import { parseServerDate } from '../../utils/dateUtils';
+import CountryPromptCard from '../../components/CountryPromptCard';
+import { reportRegion } from '../../utils/region';
 import { SAFETY_LINES, describeReading, formatGlucose, getGlucoseUnit, statusMeta, timeAgo } from '../../utils/glucose';
 
 // "Last used" ingredients older than this are hidden - fridge contents change.
@@ -48,6 +50,10 @@ const PANTRY_BASICS = new Set(['salt', 'pepper', 'black pepper', 'oil', 'olive o
 const LAST_INGREDIENTS_KEY = 'last_used_ingredients_v1';
 
 // Home action tiles: soft gradient, tinted border, solid icon badge in the same hue.
+// Counted once per app session (not per Home re-render) for the country card timing.
+let countryOpenCounted = false;
+let countryStateCache = null;
+
 const TILE_THEMES = {
   green: { accent: '#2C8632', subColor: '#2C7A31', border: '#CBE9CD', gradient: ['#E2F4E3', '#F6FBF6'] },
   blue: { accent: '#2B6CB0', subColor: '#2B5F99', border: '#CADDF4', gradient: ['#E0ECFB', '#F5F9FE'] },
@@ -80,6 +86,7 @@ export default function HomeScreen() {
   const [dailyChallenge, setDailyChallenge] = useState(null);
   const [healthLogSummary, setHealthLogSummary] = useState(null);
   const [insightHighlight, setInsightHighlight] = useState(null);
+  const [countryPrompt, setCountryPrompt] = useState(null); // { suggested } when the card should show
   const todayTip = useMemo(() => {
     if (serverTodayTip?.title && (serverTodayTip?.tip || serverTodayTip?.body)) return serverTodayTip;
     return getTodayTip(new Date(), { blockedTipIds });
@@ -212,6 +219,25 @@ export default function HomeScreen() {
   };
 
   // The one insight worth showing on Home (Glucose insights, last 30 days).
+  // Country: report the phone region (the backend adds the IP country). The one-off card
+  // shows only when the backend isn't sure, and never on the first app open, so it doesn't
+  // stack with the notifications question.
+  const loadCountry = async () => {
+    try {
+      // Once per app session: Home reloads on every focus, the region only needs sending once.
+      if (!countryStateCache) countryStateCache = await reportRegion();
+      const state = countryStateCache;
+      const opens = Number((await AsyncStorage.getItem('app_open_count_v1')) || 0);
+      if (!countryOpenCounted) {
+        countryOpenCounted = true;
+        await AsyncStorage.setItem('app_open_count_v1', String(opens + 1));
+      }
+      setCountryPrompt(state?.ask && opens >= 1 ? { suggested: state.suggested_country } : null);
+    } catch {
+      // Optional.
+    }
+  };
+
   const loadInsightHighlight = async () => {
     try {
       const token = await AsyncStorage.getItem('userToken');
@@ -368,6 +394,7 @@ export default function HomeScreen() {
         loadDailyChallenge(),
         loadHealthLogSummary(),
         loadInsightHighlight(),
+        loadCountry(),
         loadGlucoseUnit(),
         loadLastUsed(),
       ]);
@@ -1108,6 +1135,15 @@ export default function HomeScreen() {
             </Pressable>
           </View>
         )}
+
+        {countryPrompt ? (
+          <View style={{ paddingHorizontal: 16 }}>
+            <CountryPromptCard suggested={countryPrompt.suggested} onDone={(result) => {
+                countryStateCache = result || { ask: false };
+                setCountryPrompt(null);
+              }} />
+          </View>
+        ) : null}
 
         {/* Track today */}
         <View style={styles.hSection}>

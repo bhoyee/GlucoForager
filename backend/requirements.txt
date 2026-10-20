@@ -20,3 +20,4 @@ google-genai==1.62.0
 reportlab==4.2.0
 boto3==1.35.36
 posthog==3.7.4
+maxminddb==2.6.2

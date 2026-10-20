@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { useNavigation, useIsFocused, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -689,6 +690,22 @@ export default function ManualInputScreen() {
     outputRange: [-76, 76],
   });
 
+  const filledCount = ingredients.filter((i) => i.trim()).length;
+
+  // Quick add: tap to add (into the first empty box, else a new one); tap again to remove.
+  const toggleQuickIngredient = (name) => {
+    setIngredients((current) => {
+      const idx = current.findIndex((i) => i.trim().toLowerCase() === name);
+      if (idx !== -1) {
+        const next = current.filter((_, i) => i !== idx);
+        return next.length ? next : [''];
+      }
+      const empty = current.findIndex((i) => !i.trim());
+      if (empty !== -1) return current.map((i, k) => (k === empty ? name : i));
+      return [...current, name];
+    });
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
@@ -719,110 +736,144 @@ export default function ManualInputScreen() {
           </View>
         </View>
 
-        {/* Instructions */}
-        <View style={styles.instructionsContainer}>
-          <Ionicons name="information-circle-outline" size={24} color={Colors.primary} />
-          <Text style={styles.instructionsText}>
-            Enter the ingredients you have available. We'll find diabetes-safe recipes you can make.
-          </Text>
-        </View>
-        {['trialing', 'trial', 'cancelled_active', 'legacy_grace', 'grace'].includes(scanStatus.accessStatus) ? (
-          <View style={styles.scanBadge}>
-            <Ionicons name="time-outline" size={16} color={Colors.primary} />
-            <Text style={styles.scanBadgeText}>
-              {Number(scanStatus.trialDaysLeft) > 0
-                ? `${scanStatus.trialDaysLeft} day${Number(scanStatus.trialDaysLeft) === 1 ? '' : 's'} left`
-                : scanStatus.accessStatus === 'cancelled_active'
-                  ? 'Active until period ends'
-                  : scanStatus.accessStatus === 'legacy_grace' || scanStatus.accessStatus === 'grace'
-                    ? 'Welcome week'
-                    : 'Trial active'}
-            </Text>
-          </View>
-        ) : null}
-        {scanStatus.freeUsage ? (
-          <TouchableOpacity style={styles.scanBadge} onPress={openPremiumPaywall} activeOpacity={0.8}>
-            <Ionicons name="sparkles-outline" size={16} color={Colors.primary} />
-            <Text style={styles.scanBadgeText}>
-              {freeUsesLabel(scanStatus.freeUsage, FREE_FEATURES.RECIPE_GENERATION)}
-            </Text>
-          </TouchableOpacity>
-        ) : null}
-        {scanStatus.isPremium && (
-          <View style={styles.scanBadge}>
-            <Ionicons name="infinite-outline" size={16} color={Colors.primary} />
-            <Text style={styles.scanBadgeText}>Premium active</Text>
-          </View>
-        )}
-
-        {/* Ingredients List */}
-        <View
-          style={styles.ingredientsContainer}
-          onLayout={(event) => {
-            ingredientsContainerYRef.current = event?.nativeEvent?.layout?.y ?? 0;
-          }}
-        >
-          <Text style={styles.sectionTitle}>Your Ingredients</Text>
-          
-          {ingredients.map((ingredient, index) => (
-            <View
-              key={index}
-              style={styles.ingredientRow}
-              onLayout={(event) => {
-                ingredientRowYRef.current[index] = event?.nativeEvent?.layout?.y ?? 0;
-              }}
-            >
-              <TextInput
-                style={styles.ingredientInput}
-                placeholder={`Ingredient ${index + 1} (e.g., tomato)`}
-                placeholderTextColor={Colors.textMuted}
-                value={ingredient}
-                onChangeText={(text) => handleIngredientChange(text, index)}
-                autoCapitalize="none"
-                editable={!isLoading}
-                onFocus={() => {
-                  setActiveIngredientIndex(index);
-                  scrollIngredientIntoView(index, 100);
-                  scrollIngredientIntoView(index, 280);
-                }}
-              />
-              {index === ingredients.length - 1 && (
-                <TouchableOpacity
-                  style={styles.addInlineButton}
-                  onPress={handleAddIngredient}
-                  disabled={isLoading}
-                >
-                  <Ionicons name="add" size={18} color="white" />
-                </TouchableOpacity>
-              )}
-              {ingredients.length > 1 && (
-                <TouchableOpacity
-                  style={styles.removeButton}
-                  onPress={() => handleRemoveIngredient(index)}
-                  disabled={isLoading}
-                >
-                  <Ionicons name="close-circle" size={24} color={Colors.error} />
-                </TouchableOpacity>
-              )}
+        <View style={styles.pBody}>
+          {/* Intro */}
+          <LinearGradient colors={['#E2F4F2', '#F4FBFA']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.pIntro}>
+            <View style={styles.pIntroIcon}>
+              <Ionicons name="basket" size={22} color="white" />
             </View>
-          ))}
+            <View style={{ flex: 1 }}>
+              <Text style={styles.pIntroTitle}>What's in your kitchen?</Text>
+              <Text style={styles.pIntroText}>Add what you have and we'll create blood-sugar-friendly recipes from it.</Text>
+            </View>
+          </LinearGradient>
 
-          <Text style={styles.addHint}>Tap + to add another ingredient</Text>
-        </View>
+          {/* Access status: welcome week days left, or this week's free uses. Premium needs no badge. */}
+          {['trialing', 'trial', 'cancelled_active', 'legacy_grace', 'grace'].includes(scanStatus.accessStatus) ? (
+            <View style={[styles.pStatus, styles.pStatusWelcome]}>
+              <Ionicons name="gift" size={15} color="#0E7490" />
+              <Text style={[styles.pStatusText, { color: '#0E7490' }]}>
+                {Number(scanStatus.trialDaysLeft) > 0
+                  ? `Welcome week · ${scanStatus.trialDaysLeft} day${Number(scanStatus.trialDaysLeft) === 1 ? '' : 's'} of full access left`
+                  : scanStatus.accessStatus === 'cancelled_active'
+                    ? 'Active until your period ends'
+                    : scanStatus.accessStatus === 'legacy_grace' || scanStatus.accessStatus === 'grace'
+                      ? 'Welcome week · full access'
+                      : 'Trial active'}
+              </Text>
+            </View>
+          ) : null}
+          {scanStatus.freeUsage ? (
+            <TouchableOpacity style={[styles.pStatus, styles.pStatusFree]} onPress={openPremiumPaywall} activeOpacity={0.8}>
+              <Ionicons name="sparkles" size={15} color="#6B46C1" />
+              <Text style={[styles.pStatusText, { color: '#5B3BA6' }]}>
+                {freeUsesLabel(scanStatus.freeUsage, FREE_FEATURES.RECIPE_GENERATION)}
+              </Text>
+              <Ionicons name="chevron-forward" size={14} color="#6B46C1" />
+            </TouchableOpacity>
+          ) : null}
 
-        {/* Examples */}
-        <View style={styles.examplesContainer}>
-        <Text style={styles.examplesTitle}>Examples:</Text>
-        <View style={styles.examplesRow}>
-          <TouchableOpacity
-            style={styles.examplePill}
-            disabled={isLoading}
-            onPress={() => setIngredients(['tomato'])}
+          {/* Ingredients */}
+          <View
+            style={styles.pCard}
+            onLayout={(event) => {
+              ingredientsContainerYRef.current = event?.nativeEvent?.layout?.y ?? 0;
+            }}
           >
-            <Text style={styles.exampleText}>Tomato</Text>
-          </TouchableOpacity>
+            <View style={styles.pCardHead}>
+              <View style={[styles.pHeadIcon, { backgroundColor: '#2C8632' }]}>
+                <Ionicons name="leaf" size={16} color="white" />
+              </View>
+              <Text style={styles.pCardTitle}>Your ingredients</Text>
+              {filledCount ? (
+                <View style={styles.pCount}>
+                  <Text style={styles.pCountText}>{filledCount}</Text>
+                </View>
+              ) : null}
+            </View>
+
+            {ingredients.map((ingredient, index) => (
+              <View
+                key={index}
+                style={[styles.pRow, activeIngredientIndex === index && styles.pRowActive]}
+                onLayout={(event) => {
+                  ingredientRowYRef.current[index] = event?.nativeEvent?.layout?.y ?? 0;
+                }}
+              >
+                <View style={[styles.pRowNum, ingredient.trim() ? styles.pRowNumOn : null]}>
+                  {ingredient.trim() ? (
+                    <Ionicons name="checkmark" size={14} color="white" />
+                  ) : (
+                    <Text style={styles.pRowNumText}>{index + 1}</Text>
+                  )}
+                </View>
+                <TextInput
+                  style={styles.pInput}
+                  placeholder={index === 0 ? 'e.g. chicken' : index === 1 ? 'e.g. spinach' : 'Add an ingredient'}
+                  placeholderTextColor={Colors.textMuted}
+                  value={ingredient}
+                  onChangeText={(text) => handleIngredientChange(text, index)}
+                  autoCapitalize="none"
+                  editable={!isLoading}
+                  returnKeyType="next"
+                  onSubmitEditing={index === ingredients.length - 1 ? handleAddIngredient : undefined}
+                  onFocus={() => {
+                    setActiveIngredientIndex(index);
+                    scrollIngredientIntoView(index, 100);
+                    scrollIngredientIntoView(index, 280);
+                  }}
+                />
+                {ingredients.length > 1 ? (
+                  <TouchableOpacity
+                    style={styles.pRemove}
+                    onPress={() => handleRemoveIngredient(index)}
+                    disabled={isLoading}
+                    hitSlop={8}
+                  >
+                    <Ionicons name="close" size={16} color={Colors.textLight} />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            ))}
+
+            <TouchableOpacity style={styles.pAdd} onPress={handleAddIngredient} disabled={isLoading} activeOpacity={0.85}>
+              <Ionicons name="add-circle" size={18} color={Colors.primary} />
+              <Text style={styles.pAddText}>Add ingredient</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Quick add */}
+          <View style={styles.pCard}>
+            <View style={styles.pCardHead}>
+              <View style={[styles.pHeadIcon, { backgroundColor: '#D97706' }]}>
+                <Ionicons name="flash" size={16} color="white" />
+              </View>
+              <Text style={styles.pCardTitle}>Quick add</Text>
+            </View>
+            <View style={styles.pChips}>
+              {QUICK_INGREDIENTS.map((item) => {
+                const added = ingredients.some((i) => i.trim().toLowerCase() === item.name);
+                return (
+                  <TouchableOpacity
+                    key={item.name}
+                    style={[styles.pChip, { backgroundColor: added ? item.color : item.bg, borderColor: added ? item.color : item.border }]}
+                    onPress={() => toggleQuickIngredient(item.name)}
+                    disabled={isLoading}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name={added ? 'checkmark' : item.icon} size={14} color={added ? 'white' : item.color} />
+                    <Text style={[styles.pChipText, { color: added ? 'white' : item.text }]}>{item.name}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          <View style={styles.pTip}>
+            <Ionicons name="bulb" size={15} color="#D97706" />
+            <Text style={styles.pTipText}>Three or more ingredients give better recipes. Salt, oil and spices are assumed.</Text>
+          </View>
         </View>
-      </View>
 
       </ScrollView>
       {!typingActive ? (
@@ -835,15 +886,17 @@ export default function ManualInputScreen() {
           ]}
         >
           <TouchableOpacity
-            style={[
-              styles.findButton,
-              (isLoading || limitReached) && styles.findButtonDisabled,
-              limitReached && styles.findButtonLimit,
-            ]}
+            style={[styles.pFindShadow, (isLoading || limitReached) && styles.findButtonDisabled]}
             onPress={handleFindRecipes}
             disabled={isLoading || limitReached}
+            activeOpacity={0.9}
           >
-            <View style={styles.findButtonContent}>
+            <LinearGradient
+              colors={limitReached ? ['#E2E8F0', '#CBD5E1'] : ['#23807E', '#0B5A46']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.pFind}
+            >
               {isLoading ? (
                 <>
                   <Ionicons name="refresh" size={20} color="white" style={styles.loadingIcon} />
@@ -858,13 +911,13 @@ export default function ManualInputScreen() {
                 </>
               ) : (
                 <>
-                  <Ionicons name="search-outline" size={20} color="white" />
+                  <Ionicons name="sparkles" size={20} color="white" />
                   <Text style={styles.findButtonText} numberOfLines={1} ellipsizeMode="tail">
-                    Find Diabetes-Safe Recipes
+                    {filledCount ? `Create recipes · ${filledCount} ingredient${filledCount === 1 ? '' : 's'}` : 'Create diabetes-friendly recipes'}
                   </Text>
                 </>
               )}
-            </View>
+            </LinearGradient>
           </TouchableOpacity>
         </View>
       ) : null}
@@ -1046,6 +1099,21 @@ export default function ManualInputScreen() {
     </View>
   );
 }
+
+const QUICK_INGREDIENTS = [
+  { name: 'chicken', icon: 'restaurant', color: '#C2410C', bg: '#FFF1E6', border: '#F8D9BD', text: '#9A3412' },
+  { name: 'eggs', icon: 'egg', color: '#B7791F', bg: '#FFF8E6', border: '#F6E2B0', text: '#7B4A0B' },
+  { name: 'salmon', icon: 'fish', color: '#DD6B20', bg: '#FFEFE6', border: '#F9D3BC', text: '#9C4221' },
+  { name: 'spinach', icon: 'leaf', color: '#2C8632', bg: '#E9F6EA', border: '#CBE9CD', text: '#1F5E24' },
+  { name: 'broccoli', icon: 'leaf', color: '#2F855A', bg: '#E6F4EC', border: '#C6E6D3', text: '#22543D' },
+  { name: 'tomato', icon: 'nutrition', color: '#C53030', bg: '#FDECEC', border: '#F6CFCF', text: '#9B2C2C' },
+  { name: 'onion', icon: 'ellipse', color: '#805AD5', bg: '#F3EEFC', border: '#DFD3F7', text: '#553C9A' },
+  { name: 'beans', icon: 'ellipse', color: '#975A16', bg: '#FAF1E4', border: '#EDDCC2', text: '#744210' },
+  { name: 'lentils', icon: 'ellipse', color: '#B7791F', bg: '#FFF8E6', border: '#F6E2B0', text: '#7B4A0B' },
+  { name: 'peppers', icon: 'flame', color: '#E53E3E', bg: '#FDECEC', border: '#F6CFCF', text: '#9B2C2C' },
+  { name: 'greek yogurt', icon: 'ice-cream', color: '#2B6CB0', bg: '#E6F0FB', border: '#C8DCF4', text: '#2C5282' },
+  { name: 'avocado', icon: 'leaf', color: '#38A169', bg: '#E9F6EA', border: '#CBE9CD', text: '#276749' },
+];
 
 const styles = StyleSheet.create({
   container: {
@@ -1457,142 +1525,8 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
   },
-  instructionsContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: `${Colors.primary}10`,
-    marginHorizontal: 20,
-    marginBottom: 24,
-    padding: 16,
-    borderRadius: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.primary,
-  },
-  instructionsText: {
-    flex: 1,
-    marginLeft: 12,
-    fontSize: 14,
-    color: Colors.text,
-    lineHeight: 20,
-  },
-  scanBadge: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.surface,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    marginHorizontal: 20,
-    marginTop: -8,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  scanBadgeText: {
-    marginLeft: 6,
-    fontSize: 12,
-    color: Colors.text,
-    fontWeight: '600',
-  },
-  ingredientsContainer: {
-    paddingHorizontal: 20,
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: Colors.text,
-    marginBottom: 16,
-  },
-  ingredientRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  ingredientInput: {
-    flex: 1,
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: Platform.OS === 'ios' ? 16 : 12,
-    fontSize: 16,
-    color: Colors.text,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  addInlineButton: {
-    marginLeft: 10,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  removeButton: {
-    marginLeft: 12,
-  },
-  addHint: {
-    marginTop: 6,
-    fontSize: 13,
-    color: Colors.textLight,
-  },
-  examplesContainer: {
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  examplesTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text,
-    marginBottom: 12,
-  },
-  examplesRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  examplePill: {
-    backgroundColor: Colors.surface,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginRight: 8,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignSelf: 'flex-start',
-    maxWidth: '100%',
-    minWidth: 84,
-    flexShrink: 0,
-  },
-  exampleText: {
-    fontSize: 14,
-    color: Colors.primary,
-    flexShrink: 0,
-  },
-  findButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    marginBottom: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
   findButtonDisabled: {
     opacity: 0.7,
-  },
-  findButtonLimit: {
-    backgroundColor: Colors.border,
-  },
-  findButtonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   findButtonText: {
     color: 'white',
@@ -1608,4 +1542,77 @@ const styles = StyleSheet.create({
   loadingIcon: {
     marginRight: 8,
   },
+  // ---- Premium layout ----
+  pBody: { padding: 16, gap: 12 },
+  pIntro: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 20, padding: 16, borderWidth: 1, borderColor: '#CDE7E4' },
+  pIntroIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },
+  pIntroTitle: { fontSize: 17, fontWeight: '900', color: Colors.brandNavy },
+  pIntroText: { fontSize: 13, lineHeight: 18, color: Colors.textLight, marginTop: 2 },
+  pStatus: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
+  pStatusWelcome: { backgroundColor: '#E0F5F8' },
+  pStatusFree: { backgroundColor: '#F0EBFB' },
+  pStatusText: { fontSize: 12.5, fontWeight: '800' },
+  pCard: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#EDF0EA',
+    shadowColor: '#0F2A3A',
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  pCardHead: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  pHeadIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  pCardTitle: { flex: 1, fontSize: 16, fontWeight: '900', color: Colors.brandNavy },
+  pCount: { minWidth: 26, height: 26, borderRadius: 13, paddingHorizontal: 8, backgroundColor: '#2C8632', alignItems: 'center', justifyContent: 'center' },
+  pCountText: { color: 'white', fontSize: 12.5, fontWeight: '900' },
+  pRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#F7F8F5',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#EDF0EA',
+    paddingLeft: 10,
+    paddingRight: 8,
+    marginBottom: 8,
+  },
+  pRowActive: { borderColor: Colors.primary, backgroundColor: 'white' },
+  pRowNum: { width: 24, height: 24, borderRadius: 8, backgroundColor: '#E6EAE2', alignItems: 'center', justifyContent: 'center' },
+  pRowNumOn: { backgroundColor: '#2C8632' },
+  pRowNumText: { fontSize: 12, fontWeight: '900', color: Colors.textLight },
+  pInput: { flex: 1, height: 48, fontSize: 15.5, fontWeight: '700', color: Colors.brandNavy },
+  pRemove: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#EEF1EA', alignItems: 'center', justifyContent: 'center' },
+  pAdd: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    height: 46,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: '#9FD3CF',
+    backgroundColor: '#F4FAF9',
+    marginTop: 2,
+  },
+  pAddText: { fontSize: 14, fontWeight: '900', color: Colors.primary },
+  pChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  pChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 8 },
+  pChipText: { fontSize: 13, fontWeight: '800', textTransform: 'capitalize' },
+  pTip: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 6 },
+  pTipText: { flex: 1, fontSize: 12.5, lineHeight: 18, color: Colors.textLight },
+  pFindShadow: {
+    borderRadius: 16,
+    shadowColor: '#0B5A46',
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 4,
+  },
+  pFind: { height: 56, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 16 },
 });

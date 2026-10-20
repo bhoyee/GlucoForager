@@ -23,6 +23,7 @@ import { apiFetch } from '../../utils/api';
 import { getRecipeImageSettings } from '../../utils/recipeImageSettings';
 import { trackEvent } from '../../utils/analytics';
 import { confirmMealLogged } from '../../utils/mealLogConfirm';
+import GlucoseImpactCard from '../../components/GlucoseImpactCard';
 import { generateIdempotencyKey } from '../../utils/idempotency';
 import { getCachedRecipeImageUrl, setCachedRecipeImageUrl } from '../../utils/recipeImageCache';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -117,6 +118,7 @@ const RecipeDetailsScreen = () => {
   const [isSubmittingCheckIn, setIsSubmittingCheckIn] = useState(false);
   // "I ate this": logs the recipe as a meal with its exact carbs per serving.
   const [ateLogged, setAteLogged] = useState(false);
+  const [glucoseImpact, setGlucoseImpact] = useState(null);
   const [isLoggingAte, setIsLoggingAte] = useState(false);
   const [isAddingToShoppingList, setIsAddingToShoppingList] = useState(false);
 
@@ -667,6 +669,47 @@ const RecipeDetailsScreen = () => {
       setIsSavingFavorite(false);
     }
   };
+
+  // Typical glucose impact for one serving, plus the user's own last reading for it.
+  useEffect(() => {
+    if (!recipe?.title || recipe === mockRecipe) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await AsyncStorage.getItem('userToken');
+        if (!token) return;
+        const n = recipe.nutrition || {};
+        const gi = parseNutritionNumber(n.glycemic_index ?? n.glycemicIndex);
+        const res = await apiFetch(
+          `${API_URL}/api/app/glucose-impact`,
+          {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              carbs_g: parseNutritionNumber(n.carbs),
+              fiber_g: parseNutritionNumber(n.fiber),
+              protein_g: parseNutritionNumber(n.protein),
+              fat_g: parseNutritionNumber(n.fat),
+              sugars_g: parseNutritionNumber(n.sugar),
+              ...(gi != null && gi > 0 && gi <= 110 ? { gi } : {}),
+              name: String(recipe.title).slice(0, 200),
+            }),
+          },
+          { timeoutMs: 10000 }
+        );
+        if (!cancelled && res.ok) {
+          const data = await res.json();
+          setGlucoseImpact(data?.glucose_impact ? { ...data, glucose_impact: { ...data.glucose_impact, portion: 'per serving' } } : null);
+        }
+      } catch {
+        // Optional card.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recipe?.title, recipe?.nutrition?.carbs]);
 
   const handleAteThis = async () => {
     if (isLoggingAte || ateLogged) return;
@@ -1319,6 +1362,7 @@ const RecipeDetailsScreen = () => {
           {renderTitleSection()}
           {renderStatsBar()}
           {renderSafetySection()}
+          {glucoseImpact ? <GlucoseImpactCard impact={glucoseImpact.glucose_impact} lastTime={glucoseImpact.last_time} /> : null}
           {renderDetailsTabs()}
           {renderActiveDetailsSection()}
           {renderActionsSection()}

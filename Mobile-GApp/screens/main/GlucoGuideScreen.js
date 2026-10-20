@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
 import { useAuth } from '../../context/authContext';
@@ -25,6 +26,22 @@ const QUICK_PROMPTS = [
   'Give me a lower-carb dinner idea.',
   'What should I ask my doctor about my meals?',
 ];
+const WELCOME_PROMPTS = [
+  { text: 'What can I eat for steady blood sugar today?', icon: 'sunny', color: '#D97706', bg: '#FFF4E0' },
+  { text: 'Explain why bread can spike glucose.', icon: 'trending-up', color: '#C53030', bg: '#FDECEC' },
+  { text: 'Give me a lower-carb dinner idea.', icon: 'restaurant', color: '#2C8632', bg: '#E9F6EA' },
+  { text: "Which snacks won't spike my blood sugar?", icon: 'nutrition', color: '#6B46C1', bg: '#F0EBFB' },
+];
+const ACTION_ICONS = { ManualInput: 'restaurant', CarbSwaps: 'swap-horizontal', DailyPlan: 'calendar', composer: 'chatbubble-ellipses' };
+
+// GlucoGuide's avatar: gradient badge with a spark.
+function GuideAvatar({ size = 30 }) {
+  return (
+    <LinearGradient colors={['#35C0BD', '#1D7C7A']} style={{ width: size, height: size, borderRadius: size / 2.6, alignItems: 'center', justifyContent: 'center' }}>
+      <Ionicons name="sparkles" size={size * 0.52} color="white" />
+    </LinearGradient>
+  );
+}
 
 const STARTER_MESSAGE = {
   id: 'starter',
@@ -94,15 +111,18 @@ function GuideAnswer({ content }) {
       {blocks.map((block, index) => {
         if (block.type === 'heading') {
           return (
-            <Text key={`${block.type}-${index}`} style={styles.answerHeading}>
-              {block.text}
-            </Text>
+            <View key={`${block.type}-${index}`} style={styles.answerHeadingRow}>
+              <View style={styles.answerHeadingBar} />
+              <Text style={styles.answerHeading}>{block.text}</Text>
+            </View>
           );
         }
         if (block.type === 'bullet') {
           return (
             <View key={`${block.type}-${index}`} style={styles.answerBulletRow}>
-              <View style={styles.answerBulletDot} />
+              <View style={styles.answerBulletDot}>
+                <Ionicons name="checkmark" size={11} color="white" />
+              </View>
               <Text style={styles.answerBulletText}>{block.text}</Text>
             </View>
           );
@@ -411,6 +431,8 @@ export default function GlucoGuideScreen({ navigation }) {
     navigation.navigate('Home', { screen: action.target });
   };
 
+  const showWelcome = !loading && messages.length <= 1 && (!messages[0] || messages[0].id === 'starter');
+
   return (
       <KeyboardAvoidingView
       style={styles.container}
@@ -428,25 +450,55 @@ export default function GlucoGuideScreen({ navigation }) {
           <Pressable style={styles.backButton} onPress={() => navigation.navigate('Home')}>
             <Ionicons name="arrow-back" size={20} color="white" />
           </Pressable>
+          <GuideAvatar size={42} />
           <View style={styles.headerCopy}>
             <Text style={styles.headerTitle}>GlucoGuide AI</Text>
-            <Text style={styles.headerSubtitle}>Diabetes-aware food and lifestyle support</Text>
+            <View style={styles.onlineRow}>
+              <View style={styles.onlineDot} />
+              <Text style={styles.headerSubtitle}>Diabetes-aware food support</Text>
+            </View>
           </View>
           <View style={styles.headerBadge}>
-            <Ionicons name="shield-checkmark-outline" size={15} color="#B9F6CA" />
+            <Ionicons name="shield-checkmark" size={14} color="#B9F6CA" />
             <Text style={styles.headerBadgeText}>Safe</Text>
           </View>
         </View>
 
-        {messages.map((item) => (
-          <View key={item.id} style={[styles.bubble, item.role === 'user' ? styles.userBubble : styles.assistantBubble]}>
-            {item.role === 'assistant' ? (
-              item.content ? <GuideAnswer content={item.content} /> : <TypingAnswer />
-            ) : (
-              <Text style={[styles.bubbleText, styles.userBubbleText]}>{item.content}</Text>
-            )}
+        {showWelcome ? (
+          <View style={styles.welcome}>
+            <GuideAvatar size={64} />
+            <Text style={styles.welcomeTitle}>Hi, I'm GlucoGuide</Text>
+            <Text style={styles.welcomeText}>
+              Ask me about food choices, recipes, swaps or daily habits for steadier blood sugar. I can't diagnose or change
+              medication.
+            </Text>
+            <View style={styles.welcomeGrid}>
+              {WELCOME_PROMPTS.map((p) => (
+                <Pressable key={p.text} style={[styles.welcomeCard, { backgroundColor: p.bg }]} onPress={() => sendMessage(p.text)}>
+                  <View style={styles.welcomeIcon}>
+                    <Ionicons name={p.icon} size={16} color={p.color} />
+                  </View>
+                  <Text style={styles.welcomeCardText}>{p.text}</Text>
+                </Pressable>
+              ))}
+            </View>
           </View>
-        ))}
+        ) : (
+          messages.map((item) =>
+            item.role === 'assistant' ? (
+              <View key={item.id} style={styles.assistantRow}>
+                <GuideAvatar size={28} />
+                <View style={[styles.bubble, styles.assistantBubble]}>
+                  {item.content ? <GuideAnswer content={item.content} /> : <TypingAnswer />}
+                </View>
+              </View>
+            ) : (
+              <LinearGradient key={item.id} colors={['#23807E', '#0B5A46']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.bubble, styles.userBubble]}>
+                <Text style={[styles.bubbleText, styles.userBubbleText]}>{item.content}</Text>
+              </LinearGradient>
+            )
+          )
+        )}
 
         {!loading && latestActions.length ? (
           <View style={styles.actionsRow}>
@@ -462,6 +514,11 @@ export default function GlucoGuideScreen({ navigation }) {
                 ]}
                 onPress={() => handleAction(action)}
               >
+                <Ionicons
+                  name={ACTION_ICONS[action.target] || 'arrow-forward'}
+                  size={14}
+                  color={action.target === 'composer' ? Colors.brandNavy : 'white'}
+                />
                 <Text
                   style={[
                     styles.actionChipText,
@@ -476,7 +533,7 @@ export default function GlucoGuideScreen({ navigation }) {
         ) : null}
       </ScrollView>
 
-      {!composerFocused ? (
+      {!composerFocused && !showWelcome ? (
         <View style={styles.quickWrap}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickRow}>
             {QUICK_PROMPTS.map((prompt) => (
@@ -534,8 +591,10 @@ export default function GlucoGuideScreen({ navigation }) {
               }}
               onBlur={() => setComposerFocused(false)}
             />
-            <Pressable style={[styles.sendButton, (!input.trim() || loading) ? styles.sendButtonDisabled : null]} onPress={() => sendMessage()}>
-              <Ionicons name="send" size={18} color="white" />
+            <Pressable style={(!input.trim() || loading) ? styles.sendButtonDisabled : null} onPress={() => sendMessage()}>
+              <LinearGradient colors={['#35C0BD', '#1D7C7A']} style={styles.sendButton}>
+                <Ionicons name="arrow-up" size={20} color="white" />
+              </LinearGradient>
             </Pressable>
           </View>
           {composerFocused ? (
@@ -553,7 +612,7 @@ function TypingAnswer() {
       <View style={styles.typingDot} />
       <View style={[styles.typingDot, styles.typingDotMuted]} />
       <View style={[styles.typingDot, styles.typingDotFaint]} />
-      <Text style={styles.typingText}>GlucoGuide is writing...</Text>
+      <Text style={styles.typingText}>Thinking…</Text>
     </View>
   );
 }
@@ -561,7 +620,7 @@ function TypingAnswer() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F2F7F4',
+    backgroundColor: Colors.background,
   },
   header: {
     backgroundColor: Colors.primaryDark,
@@ -627,25 +686,26 @@ const styles = StyleSheet.create({
     gap: 11,
   },
   bubble: {
-    maxWidth: '88%',
+    maxWidth: '86%',
     borderRadius: 20,
-    paddingHorizontal: 14,
+    paddingHorizontal: 15,
     paddingVertical: 12,
   },
   assistantBubble: {
-    alignSelf: 'flex-start',
-    backgroundColor: Colors.surface,
+    flexShrink: 1,
+    backgroundColor: 'white',
+    borderTopLeftRadius: 6,
     borderWidth: 1,
-    borderColor: Colors.border,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
+    borderColor: '#EDF0EA',
+    shadowColor: '#0F2A3A',
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
-    elevation: 1,
+    elevation: 2,
   },
   userBubble: {
     alignSelf: 'flex-end',
-    backgroundColor: Colors.primaryDark,
+    borderBottomRightRadius: 6,
   },
   bubbleText: {
     fontSize: 15,
@@ -661,12 +721,90 @@ const styles = StyleSheet.create({
   answerWrap: {
     gap: 7,
   },
+  answerHeadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  answerHeadingBar: {
+    width: 4,
+    height: 16,
+    borderRadius: 2,
+    backgroundColor: Colors.primary,
+  },
+  assistantRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    alignSelf: 'flex-start',
+    maxWidth: '96%',
+  },
+  onlineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 3,
+  },
+  onlineDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#56C75D',
+  },
+  welcome: {
+    alignItems: 'center',
+    paddingTop: 6,
+  },
+  welcomeTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: Colors.brandNavy,
+    marginTop: 14,
+  },
+  welcomeText: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: Colors.textLight,
+    textAlign: 'center',
+    marginTop: 6,
+    paddingHorizontal: 12,
+  },
+  welcomeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    rowGap: 10,
+    marginTop: 20,
+    alignSelf: 'stretch',
+  },
+  welcomeCard: {
+    width: '48.5%',
+    borderRadius: 18,
+    padding: 14,
+    gap: 10,
+    minHeight: 112,
+  },
+  welcomeIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: 'white',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  welcomeCardText: {
+    fontSize: 13.5,
+    lineHeight: 18,
+    fontWeight: '800',
+    color: Colors.brandNavy,
+  },
   answerHeading: {
-    color: Colors.primaryDark,
-    fontSize: 15,
+    flex: 1,
+    color: Colors.brandNavy,
+    fontSize: 15.5,
     lineHeight: 20,
     fontWeight: '900',
-    marginTop: 2,
   },
   answerParagraph: {
     color: Colors.text,
@@ -679,11 +817,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   answerBulletDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 18,
+    height: 18,
+    borderRadius: 6,
     backgroundColor: Colors.primary,
-    marginTop: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
   },
   answerBulletText: {
     flex: 1,
@@ -719,18 +859,21 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   actionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     borderRadius: 999,
-    paddingHorizontal: 12,
+    paddingHorizontal: 13,
     paddingVertical: 9,
   },
   actionChipRecipes: {
     backgroundColor: Colors.primaryDark,
   },
   actionChipSwaps: {
-    backgroundColor: Colors.secondary,
+    backgroundColor: '#6B46C1',
   },
   actionChipPlan: {
-    backgroundColor: '#B45309',
+    backgroundColor: '#D97706',
   },
   actionChipComposer: {
     backgroundColor: '#EEF2F7',
@@ -748,9 +891,7 @@ const styles = StyleSheet.create({
     color: Colors.text,
   },
   quickWrap: {
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    backgroundColor: '#F9FCFA',
+    backgroundColor: Colors.background,
   },
   quickRow: {
     gap: 8,
@@ -760,19 +901,19 @@ const styles = StyleSheet.create({
   quickChip: {
     maxWidth: 230,
     borderRadius: 999,
-    paddingHorizontal: 12,
+    paddingHorizontal: 13,
     paddingVertical: 9,
-    backgroundColor: Colors.surface,
+    backgroundColor: '#E8F4F3',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#CDE7E4',
   },
   quickChipText: {
-    color: Colors.text,
-    fontSize: 12,
-    fontWeight: '700',
+    color: Colors.primaryDark,
+    fontSize: 12.5,
+    fontWeight: '800',
   },
   composerWrap: {
-    backgroundColor: '#F9FCFA',
+    backgroundColor: Colors.background,
     paddingHorizontal: 12,
     paddingTop: 6,
   },
@@ -780,16 +921,16 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   composerCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 18,
+    backgroundColor: 'white',
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: Colors.border,
-    padding: 8,
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
+    borderColor: '#E6EAE2',
+    padding: 6,
+    shadowColor: '#0F2A3A',
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 5,
   },
   composerCardFocused: {
     borderRadius: 22,
@@ -843,21 +984,16 @@ const styles = StyleSheet.create({
     flex: 1,
     maxHeight: 110,
     minHeight: 44,
-    borderRadius: 16,
-    backgroundColor: '#F7FAFC',
-    borderWidth: 1,
-    borderColor: Colors.border,
     paddingHorizontal: 12,
     paddingVertical: 11,
-    color: Colors.text,
-    fontSize: 15,
+    color: Colors.brandNavy,
+    fontSize: 15.5,
     lineHeight: 20,
   },
   sendButton: {
     width: 44,
     height: 44,
-    borderRadius: 14,
-    backgroundColor: Colors.primary,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },

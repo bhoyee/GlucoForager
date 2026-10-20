@@ -16,6 +16,7 @@ from ...services.cache_service import CacheService
 from ...services import glucose_insights, glucose_targets, meal_diary
 from ...services.meal_carb_estimate import MODEL as MEAL_ESTIMATE_MODEL, estimate_meal_carbs
 from ...services.diabetes_food_note import build_diabetes_note
+from ...services import food_label, geo_country, glucose_impact
 from ...services.user_activity_service import add_user_activity
 from ..dependencies import get_current_user
 
@@ -477,6 +478,35 @@ def recipe_meal_options(
     return {"items": options[:limit]}
 
 
+class GlucoseImpactPayload(BaseModel):
+    carbs_g: float | None = Field(None, ge=0, le=1000)
+    fiber_g: float | None = Field(None, ge=0, le=200)
+    protein_g: float | None = Field(None, ge=0, le=500)
+    fat_g: float | None = Field(None, ge=0, le=500)
+    sugars_g: float | None = Field(None, ge=0, le=1000)
+    gi: float | None = Field(None, ge=0, le=110)
+    is_drink: bool = False
+    name: str | None = Field(None, max_length=200)
+
+
+@router.post("/glucose-impact")
+def glucose_impact_estimate(
+    payload: GlucoseImpactPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Typical glucose impact for a recipe or meal, plus the user's own reading the last
+    time they ate something with the same name. A fixed formula: no AI, no cost."""
+    impact = glucose_impact.estimate_impact(
+        carbs_g=payload.carbs_g, fiber_g=payload.fiber_g, protein_g=payload.protein_g,
+        fat_g=payload.fat_g, sugars_g=payload.sugars_g, gi=payload.gi, is_drink=payload.is_drink,
+    )
+    return {
+        "glucose_impact": impact,
+        "last_time": glucose_impact.last_actual_reading(db, current_user, payload.name) if payload.name else None,
+    }
+
+
 @router.get("/meals")
 def list_meals(
     db: Session = Depends(get_db),
@@ -878,6 +908,40 @@ def lookup_barcode(
     if not code:
         return {"found": False, "barcode": barcode}
     result = _lookup_barcode_product(code)
+    if result.get("found"):
+        # Ratings in the user's own country's standard (FDA %DV in the US, etc.).
+        ratings = food_label.nutrient_ratings(
+            result.get("per_100g") or {}, result.get("per_serving"), bool(result.get("is_drink")),
+            geo_country.effective_country(current_user)[0], result.get("serving_quantity"),
+        )
+        result["traffic_lights"] = ratings["lights"]
+        result["traffic_light_standard"] = ratings["standard"]
+        result["rating_system"] = ratings["system"]
+        result["rating_country"] = geo_country.effective_country(current_user)[0]
+        # Carbs in one serving vs a typical meal for this user's daily carb goal.
+        carb_goal_g, goal_mode = _carb_goal_for_user(current_user)
+        per_serving = result.get("per_serving") or {}
+        result["meal_share"] = food_label.meal_share(per_serving.get("carbs_g"), carb_goal_g, goal_mode)
+        result["insights"] = food_label.build_insights(
+            per_serving=per_serving,
+            per_100g=result.get("per_100g") or {},
+            lights=result.get("traffic_lights") or [],
+            fibre=result.get("fibre_claim"),
+            nova_group=(result.get("diabetes_note") or {}).get("nova_group"),
+            share=result["meal_share"],
+            serving_size=result.get("serving_size"),
+            drink=bool(result.get("is_drink")),
+        )
+        # Typical 2-hour response for one serving (per 100g/ml when no serving size).
+        basis = per_serving if (per_serving and per_serving.get("carbs_g") is not None) else (result.get("per_100g") or {})
+        impact = glucose_impact.estimate_impact(
+            carbs_g=basis.get("carbs_g"), fiber_g=basis.get("fiber_g"), protein_g=basis.get("protein_g"),
+            fat_g=basis.get("fat_g"), sugars_g=basis.get("sugars_g"), is_drink=bool(result.get("is_drink")),
+        )
+        if impact:
+            impact["portion"] = "per serving" if basis is per_serving else ("per 100ml" if result.get("is_drink") else "per 100g")
+        result["glucose_impact"] = impact
+        result["last_time"] = glucose_impact.last_actual_reading(db, current_user, result.get("name"))
     # Feature-usage tracking (admin Activity chart). Never fail the lookup over it.
     add_user_activity(
         db,
@@ -910,13 +974,32 @@ def _lookup_barcode_product(code: str) -> dict:
     product = data["product"]
     nutrition = _extract_nutrition(product)
     name = (product.get("product_name") or product.get("generic_name") or "").strip() or None
+    nutriments = product.get("nutriments") or {}
+    per_100g = food_label.nutrient_table(nutriments, "_100g")
+    per_serving = food_label.nutrient_table(nutriments, "_serving")
+    drink = food_label.is_drink(product)
 
     return {
         "found": bool(name),
         "barcode": code,
         "name": name,
+        "brand": (product.get("brands") or "").split(",")[0].strip() or None,
+        "image_url": product.get("image_front_small_url") or product.get("image_small_url") or product.get("image_url"),
         "serving_size": product.get("serving_size"),
         **nutrition,
         "has_nutrition_data": nutrition.get("carbs_g") is not None,
         "diabetes_note": _diabetes_note(nutrition, product) if name else None,
+        # Full label: per 100g (what the traffic lights use) and per serving when known.
+        "per_100g": per_100g,
+        "per_serving": per_serving if any(v is not None for v in per_serving.values()) else None,
+        "is_drink": drink,
+        "serving_quantity": product.get("serving_quantity") if isinstance(product.get("serving_quantity"), (int, float)) else None,
+        "traffic_lights": food_label.traffic_lights(
+            per_100g, drink, per_serving, product.get("serving_quantity") if isinstance(product.get("serving_quantity"), (int, float)) else None
+        ),
+        "traffic_light_standard": "UK FSA front-of-pack, per 100ml" if drink else "UK FSA front-of-pack, per 100g",
+        "fibre_claim": food_label.fibre_claim(per_100g),
+        "nova_group": product.get("nova_group"),
+        "nova_label": food_label.NOVA_LABELS.get(int(product["nova_group"])) if isinstance(product.get("nova_group"), (int, float)) else None,
+        "nutriscore_grade": (product.get("nutriscore_grade") or "").lower() or None,
     }

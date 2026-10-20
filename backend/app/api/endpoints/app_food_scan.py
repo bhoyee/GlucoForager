@@ -16,6 +16,8 @@ from ...services.analytics_service import track_event
 from ...services.cache_service import CacheService
 from ...services.cost_tracker import record_ai_request
 from ...services.diabetes_food_note import build_diabetes_note
+from ...services import food_label, glucose_impact
+from .app_health_log import _carb_goal_for_user
 from ...services.subscription_service import get_effective_subscription_tier
 
 router = APIRouter(prefix="/app", tags=["app"])
@@ -96,14 +98,41 @@ def scan_food_photo(
         {"tier": tier, "is_food": True, "verdict": diabetes_note.get("verdict")},
     )
 
+    protein = _num(result.get("protein_g"))
+    fat = _num(result.get("fat_g"))
+    items = []
+    for item in (result.get("items") or [])[:5] if isinstance(result.get("items"), list) else []:
+        if isinstance(item, dict) and item.get("name") and _num(item.get("carbs_g")) is not None:
+            items.append({"name": str(item["name"])[:40], "carbs_g": round(_num(item["carbs_g"]))})
+    per_serving = {"carbs_g": round(carbs, 1) if carbs is not None else None, "sugars_g": sugars, "fiber_g": fiber}
+    carb_goal_g, goal_mode = _carb_goal_for_user(current_user)
+    meal_share = food_label.meal_share(per_serving["carbs_g"], carb_goal_g, goal_mode)
+    insights = food_label.build_insights(
+        per_serving=per_serving, per_100g={}, lights=[], fibre=None, nova_group=None,
+        share=meal_share, serving_size=result.get("portion"),
+    )
+    tip = result.get("tip")
+    if isinstance(tip, str) and tip.strip():
+        insights.append({"tone": "info", "text": tip.strip()[:180]})
+
     return {
         "is_food": True,
         "name": result.get("name"),
         "confidence": result.get("confidence"),
+        "portion": (result.get("portion") or None) if isinstance(result.get("portion"), str) else None,
         "carbs_g": round(carbs, 1) if carbs is not None else None,
         "sugars_g": round(sugars, 1) if sugars is not None else None,
         "fiber_g": round(fiber, 1) if fiber is not None else None,
         "net_carbs_g": round(carbs - fiber, 1) if carbs is not None and fiber is not None else None,
+        "protein_g": round(protein, 1) if protein is not None else None,
+        "fat_g": round(fat, 1) if fat is not None else None,
         "calories": round(calories) if calories is not None else None,
+        "items": items,
+        "glucose_impact": glucose_impact.estimate_impact(
+            carbs_g=carbs, fiber_g=fiber, protein_g=protein, fat_g=fat, sugars_g=sugars,
+        ),
+        "last_time": glucose_impact.last_actual_reading(db, current_user, result.get("name")),
+        "meal_share": meal_share,
+        "insights": insights[:4],
         "diabetes_note": diabetes_note,
     }
