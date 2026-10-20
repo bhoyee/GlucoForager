@@ -6,9 +6,10 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/Colors';
 import { apiFetch } from '../../utils/api';
+import { confirmMealLogged } from '../../utils/mealLogConfirm';
+import BarcodeResultSheet from '../../components/BarcodeResultSheet';
 import { API_URL } from '../../config/api';
 import { trackEvent } from '../../utils/analytics';
-import NutritionFactBadges from '../../components/NutritionFactBadges';
 
 let Camera;
 let CameraView;
@@ -23,13 +24,6 @@ try {
 }
 
 const BARCODE_TYPES = ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128'];
-
-const VERDICT_STYLE = {
-  good_fit: { label: 'Diabetes-friendly', color: Colors.success },
-  moderate: { label: 'Moderate', color: Colors.warning },
-  use_caution: { label: 'Use caution', color: Colors.danger },
-  unknown: { label: 'Not enough info', color: Colors.textLight },
-};
 
 export default function BarcodeScanScreen() {
   const navigation = useNavigation();
@@ -148,8 +142,10 @@ export default function BarcodeScanScreen() {
           body: JSON.stringify({
             description: result.name,
             source: 'barcode',
+            food_name: (result.name || '').slice(0, 80),
             carbs_g: result.carbs_g ?? undefined,
             calories: result.calories ?? undefined,
+            carbs_estimated: false,
           }),
         },
         { timeoutMs: 8000 }
@@ -159,11 +155,20 @@ export default function BarcodeScanScreen() {
         Alert.alert('Unable to log meal', data?.detail?.message || data?.detail || 'Please try again.');
         return;
       }
+      const saved = await response.json().catch(() => ({}));
       // This screen is reachable from two different tab stacks (Scan tab's mode
       // switcher, and the Log Meal screen's "scan barcode" link) - always land back
       // on Home rather than goBack(), so the second path doesn't dump the user on
       // the unrelated Scan tab.
       navigation.navigate('Home', { screen: 'HomeMain' });
+      if (saved?.meal && !saved.duplicate) {
+        await confirmMealLogged({
+          name: result.name,
+          loggedAt: saved.meal.logged_at,
+          carbs: result.carbs_g,
+          carbsEstimated: false,
+        });
+      }
     } catch {
       Alert.alert('Unable to log meal', 'Network request failed. Please check your connection.');
     } finally {
@@ -239,102 +244,31 @@ export default function BarcodeScanScreen() {
         </View>
       ) : null}
 
-      {result ? (
+      {result?.found ? (
+        <BarcodeResultSheet
+          result={result}
+          top={insets.top + 64}
+          bottom={Math.max(insets.bottom, 16)}
+          isSaving={isSaving}
+          onLog={handleLogProduct}
+          onScanAgain={handleScanAgain}
+          onPhotoScan={() => navigation.replace('PhotoScan')}
+          onFindSwap={() => navigation.navigate('Home', { screen: 'CarbSwaps', params: { query: result.name } })}
+          onChangeCountry={() => navigation.navigate('Profile', { screen: 'FoodPreferences' })}
+        />
+      ) : result ? (
         <View style={[styles.resultCard, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]}>
-          {result.found ? (
-            <>
-              <Text style={styles.eyebrow}>Diabetes check</Text>
-              <View style={styles.resultTitleRow}>
-                <Text style={styles.resultTitle} numberOfLines={2}>
-                  {result.name}
-                </Text>
-                {result.diabetes_note ? (
-                  <View
-                    style={[
-                      styles.verdictBadge,
-                      { backgroundColor: `${VERDICT_STYLE[result.diabetes_note.verdict]?.color ?? Colors.textLight}18` },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.verdictBadgeText,
-                        { color: VERDICT_STYLE[result.diabetes_note.verdict]?.color ?? Colors.textLight },
-                      ]}
-                    >
-                      {VERDICT_STYLE[result.diabetes_note.verdict]?.label ?? 'Unrated'}
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-
-              {result.carbs_g != null || result.sugars_g != null || result.calories != null ? (
-                <NutritionFactBadges
-                  carbsG={result.carbs_g}
-                  netCarbsG={result.net_carbs_g}
-                  sugarsG={result.sugars_g}
-                  calories={result.calories}
-                  basis={result.basis}
-                />
-              ) : (
-                <Text style={styles.resultMeta}>Carbs unknown</Text>
-              )}
-
-              {result.diabetes_note?.flags?.length ? (
-                <View style={styles.flagRow}>
-                  {result.diabetes_note.flags.map((flag) => (
-                    <View key={flag} style={styles.flagChip}>
-                      <Text style={styles.flagChipText}>{flag}</Text>
-                    </View>
-                  ))}
-                </View>
-              ) : null}
-
-              {result.has_nutrition_data === false ? (
-                <View style={styles.noDataNudge}>
-                  <Text style={styles.noDataNudgeText}>
-                    This barcode has no nutrition label data on file - common for fresh produce. Photo scan can
-                    usually estimate it instead.
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => navigation.replace('PhotoScan')}
-                    style={styles.noDataNudgeButton}
-                  >
-                    <Text style={styles.noDataNudgeButtonText}>Try photo scan</Text>
-                    <Ionicons name="chevron-forward" size={14} color={Colors.primary} />
-                  </TouchableOpacity>
-                </View>
-              ) : null}
-
-              <Text style={styles.disclaimer}>
-                General guide based on sugar, processing level, and fiber - not medical advice.
-              </Text>
-
-              <TouchableOpacity
-                style={[styles.primaryButton, isSaving && styles.buttonDisabled]}
-                onPress={handleLogProduct}
-                disabled={isSaving}
-              >
-                <Text style={styles.primaryButtonText}>{isSaving ? 'Logging...' : 'Log this meal'}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.secondaryButton} onPress={handleScanAgain}>
-                <Text style={styles.secondaryButtonText}>Scan again</Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <>
-              <Text style={styles.resultTitle}>Product not found</Text>
-              <Text style={styles.resultMeta}>We couldn't find that barcode. Try again, or log it manually.</Text>
-              <TouchableOpacity style={styles.primaryButton} onPress={handleScanAgain}>
-                <Text style={styles.primaryButtonText}>Scan again</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.secondaryButton}
-                onPress={() => navigation.navigate('LogMeal')}
-              >
-                <Text style={styles.secondaryButtonText}>Log manually</Text>
-              </TouchableOpacity>
-            </>
-          )}
+          <View style={styles.notFoundIcon}>
+            <Ionicons name="search" size={24} color={Colors.primary} />
+          </View>
+          <Text style={styles.resultTitle}>Product not found</Text>
+          <Text style={styles.resultMeta}>We couldn't find that barcode. Try again, or log it by typing what it is.</Text>
+          <TouchableOpacity style={styles.primaryButton} onPress={handleScanAgain}>
+            <Text style={styles.primaryButtonText}>Scan again</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.secondaryButton} onPress={() => navigation.navigate('LogMeal')}>
+            <Text style={styles.secondaryButtonText}>Log manually</Text>
+          </TouchableOpacity>
         </View>
       ) : null}
     </View>
@@ -395,59 +329,9 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     padding: 20,
   },
-  eyebrow: {
-    fontSize: 11,
-    fontWeight: '900',
-    color: Colors.primary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-    marginBottom: 6,
-  },
-  resultTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
+  notFoundIcon: { width: 48, height: 48, borderRadius: 16, backgroundColor: '#E8F4F3', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
   resultTitle: { flex: 1, fontSize: 18, fontWeight: '900', color: Colors.text },
-  verdictBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-  },
-  verdictBadgeText: { fontSize: 11, fontWeight: '900' },
   resultMeta: { marginTop: 6, fontSize: 13, color: Colors.textLight, fontWeight: '600', lineHeight: 19 },
-  flagRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 10,
-  },
-  flagChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-    backgroundColor: `${Colors.danger}12`,
-  },
-  flagChipText: { fontSize: 11, fontWeight: '800', color: Colors.danger },
-  noDataNudge: {
-    marginTop: 12,
-    padding: 12,
-    borderRadius: 14,
-    backgroundColor: `${Colors.primary}0C`,
-    borderWidth: 1,
-    borderColor: `${Colors.primary}22`,
-  },
-  noDataNudgeText: { fontSize: 12, lineHeight: 17, color: Colors.textLight, fontWeight: '600' },
-  noDataNudgeButton: {
-    marginTop: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    alignSelf: 'flex-start',
-  },
-  noDataNudgeButtonText: { fontSize: 13, fontWeight: '800', color: Colors.primary },
-  disclaimer: { marginTop: 10, fontSize: 11, lineHeight: 15, color: Colors.textMuted, fontWeight: '600' },
   primaryButton: {
     marginTop: 18,
     height: 50,
@@ -456,7 +340,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  buttonDisabled: { opacity: 0.7 },
   primaryButtonText: { color: 'white', fontSize: 15, fontWeight: '800' },
   secondaryButton: {
     marginTop: 10,

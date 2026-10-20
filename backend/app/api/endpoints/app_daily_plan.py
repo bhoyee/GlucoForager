@@ -1,3 +1,5 @@
+import re
+from ...services import glucose_impact
 from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -97,12 +99,36 @@ def _decode_plan_payload(recipes_value):
     return {"meals": [], "summary": None, "daily_nutrition_estimate": None}
 
 
+def _range_mid(value) -> float | None:
+    """'35-45g' -> 40, '20g' -> 20, 30 -> 30."""
+    if isinstance(value, (int, float)):
+        return float(value)
+    nums = [float(n) for n in re.findall(r"\d+(?:\.\d+)?", str(value or ""))]
+    return sum(nums[:2]) / len(nums[:2]) if nums else None
+
+
+def _with_glucose_impact(meal):
+    """Adds the typical glucose impact (Gentle / Moderate / Sharp) for one plan meal."""
+    if not isinstance(meal, dict):
+        return meal
+    est = meal.get("nutrition_estimate") if isinstance(meal.get("nutrition_estimate"), dict) else {}
+    impact = glucose_impact.estimate_impact(
+        carbs_g=_range_mid(est.get("carbs_g")),
+        fiber_g=_range_mid(est.get("fiber_g")),
+        protein_g=_range_mid(est.get("protein_g")),
+        fat_g=_range_mid(est.get("fat_g")),
+    )
+    if impact:
+        impact["portion"] = "per serving"
+    return {**meal, "glucose_impact": impact}
+
+
 def _serialize_plan(plan: MealPlan):
     decoded = _decode_plan_payload(plan.recipes)
     return {
         "id": plan.id,
         "plan_date": plan.plan_date.isoformat(),
-        "meals": decoded["meals"],
+        "meals": [_with_glucose_impact(m) for m in decoded["meals"]],
         "summary": decoded["summary"],
         "daily_nutrition_estimate": decoded["daily_nutrition_estimate"],
     }

@@ -33,8 +33,9 @@ import LogGlucoseScreen from '../screens/main/LogGlucoseScreen';
 import BarcodeScanScreen from '../screens/main/BarcodeScanScreen';
 import PhotoScanScreen from '../screens/main/PhotoScanScreen';
 import FoodLogScreen from '../screens/main/FoodLogScreen';
-import TrackRegularlyScreen from '../screens/main/TrackRegularlyScreen';
+import GlucoseInsightsScreen from '../screens/main/GlucoseInsightsScreen';
 import CarbGoalScreen from '../screens/main/CarbGoalScreen';
+import GlucoseTargetsScreen from '../screens/main/GlucoseTargetsScreen';
 import TodayTipScreen from '../screens/main/TodayTipScreen';
 import TipsArchiveScreen from '../screens/main/TipsArchiveScreen';
 import FoodPreferencesScreen from '../screens/main/FoodPreferencesScreen';
@@ -69,8 +70,9 @@ function HomeStackNavigator() {
       <HomeStack.Screen name="LogMeal" component={LogMealScreen} />
       <HomeStack.Screen name="LogGlucose" component={LogGlucoseScreen} />
       <HomeStack.Screen name="FoodLog" component={FoodLogScreen} />
-      <HomeStack.Screen name="TrackRegularly" component={TrackRegularlyScreen} />
+      <HomeStack.Screen name="GlucoseInsights" component={GlucoseInsightsScreen} />
       <HomeStack.Screen name="CarbGoal" component={CarbGoalScreen} />
+      <HomeStack.Screen name="GlucoseTargets" component={GlucoseTargetsScreen} />
       <HomeStack.Screen name="TodayTip" component={TodayTipScreen} />
       <HomeStack.Screen name="TipsArchive" component={TipsArchiveScreen} />
     </HomeStack.Navigator>
@@ -130,10 +132,13 @@ function ProfileStackNavigator() {
       <ProfileStack.Screen name="ProfileMain" component={ProfileScreen} />
       <ProfileStack.Screen name="PersonalInfo" component={PersonalInfoScreen} />
       <ProfileStack.Screen name="FoodPreferences" component={FoodPreferencesScreen} />
+      <ProfileStack.Screen name="GlucoseTargets" component={GlucoseTargetsScreen} />
       <ProfileStack.Screen name="ShoppingList" component={ShoppingListScreen} />
       <ProfileStack.Screen name="WeeklyRecap" component={WeeklyRecapScreen} />
-      <ProfileStack.Screen name="TrackRegularly" component={TrackRegularlyScreen} />
+      <ProfileStack.Screen name="GlucoseInsights" component={GlucoseInsightsScreen} />
       <ProfileStack.Screen name="FoodLog" component={FoodLogScreen} />
+      <ProfileStack.Screen name="LogMeal" component={LogMealScreen} />
+      <ProfileStack.Screen name="LogGlucose" component={LogGlucoseScreen} />
       <ProfileStack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
       <ProfileStack.Screen name="Terms" component={TermsScreen} />
       <ProfileStack.Screen name="DebugLogs" component={DebugLogsScreen} />

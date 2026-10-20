@@ -31,6 +31,7 @@ Rules:
 - For lists: keep watch_outs max 3, pair_with max 3.
 - For each swap candidate: keep fit_tags max 3, cuisine_fit max 2.
 - If you are unsure about a numeric/macros field, return null (do not guess aggressively).
+- In assessment.original_estimate, give the ORIGINAL food's typical single serving and its macros (best estimate).
 - GI is REQUIRED for every swap candidate: always provide gi_min and gi_max as integers in range 0â€“110.
   If you are not sure, provide your best estimate range and set gi_note="Estimated".
 
@@ -46,7 +47,17 @@ Return ONLY valid JSON with this exact shape:
     "summary": "...",
     "watch_outs": ["...", "..."],
     "pair_with": ["...", "..."],
-    "portion_tip": "..."
+    "portion_tip": "...",
+    "original_estimate": {
+      "serving": "...",
+      "net_carbs_g": 0 | null,
+      "fiber_g": 0 | null,
+      "protein_g": 0 | null,
+      "fat_g": 0 | null,
+      "sugars_g": 0 | null,
+      "gi_min": 0 | null,
+      "gi_max": 0 | null
+    }
   },
   "should_show_swaps": true | false,
   "swaps_explanation": "..." | null,
@@ -427,6 +438,23 @@ def _best_options_from_candidates(
     return out
 
 
+def _normalize_original_estimate(raw: Any) -> Dict[str, Any] | None:
+    """The searched food's own typical serving, used for the original-vs-swap impact chart."""
+    if not isinstance(raw, dict):
+        return None
+    out = {
+        "serving": str(raw.get("serving") or "").strip()[:60] or None,
+        "net_carbs_g": _to_float(raw.get("net_carbs_g")),
+        "fiber_g": _to_float(raw.get("fiber_g")),
+        "protein_g": _to_float(raw.get("protein_g")),
+        "fat_g": _to_float(raw.get("fat_g")),
+        "sugars_g": _to_float(raw.get("sugars_g")),
+        "gi_min": _to_float(raw.get("gi_min")),
+        "gi_max": _to_float(raw.get("gi_max")),
+    }
+    return out if out["net_carbs_g"] is not None else None
+
+
 def _normalize_payload(data: Dict[str, Any], *, food_profile: dict[str, Any] | None) -> Dict[str, Any] | None:
     assessment = data.get("assessment")
     should_show = data.get("should_show_swaps")
@@ -543,6 +571,7 @@ def _normalize_payload(data: Dict[str, Any], *, food_profile: dict[str, Any] | N
             "watch_outs": watch_outs,
             "pair_with": pair_with,
             "portion_tip": (portion_tip.strip()[:240] if isinstance(portion_tip, str) else ""),
+            "original_estimate": _normalize_original_estimate(assessment.get("original_estimate")),
         },
         "should_show_swaps": should_show_bool,
         "swaps": normalized_swaps,

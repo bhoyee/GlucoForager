@@ -66,15 +66,23 @@ export default function CarbGoalRing({ carbsLogged, carbGoal, mode = 'ceiling', 
           />
         ) : null}
       </Svg>
-      {percentLabel != null ? (
-        <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
-          <View style={styles.labelCenter}>
+      <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+        <View style={styles.labelCenter}>
+          {percentLabel != null ? (
             <Text style={[styles.labelText, { fontSize, color }]} numberOfLines={1} adjustsFontSizeToFit>
               {percentLabel}%
             </Text>
-          </View>
+          ) : carbsLogged != null ? (
+            // No daily target (e.g. Type 1): show the total instead of a percentage.
+            <Text style={[styles.labelText, { fontSize, color: Colors.brandNavy }]} numberOfLines={1} adjustsFontSizeToFit>
+              {Math.round(carbsLogged)}g
+            </Text>
+          ) : (
+            // Empty, same as the glucose ring's "No readings".
+            <Text style={styles.emptyText}>{'No\ncarbs'}</Text>
+          )}
         </View>
-      ) : null}
+      </View>
     </View>
   );
 }
@@ -82,4 +90,5 @@ export default function CarbGoalRing({ carbsLogged, carbGoal, mode = 'ceiling', 
 const styles = StyleSheet.create({
   labelCenter: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   labelText: { fontWeight: '800' },
+  emptyText: { fontSize: 11, color: Colors.textLight, fontWeight: '600', textAlign: 'center' },
 });

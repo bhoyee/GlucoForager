@@ -7,9 +7,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Colors } from '../../constants/Colors';
 import { apiFetch } from '../../utils/api';
+import { confirmMealLogged } from '../../utils/mealLogConfirm';
+import PhotoResultSheet from '../../components/PhotoResultSheet';
 import { API_URL } from '../../config/api';
 import { trackEvent } from '../../utils/analytics';
-import NutritionFactBadges from '../../components/NutritionFactBadges';
 import { isFreeLimitDetail, showFreeLimitAlert } from '../../utils/freeTier';
 
 let Camera;
@@ -25,13 +26,6 @@ try {
 }
 
 const HOLD_STEADY_SECONDS = 2;
-
-const VERDICT_STYLE = {
-  good_fit: { label: 'Diabetes-friendly', color: Colors.success },
-  moderate: { label: 'Moderate', color: Colors.warning },
-  use_caution: { label: 'Use caution', color: Colors.danger },
-  unknown: { label: 'Not enough info', color: Colors.textLight },
-};
 
 export default function PhotoScanScreen() {
   const navigation = useNavigation();
@@ -262,8 +256,10 @@ export default function PhotoScanScreen() {
           body: JSON.stringify({
             description: result.name || 'Scanned food',
             source: 'photo',
+            food_name: (result.name || '').slice(0, 80) || undefined,
             carbs_g: result.carbs_g ?? undefined,
             calories: result.calories ?? undefined,
+            carbs_estimated: result.carbs_g != null,
           }),
         },
         { timeoutMs: 8000 }
@@ -273,7 +269,16 @@ export default function PhotoScanScreen() {
         Alert.alert('Unable to log meal', data?.detail?.message || data?.detail || 'Please try again.');
         return;
       }
+      const saved = await response.json().catch(() => ({}));
       navigation.navigate('Home', { screen: 'HomeMain' });
+      if (saved?.meal && !saved.duplicate) {
+        await confirmMealLogged({
+          name: result.name || 'Your meal',
+          loggedAt: saved.meal.logged_at,
+          carbs: result.carbs_g,
+          carbsEstimated: true,
+        });
+      }
     } catch {
       Alert.alert('Unable to log meal', 'Network request failed. Please check your connection.');
     } finally {
@@ -282,7 +287,6 @@ export default function PhotoScanScreen() {
   };
 
   const scanLineTranslate = scanLineAnim.interpolate({ inputRange: [0, 1], outputRange: [-90, 90] });
-  const verdictInfo = result?.diabetes_note ? VERDICT_STYLE[result.diabetes_note.verdict] : null;
 
   return (
     <View style={styles.container}>
@@ -356,73 +360,27 @@ export default function PhotoScanScreen() {
         </View>
       ) : null}
 
-      {phase === 'result' && result ? (
+      {phase === 'result' && result?.is_food ? (
+        <PhotoResultSheet
+          result={result}
+          photoUri={capturedUri}
+          top={insets.top + 64}
+          bottom={Math.max(insets.bottom, 16)}
+          isSaving={isSaving}
+          onLog={handleLogFood}
+          onScanAgain={handleScanAgain}
+          onFindSwap={() => navigation.navigate('Home', { screen: 'CarbSwaps', params: { query: result.name || '' } })}
+        />
+      ) : phase === 'result' && result ? (
         <View style={[styles.resultCard, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]}>
-          {result.is_food ? (
-            <>
-              <Text style={styles.eyebrow}>Diabetes check</Text>
-              <View style={styles.resultTitleRow}>
-                <Text style={styles.resultTitle} numberOfLines={2}>
-                  {result.name || 'Unidentified food'}
-                </Text>
-                {verdictInfo ? (
-                  <View style={[styles.verdictBadge, { backgroundColor: `${verdictInfo.color}18` }]}>
-                    <Text style={[styles.verdictBadgeText, { color: verdictInfo.color }]}>{verdictInfo.label}</Text>
-                  </View>
-                ) : null}
-              </View>
-
-              {result.carbs_g != null || result.calories != null ? (
-                <NutritionFactBadges
-                  carbsG={result.carbs_g}
-                  netCarbsG={result.net_carbs_g}
-                  sugarsG={result.sugars_g}
-                  calories={result.calories}
-                  estimated
-                />
-              ) : (
-                <Text style={styles.resultMeta}>Couldn't estimate nutrition for this one.</Text>
-              )}
-
-              {result.diabetes_note?.flags?.length ? (
-                <View style={styles.flagRow}>
-                  {result.diabetes_note.flags.map((flag) => (
-                    <View key={flag} style={styles.flagChip}>
-                      <Text style={styles.flagChipText}>{flag}</Text>
-                    </View>
-                  ))}
-                </View>
-              ) : null}
-
-              <Text style={styles.disclaimer}>
-                Estimated from a photo - a rough guide, not an exact measurement or medical advice.
-              </Text>
-
-              <TouchableOpacity
-                style={[styles.primaryButton, isSaving && styles.buttonDisabled]}
-                onPress={handleLogFood}
-                disabled={isSaving}
-              >
-                <Text style={styles.primaryButtonText}>{isSaving ? 'Logging...' : 'Log this meal'}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.secondaryButton} onPress={handleScanAgain}>
-                <Text style={styles.secondaryButtonText}>Scan again</Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <>
-              <Text style={styles.resultTitle}>This doesn't look like food</Text>
-              <Text style={styles.resultMeta}>
-                Try repositioning so the food fills the box, then scan again.
-              </Text>
-              <TouchableOpacity style={styles.primaryButton} onPress={handleScanAgain}>
-                <Text style={styles.primaryButtonText}>Scan again</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.secondaryButton} onPress={() => navigation.navigate('LogMeal')}>
-                <Text style={styles.secondaryButtonText}>Log manually instead</Text>
-              </TouchableOpacity>
-            </>
-          )}
+          <Text style={styles.resultTitle}>This doesn't look like food</Text>
+          <Text style={styles.resultMeta}>Try repositioning so the food fills the box, then scan again.</Text>
+          <TouchableOpacity style={styles.primaryButton} onPress={handleScanAgain}>
+            <Text style={styles.primaryButtonText}>Scan again</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.secondaryButton} onPress={() => navigation.navigate('LogMeal')}>
+            <Text style={styles.secondaryButtonText}>Log manually instead</Text>
+          </TouchableOpacity>
         </View>
       ) : null}
     </View>
@@ -497,33 +455,8 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     padding: 20,
   },
-  eyebrow: {
-    fontSize: 11,
-    fontWeight: '900',
-    color: Colors.primary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-    marginBottom: 6,
-  },
-  resultTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
   resultTitle: { flex: 1, fontSize: 18, fontWeight: '900', color: Colors.text },
-  verdictBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 },
-  verdictBadgeText: { fontSize: 11, fontWeight: '900' },
   resultMeta: { marginTop: 6, fontSize: 13, color: Colors.textLight, fontWeight: '600', lineHeight: 19 },
-  flagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
-  flagChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-    backgroundColor: `${Colors.danger}12`,
-  },
-  flagChipText: { fontSize: 11, fontWeight: '800', color: Colors.danger },
-  disclaimer: { marginTop: 10, fontSize: 11, lineHeight: 15, color: Colors.textMuted, fontWeight: '600' },
   primaryButton: {
     marginTop: 18,
     height: 50,
@@ -532,7 +465,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  buttonDisabled: { opacity: 0.7 },
   primaryButtonText: { color: 'white', fontSize: 15, fontWeight: '800' },
   secondaryButton: {
     marginTop: 10,

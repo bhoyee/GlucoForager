@@ -14,6 +14,7 @@ import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
 import { configureRevenueCat, getCustomerInfo, getOfferings, getPaywallOffering, isPremiumEntitled, isRevenueCatConfigured, presentCustomerCenter, presentPaywall, restorePurchases } from '../../utils/revenuecat';
 import { disableMealReminders, enableMealRemindersAndSchedule, getMealRemindersEnabled, setMealRemindersPrompted } from '../../utils/mealReminders';
+import { getAfterMealCheckActive, requestAfterMealCheckPermission, setAfterMealCheckEnabled } from '../../utils/afterMealCheck';
 import { trackEvent } from '../../utils/analytics';
 import { disableExpoPushTokens, registerExpoPushToken } from '../../utils/pushToken';
 import { addDebugLog } from '../../utils/debugLogger';
@@ -59,6 +60,7 @@ export default function ProfileScreen() {
   const [premiumProductId, setPremiumProductId] = useState('');
   const [mealRemindersEnabled, setMealRemindersEnabled] = useState(false);
   const [mealRemindersBusy, setMealRemindersBusy] = useState(false);
+  const [afterMealCheckOn, setAfterMealCheckOn] = useState(false);
   const [debugTapCount, setDebugTapCount] = useState(0);
   const [debugTapTimer, setDebugTapTimer] = useState(null);
   const debugTapThreshold = 7;
@@ -239,6 +241,7 @@ export default function ProfileScreen() {
   const loadMealReminders = useCallback(async () => {
     const enabled = await getMealRemindersEnabled();
     setMealRemindersEnabled(enabled);
+    setAfterMealCheckOn(await getAfterMealCheckActive());
 
     // Best-effort: if notifications are enabled already, ensure we have a remote push token
     // for admin broadcasts (does not change local reminder scheduling).
@@ -816,6 +819,17 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
         </TouchableOpacity>
 
+        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('GlucoseTargets')}>
+          <View style={styles.menuItemLeft}>
+            <Ionicons name="pulse-outline" size={22} color={Colors.text} />
+            <View style={styles.menuTextStack}>
+              <Text style={[styles.menuText, { marginLeft: 0, flex: 0 }]}>My glucose targets</Text>
+              <Text style={styles.menuSubtext}>The ranges your readings are checked against</Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
+        </TouchableOpacity>
+
         <TouchableOpacity style={styles.menuItem} onPress={handleManageSubscription}>
           <View style={styles.menuItemLeft}>
             <Ionicons name="card-outline" size={22} color={Colors.text} />
@@ -837,10 +851,18 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('TrackRegularly')}>
+        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('GlucoseInsights')}>
           <View style={styles.menuItemLeft}>
             <Ionicons name="trending-up-outline" size={22} color={Colors.text} />
-            <Text style={styles.menuText}>Track Regularly</Text>
+            <Text style={styles.menuText}>Glucose Insights</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('FoodLog')}>
+          <View style={styles.menuItemLeft}>
+            <Ionicons name="book-outline" size={22} color={Colors.text} />
+            <Text style={styles.menuText}>Meal Diary</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
         </TouchableOpacity>
@@ -874,6 +896,36 @@ export default function ProfileScreen() {
             thumbColor={mealRemindersEnabled ? Colors.primary : '#FFFFFF'}
           />
         </View>
+
+        <View style={styles.menuItem}>
+            <View style={styles.menuItemLeft}>
+              <Ionicons name="water-outline" size={22} color={Colors.text} />
+              <View style={styles.menuTextStack}>
+                <Text style={[styles.menuText, { marginLeft: 0, flex: 0 }]}>After-meal glucose check</Text>
+                <Text style={styles.menuSubtext}>A reminder 2 hours after you log a meal</Text>
+              </View>
+            </View>
+            <Switch
+              value={afterMealCheckOn}
+              onValueChange={async (on) => {
+                if (on && !(await requestAfterMealCheckPermission())) {
+                  Alert.alert(
+                    'Notifications are off',
+                    'Turn on notifications for GlucoForager in your phone settings to get after-meal reminders.',
+                    [
+                      { text: 'Not now', style: 'cancel' },
+                      { text: 'Open settings', onPress: () => Linking.openSettings() },
+                    ]
+                  );
+                  return;
+                }
+                setAfterMealCheckOn(on);
+                setAfterMealCheckEnabled(on);
+              }}
+              trackColor={{ false: '#C7CBD1', true: `${Colors.primary}88` }}
+              thumbColor={afterMealCheckOn ? Colors.primary : '#FFFFFF'}
+            />
+          </View>
       </View>
 
       <View style={styles.menuSection}>

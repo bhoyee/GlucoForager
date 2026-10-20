@@ -8,10 +8,15 @@ from sqlalchemy.orm import Session
 
 from ...database import get_db
 from ...models.glucose_reading import GlucoseReading
+from ...models.favorite import Favorite
 from ...models.meal_log_entry import MealLogEntry
+from ...models.recipe_history import RecipeHistory
 from ...models.user import User
 from ...services.cache_service import CacheService
+from ...services import glucose_insights, glucose_targets, meal_diary
+from ...services.meal_carb_estimate import MODEL as MEAL_ESTIMATE_MODEL, estimate_meal_carbs
 from ...services.diabetes_food_note import build_diabetes_note
+from ...services import food_label, geo_country, glucose_impact
 from ...services.user_activity_service import add_user_activity
 from ..dependencies import get_current_user
 
@@ -175,9 +180,11 @@ def _recent_duplicate_meal(db: Session, user_id: int, description: str, source: 
 class MealLogPayload(BaseModel):
     description: str = Field(..., min_length=1, max_length=200)
     logged_at: datetime | None = None
-    source: str = Field("manual", pattern="^(manual|barcode|photo)$")
+    source: str = Field("manual", pattern="^(manual|barcode|photo|recipe)$")
     carbs_g: float | None = Field(None, ge=0, le=1000)
     calories: int | None = Field(None, ge=0, le=10000)
+    carbs_estimated: bool = False
+    food_name: str | None = Field(None, max_length=80)
     idempotency_key: str | None = Field(None, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
 
     @field_validator("description")
@@ -217,6 +224,13 @@ class GlucoseLogPayload(BaseModel):
         return cleaned
 
 
+def parse_iso_ts(value: str) -> float:
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _iso_utc(value: datetime | None) -> str | None:
     """logged_at is stored as a naive UTC datetime (datetime.utcnow()) - .isoformat() on
     that alone omits any timezone marker, which a mobile client's `new Date(...)`
@@ -236,6 +250,8 @@ def _serialize_meal(meal: MealLogEntry) -> dict:
         "description": meal.description,
         "source": meal.source,
         "carbs_g": meal.carbs_g,
+        "carbs_estimated": bool(getattr(meal, "carbs_estimated", False)),
+        "food_name": getattr(meal, "food_name", None),
         "calories": meal.calories,
         "logged_at": _iso_utc(meal.logged_at),
     }
@@ -315,6 +331,8 @@ def log_meal(
         description=description,
         source=payload.source,
         carbs_g=payload.carbs_g,
+        carbs_estimated=bool(payload.carbs_estimated and payload.carbs_g is not None),
+        food_name=(payload.food_name or "").strip() or None,
         calories=payload.calories,
         logged_at=logged_at,
     )
@@ -332,6 +350,161 @@ def log_meal(
     if idem_key:
         cache.set(idem_key, str(meal.id), ttl_seconds=IDEMPOTENCY_TTL_SECONDS)
     return {"meal": _serialize_meal(meal), "duplicate": False}
+
+
+class MealEstimatePayload(BaseModel):
+    description: str = Field(..., min_length=2, max_length=200)
+
+
+# Not counted against the free weekly AI uses: logging meals is the habit the app is
+# built on. These limits only stop abuse; repeats are served from cache for free.
+MEAL_ESTIMATE_PER_MINUTE = 20
+MEAL_ESTIMATE_PER_DAY = 120
+
+
+@router.post("/meals/estimate")
+def estimate_meal(
+    payload: MealEstimatePayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Carb estimate + standard food name for a typed meal. Never blocks logging:
+    on failure the app just saves the meal without carbs."""
+    if cache.incr(f"meal_estimate:rl:min:{current_user.id}", ttl_seconds=60) > MEAL_ESTIMATE_PER_MINUTE:
+        raise HTTPException(status_code=429, detail={"code": "rate_limited", "message": "Slow down a little."})
+    day_key = f"meal_estimate:rl:day:{current_user.id}:{datetime.utcnow().date().isoformat()}"
+    if cache.incr(day_key, ttl_seconds=90000) > MEAL_ESTIMATE_PER_DAY:
+        raise HTTPException(status_code=429, detail={"code": "daily_limit", "message": "Estimate limit reached for today."})
+    result, from_cache = estimate_meal_carbs(payload.description)
+    if result is None:
+        raise HTTPException(status_code=503, detail={"code": "estimate_unavailable", "message": "No estimate right now."})
+    if not from_cache:
+        try:
+            from ...services.cost_tracker import record_ai_request
+
+            record_ai_request(db, current_user.id, "free", "meal_estimate", model_used=MEAL_ESTIMATE_MODEL)
+        except Exception:  # noqa: BLE001 - tracking must never fail the estimate
+            db.rollback()
+    return result
+
+
+@router.get("/meals/recent")
+def recent_meals(
+    limit: int = Query(6, ge=1, le=12),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Meals for one-tap re-logging, from the user's own log (last 60 days).
+    "usual" = meals logged 2+ times (most often first); until there are any, the
+    latest distinct meals are returned as "recent" so the label is always honest."""
+    since = datetime.utcnow() - timedelta(days=60)
+    meals = (
+        db.query(MealLogEntry)
+        .filter(MealLogEntry.user_id == current_user.id, MealLogEntry.logged_at >= since)
+        .order_by(MealLogEntry.logged_at.desc())
+        .limit(300)
+        .all()
+    )
+    groups: dict[str, dict] = {}
+    for meal in meals:  # newest first, so the first one seen is the latest version
+        key = (meal.food_name or meal.description or "").strip().lower()
+        if not key:
+            continue
+        if key not in groups:
+            groups[key] = {**_serialize_meal(meal), "times": 0}
+        groups[key]["times"] += 1
+    usual = [g for g in groups.values() if g["times"] >= 2]
+    if usual:
+        usual.sort(key=lambda g: (-g["times"], -parse_iso_ts(g["logged_at"] or "")))
+        return {"label": "usual", "items": usual[:limit]}
+    recent = list(groups.values())  # insertion order = newest first
+    return {"label": "recent", "items": recent[: min(limit, 5)]}
+
+
+def recipe_carbs_per_serving(recipe: dict) -> float | None:
+    """Carbs per serving from a stored recipe, whichever shape it was saved in."""
+    if not isinstance(recipe, dict):
+        return None
+    for block in ("nutritional_info", "nutrition", "nutrition_per_serving"):
+        info = recipe.get(block)
+        if not isinstance(info, dict):
+            continue
+        for field in ("carbs", "carbohydrates"):
+            raw = info.get(field)
+            try:
+                value = float(str(raw).lower().replace("g", "").strip()) if raw is not None else None
+            except ValueError:
+                value = None
+            if value is not None and 0 <= value <= 400:
+                return round(value)
+    return None
+
+
+@router.get("/meals/recipe-options")
+def recipe_meal_options(
+    limit: int = Query(8, ge=1, le=20),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The user's favourite and recently generated recipes, with carbs per serving,
+    so a cooked recipe can be logged as a meal with exact (not estimated) carbs."""
+    options: list[dict] = []
+    seen: set[str] = set()
+
+    def add(title, recipe, origin):
+        title = (title or "").strip()
+        key = title.lower()
+        if not title or key in seen:
+            return
+        seen.add(key)
+        options.append({"title": title[:120], "carbs_g": recipe_carbs_per_serving(recipe), "origin": origin})
+
+    favorites = (
+        db.query(Favorite).filter(Favorite.user_id == current_user.id).order_by(Favorite.created_at.desc()).limit(20).all()
+    )
+    for fav in favorites:
+        add(fav.title or (fav.recipe or {}).get("title"), fav.recipe or {}, "favorite")
+    histories = (
+        db.query(RecipeHistory)
+        .filter(RecipeHistory.user_id == current_user.id)
+        .order_by(RecipeHistory.created_at.desc())
+        .limit(5)
+        .all()
+    )
+    for history in histories:
+        for recipe in history.recipes if isinstance(history.recipes, list) else []:
+            if isinstance(recipe, dict):
+                add(recipe.get("title") or recipe.get("name"), recipe, "recent")
+    return {"items": options[:limit]}
+
+
+class GlucoseImpactPayload(BaseModel):
+    carbs_g: float | None = Field(None, ge=0, le=1000)
+    fiber_g: float | None = Field(None, ge=0, le=200)
+    protein_g: float | None = Field(None, ge=0, le=500)
+    fat_g: float | None = Field(None, ge=0, le=500)
+    sugars_g: float | None = Field(None, ge=0, le=1000)
+    gi: float | None = Field(None, ge=0, le=110)
+    is_drink: bool = False
+    name: str | None = Field(None, max_length=200)
+
+
+@router.post("/glucose-impact")
+def glucose_impact_estimate(
+    payload: GlucoseImpactPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Typical glucose impact for a recipe or meal, plus the user's own reading the last
+    time they ate something with the same name. A fixed formula: no AI, no cost."""
+    impact = glucose_impact.estimate_impact(
+        carbs_g=payload.carbs_g, fiber_g=payload.fiber_g, protein_g=payload.protein_g,
+        fat_g=payload.fat_g, sugars_g=payload.sugars_g, gi=payload.gi, is_drink=payload.is_drink,
+    )
+    return {
+        "glucose_impact": impact,
+        "last_time": glucose_impact.last_actual_reading(db, current_user, payload.name) if payload.name else None,
+    }
 
 
 @router.get("/meals")
@@ -374,16 +547,24 @@ def delete_meal(
     return {"detail": "Deleted"}
 
 
-def _glucose_response(db: Session, user_id: int, reading: GlucoseReading, *, duplicate: bool) -> dict:
+def _glucose_response(db: Session, user_id: int, reading: GlucoseReading, *, duplicate: bool, targets=None) -> dict:
     # A reading explicitly tagged "fasting" isn't a post-meal reading no matter what
     # the time-window heuristic would otherwise infer from a nearby meal log.
     preceding_meal = None if reading.context == "fasting" else _find_preceding_meal(db, user_id, reading.logged_at)
     is_spike = reading.value_mg_dl >= SPIKE_THRESHOLD_MGDL and preceding_meal is not None
+    # "Your reading after <meal> was on target": the same pairing the meal diary uses.
+    paired = preceding_meal if reading.context not in ("fasting", "before_meal") else None
     return {
         "reading": _serialize_reading(reading),
         "is_spike": is_spike,
         "flagged_meal": _serialize_meal(preceding_meal) if is_spike else None,
         "general_alert": _general_alert(reading.value_mg_dl),
+        "paired_meal": _serialize_meal(paired) if paired else None,
+        "after_meal_result": (
+            glucose_targets.classify(reading.value_mg_dl, "after_meal", targets or glucose_targets.GlucoseTargets())
+            if paired
+            else None
+        ),
         "duplicate": duplicate,
     }
 
@@ -406,13 +587,13 @@ def log_glucose(
         if cached_id:
             cached_reading = db.query(GlucoseReading).filter(GlucoseReading.id == int(cached_id)).first()
             if cached_reading:
-                return _glucose_response(db, current_user.id, cached_reading, duplicate=True)
+                return _glucose_response(db, current_user.id, cached_reading, duplicate=True, targets=glucose_targets.targets_for(current_user))
     else:
         # No idempotency key from this client - fall back to the tight content+time
         # window guard so an old app build isn't left with zero duplicate protection.
         duplicate = _recent_duplicate_glucose(db, current_user.id, payload.value_mg_dl, payload.context)
         if duplicate:
-            return _glucose_response(db, current_user.id, duplicate, duplicate=True)
+            return _glucose_response(db, current_user.id, duplicate, duplicate=True, targets=glucose_targets.targets_for(current_user))
 
     logged_at = payload.logged_at or datetime.utcnow()
     reading = GlucoseReading(
@@ -436,7 +617,7 @@ def log_glucose(
     if idem_key:
         cache.set(idem_key, str(reading.id), ttl_seconds=IDEMPOTENCY_TTL_SECONDS)
 
-    return _glucose_response(db, current_user.id, reading, duplicate=False)
+    return _glucose_response(db, current_user.id, reading, duplicate=False, targets=glucose_targets.targets_for(current_user))
 
 
 @router.get("/glucose")
@@ -453,6 +634,8 @@ def list_glucose(
         .limit(1000)
         .all()
     )
+    # Judged against the user's own targets (same rules as Home and the meal diary).
+    targets = glucose_targets.targets_for(current_user)
     items = []
     for reading in readings:
         preceding_meal = (
@@ -463,8 +646,67 @@ def list_glucose(
         entry["is_spike"] = is_spike
         entry["flagged_meal"] = _serialize_meal(preceding_meal) if is_spike else None
         entry["general_alert"] = _general_alert(reading.value_mg_dl)
+        entry.update(glucose_targets.classify(reading.value_mg_dl, reading.context, targets))
         items.append(entry)
-    return {"items": items}
+    return {"items": items, "targets": targets.to_dict()}
+
+
+@router.get("/health-log/diary")
+def get_meal_diary(
+    days: int = Query(LOG_HISTORY_DAYS, ge=1, le=90),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Meals paired with their before/after readings, plus standalone readings, all
+    judged against the user's own targets. Grouping into days happens on the phone
+    (local time)."""
+    since = datetime.utcnow() - timedelta(days=days)
+    meals = (
+        db.query(MealLogEntry)
+        .filter(MealLogEntry.user_id == current_user.id, MealLogEntry.logged_at >= since)
+        .order_by(MealLogEntry.logged_at.desc())
+        .limit(300)
+        .all()
+    )
+    readings = (
+        db.query(GlucoseReading)
+        .filter(GlucoseReading.user_id == current_user.id, GlucoseReading.logged_at >= since)
+        .order_by(GlucoseReading.logged_at.desc())
+        .limit(1000)
+        .all()
+    )
+    targets = glucose_targets.targets_for(current_user)
+    items = meal_diary.build_diary(meals, readings, targets, _serialize_meal, _serialize_reading)
+    return {"days": days, "targets": targets.to_dict(), "items": items}
+
+
+@router.get("/health-log/insights")
+def get_glucose_insights(
+    days: int = Query(30, ge=7, le=90),
+    tz_offset_minutes: int = Query(0, ge=-840, le=840, description="Phone's offset from UTC, minutes east"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Glucose insights (Trends / Food impact / Patterns) and the one highlight for Home.
+    Rules only, from the user's own data - see services/glucose_insights.py."""
+    now = datetime.utcnow()
+    since = now - timedelta(days=days)
+    meals = (
+        db.query(MealLogEntry)
+        .filter(MealLogEntry.user_id == current_user.id, MealLogEntry.logged_at >= since)
+        .limit(1000)
+        .all()
+    )
+    readings = (
+        db.query(GlucoseReading)
+        .filter(GlucoseReading.user_id == current_user.id, GlucoseReading.logged_at >= since - timedelta(days=days))
+        .limit(5000)
+        .all()
+    )
+    current = [r for r in readings if r.logged_at >= since]
+    previous = [r for r in readings if r.logged_at < since]
+    targets = glucose_targets.targets_for(current_user)
+    return glucose_insights.build_insights(meals, current, previous, targets, days, tz_offset_minutes)
 
 
 @router.delete("/glucose/{reading_id}")
@@ -524,6 +766,7 @@ def get_today_health_log_summary(
     )
     carbs_logged_today = sum(m.carbs_g for m in meals_today if m.carbs_g is not None)
     carb_goal_g, carb_goal_mode = _carb_goal_for_user(current_user)
+    glucose = _glucose_summary(db, current_user, readings_today)
     return {
         "meals_logged_today": len(meals_today),
         "readings_logged_today": len(readings_today),
@@ -532,7 +775,85 @@ def get_today_health_log_summary(
         "carb_goal_g": carb_goal_g,
         "carb_goal_mode": carb_goal_mode,
         "last_reading": _serialize_reading(readings_today[0]) if readings_today else None,
+        "glucose": glucose,
     }
+
+
+def _in_range_stats(readings: list[GlucoseReading], targets) -> dict:
+    counts = {k: 0 for k in ("in_range", "above", "below", "low", "very_high")}
+    for r in readings:
+        counts[glucose_targets.classify(r.value_mg_dl, r.context, targets)["status"]] += 1
+    total = len(readings)
+    return {
+        "readings": total,
+        **counts,
+        "in_range_pct": round(100 * counts["in_range"] / total) if total else None,
+    }
+
+
+def _glucose_summary(db: Session, user: User, readings_today: list[GlucoseReading]) -> dict:
+    """Home "Track today" glucose block: today's readings vs target, the latest reading's
+    status, and this week vs last week (rolling 7-day windows) to show progress."""
+    targets = glucose_targets.targets_for(user)
+    now = datetime.utcnow()
+    last_14 = (
+        db.query(GlucoseReading)
+        .filter(GlucoseReading.user_id == user.id, GlucoseReading.logged_at >= now - timedelta(days=14))
+        .all()
+    )
+    week_cut = now - timedelta(days=7)
+    this_week = [r for r in last_14 if r.logged_at >= week_cut]
+    prev_week = [r for r in last_14 if r.logged_at < week_cut]
+    last = None
+    if readings_today:
+        latest = readings_today[0]
+        last = {**_serialize_reading(latest), **glucose_targets.classify(latest.value_mg_dl, latest.context, targets)}
+    return {
+        "today": _in_range_stats(readings_today, targets),
+        "last": last,
+        "week": _in_range_stats(this_week, targets),
+        "prev_week": _in_range_stats(prev_week, targets),
+        "targets": targets.to_dict(),
+    }
+
+
+class GlucoseTargetsPayload(BaseModel):
+    premeal_low: int = Field(..., ge=40, le=300)
+    premeal_high: int = Field(..., ge=40, le=300)
+    postmeal_high: int = Field(..., ge=40, le=400)
+
+
+@router.get("/health-log/glucose-targets")
+def get_glucose_targets(current_user: User = Depends(get_current_user)):
+    return glucose_targets.targets_for(current_user).to_dict()
+
+
+@router.put("/health-log/glucose-targets")
+def put_glucose_targets(
+    payload: GlucoseTargetsPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    error = glucose_targets.validate_targets(payload.premeal_low, payload.premeal_high, payload.postmeal_high)
+    if error:
+        raise HTTPException(status_code=422, detail={"code": "invalid_targets", "message": error})
+    current_user.glucose_target_premeal_low_mgdl = payload.premeal_low
+    current_user.glucose_target_premeal_high_mgdl = payload.premeal_high
+    current_user.glucose_target_postmeal_high_mgdl = payload.postmeal_high
+    db.add(current_user)
+    db.commit()
+    return glucose_targets.targets_for(current_user).to_dict()
+
+
+@router.delete("/health-log/glucose-targets")
+def reset_glucose_targets(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Back to the ADA defaults."""
+    current_user.glucose_target_premeal_low_mgdl = None
+    current_user.glucose_target_premeal_high_mgdl = None
+    current_user.glucose_target_postmeal_high_mgdl = None
+    db.add(current_user)
+    db.commit()
+    return glucose_targets.targets_for(current_user).to_dict()
 
 
 def _extract_nutrition(product: dict) -> dict:
@@ -587,6 +908,40 @@ def lookup_barcode(
     if not code:
         return {"found": False, "barcode": barcode}
     result = _lookup_barcode_product(code)
+    if result.get("found"):
+        # Ratings in the user's own country's standard (FDA %DV in the US, etc.).
+        ratings = food_label.nutrient_ratings(
+            result.get("per_100g") or {}, result.get("per_serving"), bool(result.get("is_drink")),
+            geo_country.effective_country(current_user)[0], result.get("serving_quantity"),
+        )
+        result["traffic_lights"] = ratings["lights"]
+        result["traffic_light_standard"] = ratings["standard"]
+        result["rating_system"] = ratings["system"]
+        result["rating_country"] = geo_country.effective_country(current_user)[0]
+        # Carbs in one serving vs a typical meal for this user's daily carb goal.
+        carb_goal_g, goal_mode = _carb_goal_for_user(current_user)
+        per_serving = result.get("per_serving") or {}
+        result["meal_share"] = food_label.meal_share(per_serving.get("carbs_g"), carb_goal_g, goal_mode)
+        result["insights"] = food_label.build_insights(
+            per_serving=per_serving,
+            per_100g=result.get("per_100g") or {},
+            lights=result.get("traffic_lights") or [],
+            fibre=result.get("fibre_claim"),
+            nova_group=(result.get("diabetes_note") or {}).get("nova_group"),
+            share=result["meal_share"],
+            serving_size=result.get("serving_size"),
+            drink=bool(result.get("is_drink")),
+        )
+        # Typical 2-hour response for one serving (per 100g/ml when no serving size).
+        basis = per_serving if (per_serving and per_serving.get("carbs_g") is not None) else (result.get("per_100g") or {})
+        impact = glucose_impact.estimate_impact(
+            carbs_g=basis.get("carbs_g"), fiber_g=basis.get("fiber_g"), protein_g=basis.get("protein_g"),
+            fat_g=basis.get("fat_g"), sugars_g=basis.get("sugars_g"), is_drink=bool(result.get("is_drink")),
+        )
+        if impact:
+            impact["portion"] = "per serving" if basis is per_serving else ("per 100ml" if result.get("is_drink") else "per 100g")
+        result["glucose_impact"] = impact
+        result["last_time"] = glucose_impact.last_actual_reading(db, current_user, result.get("name"))
     # Feature-usage tracking (admin Activity chart). Never fail the lookup over it.
     add_user_activity(
         db,
@@ -619,13 +974,32 @@ def _lookup_barcode_product(code: str) -> dict:
     product = data["product"]
     nutrition = _extract_nutrition(product)
     name = (product.get("product_name") or product.get("generic_name") or "").strip() or None
+    nutriments = product.get("nutriments") or {}
+    per_100g = food_label.nutrient_table(nutriments, "_100g")
+    per_serving = food_label.nutrient_table(nutriments, "_serving")
+    drink = food_label.is_drink(product)
 
     return {
         "found": bool(name),
         "barcode": code,
         "name": name,
+        "brand": (product.get("brands") or "").split(",")[0].strip() or None,
+        "image_url": product.get("image_front_small_url") or product.get("image_small_url") or product.get("image_url"),
         "serving_size": product.get("serving_size"),
         **nutrition,
         "has_nutrition_data": nutrition.get("carbs_g") is not None,
         "diabetes_note": _diabetes_note(nutrition, product) if name else None,
+        # Full label: per 100g (what the traffic lights use) and per serving when known.
+        "per_100g": per_100g,
+        "per_serving": per_serving if any(v is not None for v in per_serving.values()) else None,
+        "is_drink": drink,
+        "serving_quantity": product.get("serving_quantity") if isinstance(product.get("serving_quantity"), (int, float)) else None,
+        "traffic_lights": food_label.traffic_lights(
+            per_100g, drink, per_serving, product.get("serving_quantity") if isinstance(product.get("serving_quantity"), (int, float)) else None
+        ),
+        "traffic_light_standard": "UK FSA front-of-pack, per 100ml" if drink else "UK FSA front-of-pack, per 100g",
+        "fibre_claim": food_label.fibre_claim(per_100g),
+        "nova_group": product.get("nova_group"),
+        "nova_label": food_label.NOVA_LABELS.get(int(product["nova_group"])) if isinstance(product.get("nova_group"), (int, float)) else None,
+        "nutriscore_grade": (product.get("nutriscore_grade") or "").lower() or None,
     }

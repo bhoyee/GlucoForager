@@ -2,7 +2,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import Footer from '../../components/Footer';
 
-const LAST_UPDATED = 'August 16, 2026';
+const LAST_UPDATED = 'October 20, 2026';
 
 export default function PrivacyPolicy() {
   return (
@@ -70,6 +70,8 @@ export default function PrivacyPolicy() {
             <ul className="list-disc pl-6 text-gray-700 mb-4">
               <li>Diabetes type / status</li>
               <li>Dietary preferences, restrictions, and food allergen or exclusion choices</li>
+              <li>Glucose readings, glucose targets and carb goals you enter</li>
+              <li>Meals you log, including estimated carbs</li>
             </ul>
             <p className="text-gray-700 mb-4">
               This is treated as sensitive health information under applicable law (see Sections 9–11 for the specific rights and protections that apply to it).
@@ -81,10 +83,24 @@ export default function PrivacyPolicy() {
             </p>
             <ul className="list-disc pl-6 text-gray-700">
               <li>Device information (type, operating system, unique device identifiers)</li>
+              <li>Your approximate country, worked out from your IP address and your phone&apos;s region setting (see &quot;Country detection&quot; below)</li>
               <li>Push notification token, if you enable notifications</li>
               <li>Usage data (features used, time spent in app)</li>
               <li>App performance data (crash reports, errors)</li>
             </ul>
+
+            <h3 className="text-xl font-semibold text-gray-800 mb-3 mt-6">Country detection</h3>
+            <p className="text-gray-700 mb-3">
+              To show nutrition labels in your country&apos;s format and suggest foods that are common where you live, we work out your approximate country when you use the app, from your IP address and your phone&apos;s region setting.
+            </p>
+            <ul className="list-disc pl-6 text-gray-700 mb-3">
+              <li>We store only the two-letter country code (at most one per day, kept for 30 days), never your IP address.</li>
+              <li>The lookup runs on our own servers; your IP address is not sent to anyone else for this.</li>
+              <li>A country you choose yourself in Profile &rsaquo; Food Preferences always takes priority, and you can change it at any time.</li>
+            </ul>
+            <p className="text-gray-600 text-sm">
+              IP geolocation by <a href="https://db-ip.com" className="underline" target="_blank" rel="noopener noreferrer">DB-IP</a>, licensed under <a href="https://creativecommons.org/licenses/by/4.0/" className="underline" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>.
+            </p>
           </section>
 
           <section className="mb-8">

@@ -13,11 +13,16 @@ FOOD_SCAN_SYSTEM_PROMPT = (
     "You are analyzing a single photo for a diabetes nutrition-tracking app. Determine: "
     "1) Is this actually a food or drink item (not a barcode, receipt, unrelated object, or person)? "
     "2) If yes, what is it, as specifically as you can reasonably tell? "
-    "3) Estimate its nutrition for the typical serving shown: carbohydrates (g), sugars (g), fiber (g), calories. "
+    "3) Estimate its nutrition for the typical serving shown: carbohydrates (g), sugars (g), fiber (g), protein (g), "
+    "fat (g), calories, plus the portion you assumed and the carbs of each main component (at most 5). "
     "Respond with ONLY a JSON object, no other text, in exactly this shape: "
     '{"is_food": true or false, "name": "short food name" or null, '
     '"confidence": "high" | "medium" | "low", '
-    '"carbs_g": number or null, "sugars_g": number or null, "fiber_g": number or null, "calories": number or null}. '
+    '"portion": "e.g. 1 plate (about 350g)" or null, '
+    '"carbs_g": number or null, "sugars_g": number or null, "fiber_g": number or null, '
+    '"protein_g": number or null, "fat_g": number or null, "calories": number or null, '
+    '"items": [{"name": "string", "carbs_g": number}], '
+    '"tip": "one short, practical way to make this meal gentler on blood sugar" or null}. '
     "If is_food is false, set every other field to null. "
     "If it is food but you cannot make a reasonable nutrition estimate, still set is_food true and name it, "
     'but set confidence to "low" and the numeric fields to null. '

@@ -11,16 +11,17 @@ import {
   Alert,
   ActivityIndicator,
   Image,
+  useWindowDimensions,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Gradients } from '../../constants/Colors';
+import { Colors } from '../../constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
-import { LinearGradient } from 'expo-linear-gradient';
 import { getRecipeImageSettings } from '../../utils/recipeImageSettings';
 import {
   getCachedRecipeImageUrl,
@@ -34,11 +35,38 @@ import CarbGoalRing, { getCarbGoalRingColor } from '../../components/CarbGoalRin
 import { getCarbGoalTitle, getCarbGoalSubtitle, getCarbGoalDisclaimer } from '../../utils/carbGoal';
 import { trackEvent } from '../../utils/analytics';
 import { FREE_FEATURES, getFreeUsage, hasFreeUsesLeft, showFreeLimitAlert } from '../../utils/freeTier';
+import BrandWordmark from '../../components/BrandWordmark';
+import GlucoseRangeRing from '../../components/GlucoseRangeRing';
+import { parseServerDate } from '../../utils/dateUtils';
+import CountryPromptCard from '../../components/CountryPromptCard';
+import { reportRegion } from '../../utils/region';
+import { SAFETY_LINES, describeReading, formatGlucose, getGlucoseUnit, statusMeta, timeAgo } from '../../utils/glucose';
+
+// "Last used" ingredients older than this are hidden - fridge contents change.
+const LAST_USED_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+// Basics pushed to the end of the "Last used" chips so the first ones are the real food.
+const PANTRY_BASICS = new Set(['salt', 'pepper', 'black pepper', 'oil', 'olive oil', 'vegetable oil', 'water', 'sugar', 'garlic', 'onion', 'butter', 'flour', 'vinegar', 'spices', 'seasoning']);
 
 const LAST_INGREDIENTS_KEY = 'last_used_ingredients_v1';
 
+// Home action tiles: soft gradient, tinted border, solid icon badge in the same hue.
+// Counted once per app session (not per Home re-render) for the country card timing.
+let countryOpenCounted = false;
+let countryStateCache = null;
+
+const TILE_THEMES = {
+  green: { accent: '#2C8632', subColor: '#2C7A31', border: '#CBE9CD', gradient: ['#E2F4E3', '#F6FBF6'] },
+  blue: { accent: '#2B6CB0', subColor: '#2B5F99', border: '#CADDF4', gradient: ['#E0ECFB', '#F5F9FE'] },
+  orange: { accent: '#E8890C', subColor: '#B86A05', border: '#F6DDB4', gradient: ['#FFEED5', '#FFF9F0'] },
+  violet: { accent: '#6B46C1', subColor: '#5B3BA6', border: '#DDD3F5', gradient: ['#ECE5FB', '#F8F6FE'] },
+};
+
 export default function HomeScreen() {
   const navigation = useNavigation();
+  // Narrow phones (under ~380dp, e.g. small Androids / iPhone SE): the 2x2 action tiles
+  // stack the icon above the text so labels like "Scan Barcode" never get cut off.
+  const { width: screenWidth } = useWindowDimensions();
+  const compactTiles = screenWidth < 380;
   const { signOut, foodProfileHasPreferences } = useAuth();
   const insets = useSafeAreaInsets();
   const headerPaddingTop = Math.max(insets.top, 16);
@@ -57,6 +85,8 @@ export default function HomeScreen() {
   const [serverTodayTip, setServerTodayTip] = useState(null);
   const [dailyChallenge, setDailyChallenge] = useState(null);
   const [healthLogSummary, setHealthLogSummary] = useState(null);
+  const [insightHighlight, setInsightHighlight] = useState(null);
+  const [countryPrompt, setCountryPrompt] = useState(null); // { suggested } when the card should show
   const todayTip = useMemo(() => {
     if (serverTodayTip?.title && (serverTodayTip?.tip || serverTodayTip?.body)) return serverTodayTip;
     return getTodayTip(new Date(), { blockedTipIds });
@@ -71,6 +101,9 @@ export default function HomeScreen() {
     favoritesSaved: 0,
   });
   const [showShoppingListNewDot, setShowShoppingListNewDot] = useState(false);
+  const [glucoseUnit, setGlucoseUnit] = useState('mg/dL');
+  const [lastUsed, setLastUsed] = useState(null); // { items, source, updatedAt }
+  const [freeRecipeUsage, setFreeRecipeUsage] = useState(null);
   const [showWeeklyRecapNewDot, setShowWeeklyRecapNewDot] = useState(false);
 
   useEffect(() => {
@@ -185,6 +218,74 @@ export default function HomeScreen() {
     }
   };
 
+  // The one insight worth showing on Home (Glucose insights, last 30 days).
+  // Country: report the phone region (the backend adds the IP country). The one-off card
+  // shows only when the backend isn't sure, and never on the first app open, so it doesn't
+  // stack with the notifications question.
+  const loadCountry = async () => {
+    try {
+      // Once per app session: Home reloads on every focus, the region only needs sending once.
+      if (!countryStateCache) countryStateCache = await reportRegion();
+      const state = countryStateCache;
+      const opens = Number((await AsyncStorage.getItem('app_open_count_v1')) || 0);
+      if (!countryOpenCounted) {
+        countryOpenCounted = true;
+        await AsyncStorage.setItem('app_open_count_v1', String(opens + 1));
+      }
+      setCountryPrompt(state?.ask && opens >= 1 ? { suggested: state.suggested_country } : null);
+    } catch {
+      // Optional.
+    }
+  };
+
+  const loadInsightHighlight = async () => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) return;
+      const tz = -new Date().getTimezoneOffset();
+      const response = await apiFetch(
+        `${API_URL}/api/app/health-log/insights?days=30&tz_offset_minutes=${tz}`,
+        { method: 'GET', headers: { Authorization: `Bearer ${token}` } },
+        { timeoutMs: 12000 }
+      );
+      if (!response.ok) return;
+      setInsightHighlight((await response.json())?.highlight || null);
+    } catch {
+      // Optional card: Home works without it.
+    }
+  };
+
+  const loadGlucoseUnit = async () => {
+    setGlucoseUnit(await getGlucoseUnit());
+  };
+
+  const loadLastUsed = async () => {
+    const token = await AsyncStorage.getItem('userToken');
+    if (!token) {
+      setLastUsed(null);
+      return;
+    }
+    const res = await apiFetch(
+      `${API_URL}${API_ENDPOINTS.USER_LAST_INGREDIENTS}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+      { onUnauthorized: signOut, timeoutMs: 10000 }
+    );
+    if (!res.ok) return;
+    const data = await res.json();
+    const items = Array.isArray(data?.ingredients) ? data.ingredients.filter(Boolean) : [];
+    const updatedAt = data?.updated_at ? Date.parse(data.updated_at) : NaN;
+    if (!items.length || (Number.isFinite(updatedAt) && Date.now() - updatedAt > LAST_USED_MAX_AGE_MS)) {
+      setLastUsed(null);
+      return;
+    }
+    const ordered = [
+      ...items.filter((i) => !PANTRY_BASICS.has(String(i).toLowerCase().trim())),
+      ...items.filter((i) => PANTRY_BASICS.has(String(i).toLowerCase().trim())),
+    ];
+    setLastUsed({ items: ordered, source: data?.source || null, updatedAt: data?.updated_at || null });
+    await AsyncStorage.setItem(LAST_INGREDIENTS_KEY, JSON.stringify(items));
+  };
+
   const loadGreetingName = async () => {
     try {
       const token = await AsyncStorage.getItem('userToken');
@@ -292,6 +393,10 @@ export default function HomeScreen() {
         loadTodayTip(),
         loadDailyChallenge(),
         loadHealthLogSummary(),
+        loadInsightHighlight(),
+        loadCountry(),
+        loadGlucoseUnit(),
+        loadLastUsed(),
       ]);
 
       const allFailed = results.every((result) => result.status === 'rejected');
@@ -355,6 +460,7 @@ export default function HomeScreen() {
     setUserIsPremium(isPremium);
     setAccessStatus(nextAccessStatus);
     setTrialDaysLeft(data.trial_days_left ?? null);
+    setFreeRecipeUsage(getFreeUsage(data, FREE_FEATURES.RECIPE_GENERATION));
 
     await AsyncStorage.setItem(
       'home_scan_status',
@@ -725,60 +831,6 @@ export default function HomeScreen() {
     checkScanLimit('surprise');
   };
 
-  const handleQuickMealPress = () => {
-    checkScanLimit('quick');
-  };
-
-  const handleUseWhatIHave = async () => {
-    trackEvent('get_recipes_started', { source: 'use_what_i_have' });
-    try {
-      const raw = await AsyncStorage.getItem(LAST_INGREDIENTS_KEY);
-      const list = raw ? JSON.parse(raw) : null;
-      const ingredients = Array.isArray(list) ? list.filter(Boolean) : [];
-      if (!ingredients.length) {
-        try {
-          const token = await AsyncStorage.getItem('userToken');
-          if (token) {
-            const res = await apiFetch(
-              `${API_URL}${API_ENDPOINTS.USER_LAST_INGREDIENTS}`,
-              { headers: { Authorization: `Bearer ${token}` } },
-              { onUnauthorized: signOut, timeoutMs: 10000 }
-            );
-            if (res.ok) {
-              const data = await res.json();
-              const serverList = Array.isArray(data?.ingredients) ? data.ingredients.filter(Boolean) : [];
-              if (serverList.length) {
-                await AsyncStorage.setItem(LAST_INGREDIENTS_KEY, JSON.stringify(serverList));
-                navigation.navigate('ManualInput', {
-                  prefillIngredients: serverList,
-                  autoSubmit: true,
-                  source: 'eat_now_have',
-                  excludeRecent: true,
-                  varietyMode: true,
-                });
-                return;
-              }
-            }
-          }
-        } catch {
-          // Ignore.
-        }
-        Alert.alert('No saved ingredients', 'Scan or type ingredients once, then you can reuse them here.');
-        navigation.navigate('ManualInput');
-        return;
-      }
-      navigation.navigate('ManualInput', {
-        prefillIngredients: ingredients,
-        autoSubmit: true,
-        source: 'eat_now_have',
-        excludeRecent: true,
-        varietyMode: true,
-      });
-    } catch {
-      navigation.navigate('ManualInput');
-    }
-  };
-
   const handleViewRecentRecipes = () => {
     navigation.navigate('RecentRecipes', { initialRecipes: recentRecipes });
   };
@@ -809,10 +861,11 @@ export default function HomeScreen() {
     openPremiumPaywall();
   };
 
-  const getSubGreeting = () => {
-    if (hasChallenge && streakDays > 0) return "Let's keep your streak going";
-    return "Let's find your next meal";
-  };
+  // Welcome week / store trial running out: shown as a red badge so the deadline is noticed.
+  const isAccessCountdown =
+    !userIsPremium &&
+    ['trialing', 'trial', 'legacy_grace', 'grace'].includes(currentAccessStatus) &&
+    Number(trialDaysLeft) > 0;
 
   const getAccessBadgeLabel = () => {
     if (userIsPremium || currentAccessStatus === 'premium') return 'Premium';
@@ -855,125 +908,194 @@ export default function HomeScreen() {
     Alert.alert('About your carb target', getCarbGoalDisclaimer(carbGoalMode, carbGoalToday));
   };
 
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return { text: 'Good morning', icon: 'sunny', color: '#F6AD55' };
+    if (hour < 17) return { text: 'Good afternoon', icon: 'partly-sunny', color: '#F6AD55' };
+    return { text: 'Good evening', icon: 'moon', color: '#805AD5' };
+  };
+
+  const getRecipeCarbs = (recipe) => {
+    const raw =
+      recipe?.nutrition?.carbs ??
+      recipe?.nutrition?.carbohydrates ??
+      recipe?.nutrition_per_serving?.carbs ??
+      recipe?.nutrition_per_serving?.carbohydrates;
+    const n = typeof raw === 'number' ? raw : parseFloat(raw);
+    return Number.isFinite(n) ? Math.round(n) : null;
+  };
+
+  const handleLastUsedPress = () => {
+    if (!lastUsed?.items?.length) return;
+    trackEvent('get_recipes_started', { source: 'last_used' });
+    // Opens the list for editing first (fridge contents change) instead of re-running blindly.
+    navigation.navigate('ManualInput', { prefillIngredients: lastUsed.items, source: 'last_used' });
+  };
+
+  const handleOpenGlucoseTargets = () => navigation.navigate('GlucoseTargets');
+
+  const glucose = healthLogSummary?.glucose || null;
+  const lastReading = glucose?.last || null;
+  const lastMeta = lastReading ? statusMeta(lastReading.status) : null;
+  const week = glucose?.week || null;
+  const prevWeek = glucose?.prev_week || null;
+
+  // Counts, not percentages: "4 of 4" is honest about how few readings there are,
+  // where "100%" from two readings oversells it. Windows are rolling 7 days.
+  const getWeeklyInsight = () => {
+    if (!week?.readings) {
+      return { text: 'Log your glucose to see how your week is going.', tone: 'neutral' };
+    }
+    const text = `Last 7 days: ${week.in_range} of ${week.readings} reading${week.readings === 1 ? '' : 's'} on target`;
+    if (!prevWeek?.readings) return { text, tone: 'neutral' };
+    const sub = `Previous 7 days: ${prevWeek.in_range} of ${prevWeek.readings}`;
+    // Tone compares the share on target, so more readings logged doesn't look like a drop.
+    const pct = week.in_range / week.readings;
+    const prev = prevWeek.in_range / prevWeek.readings;
+    return { text, sub, tone: pct > prev ? 'up' : pct < prev ? 'down' : 'neutral' };
+  };
+  const insight = getWeeklyInsight();
+
+  // Home insight card: a meal waiting for its after-meal reading (act now), a real
+  // insight, or a nudge that teaches the meal -> reading loop. Chosen by the backend.
+  const getHighlightCard = () => {
+    const h = insightHighlight;
+    if (!h) return null;
+    if (h.kind === 'check_meal' && h.meal) {
+      const checkAt = parseServerDate(h.check_at);
+      const when =
+        checkAt.getTime() <= Date.now()
+          ? 'now'
+          : `around ${new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(checkAt)}`;
+      return {
+        title: 'Check your glucose',
+        text: `Check your glucose ${when} to see how ${h.meal.description} affects you.`,
+        link: 'Log ›',
+        icon: 'time-outline',
+        iconColor: Colors.primary,
+        iconBg: '#D5ECEA',
+        style: styles.hInsightCardCheck,
+        onPress: () => navigation.navigate('LogGlucose', { context: 'after_meal' }),
+      };
+    }
+    if (h.kind === 'insight') {
+      return {
+        title: 'Your insight',
+        text: h.text,
+        link: 'See all ›',
+        icon: 'bulb',
+        iconColor: '#C05621',
+        onPress: () => navigation.navigate('GlucoseInsights', { tab: h.tab || 'trends' }),
+      };
+    }
+    return {
+      title: 'How it works',
+      text: h.text,
+      link: 'Log meal ›',
+      icon: 'sparkles-outline',
+      iconColor: Colors.primary,
+      iconBg: '#E8F4F3',
+      style: styles.hInsightCardNudge,
+      onPress: handleOpenLogMeal,
+    };
+  };
+  const highlightCard = getHighlightCard();
+  const greeting = getGreeting();
+  const showFreeLine = !hasCurrentFeatureAccess && freeRecipeUsage;
+
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="dark-content" />
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding + 12 }]}
       >
-      <LinearGradient colors={[Colors.primaryDark, Colors.primary, Colors.primaryLight]} style={[styles.heroHeader, { paddingTop: headerPaddingTop }]}>
-        <View style={styles.heroTopRow}>
-          <View style={styles.heroGreetingBlock}>
-            <Text style={styles.greeting} numberOfLines={1} ellipsizeMode="tail">
-              <Text style={styles.greetingHey}>Hey</Text>
-              {greetingName ? `, ${greetingName}` : ''}
+        <View style={[styles.hHeader, { paddingTop: headerPaddingTop + 6 }]}>
+          {/* Brand */}
+          <View style={styles.hBrandRow}>
+            <Image source={require('../../assets/logo.png')} style={styles.hLogo} />
+            <View style={{ flex: 1 }}>
+              <BrandWordmark size={22} />
+              <Text style={styles.hTagline} numberOfLines={1}>Smarter food choices for a healthier you</Text>
+            </View>
+          </View>
+
+          {/* Greeting + plan status */}
+          <View style={styles.hGreetRow}>
+            <Text style={styles.hGreeting} numberOfLines={1}>
+              {greeting.text}{greetingName ? `, ${greetingName}` : ''}
             </Text>
-            <View style={styles.subGreetingRow}>
-              <Text style={styles.subGreeting} numberOfLines={1} ellipsizeMode="tail">
-                {getSubGreeting()}
+            <Ionicons name={greeting.icon} size={22} color={greeting.color} style={{ marginLeft: 6 }} />
+          </View>
+          <Text style={styles.hAsk}>What would you like to eat today?</Text>
+          <View style={styles.hBadgeRow}>
+            <View style={[styles.hBadge, isAccessCountdown ? styles.hBadgeUrgent : styles.hBadgeSoft]}>
+              {isAccessCountdown ? <Ionicons name="time-outline" size={12} color="white" style={{ marginRight: 4 }} /> : null}
+              <Text style={[styles.hBadgeText, isAccessCountdown ? { color: 'white' } : null]} numberOfLines={1}>
+                {getAccessBadgeLabel()}
               </Text>
-              <View style={styles.accessBadge}>
-                <Text style={styles.accessBadgeText} numberOfLines={1} ellipsizeMode="tail">
-                  {getAccessBadgeLabel()}
-                </Text>
-              </View>
             </View>
           </View>
-          <TouchableOpacity style={styles.notificationButton} onPress={() => navigation.navigate('Profile')}>
-            <Ionicons name="person-outline" size={22} color="white" />
-          </TouchableOpacity>
-        </View>
 
-        <View style={styles.heroStatsRow}>
-          <TouchableOpacity style={styles.heroStatPill} onPress={handleViewRecipeHistory} activeOpacity={0.86}>
-            <View style={styles.heroStatIcon}>
-              <Ionicons name="restaurant-outline" size={20} color={Colors.primaryDark} />
-            </View>
-            <View style={styles.heroStatText}>
-              <Text style={styles.heroStatValue}>{userStats.recipesGenerated}</Text>
-              <Text style={styles.heroStatLabel}>recipes made</Text>
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.heroStatPill} onPress={() => navigation.navigate('Favorites')} activeOpacity={0.86}>
-            <View style={styles.heroStatIcon}>
-              <Ionicons name="bookmark-outline" size={21} color={Colors.primaryDark} />
-            </View>
-            <View style={styles.heroStatText}>
-              <Text style={styles.heroStatValue}>{userStats.favoritesSaved}</Text>
-              <Text style={styles.heroStatLabel}>saved</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.heroCtaWrap}>
-          <View style={styles.getRecipesCard}>
-            <View style={styles.getRecipesHeader}>
-              <View style={styles.heroPrimaryIcon}>
-                <Ionicons name="restaurant-outline" size={20} color="white" />
+          {/* What should I eat */}
+          <View style={styles.hActions}>
+            <TouchableOpacity style={[styles.hAction, styles.hActionPrimary]} onPress={handleScanPress} activeOpacity={0.88}>
+              <View style={[styles.hActionIcon, { backgroundColor: 'rgba(255,255,255,0.18)' }]}>
+                <Ionicons name="camera" size={20} color="white" />
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.getRecipesTitle}>Get recipes</Text>
-                <Text style={styles.getRecipesSub} numberOfLines={1}>
-                  {getAccessLabel()}
-                </Text>
+              <Text style={[styles.hActionText, { color: 'white' }]} numberOfLines={1} adjustsFontSizeToFit>Scan fridge</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.hAction, styles.hActionBlue]} onPress={handleManualInputPress} activeOpacity={0.88}>
+              <View style={styles.hActionIcon}>
+                <Ionicons name="create" size={20} color="#2B6CB0" />
               </View>
-            </View>
-
-            <View style={styles.entryChipRow}>
-              <TouchableOpacity
-                style={styles.entryChip}
-                onPress={handleScanPress}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="camera-outline" size={18} color={Colors.primary} />
-                <Text style={styles.entryChipText}>Scan</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.entryChip}
-                onPress={handleManualInputPress}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="create-outline" size={18} color={Colors.primary} />
-                <Text style={styles.entryChipText}>Type</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.entryChip}
-                onPress={handleSurprisePress}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="shuffle-outline" size={18} color={Colors.primary} />
-                <Text style={styles.entryChipText}>Surprise</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.filterChipRow}>
-              <TouchableOpacity style={styles.filterChip} onPress={handleUseWhatIHave} activeOpacity={0.8}>
-                <Text style={styles.filterChipText}>Use what I have</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.filterChip} onPress={handleQuickMealPress} activeOpacity={0.8}>
-                <Text style={styles.filterChipText}>Quick meal</Text>
-              </TouchableOpacity>
-            </View>
+              <Text style={styles.hActionText} numberOfLines={1} adjustsFontSizeToFit>Type foods</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.hAction, styles.hActionOrange]} onPress={handleSurprisePress} activeOpacity={0.88}>
+              <View style={styles.hActionIcon}>
+                <Ionicons name="sparkles" size={20} color="#DD6B20" />
+              </View>
+              <Text style={styles.hActionText} numberOfLines={1} adjustsFontSizeToFit>Suggest meal</Text>
+            </TouchableOpacity>
           </View>
-          {!hasCurrentFeatureAccess ? (
-            <View style={styles.heroUsageWrap}>
-              <View style={styles.heroUsageTop}>
-                <Text style={styles.heroUsageLabel}>Free plan</Text>
-                <Text style={styles.heroUsageCount}>Resets Monday</Text>
+
+          {/* Last used ingredients: one line, first 3 + "+N more" */}
+          {lastUsed?.items?.length ? (
+            <TouchableOpacity style={styles.hLastUsed} onPress={handleLastUsedPress} activeOpacity={0.85}>
+              <View style={styles.hLastUsedRow}>
+                <Ionicons name="time-outline" size={16} color={Colors.textLight} />
+                {lastUsed.items.slice(0, 3).map((item) => (
+                  <View key={item} style={styles.hChip}>
+                    <Text style={styles.hChipText} numberOfLines={1}>{item}</Text>
+                  </View>
+                ))}
+                {lastUsed.items.length > 3 ? (
+                  <View style={[styles.hChip, styles.hChipMore]}>
+                    <Text style={[styles.hChipText, { color: Colors.primary }]}>+{lastUsed.items.length - 3} more</Text>
+                  </View>
+                ) : null}
+                <Ionicons name="chevron-forward" size={16} color={Colors.primary} style={{ marginLeft: 'auto' }} />
               </View>
-              <Text style={styles.heroUsageBody}>
-                You get free uses of GlucoGuide, scans, recipes and food swaps every week. Upgrade for unlimited
-                access and your daily meal planner.
+              <Text style={styles.hLastUsedMeta} numberOfLines={1}>
+                Last used · {lastUsed.source === 'text' ? 'typed ingredients' : 'from your fridge scan'}
+                {lastUsed.updatedAt ? ` · ${timeAgo(lastUsed.updatedAt)}` : ''}
               </Text>
-              <TouchableOpacity style={styles.heroUpgradeButton} onPress={handleUpgradePaywall} activeOpacity={0.9}>
-                <Text style={styles.heroUpgradeText}>Upgrade to Premium</Text>
-                <Ionicons name="arrow-forward" size={15} color="white" />
-              </TouchableOpacity>
-            </View>
+            </TouchableOpacity>
+          ) : null}
+
+          {showFreeLine ? (
+            <TouchableOpacity style={styles.hFreeLine} onPress={handleUpgradePaywall} activeOpacity={0.85}>
+              <Text style={styles.hFreeText}>
+                <Text style={styles.hFreeStrong}>
+                  {freeRecipeUsage.remaining} of {freeRecipeUsage.limit}
+                </Text>{' '}
+                free recipe ideas left this week
+              </Text>
+              <Text style={styles.hFreeLink}>Upgrade</Text>
+            </TouchableOpacity>
           ) : null}
         </View>
-      </LinearGradient>
+
         {isRefreshing && (
           <View style={styles.refreshRow}>
             <ActivityIndicator size="small" color={Colors.primary} />
@@ -991,7 +1113,7 @@ export default function HomeScreen() {
         )}
 
         {foodProfileHasPreferences === true ? null : (
-          <View style={styles.section}>
+          <View style={styles.hSection}>
             <Pressable
               style={({ pressed }) => [styles.urgentCard, pressed && styles.cardPressed]}
               android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
@@ -1014,334 +1136,362 @@ export default function HomeScreen() {
           </View>
         )}
 
+        {countryPrompt ? (
+          <View style={{ paddingHorizontal: 16 }}>
+            <CountryPromptCard suggested={countryPrompt.suggested} onDone={(result) => {
+                countryStateCache = result || { ask: false };
+                setCountryPrompt(null);
+              }} />
+          </View>
+        ) : null}
+
         {/* Track today */}
-        <View style={[styles.section, { marginTop: 18 }]}>
-          <View style={styles.trackCard}>
-            <View style={styles.getRecipesHeader}>
-              <View style={[styles.heroPrimaryIcon, { backgroundColor: Colors.accent }]}>
-                <Ionicons name="water-outline" size={20} color="white" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.getRecipesTitle}>Track today</Text>
-                <Text style={styles.getRecipesSub} numberOfLines={1}>
-                  Log meals and glucose readings
-                </Text>
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={styles.carbGoalRow}
-              onPress={() => {
-                trackEvent('carb_goal_ring_tapped', { carb_goal_mode: carbGoalMode });
-                navigation.navigate('CarbGoal');
-              }}
-              activeOpacity={0.7}
-            >
-              <CarbGoalRing carbsLogged={carbsLoggedToday} carbGoal={carbGoalToday} mode={carbGoalMode} size={92} />
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                  <Text style={styles.carbGoalTitle} numberOfLines={1}>
-                    {carbGoalTitle}
-                  </Text>
-                  <Pressable hitSlop={10} onPress={showCarbGoalDisclaimer}>
-                    <Ionicons name="information-circle-outline" size={15} color={Colors.textLight} />
-                  </Pressable>
-                </View>
-                <Text
-                  style={[
-                    styles.carbGoalSubtitle,
-                    { color: getCarbGoalRingColor(carbsLoggedToday, carbGoalToday, carbGoalMode) },
-                  ]}
-                  numberOfLines={1}
-                >
-                  {carbGoalSubtitle}
-                </Text>
-                {healthLogSummary?.spikes_flagged_today > 0 ? (
-                  <View style={[styles.spikeBadge, { marginTop: 6, alignSelf: 'flex-start' }]}>
-                    <Ionicons name="alert-circle" size={12} color={Colors.warning} />
-                    <Text style={styles.spikeBadgeText}>
-                      {healthLogSummary.spikes_flagged_today} spike{healthLogSummary.spikes_flagged_today === 1 ? '' : 's'} flagged
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-              <Ionicons name="chevron-forward" size={14} color={Colors.textLight} />
-            </TouchableOpacity>
-
-            <View style={styles.scanButtonsRow}>
-              <TouchableOpacity style={styles.scanButton} onPress={handleOpenBarcodeScan} activeOpacity={0.9}>
-                <Ionicons name="barcode-outline" size={19} color="white" />
-                <Text style={styles.scanButtonText}>Scan barcode</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.scanButton} onPress={handleOpenPhotoScan} activeOpacity={0.9}>
-                <Ionicons name="camera-outline" size={19} color="white" />
-                <Text style={styles.scanButtonText}>Scan food</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.trackButtonRow}>
-              <TouchableOpacity style={styles.trackButton} onPress={handleOpenLogMeal} activeOpacity={0.85}>
-                <View style={styles.trackButtonTop}>
-                  <Ionicons name="restaurant-outline" size={18} color={Colors.primary} />
-                  <Text style={styles.trackButtonTitle}>Log meal</Text>
-                </View>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.trackButton} onPress={handleOpenLogGlucose} activeOpacity={0.85}>
-                <View style={styles.trackButtonTop}>
-                  <Ionicons name="water-outline" size={18} color={Colors.primary} />
-                  <Text style={styles.trackButtonTitle}>Log glucose</Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity style={styles.viewLogBadge} onPress={() => navigation.navigate('FoodLog')} activeOpacity={0.85}>
-              <Ionicons name="clipboard-outline" size={14} color={Colors.secondary} />
-              <Text style={styles.viewLogBadgeText}>View food log</Text>
-              <Ionicons name="chevron-forward" size={13} color={Colors.secondary} />
+        <View style={styles.hSection}>
+          <View style={styles.hSectionHead}>
+            <Text style={styles.hSectionTitle}>Track Today</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('FoodLog')} hitSlop={10}>
+              <Text style={styles.hSectionLink}>Meal diary ›</Text>
             </TouchableOpacity>
           </View>
+          <View style={[styles.hCard, styles.hTrackCard]}>
+            <View style={styles.hRings}>
+              <TouchableOpacity
+                style={styles.hRingCol}
+                onPress={() => {
+                  trackEvent('carb_goal_ring_tapped', { carb_goal_mode: carbGoalMode });
+                  // Same as the glucose ring: empty goes straight to logging.
+                  navigation.navigate(carbsLoggedToday == null && !mealsLoggedToday ? 'LogMeal' : 'CarbGoal');
+                }}
+                activeOpacity={0.8}
+              >
+                <CarbGoalRing carbsLogged={carbsLoggedToday} carbGoal={carbGoalToday} mode={carbGoalMode} size={100} />
+                <View style={styles.hRingTitleRow}>
+                  <Text style={styles.hRingTitle}>Carbs</Text>
+                  <Pressable hitSlop={10} onPress={showCarbGoalDisclaimer}>
+                    <Ionicons name="information-circle-outline" size={14} color={Colors.textLight} />
+                  </Pressable>
+                </View>
+                {carbsLoggedToday != null ? (
+                  <Text style={styles.hRingValue} numberOfLines={1}>
+                    {carbGoalMode === 'none' || !carbGoalToday ? `${carbsLoggedToday}g today` : `${carbsLoggedToday}g of ${carbGoalToday}g`}
+                  </Text>
+                ) : null}
+                {carbsLoggedToday == null ? (
+                  mealsLoggedToday ? (
+                    <Text style={[styles.hRingSub, { color: Colors.textLight }]} numberOfLines={2}>
+                      {mealsLoggedToday} meal{mealsLoggedToday === 1 ? '' : 's'}, no carb count
+                    </Text>
+                  ) : (
+                    <Text style={[styles.hRingSub, { color: Colors.primary }]}>Log a meal</Text>
+                  )
+                ) : (
+                  <Text
+                    style={[styles.hRingSub, { color: getCarbGoalRingColor(carbsLoggedToday, carbGoalToday, carbGoalMode) }]}
+                    numberOfLines={2}
+                  >
+                    {carbGoalSubtitle || carbGoalTitle}
+                  </Text>
+                )}
+              </TouchableOpacity>
+
+              {/* With a reading today the ring opens the glucose details; empty, it goes straight to logging. */}
+              <TouchableOpacity
+                style={styles.hRingCol}
+                onPress={lastReading ? () => navigation.navigate('GlucoseInsights', { tab: 'trends' }) : handleOpenLogGlucose}
+                activeOpacity={0.8}
+              >
+                <GlucoseRangeRing today={glucose?.today} size={100} />
+                <Text style={[styles.hRingTitle, { marginTop: 8 }]}>Glucose</Text>
+                {lastReading ? (
+                  <>
+                    <Text style={styles.hRingValue} numberOfLines={1}>
+                      {formatGlucose(lastReading.value_mg_dl, glucoseUnit)}
+                    </Text>
+                    <Text style={[styles.hRingSub, { color: lastMeta.color }]} numberOfLines={1}>
+                      {describeReading(lastReading, glucoseUnit)}
+                    </Text>
+                  </>
+                ) : (
+                  <Text style={[styles.hRingSub, { color: Colors.primary }]}>Log a reading</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            {lastReading && SAFETY_LINES[lastReading.status] ? (
+              <View style={styles.hSafety}>
+                <Ionicons name="alert-circle" size={16} color="#C53030" />
+                <Text style={styles.hSafetyText}>{SAFETY_LINES[lastReading.status]}</Text>
+              </View>
+            ) : null}
+
+            <View
+              style={[
+                styles.hInsight,
+                insight.tone === 'up' && styles.hInsightUp,
+                insight.tone === 'down' && styles.hInsightDown,
+              ]}
+            >
+              <Ionicons
+                name={insight.tone === 'up' ? 'trending-up' : insight.tone === 'down' ? 'trending-down' : 'analytics-outline'}
+                size={16}
+                color={insight.tone === 'up' ? Colors.success : insight.tone === 'down' ? '#B7791F' : Colors.primary}
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.hInsightText} numberOfLines={2}>{insight.text}</Text>
+                {insight.sub ? <Text style={styles.hInsightSub}>{insight.sub}</Text> : null}
+              </View>
+              <TouchableOpacity onPress={handleOpenGlucoseTargets} hitSlop={8}>
+                <Text style={styles.hInsightLink}>Targets</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.hTiles}>
+              {[
+                // One distinct hue per action: green (food), blue (glucose), orange (camera), violet (barcode).
+                { label: 'Log Meal', sub: 'What you ate', icon: 'restaurant', ...TILE_THEMES.green, onPress: handleOpenLogMeal },
+                { label: 'Log Glucose', sub: 'Your reading', icon: 'water', ...TILE_THEMES.blue, onPress: handleOpenLogGlucose },
+                { label: 'Snap a Meal', sub: 'See the carbs', icon: 'camera', ...TILE_THEMES.orange, onPress: handleOpenPhotoScan },
+                { label: 'Scan Barcode', sub: 'Free verdict', icon: 'barcode-outline', ...TILE_THEMES.violet, onPress: handleOpenBarcodeScan },
+              ].map((tile) => (
+                <TouchableOpacity
+                  key={tile.label}
+                  style={[styles.hTileShell, { borderColor: tile.border, shadowColor: tile.accent }]}
+                  onPress={tile.onPress}
+                  activeOpacity={0.85}
+                >
+                  <LinearGradient
+                    colors={tile.gradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={[styles.hTile, compactTiles && styles.hTileCompact]}
+                  >
+                    <View style={[styles.hTileIcon, { backgroundColor: tile.accent }]}>
+                      <Ionicons name={tile.icon} size={17} color="white" />
+                    </View>
+                    <View style={compactTiles ? styles.hTileTextCompact : { flex: 1 }}>
+                      <Text style={styles.hTileTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
+                        {tile.label}
+                      </Text>
+                      <Text style={[styles.hTileSub, { color: tile.subColor }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
+                        {tile.sub}
+                      </Text>
+                    </View>
+                  </LinearGradient>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {highlightCard ? (
+            <TouchableOpacity
+              style={[styles.hInsightCard, highlightCard.style]}
+              onPress={highlightCard.onPress}
+              activeOpacity={0.85}
+            >
+              <View style={[styles.hInsightBulb, highlightCard.iconBg && { backgroundColor: highlightCard.iconBg }]}>
+                <Ionicons name={highlightCard.icon} size={18} color={highlightCard.iconColor} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.hInsightCardTitle, { color: highlightCard.iconColor }]}>{highlightCard.title}</Text>
+                <Text style={styles.hInsightCardText}>{highlightCard.text}</Text>
+              </View>
+              <Text style={styles.hSectionLink}>{highlightCard.link}</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
 
-        {/* Daily smart move */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Today's smart move</Text>
+        {/* 3 picks */}
+        {isFetchingRecipes || suggestedRecipes.length ? (
+        <View style={styles.hSection}>
+          <View style={styles.hSectionHead}>
+            <Text style={styles.hSectionTitle}>3 Picks for You</Text>
+            <TouchableOpacity onPress={handleShuffleSuggestions} disabled={isFetchingRecipes} hitSlop={10} style={styles.hShuffle}>
+              {isFetchingRecipes ? <ActivityIndicator size="small" color={Colors.primary} /> : <Ionicons name="shuffle" size={16} color={Colors.primary} />}
+              <Text style={styles.hSectionLink}>Shuffle</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hCardsRow}>
+            {isFetchingRecipes && suggestedRecipes.length === 0
+              ? Array.from({ length: 3 }).map((_, idx) => (
+                  <View key={`skeleton-${idx}`} style={styles.hPick}>
+                    <View style={[styles.hPickImage, { backgroundColor: Colors.border }]} />
+                    <View style={styles.hPickBody}>
+                      <View style={styles.recipeSkeletonLine} />
+                      <View style={styles.recipeSkeletonLineShort} />
+                    </View>
+                  </View>
+                ))
+              : suggestedRecipes.map((recipe, index) => {
+                  const carbs = getRecipeCarbs(recipe);
+                  const lowCarb = carbs != null && carbs <= 20;
+                  const timeValue = getRecipeTimeValue(recipe);
+                  const imageUrl = recipeImagesEnabled ? getRecipeImageUrl(recipe) || recipe.image_url : '';
+                  return (
+                    <TouchableOpacity
+                      key={recipe.id || `${recipe.name || 'recipe'}-${index}`}
+                      style={styles.hPick}
+                      onPress={() => handleViewRecipeDetail(recipe)}
+                      activeOpacity={0.9}
+                    >
+                      <View>
+                        {imageUrl ? (
+                          <Image source={{ uri: imageUrl }} style={styles.hPickImage} />
+                        ) : (
+                          <View style={[styles.hPickImage, styles.hPickImageEmpty]}>
+                            <Ionicons name="restaurant-outline" size={26} color={Colors.primary} />
+                          </View>
+                        )}
+                        {carbs != null ? (
+                          <View style={[styles.hLabel, lowCarb ? styles.hLabelLow : styles.hLabelBal]}>
+                            <Text style={[styles.hLabelText, { color: lowCarb ? Colors.success : '#2B6CB0' }]}>
+                              {lowCarb ? 'Low carb' : 'Balanced'}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      <View style={styles.hPickBody}>
+                        <Text style={styles.hPickTitle} numberOfLines={2}>
+                          {getFeelingBadge(recipe) ? `${getFeelingBadge(recipe).emoji} ` : ''}
+                          {recipe.name || recipe.title}
+                        </Text>
+                        <View style={styles.hPickMeta}>
+                          {timeValue !== '--' ? (
+                            <Text style={styles.hPickMetaText}>
+                              <Ionicons name="time-outline" size={12} color={Colors.textLight} /> {timeValue} min
+                            </Text>
+                          ) : null}
+                          {carbs != null ? <Text style={styles.hPickCarbs}>{carbs}g carbs</Text> : null}
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+          </ScrollView>
+        </View>
+        ) : null}
+
+        {/* Smart move */}
+        <View style={styles.hSection}>
+          <View style={styles.hSectionHead}>
+            <Text style={styles.hSectionTitle}>Today's Smart Move</Text>
             {hasChallenge && streakDays > 0 ? (
-              <TouchableOpacity style={styles.streakBadge} onPress={handleOpenWeeklyRecap} activeOpacity={0.8}>
-                <Ionicons name="flame" size={13} color={Colors.accent} />
-                <Text style={styles.streakBadgeText}>{streakDays} day streak</Text>
+              <TouchableOpacity style={styles.hStreak} onPress={handleOpenWeeklyRecap} activeOpacity={0.8}>
+                <Ionicons name="flame" size={14} color="#C05621" />
+                <Text style={styles.hStreakText}>{streakDays} day streak</Text>
                 {showWeeklyRecapNewDot ? <View style={styles.newDot} /> : null}
               </TouchableOpacity>
             ) : null}
           </View>
-          <Text style={styles.sectionSubtitle}>One practical nudge for steadier choices today.</Text>
-
-          <View style={styles.smartMoveCard}>
+          <View style={styles.hCard}>
             {hasChallenge ? (
-              <TouchableOpacity style={styles.smartChallengeRow} onPress={handleOpenChallenge} activeOpacity={0.9}>
-                <View style={styles.smartChallengeIcon}>
-                  <Ionicons
-                    name={dailyChallenge.completed_today ? 'checkmark-circle' : 'trophy-outline'}
-                    size={22}
-                    color={dailyChallenge.completed_today ? Colors.success : Colors.accent}
-                  />
-                </View>
-                <View style={styles.smartChallengeText}>
-                  <Text style={styles.smartChallengeTitle} numberOfLines={1}>
-                    {dailyChallenge.completed_today ? 'Challenge complete' : "Today's challenge"}
-                  </Text>
-                  <Text style={styles.smartChallengeMeta} numberOfLines={1}>
-                    {challengeCompleted}/{challengeTotal} done • {streakDays} day streak
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
-              </TouchableOpacity>
+              <>
+                <TouchableOpacity style={styles.hMoveRow} onPress={handleOpenChallenge} activeOpacity={0.88}>
+                  <View style={[styles.hMoveIcon, { backgroundColor: '#FFF1E6' }]}>
+                    <Ionicons
+                      name={dailyChallenge.completed_today ? 'checkmark-circle' : 'trophy'}
+                      size={20}
+                      color={dailyChallenge.completed_today ? Colors.success : '#C05621'}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.hMoveKicker, { color: '#C05621' }]}>
+                      {dailyChallenge.completed_today ? 'Challenge complete' : `Challenge · ${challengeCompleted}/${challengeTotal} done`}
+                    </Text>
+                    <Text style={styles.hMoveTitle} numberOfLines={2}>
+                      {(dailyChallenge.tasks.find((t) => !t.completed) || dailyChallenge.tasks[0])?.text || "Today's challenge"}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={Colors.textLight} />
+                </TouchableOpacity>
+                <View style={styles.hDivider} />
+              </>
             ) : null}
-
-            <TouchableOpacity
-              style={[styles.smartMoveMain, hasChallenge && styles.smartMoveMainSecondary]}
-              onPress={handleOpenTip}
-              activeOpacity={0.9}
-            >
-              <View style={styles.smartMoveIcon}>
-                <Ionicons name="bulb-outline" size={22} color="white" />
+            <TouchableOpacity style={styles.hMoveRow} onPress={handleOpenTip} activeOpacity={0.88}>
+              <View style={[styles.hMoveIcon, { backgroundColor: '#E8F4F3' }]}>
+                <Ionicons name="bulb" size={20} color={Colors.primary} />
               </View>
-              <View style={styles.smartMoveText}>
-                <Text style={styles.smartMoveLabel}>Food tip</Text>
-                <Text style={styles.smartMoveTitle} numberOfLines={2}>
-                  {todayTip.title}
-                </Text>
-                <Text style={styles.smartMoveSnippet} numberOfLines={2}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.hMoveKicker, { color: Colors.primary }]}>Food tip</Text>
+                <Text style={styles.hMoveTitle} numberOfLines={2}>{todayTip.title}</Text>
+                <Text style={styles.hMoveBody} numberOfLines={2}>
                   {todayTip.tip || todayTip.body || 'Small daily actions to support steadier blood sugar.'}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
+              <Ionicons name="chevron-forward" size={18} color={Colors.textLight} />
             </TouchableOpacity>
           </View>
         </View>
 
         {/* Tools */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Tools</Text>
+        <View style={styles.hSection}>
+          <View style={styles.hSectionHead}>
+            <Text style={styles.hSectionTitle}>Food Tools</Text>
           </View>
-          <Text style={styles.sectionSubtitle}>Quick helpers for smarter choices.</Text>
-
-          <View style={styles.toolsRow}>
-            <Pressable
-              style={({ pressed }) => [styles.toolTile, pressed && styles.cardPressed]}
-              android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
-              onPress={handleOpenSwaps}
-            >
-              <View style={[styles.toolTileIcon, { backgroundColor: Colors.accent }]}>
-                <Ionicons name="swap-horizontal-outline" size={20} color="white" />
+          <View style={styles.hTools}>
+            <TouchableOpacity style={[styles.hTool, { backgroundColor: '#FFF1E6' }]} onPress={handleOpenSwaps} activeOpacity={0.88}>
+              <View style={styles.hToolIcon}>
+                <Ionicons name="swap-horizontal" size={20} color="#DD6B20" />
               </View>
-              <Text style={styles.toolTileLabel}>Food swaps</Text>
-            </Pressable>
-
-            <Pressable
-              style={({ pressed }) => [styles.toolTile, pressed && styles.cardPressed]}
-              android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
-              onPress={handleOpenShoppingList}
-            >
-              <View style={[styles.toolTileIcon, { backgroundColor: Colors.primary }]}>
-                <Ionicons name="cart-outline" size={20} color="white" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.hToolTitle}>Food Swaps</Text>
+                <Text style={styles.hToolSub} numberOfLines={2}>Find healthier alternatives</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.hTool, { backgroundColor: '#E7F4E8' }]} onPress={handleOpenShoppingList} activeOpacity={0.88}>
+              <View style={styles.hToolIcon}>
+                <Ionicons name="cart" size={20} color={Colors.success} />
                 {showShoppingListNewDot ? <View style={styles.newDot} /> : null}
               </View>
-              <Text style={styles.toolTileLabel}>Shopping list</Text>
-            </Pressable>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.hToolTitle}>Shopping List</Text>
+                <Text style={styles.hToolSub} numberOfLines={2}>Save ingredients, shop easily</Text>
+              </View>
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* Suggested Recipes */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>3 picks for you</Text>
-          </View>
-          
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            style={styles.recipesScroll}
-          >
-            {isFetchingRecipes && suggestedRecipes.length === 0 ? (
-              Array.from({ length: 3 }).map((_, idx) => (
-                <View key={`skeleton-${idx}`} style={styles.recipeSkeletonCard}>
-                  <View style={styles.recipeSkeletonImage} />
-                  <View style={styles.recipeSkeletonInfo}>
-                    <View style={styles.recipeSkeletonLineShort} />
-                    <View style={styles.recipeSkeletonLine} />
-                    <View style={styles.recipeSkeletonLine} />
-                  </View>
-                </View>
-              ))
-            ) : suggestedRecipes.map((recipe, index) => (
-              <TouchableOpacity 
-                key={recipe.id || `${recipe.name || 'recipe'}-${index}`}
-                style={styles.recipeCard}
-                onPress={() => handleViewRecipeDetail(recipe)}
-              >
-                {recipeImagesEnabled && recipe.image_url ? (
-                  <Image source={{ uri: recipe.image_url }} style={styles.recipeImage} />
-                ) : null}
-                <View style={styles.recipeInfo}>
-                  <View style={styles.recipeHeader}>
-                    <View style={styles.badge}>
-                      <Text style={styles.badgeText} numberOfLines={1}>
-                        Diabetes-Safe
-                      </Text>
-                    </View>
-                    {(() => {
-                      const feeling = getFeelingBadge(recipe);
-                      if (!feeling) return null;
-                      return (
-                        <View style={styles.feelingBadge}>
-                          <Text style={styles.feelingBadgeText} numberOfLines={1}>
-                            {feeling.emoji}
-                          </Text>
-                        </View>
-                      );
-                    })()}
-                    <View style={styles.recipeSpacer} />
-                    {(() => {
-                      const timeValue = getRecipeTimeValue(recipe);
-                      if (timeValue === '--') {
-                        return <Text style={styles.recipeTime}>{timeValue}</Text>;
-                      }
-                      return (
-                        <Text style={styles.recipeTime}>
-                          {timeValue}
-                          <Text style={styles.recipeTimeUnit}>mins</Text>
-                        </Text>
-                      );
-                    })()}
-                  </View>
-                  <Text style={styles.recipeName} numberOfLines={2}>
-                    {recipe.name || recipe.title}
-                  </Text>
-                  <View style={styles.recipeMetaRow}>
-                    <Text style={[styles.recipeMetaValue, styles.recipeCal]}>{getRecipeCalories(recipe)}</Text>
-                    <Text style={styles.recipeMetaDivider}>|</Text>
-                    <Text style={[styles.recipeMetaValue, styles.recipePro]}>{getRecipeProtein(recipe)}</Text>
-                    <Text style={styles.recipeMetaDivider}>|</Text>
-                    <Text style={[styles.recipeMetaValue, styles.recipeFib]}>{getRecipeFiber(recipe)}</Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          <TouchableOpacity
-            style={[styles.shuffleButton, isFetchingRecipes && styles.shuffleButtonDisabled]}
-            onPress={handleShuffleSuggestions}
-            disabled={isFetchingRecipes}
-          >
-            {isFetchingRecipes ? (
-              <ActivityIndicator size="small" color="white" />
-            ) : (
-              <Ionicons name="shuffle" size={18} color="white" />
-            )}
-            <Text style={styles.shuffleText}>
-              {isFetchingRecipes ? 'Refreshing...' : 'Shuffle recipes'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Recent Recipes */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recent recipes</Text>
+        {/* Recent recipes */}
+        <View style={styles.hSection}>
+          <View style={styles.hSectionHead}>
+            <Text style={styles.hSectionTitle}>Recent Recipes</Text>
             {recentRecipes.length ? (
-              <TouchableOpacity style={styles.viewAllButton} onPress={handleViewRecentRecipes} activeOpacity={0.85}>
-                <Text style={styles.viewAllText}>View all</Text>
-                <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
+              <TouchableOpacity onPress={handleViewRecentRecipes} hitSlop={10}>
+                <Text style={styles.hSectionLink}>See all ›</Text>
               </TouchableOpacity>
             ) : null}
           </View>
-          <Text style={styles.sectionSubtitle}>Your latest generated meals.</Text>
-
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.recipesScroll, { marginTop: 10 }]}>
-            {isFetchingRecipes && recentRecipes.length === 0 ? (
-              Array.from({ length: 2 }).map((_, idx) => (
-                <View key={`recent-skeleton-${idx}`} style={styles.recentMiniCard}>
-                  <View style={styles.recentMiniThumb} />
-                  <View style={styles.recentMiniTextWrap}>
-                    <View style={styles.recipeSkeletonLine} />
-                    <View style={styles.recipeSkeletonLineShort} />
-                  </View>
-                </View>
-              ))
-            ) : recentRecipes.length ? (
-              recentRecipes.slice(0, 5).map((recipe, index) => (
-                <TouchableOpacity
-                  key={recipe.id || `${recipe.name || 'recent'}-${index}`}
-                  style={styles.recentMiniCard}
-                  onPress={() => handleViewRecipeDetail(recipe)}
-                  activeOpacity={0.9}
-                >
-                  {recipeImagesEnabled && getRecipeImageUrl(recipe) ? (
-                    <Image source={{ uri: getRecipeImageUrl(recipe) }} style={styles.recentMiniThumb} />
-                  ) : (
-                    <View style={[styles.recentMiniThumb, { backgroundColor: Colors.border }]} />
-                  )}
-                  <View style={styles.recentMiniTextWrap}>
-                    <Text style={styles.recentMiniTitle} numberOfLines={2}>
-                      {getFeelingBadge(recipe) ? `${getFeelingBadge(recipe).emoji} ` : ''}
-                      {recipe.name || recipe.title}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              ))
-            ) : (
-              <View style={styles.emptyInline}>
-                <Text style={styles.emptyInlineText}>No recent recipes yet.</Text>
-              </View>
-            )}
-          </ScrollView>
+          {recentRecipes.length ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hCardsRow}>
+              {recentRecipes.slice(0, 6).map((recipe, index) => {
+                const imageUrl = recipeImagesEnabled ? getRecipeImageUrl(recipe) : '';
+                const timeValue = getRecipeTimeValue(recipe);
+                return (
+                  <TouchableOpacity
+                    key={recipe.id || `${recipe.name || 'recent'}-${index}`}
+                    style={styles.hRecent}
+                    onPress={() => handleViewRecipeDetail(recipe)}
+                    activeOpacity={0.9}
+                  >
+                    {imageUrl ? (
+                      <Image source={{ uri: imageUrl }} style={styles.hRecentImage} />
+                    ) : (
+                      <View style={[styles.hRecentImage, styles.hPickImageEmpty]}>
+                        <Ionicons name="restaurant-outline" size={22} color={Colors.primary} />
+                      </View>
+                    )}
+                    <Text style={styles.hRecentTitle} numberOfLines={2}>{recipe.name || recipe.title}</Text>
+                    {timeValue !== '--' ? <Text style={styles.hPickMetaText}>{timeValue} min</Text> : null}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          ) : (
+            <Text style={styles.hEmpty}>
+              {isFetchingRecipes ? 'Loading…' : 'Your recipes will show here after your first scan or search.'}
+            </Text>
+          )}
         </View>
-
       </ScrollView>
-
     </View>
   );
 }
@@ -1349,8 +1499,113 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.brandCream,
   },
+  // Redesigned home: header, actions, track today, picks, tools, recent.
+  hHeader: { paddingHorizontal: 18 },
+  hBrandRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  hLogo: { width: 44, height: 44 },
+  hTagline: { fontSize: 11.5, color: Colors.textLight, marginTop: 1 },
+  hGreetRow: { flexDirection: 'row', alignItems: 'center', marginTop: 18 },
+  hGreeting: { fontSize: 24, fontWeight: '900', color: Colors.brandNavy, flexShrink: 1 },
+  hAsk: { fontSize: 15.5, color: '#4A5568', marginTop: 2 },
+  hBadgeRow: { flexDirection: 'row', marginTop: 8 },
+  hBadge: { flexDirection: 'row', alignItems: 'center', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1 },
+  hBadgeUrgent: { backgroundColor: '#C53030', borderColor: '#C53030' },
+  hBadgeSoft: { backgroundColor: '#E8F4F3', borderColor: '#CDE7E5' },
+  hBadgeText: { fontSize: 11.5, fontWeight: '900', color: Colors.primary },
+  hActions: { flexDirection: 'row', gap: 8, marginTop: 14 },
+  hAction: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 7, borderRadius: 16, paddingVertical: 12, paddingHorizontal: 6, borderWidth: 1 },
+  hActionPrimary: { backgroundColor: Colors.primary, borderColor: Colors.primary, shadowColor: Colors.primary, shadowOpacity: 0.25, shadowRadius: 10, shadowOffset: { width: 0, height: 6 }, elevation: 4 },
+  hActionBlue: { backgroundColor: '#E8F1FB', borderColor: '#D3E4F7' },
+  hActionOrange: { backgroundColor: '#FFF1E6', borderColor: '#FBDCC4' },
+  hActionIcon: { width: 36, height: 36, borderRadius: 11, backgroundColor: 'white', alignItems: 'center', justifyContent: 'center' },
+  hActionText: { fontSize: 13.5, fontWeight: '800', color: Colors.brandNavy },
+  hLastUsed: { marginTop: 10, borderRadius: 16, paddingVertical: 10, paddingHorizontal: 12, backgroundColor: 'rgba(232,244,243,0.75)', borderWidth: 1, borderColor: '#DCEDEB' },
+  hLastUsedRow: { flexDirection: 'row', alignItems: 'center', gap: 6, overflow: 'hidden' },
+  hChip: { backgroundColor: 'white', borderWidth: 1, borderColor: '#CDE7E5', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, maxWidth: 92 },
+  hChipMore: { backgroundColor: '#E8F4F3' },
+  hChipText: { fontSize: 12.5, fontWeight: '700', color: Colors.brandNavy },
+  hLastUsedMeta: { fontSize: 11.5, color: Colors.textLight, marginTop: 5, marginLeft: 22 },
+  hFreeLine: { marginTop: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 14, paddingVertical: 9, paddingHorizontal: 12, backgroundColor: 'white', borderWidth: 1, borderColor: '#E9ECE4' },
+  hFreeText: { fontSize: 12.5, color: Colors.textLight, flexShrink: 1 },
+  hFreeStrong: { fontWeight: '900', color: Colors.brandNavy },
+  hFreeLink: { fontSize: 12.5, fontWeight: '900', color: Colors.primary, marginLeft: 8 },
+  hSection: { paddingHorizontal: 18, marginTop: 22 },
+  hSectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  hSectionTitle: { fontSize: 19, fontWeight: '900', color: Colors.brandNavy },
+  hSectionLink: { fontSize: 13.5, fontWeight: '800', color: Colors.primary },
+  hShuffle: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  hCard: { backgroundColor: 'white', borderRadius: 20, borderWidth: 1, borderColor: '#E9ECE4', padding: 14 },
+  hTrackCard: { marginHorizontal: -10, paddingHorizontal: 12, paddingVertical: 16 },
+  hRings: { flexDirection: 'row', gap: 8 },
+  hRingCol: { flex: 1, alignItems: 'center' },
+  hRingTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 },
+  hRingTitle: { fontSize: 14, fontWeight: '900', color: Colors.brandNavy },
+  hRingValue: { fontSize: 13.5, fontWeight: '900', color: Colors.brandNavy, marginTop: 2 },
+  hRingSub: { fontSize: 12, fontWeight: '800', textAlign: 'center', marginTop: 2 },
+  hSafety: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, padding: 10, borderRadius: 12, backgroundColor: '#FFF5F5', borderWidth: 1, borderColor: '#FED7D7' },
+  hSafetyText: { flex: 1, fontSize: 12.5, color: '#9B2C2C', fontWeight: '600' },
+  hInsightCard: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12, padding: 14, borderRadius: 18, backgroundColor: '#FFF8EE', borderWidth: 1, borderColor: '#FBE3C4' },
+  hInsightCardNudge: { backgroundColor: 'white', borderColor: '#E9ECE4' },
+  hInsightCardCheck: { backgroundColor: '#E8F4F3', borderColor: '#BFE0DD' },
+  hInsightBulb: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#FFEBD2', alignItems: 'center', justifyContent: 'center' },
+  hInsightCardTitle: { fontSize: 12, fontWeight: '900', color: '#C05621', textTransform: 'uppercase', letterSpacing: 0.4 },
+  hInsightCardText: { fontSize: 13.5, fontWeight: '700', color: Colors.brandNavy, marginTop: 2, lineHeight: 19 },
+  hInsight: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, paddingVertical: 9, paddingHorizontal: 12, borderRadius: 12, backgroundColor: '#F1F5F9' },
+  hInsightUp: { backgroundColor: '#E7F4E8' },
+  hInsightDown: { backgroundColor: '#FFF8E6' },
+  hInsightText: { fontSize: 12.5, color: Colors.brandNavy, fontWeight: '700' },
+  hInsightSub: { fontSize: 11.5, color: Colors.textLight, marginTop: 1 },
+  hInsightLink: { fontSize: 12.5, fontWeight: '900', color: Colors.primary },
+  hTiles: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 8, marginTop: 12 },
+  hTileShell: {
+    width: '48.8%',
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: 'hidden',
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+    backgroundColor: 'white',
+  },
+  hTile: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 11 },
+  hTileCompact: { flexDirection: 'column', alignItems: 'flex-start', gap: 7, padding: 11 },
+  hTileTextCompact: { alignSelf: 'stretch' },
+  hTileIcon: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  hTileTitle: { fontSize: 13.5, fontWeight: '800', color: Colors.brandNavy },
+  hTileSub: { fontSize: 11, fontWeight: '700', marginTop: 1 },
+  hCardsRow: { gap: 10, paddingRight: 18 },
+  hPick: { width: 168, backgroundColor: 'white', borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: '#E9ECE4' },
+  hPickImage: { width: '100%', height: 108 },
+  hPickImageEmpty: { backgroundColor: '#E8F4F3', alignItems: 'center', justifyContent: 'center' },
+  hLabel: { position: 'absolute', left: 8, bottom: 8, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3 },
+  hLabelLow: { backgroundColor: '#E7F4E8' },
+  hLabelBal: { backgroundColor: '#E8F1FB' },
+  hLabelText: { fontSize: 11, fontWeight: '800' },
+  hPickBody: { padding: 10, gap: 6 },
+  hPickTitle: { fontSize: 14, fontWeight: '800', color: Colors.brandNavy, minHeight: 36 },
+  hPickMeta: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  hPickMetaText: { fontSize: 12, color: Colors.textLight },
+  hPickCarbs: { fontSize: 12, fontWeight: '800', color: Colors.success },
+  hStreak: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  hStreakText: { fontSize: 13, fontWeight: '800', color: '#C05621' },
+  hMoveRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  hMoveIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  hMoveKicker: { fontSize: 11, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.4 },
+  hMoveTitle: { fontSize: 14.5, fontWeight: '800', color: Colors.brandNavy, marginTop: 2 },
+  hMoveBody: { fontSize: 12.5, color: Colors.textLight, marginTop: 2 },
+  hDivider: { height: 1, backgroundColor: '#E9ECE4', marginVertical: 12 },
+  hTools: { flexDirection: 'row', gap: 10 },
+  hTool: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 18, padding: 12 },
+  hToolIcon: { width: 42, height: 42, borderRadius: 13, backgroundColor: 'white', alignItems: 'center', justifyContent: 'center' },
+  hToolTitle: { fontSize: 14, fontWeight: '800', color: Colors.brandNavy },
+  hToolSub: { fontSize: 11.5, color: Colors.textLight, marginTop: 2 },
+  hRecent: { width: 122 },
+  hRecentImage: { width: 122, height: 94, borderRadius: 16 },
+  hRecentTitle: { fontSize: 13, fontWeight: '800', color: Colors.brandNavy, marginTop: 6 },
+  hEmpty: { fontSize: 13, color: Colors.textLight },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -1579,6 +1834,8 @@ const styles = StyleSheet.create({
   },
   accessBadge: {
     maxWidth: '62%',
+    flexDirection: 'row',
+    alignItems: 'center',
     borderRadius: 999,
     paddingHorizontal: 9,
     paddingVertical: 4,
@@ -1586,7 +1843,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.24)',
   },
+  accessBadgeUrgent: {
+    backgroundColor: '#C53030',
+    borderColor: 'rgba(255,255,255,0.35)',
+  },
   accessBadgeText: {
+    flexShrink: 1,
     fontSize: 11,
     lineHeight: 14,
     fontWeight: '900',

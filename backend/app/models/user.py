@@ -29,6 +29,10 @@ class User(Base):
     trial_grace_ends_at = Column(DateTime, nullable=True)
     welcome_reminder_email_at = Column(DateTime, nullable=True)
     welcome_ended_email_at = Column(DateTime, nullable=True)
+    # "My targets" for glucose readings (mg/dL); NULL = ADA defaults (glucose_targets.py).
+    glucose_target_premeal_low_mgdl = Column(Integer, nullable=True)
+    glucose_target_premeal_high_mgdl = Column(Integer, nullable=True)
+    glucose_target_postmeal_high_mgdl = Column(Integer, nullable=True)
     dunning_started_at = Column(DateTime, nullable=True)
     dunning_emails_sent = Column(Integer, nullable=False, default=0, server_default="0")
     last_dunning_email_at = Column(DateTime, nullable=True)
@@ -47,6 +51,12 @@ class User(Base):
     # Food profile (onboarding-driven). All fields are optional so existing users are not forced.
     blood_sugar_profile = Column(String, nullable=True)
     country_code = Column(String, nullable=True)
+    # Detected country: one {"d": date, "c": code} per day for 30 days (never the IP itself),
+    # and the phone's region setting. Used when country_code isn't set (services/geo_country.py).
+    detected_countries = Column(JSON, nullable=True)
+    phone_region = Column(String(2), nullable=True)
+    country_prompt_count = Column(Integer, nullable=False, default=0, server_default="0")
+    country_prompt_snoozed_until = Column(DateTime, nullable=True)
     preferred_cuisines = Column(JSON, nullable=True)
     meal_goals = Column(JSON, nullable=True)
     dietary_pattern = Column(String, nullable=True)

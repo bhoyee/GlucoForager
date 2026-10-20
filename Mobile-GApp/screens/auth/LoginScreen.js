@@ -20,6 +20,7 @@ import { useAuth } from "../../context/authContext"; // Use the hook instead of 
 import { API_ENDPOINTS, API_URL } from "../../config/api";
 import { getClientInfo } from "../../utils/clientInfo";
 import { getServiceStatus, isServiceDisrupted, refreshServiceStatus } from "../../utils/serviceStatus";
+import BrandWordmark from '../../components/BrandWordmark';
 
 const OUTAGE_LOGIN_MESSAGE =
   "GlucoForager is temporarily unavailable, so we can't sign you in right now. Your account and data are safe — please try again shortly.";
@@ -154,7 +155,7 @@ export default function LoginScreen() {
             resizeMode="contain"
           />
           <Text style={styles.kicker}>Welcome back</Text>
-          <Text style={styles.title}>GlucoForager</Text>
+          <BrandWordmark style={styles.title} />
           <Text style={styles.subtitle}>Sign in to continue.</Text>
           {__DEV__ ? <Text style={styles.devApiText}>API: {API_URL}</Text> : null}
         </View>
@@ -285,7 +286,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.brandCream,
   },
   scrollContent: {
     flexGrow: 1,

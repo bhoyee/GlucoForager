@@ -28,7 +28,7 @@ export default function PrivacyPolicyScreen({ navigation }) {
           </View>
         </View>
         <View style={styles.card}>
-        <Text style={styles.updated}>Last updated: January 12, 2026</Text>
+        <Text style={styles.updated}>Last updated: October 20, 2026</Text>
 
         <Text style={styles.sectionTitle}>1. Introduction</Text>
         <Text style={styles.paragraph}>
@@ -45,12 +45,22 @@ export default function PrivacyPolicyScreen({ navigation }) {
         <Text style={styles.subTitle}>Personal Information</Text>
         <Text style={styles.paragraph}>
           When you use GlucoForager, we may collect: Email address (if you choose to create an account),
-          name (optional), dietary preferences and restrictions, and recipe preferences and saved recipes.
+          name (optional), dietary preferences and restrictions, recipe preferences and saved recipes, and
+          the health information you enter: diabetes type, glucose readings and targets, carb goals, and the
+          meals you log.
         </Text>
         <Text style={styles.subTitle}>Automatically Collected Information</Text>
         <Text style={styles.paragraph}>
           We may automatically collect device information (type, operating system, unique device identifiers),
           usage data (features used, time spent in app), and app performance data (crash reports, errors).
+        </Text>
+        <Text style={styles.subTitle}>Country detection</Text>
+        <Text style={styles.paragraph}>
+          To show nutrition labels in your country&apos;s format and suggest foods common where you live, we work
+          out your approximate country from your IP address and your phone&apos;s region setting. We store only
+          the two-letter country code (at most one per day, kept for 30 days), never your IP address, and the
+          lookup runs on our own servers. A country you choose in Profile › Food Preferences always takes
+          priority. IP geolocation by DB-IP (db-ip.com), licensed under CC BY 4.0.
         </Text>
 
         <Text style={styles.sectionTitle}>3. How We Use Your Information</Text>

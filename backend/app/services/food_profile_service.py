@@ -79,6 +79,15 @@ _COUNTRY_LABELS: dict[str, str] = {
 }
 
 
+
+def _effective_country(user) -> str | None:
+    try:
+        from .geo_country import effective_country
+
+        return effective_country(user)[0]
+    except Exception:  # noqa: BLE001
+        return getattr(user, "country_code", None)
+
 def _humanize(value: Any, mapping: dict[str, str]) -> str | None:
     if not isinstance(value, str):
         return None
@@ -132,7 +141,9 @@ def extract_food_profile(user: User) -> dict[str, Any]:
 
     return {
         "blood_sugar_profile": (getattr(user, "blood_sugar_profile", None) or None),
-        "country_code": (getattr(user, "country_code", None) or None),
+        # Chosen country, else the detected one (IP / phone region), so recipes and swaps
+        # suit where people actually live even if they skipped the field.
+        "country_code": (_effective_country(user) or None),
         "preferred_cuisines": _list(getattr(user, "preferred_cuisines", None), max_items=6),
         "meal_goals": _list(getattr(user, "meal_goals", None), max_items=4),
         "dietary_pattern": (getattr(user, "dietary_pattern", None) or None),

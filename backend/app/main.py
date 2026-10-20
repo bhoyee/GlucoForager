@@ -47,6 +47,7 @@ from .api.endpoints import (
     app_challenge,
     app_recipe_checkins,
     app_health_log,
+    app_region,
     app_food_scan,
     app_recap,
     ingredients,
@@ -346,6 +347,12 @@ def _should_log_failed_api_request(request: Request, status_code: int) -> bool:
 @app.on_event("startup")
 def on_startup():
     logger.info("Startup complete.")
+    try:
+        from .services.geo_country import warm_up as warm_up_ip_country
+
+        warm_up_ip_country()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("IP country database warm-up failed: %s", exc)
     try:
         start_backup_scheduler()
     except Exception as exc:  # noqa: BLE001
@@ -696,6 +703,7 @@ app.include_router(app_public.router, prefix="/api")
 app.include_router(app_challenge.router, prefix="/api")
 app.include_router(app_recipe_checkins.router, prefix="/api")
 app.include_router(app_health_log.router, prefix="/api")
+app.include_router(app_region.router, prefix="/api")
 app.include_router(app_food_scan.router, prefix="/api")
 app.include_router(app_recap.router, prefix="/api")
 app.include_router(app_swaps.router, prefix="/api")
