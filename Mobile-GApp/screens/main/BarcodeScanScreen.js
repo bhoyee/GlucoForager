@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
-import { useNavigation, useIsFocused } from '@react-navigation/native';
+import { useNavigation, useIsFocused, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -27,6 +27,7 @@ const BARCODE_TYPES = ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128'];
 
 export default function BarcodeScanScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
   const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
 
@@ -109,6 +110,16 @@ export default function BarcodeScanScreen() {
       setIsLooking(false);
     }
   }, []);
+
+  // Opened from Snap a meal because a barcode was visible in the photo: look it up now.
+  const fromPhoto = Boolean(route.params?.fromPhoto);
+  useEffect(() => {
+    const code = route.params?.barcode;
+    if (!code || scanLockRef.current) return;
+    scanLockRef.current = true;
+    lookupBarcode(String(code));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route.params?.barcode]);
 
   const handleBarcodeScanned = useCallback(
     ({ data }) => {
@@ -246,6 +257,7 @@ export default function BarcodeScanScreen() {
 
       {result?.found ? (
         <BarcodeResultSheet
+          notice={fromPhoto ? 'Barcode found in your photo, so this uses the product\'s exact label.' : null}
           result={result}
           top={insets.top + 64}
           bottom={Math.max(insets.bottom, 16)}

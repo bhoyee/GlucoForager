@@ -19,6 +19,8 @@ export const IMPACT_STYLE = {
 const H = 160;
 const PAD = { l: 8, r: 64, t: 10, b: 22 };
 const TWO_HOUR = { baseline: '#2C8632', falling: '#C47F0A', raised: '#C53030' };
+// The original food in a swap comparison: dark navy, dashed, drawn on top so it's always visible.
+const ORIGINAL_COLOR = '#0F2A3A';
 const Y_MAX = 1.3;
 const BANDS = [
   { from: 0, to: 0.33, color: '#2C8632', label: 'Gentle' },
@@ -58,6 +60,12 @@ export default function GlucoseImpactCard({ impact, compare, lastTime, title = '
   const area = `${line} L${x(120).toFixed(1)},${y(0).toFixed(1)} L${x(0).toFixed(1)},${y(0).toFixed(1)} Z`;
   const peak = impact.points.reduce((a, b) => (b[1] > a[1] ? b : a), impact.points[0]);
   const compareStyle = compare?.impact ? IMPACT_STYLE[compare.impact.impact] : null;
+  const comparePoints = compare?.impact?.points?.length ? compare.impact.points : null;
+  const comparePeak = comparePoints ? comparePoints.reduce((a, b) => (b[1] > a[1] ? b : a), comparePoints[0]) : null;
+  const gentlerPct =
+    comparePoints && compare.impact.glycemic_load > 0
+      ? Math.round((1 - impact.glycemic_load / compare.impact.glycemic_load) * 100)
+      : null;
 
   const lastMeta = lastTime ? statusMeta(lastTime.status) : null;
   const lastDelta =
@@ -77,6 +85,25 @@ export default function GlucoseImpactCard({ impact, compare, lastTime, title = '
         </View>
         <ImpactPill impact={impact} />
       </View>
+
+      {comparePoints ? (
+        <View style={styles.compareRow}>
+          <View style={[styles.compareBox, { borderColor: '#CBD5E1' }]}>
+            <Text style={styles.statLabel} numberOfLines={1}>{compare.label || 'Original'}</Text>
+            <Text style={[styles.compareValue, { color: compareStyle?.color || ORIGINAL_COLOR }]}>{compareStyle?.label || '—'}</Text>
+          </View>
+          <Ionicons name="arrow-forward" size={18} color={Colors.textLight} />
+          <View style={[styles.compareBox, { borderColor: s.color, backgroundColor: s.bg }]}>
+            <Text style={styles.statLabel} numberOfLines={1}>{compare.mainLabel || 'Swap'}</Text>
+            <Text style={[styles.compareValue, { color: s.color }]}>{s.label}</Text>
+          </View>
+        </View>
+      ) : null}
+      {gentlerPct != null && gentlerPct > 0 ? (
+        <Text style={styles.gentler}>
+          About <Text style={{ fontWeight: '900', color: '#2C8632' }}>{gentlerPct}% gentler</Text> on blood sugar than {compare.label || 'the original'}
+        </Text>
+      ) : null}
 
       <View style={styles.stats}>
         <View style={styles.stat}>
@@ -124,8 +151,12 @@ export default function GlucoseImpactCard({ impact, compare, lastTime, title = '
               </React.Fragment>
             ))}
             <Line x1={PAD.l} y1={y(0)} x2={PAD.l + plotW} y2={y(0)} stroke="#CBD5C5" strokeWidth={1} />
-            {compare?.impact?.points?.length ? (
-              <Path d={buildPath(compare.impact.points, x, y)} fill="none" stroke="#94A3B8" strokeWidth={2} strokeDasharray="5,4" />
+            {comparePoints ? (
+              <Path
+                d={`${buildPath(comparePoints, x, y)} L${x(120).toFixed(1)},${y(0).toFixed(1)} L${x(0).toFixed(1)},${y(0).toFixed(1)} Z`}
+                fill="#94A3B8"
+                opacity={0.14}
+              />
             ) : null}
             <Path d={area} fill="url(#impactFill)" />
             {/* The line takes the colour of each band it passes through: green, amber, red. */}
@@ -135,6 +166,28 @@ export default function GlucoseImpactCard({ impact, compare, lastTime, title = '
               </G>
             ))}
             <Circle cx={x(peak[0])} cy={y(peak[1])} r={5} fill="white" stroke={s.color} strokeWidth={2.5} />
+            {comparePoints ? (
+              <>
+                <Path
+                  d={buildPath(comparePoints, x, y)}
+                  fill="none"
+                  stroke={ORIGINAL_COLOR}
+                  strokeWidth={3}
+                  strokeDasharray="7,5"
+                  strokeLinecap="round"
+                />
+                <Circle cx={x(comparePeak[0])} cy={y(comparePeak[1])} r={5} fill="white" stroke={ORIGINAL_COLOR} strokeWidth={2.5} />
+                {/* Peak tags so it's obvious which curve is which. */}
+                <Rect x={Math.min(x(comparePeak[0]) - 28, PAD.l + plotW - 56)} y={Math.max(y(comparePeak[1]) - 24, 0)} width={56} height={17} rx={8} fill={ORIGINAL_COLOR} />
+                <SvgText x={Math.min(x(comparePeak[0]), PAD.l + plotW - 28)} y={Math.max(y(comparePeak[1]) - 12, 12)} fontSize="10" fontWeight="800" fill="white" textAnchor="middle">
+                  Original
+                </SvgText>
+                <Rect x={Math.min(x(peak[0]) - 22, PAD.l + plotW - 44)} y={Math.min(y(peak[1]) + 8, y(0) - 20)} width={44} height={17} rx={8} fill={s.color} />
+                <SvgText x={Math.min(x(peak[0]), PAD.l + plotW - 22)} y={Math.min(y(peak[1]) + 20, y(0) - 8)} fontSize="10" fontWeight="800" fill="white" textAnchor="middle">
+                  Swap
+                </SvgText>
+              </>
+            ) : null}
             {/* The 2-hour check: when people test after a meal. */}
             <Line x1={x(120)} y1={PAD.t} x2={x(120)} y2={y(0)} stroke={Colors.primary} strokeWidth={1.5} strokeDasharray="4,3" />
             <Circle cx={x(120)} cy={y(impact.points[impact.points.length - 1][1])} r={4.5} fill={Colors.primary} stroke="white" strokeWidth={2} />
@@ -149,7 +202,11 @@ export default function GlucoseImpactCard({ impact, compare, lastTime, title = '
             <Text style={styles.legendText} numberOfLines={1}>{compare.mainLabel || 'This option'}</Text>
           </View>
           <View style={styles.legendItem}>
-            <View style={[styles.legendLine, styles.legendDashed]} />
+            <View style={styles.legendDashRow}>
+              {[0, 1, 2].map((i) => (
+                <View key={i} style={[styles.legendDash, { backgroundColor: ORIGINAL_COLOR }]} />
+              ))}
+            </View>
             <Text style={styles.legendText} numberOfLines={1}>
               {compare.label}
               {compareStyle ? ` (${compareStyle.label.toLowerCase()})` : ''}
@@ -214,6 +271,12 @@ const styles = StyleSheet.create({
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
   legendLine: { width: 18, height: 3, borderRadius: 2 },
   legendDashed: { backgroundColor: '#94A3B8', opacity: 0.8 },
+  legendDashRow: { flexDirection: 'row', gap: 2, width: 18 },
+  legendDash: { width: 5, height: 3, borderRadius: 1 },
+  compareRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  compareBox: { flex: 1, borderWidth: 1.5, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: '#F8FAFC' },
+  compareValue: { fontSize: 14, fontWeight: '900', marginTop: 2 },
+  gentler: { fontSize: 13, color: Colors.brandNavy, marginBottom: 8 },
   legendText: { fontSize: 12, fontWeight: '700', color: Colors.textLight, flexShrink: 1 },
   factors: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
   factor: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F4F6F2', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },

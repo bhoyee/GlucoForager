@@ -58,7 +58,7 @@ function Card({ title, caption, children, right }) {
   );
 }
 
-export default function BarcodeResultSheet({ result, top, bottom, isSaving, onLog, onScanAgain, onFindSwap, onPhotoScan, onChangeCountry }) {
+export default function BarcodeResultSheet({ result, top, bottom, isSaving, onLog, onScanAgain, onFindSwap, onPhotoScan, onChangeCountry, notice }) {
   const verdict = VERDICTS[result?.diabetes_note?.verdict] || VERDICTS.unknown;
   const share = result.meal_share;
   const perServing = result.per_serving;
@@ -71,6 +71,13 @@ export default function BarcodeResultSheet({ result, top, bottom, isSaving, onLo
     <View style={[styles.sheet, { top }]}>
       <View style={styles.grabber} />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: bottom + 20, gap: 12 }}>
+        {notice ? (
+          <View style={styles.notice}>
+            <Ionicons name="barcode" size={18} color="#2C8632" />
+            <Text style={styles.noticeText}>{notice}</Text>
+          </View>
+        ) : null}
+
         {/* Product */}
         <View style={styles.product}>
           {result.image_url ? (
@@ -277,6 +284,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   grabber: { alignSelf: 'center', width: 42, height: 5, borderRadius: 3, backgroundColor: '#D5DBD0', marginTop: 8 },
+  notice: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 14, backgroundColor: '#E9F6EA', borderWidth: 1, borderColor: '#CBE9CD' },
+  noticeText: { flex: 1, fontSize: 13, fontWeight: '700', color: '#1F5E24' },
   product: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   productImage: { width: 72, height: 72, borderRadius: 16, backgroundColor: 'white', borderWidth: 1, borderColor: '#EDF0EA' },
   productImageEmpty: { alignItems: 'center', justifyContent: 'center' },

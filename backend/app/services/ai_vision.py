@@ -18,6 +18,8 @@ FOOD_SCAN_SYSTEM_PROMPT = (
     "Respond with ONLY a JSON object, no other text, in exactly this shape: "
     '{"is_food": true or false, "name": "short food name" or null, '
     '"confidence": "high" | "medium" | "low", '
+    '"is_packaged": true if it is a packaged or branded product (bottle, jar, tub, packet, can, '
+    'wrapped bar) rather than a prepared meal or loose food, else false, '
     '"portion": "e.g. 1 plate (about 350g)" or null, '
     '"carbs_g": number or null, "sugars_g": number or null, "fiber_g": number or null, '
     '"protein_g": number or null, "fat_g": number or null, "calories": number or null, '

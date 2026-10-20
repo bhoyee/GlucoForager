@@ -120,6 +120,8 @@ def scan_food_photo(
         "name": result.get("name"),
         "confidence": result.get("confidence"),
         "portion": (result.get("portion") or None) if isinstance(result.get("portion"), str) else None,
+        # Packaged products have an exact label: the app suggests scanning the barcode instead.
+        "is_packaged": bool(result.get("is_packaged")),
         "carbs_g": round(carbs, 1) if carbs is not None else None,
         "sugars_g": round(sugars, 1) if sugars is not None else None,
         "fiber_g": round(fiber, 1) if fiber is not None else None,

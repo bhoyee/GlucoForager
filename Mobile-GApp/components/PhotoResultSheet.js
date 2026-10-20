@@ -29,7 +29,7 @@ const NUTRIENTS = [
 ];
 const CONFIDENCE = { high: 'High confidence', medium: 'Medium confidence', low: 'Low confidence' };
 
-export default function PhotoResultSheet({ result, photoUri, top, bottom, isSaving, onLog, onScanAgain, onFindSwap }) {
+export default function PhotoResultSheet({ result, photoUri, top, bottom, isSaving, onLog, onScanAgain, onFindSwap, onScanBarcode }) {
   const verdict = VERDICTS[result?.diabetes_note?.verdict] || VERDICTS.unknown;
   const share = result.meal_share;
   const carbs = result.carbs_g;
@@ -52,6 +52,24 @@ export default function PhotoResultSheet({ result, photoUri, top, bottom, isSavi
           </View>
         </View>
 
+        {result.is_packaged ? (
+          <View style={styles.packaged}>
+            <View style={styles.packagedIcon}>
+              <Ionicons name="barcode-outline" size={22} color="#6B46C1" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.packagedTitle}>This looks like a packaged product</Text>
+              <Text style={styles.packagedText}>
+                Scan its barcode for the exact nutrition label. The numbers below are only a photo estimate.
+              </Text>
+              <TouchableOpacity style={styles.packagedBtn} onPress={onScanBarcode} activeOpacity={0.85}>
+                <Ionicons name="scan" size={15} color="white" />
+                <Text style={styles.packagedBtnText}>Scan barcode</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : null}
+
         <LinearGradient colors={verdict.colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.verdict}>
           <View style={styles.verdictIcon}>
             <Ionicons name={verdict.icon} size={26} color="white" />
@@ -65,8 +83,16 @@ export default function PhotoResultSheet({ result, photoUri, top, bottom, isSavi
         {carbs != null ? (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Carbs (estimate)</Text>
+            {result.portion ? (
+              <View style={styles.portionPill}>
+                <Ionicons name="restaurant-outline" size={13} color={Colors.primary} />
+                <Text style={styles.portionText}>
+                  Estimated for <Text style={{ fontWeight: '900' }}>{result.portion}</Text>
+                </Text>
+              </View>
+            ) : null}
             <Text style={styles.cardCaption}>
-              {share ? `This meal vs a typical meal for your ${share.daily_goal_g}g daily goal` : 'For the portion in the photo'}
+              {share ? `Compared with a typical meal for your ${share.daily_goal_g}g daily goal` : 'For the portion in the photo'}
             </Text>
             <View style={styles.carbRow}>
               <Text style={styles.carbBig}>
@@ -188,6 +214,14 @@ const styles = StyleSheet.create({
   eyebrow: { fontSize: 11.5, fontWeight: '900', color: Colors.primary, textTransform: 'uppercase', letterSpacing: 0.5 },
   name: { fontSize: 19, fontWeight: '900', color: Colors.brandNavy, marginTop: 2, lineHeight: 24 },
   meta: { fontSize: 12.5, color: Colors.textLight, marginTop: 3 },
+  packaged: { flexDirection: 'row', gap: 12, padding: 14, borderRadius: 18, backgroundColor: '#F0EBFB', borderWidth: 1, borderColor: '#DDD3F5' },
+  packagedIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'white', alignItems: 'center', justifyContent: 'center' },
+  packagedTitle: { fontSize: 15, fontWeight: '900', color: '#3F2A7A' },
+  packagedText: { fontSize: 13, color: '#4C3A86', marginTop: 2, lineHeight: 18 },
+  packagedBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', backgroundColor: '#6B46C1', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8, marginTop: 10 },
+  packagedBtnText: { color: 'white', fontWeight: '900', fontSize: 13.5 },
+  portionPill: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', backgroundColor: '#E8F4F3', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, marginTop: 6 },
+  portionText: { fontSize: 12.5, color: Colors.primaryDark },
   verdict: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 20, padding: 16 },
   verdictIcon: { width: 46, height: 46, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.22)', alignItems: 'center', justifyContent: 'center' },
   verdictLabel: { fontSize: 19, fontWeight: '900', color: 'white' },

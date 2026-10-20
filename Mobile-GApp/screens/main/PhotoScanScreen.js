@@ -232,6 +232,17 @@ export default function PhotoScanScreen() {
     return () => loop.stop();
   }, [phase, scanLineAnim]);
 
+  const barcodeHandledRef = useRef(false);
+  const handlePhotoBarcode = useCallback(
+    ({ data }) => {
+      if (barcodeHandledRef.current || !data) return;
+      barcodeHandledRef.current = true;
+      trackEvent('photo_scan_barcode_found');
+      navigation.replace('BarcodeScan', { barcode: String(data), fromPhoto: true });
+    },
+    [navigation]
+  );
+
   const handleScanAgain = () => {
     setResult(null);
     setCapturedUri(null);
@@ -329,6 +340,9 @@ export default function PhotoScanScreen() {
             facing="back"
             enableTorch={torchEnabled}
             onCameraReady={() => setCameraReady(true)}
+            // A barcode in view means a packaged product with an exact label: use that instead.
+            barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'] }}
+            onBarcodeScanned={phase === 'countdown' || phase === 'capturing' ? handlePhotoBarcode : undefined}
           />
         ) : null
       ) : capturedUri ? (
@@ -370,6 +384,7 @@ export default function PhotoScanScreen() {
           onLog={handleLogFood}
           onScanAgain={handleScanAgain}
           onFindSwap={() => navigation.navigate('Home', { screen: 'CarbSwaps', params: { query: result.name || '' } })}
+          onScanBarcode={() => navigation.replace('BarcodeScan')}
         />
       ) : phase === 'result' && result ? (
         <View style={[styles.resultCard, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]}>
