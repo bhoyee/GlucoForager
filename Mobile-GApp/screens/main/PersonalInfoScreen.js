@@ -215,6 +215,7 @@ export default function PersonalInfoScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <ScrollView
+        stickyHeaderIndices={[0]}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
       >
@@ -385,6 +386,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   header: {
+    backgroundColor: Colors.background,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

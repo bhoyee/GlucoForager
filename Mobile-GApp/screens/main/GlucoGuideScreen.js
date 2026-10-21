@@ -440,6 +440,7 @@ export default function GlucoGuideScreen({ navigation }) {
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 76}
     >
       <ScrollView
+        stickyHeaderIndices={[0]}
         ref={scrollRef}
         style={styles.messages}
         contentContainerStyle={[styles.messagesContent, { paddingBottom: 26 }]}

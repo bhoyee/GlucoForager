@@ -123,6 +123,7 @@ export default function TodayTipScreen() {
   return (
     <View style={styles.container}>
       <ScrollView
+        stickyHeaderIndices={[0]}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: contentBottomPadding }}
       >

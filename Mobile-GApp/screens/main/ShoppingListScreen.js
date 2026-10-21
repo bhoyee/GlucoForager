@@ -258,6 +258,7 @@ export default function ShoppingListScreen() {
   return (
     <View style={styles.container}>
       <ScrollView
+        stickyHeaderIndices={[0]}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: contentBottomPadding }}
         refreshControl={

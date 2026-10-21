@@ -710,6 +710,7 @@ export default function ManualInputScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <ScrollView
+        stickyHeaderIndices={[0]}
         ref={scrollRef}
         contentContainerStyle={[
           styles.scrollContent,

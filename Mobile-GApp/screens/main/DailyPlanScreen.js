@@ -781,7 +781,8 @@ export default function DailyPlanScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 32 }} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        stickyHeaderIndices={[0]} contentContainerStyle={{ paddingBottom: insets.bottom + 32 }} showsVerticalScrollIndicator={false}>
         <View style={[styles.pHeader, { paddingTop: Math.max(insets.top, 12) + 6 }]}>
           <View style={styles.headerRow}>
             <Pressable style={styles.backButton} onPress={() => navigation.navigate('Home')}>

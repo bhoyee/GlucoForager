@@ -103,7 +103,9 @@ export default function DebugLogsScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        stickyHeaderIndices={[0]}
+        contentContainerStyle={styles.content}>
         <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
           <TouchableOpacity onPress={handleClose}>
             <Ionicons name="arrow-back" size={24} color={Colors.text} />
@@ -163,9 +165,11 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   header: {
+    backgroundColor: Colors.background,
+    marginHorizontal: -16,
+    paddingHorizontal: 32,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 12,
   },

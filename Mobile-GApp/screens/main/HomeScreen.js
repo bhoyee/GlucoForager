@@ -1008,11 +1008,12 @@ export default function HomeScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
       <ScrollView
+        stickyHeaderIndices={[0]}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding + 12 }]}
       >
-        <View style={[styles.hHeader, { paddingTop: headerPaddingTop + 6 }]}>
-          {/* Brand */}
+        {/* Brand bar: pinned while the rest of Home scrolls up under it. */}
+        <View style={[styles.hTopBar, { paddingTop: headerPaddingTop + 6 }]}>
           <View style={styles.hBrandRow}>
             <Image source={require('../../assets/logo.png')} style={styles.hLogo} />
             <View style={{ flex: 1 }}>
@@ -1020,6 +1021,8 @@ export default function HomeScreen() {
               <Text style={styles.hTagline} numberOfLines={1}>Smarter food choices for a healthier you</Text>
             </View>
           </View>
+        </View>
+        <View style={styles.hHeader}>
 
           {/* Greeting + plan status */}
           <View style={styles.hGreetRow}>
@@ -1508,7 +1511,14 @@ const styles = StyleSheet.create({
   hBrandRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   hLogo: { width: 44, height: 44 },
   hTagline: { fontSize: 11.5, color: Colors.textLight, marginTop: 1 },
-  hGreetRow: { flexDirection: 'row', alignItems: 'center', marginTop: 18 },
+  hTopBar: {
+    backgroundColor: Colors.brandCream,
+    paddingHorizontal: 18,
+    paddingBottom: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E3E8E1',
+  },
+  hGreetRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
   hGreeting: { fontSize: 24, fontWeight: '900', color: Colors.brandNavy, flexShrink: 1 },
   hAsk: { fontSize: 15.5, color: '#4A5568', marginTop: 2 },
   hBadgeRow: { flexDirection: 'row', marginTop: 8 },

@@ -286,7 +286,8 @@ export default function CarbSwapsScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: contentBottomPadding }}>
+      <ScrollView
+        stickyHeaderIndices={[0]} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: contentBottomPadding }}>
         <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
           <View style={styles.header}>
             <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} activeOpacity={0.85}>

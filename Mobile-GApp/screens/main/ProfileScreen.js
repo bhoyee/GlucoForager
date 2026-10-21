@@ -618,6 +618,7 @@ export default function ProfileScreen() {
     <View style={styles.container}>
       <View style={{ flex: 1, paddingBottom: versionFooterBottom + versionFooterHeight }}>
         <ScrollView
+        stickyHeaderIndices={[0]}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >

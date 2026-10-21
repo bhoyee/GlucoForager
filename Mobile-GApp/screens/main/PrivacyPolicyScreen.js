@@ -12,6 +12,7 @@ export default function PrivacyPolicyScreen({ navigation }) {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <ScrollView
+        stickyHeaderIndices={[0]}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
       >

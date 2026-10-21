@@ -355,7 +355,9 @@ export default function FoodPreferencesScreen({ navigation }) {
   return (
     <View style={styles.container}>
       {busy ? (
-        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: contentBottomPadding }]}>
+        <ScrollView
+        stickyHeaderIndices={[0]}
+        contentContainerStyle={[styles.content, { paddingBottom: contentBottomPadding }]}>
           <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
             <TouchableOpacity style={styles.headerButton} onPress={handleBack}>
               <Ionicons name="arrow-back" size={22} color={Colors.text} />
@@ -624,9 +626,11 @@ export default function FoodPreferencesScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   header: {
+    backgroundColor: Colors.background,
+    marginHorizontal: -16,
+    paddingHorizontal: 32,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
     paddingBottom: 10,
     gap: 10,
   },
