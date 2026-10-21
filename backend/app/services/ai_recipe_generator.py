@@ -421,7 +421,7 @@ class AIRecipeGenerator:
                 return bytes(data)
         raise RuntimeError("Gemini response did not include inline image data")
 
-    def _generate_image_runware(self, prompt: str, *, size: int) -> bytes:
+    def _generate_image_runware(self, prompt: str, *, size: int, negative_prompt: str | None = None) -> bytes:
         """
         Generate an image using Runware API (e.g. FLUX Schnell).
 
@@ -441,7 +441,8 @@ class AIRecipeGenerator:
                 "taskUUID": task_uuid,
                 "model": self.runware_image_model,
                 "positivePrompt": prompt,
-                "negativePrompt": (
+                "negativePrompt": negative_prompt
+                or (
                     "text, words, letters, numbers, watermark, logo, caption, recipe card, menu, UI, border, frame, "
                     "cartoon, illustration, anime, CGI, 3d, render, plastic, glossy, fake, lowres, blurry, "
                     "raw ingredients, ingredient pile, cutting board, prep scene, uncooked"

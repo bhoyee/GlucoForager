@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, ActivityIndicator, Image } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -85,6 +85,22 @@ function GiMeter({ gi }) {
   );
 }
 
+// Food photo from the shared library; a soft placeholder while it is being made.
+function FoodThumb({ uri, pending, size = 64, radius = 16, children }) {
+  return (
+    <View style={[styles.thumb, { width: size, height: size, borderRadius: radius }]}>
+      {uri ? (
+        <Image source={{ uri }} style={{ width: size, height: size, borderRadius: radius }} />
+      ) : pending ? (
+        <ActivityIndicator size="small" color="#8B6BD9" />
+      ) : (
+        <Ionicons name="restaurant" size={Math.round(size * 0.36)} color="#B9A7E8" />
+      )}
+      {children}
+    </View>
+  );
+}
+
 export default function CarbSwapsScreen() {
   const navigation = useNavigation();
   const route = useRoute();
@@ -100,6 +116,9 @@ export default function CarbSwapsScreen() {
   const [shouldUpgrade, setShouldUpgrade] = useState(false);
   const [loading, setLoading] = useState(false);
   const lastRequestIdRef = useRef(0);
+  // Library photos by food name, and names still being generated.
+  const [images, setImages] = useState({});
+  const [pendingImages, setPendingImages] = useState([]);
 
   const suggestions = useMemo(
     () => ['rice', 'pasta', 'bread', 'potato', 'cereal', 'pizza', 'soda', 'juice', 'ice cream'],
@@ -197,6 +216,58 @@ export default function CarbSwapsScreen() {
   };
 
   useEffect(() => {
+    if (!aiResult) {
+      setImages({});
+      setPendingImages([]);
+      return;
+    }
+    const seed = {};
+    if (aiResult.food && aiResult.original?.image_url) seed[aiResult.food] = aiResult.original.image_url;
+    (aiResult.swaps?.options || []).forEach((o) => {
+      if (o?.name && o?.image_url) seed[o.name] = o.image_url;
+    });
+    setImages(seed);
+    setPendingImages(Array.isArray(aiResult.images_pending) ? aiResult.images_pending : []);
+  }, [aiResult]);
+
+  useEffect(() => {
+    if (!pendingImages.length) return undefined;
+    let cancelled = false;
+    const started = Date.now();
+    const poll = async () => {
+      if (cancelled) return;
+      try {
+        const token = await AsyncStorage.getItem('userToken');
+        const qs = pendingImages.map((n) => `name=${encodeURIComponent(n)}`).join('&');
+        const res = await apiFetch(`${API_URL}/api/app/food-images?${qs}`, { headers: { Authorization: `Bearer ${token}` } }, { timeoutMs: 8000 });
+        if (!cancelled && res.ok) {
+          const data = await res.json();
+          const got = Object.fromEntries(Object.entries(data?.images || {}).filter(([, u]) => u));
+          if (Object.keys(got).length) setImages((prev) => ({ ...prev, ...got }));
+          const still = pendingImages.filter((n) => !got[n] && (data?.pending || []).includes(n));
+          if (still.length !== pendingImages.length) {
+            setPendingImages(still);
+            return;
+          }
+        }
+      } catch {
+        // Photos are optional.
+      }
+      if (cancelled) return;
+      if (Date.now() - started > 45000) {
+        setPendingImages([]);
+        return;
+      }
+      timer = setTimeout(poll, 3000);
+    };
+    let timer = setTimeout(poll, 2500);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [pendingImages]);
+
+  useEffect(() => {
     const trimmed = String(query || '').trim();
     setAiResult(null);
     setAiError(null);
@@ -289,6 +360,9 @@ export default function CarbSwapsScreen() {
             <>
               {/* What you searched */}
               <View style={styles.card}>
+                <View style={styles.originalTop}>
+                  <FoodThumb uri={images[aiResult.food]} pending={pendingImages.includes(aiResult.food)} size={76} radius={18} />
+                  <View style={{ flex: 1 }}>
                 <Text style={styles.eyebrow}>You searched</Text>
                 <View style={styles.originalHead}>
                   <Text style={styles.originalName}>{aiResult.food}</Text>
@@ -304,6 +378,8 @@ export default function CarbSwapsScreen() {
                       </Text>
                     </View>
                   ) : null}
+                </View>
+                  </View>
                 </View>
                 {aiResult.original?.summary ? <Text style={styles.originalSummary}>{aiResult.original.summary}</Text> : null}
                 {aiResult.original?.watch_outs?.length ? (
@@ -369,9 +445,11 @@ export default function CarbSwapsScreen() {
                     return (
                       <View key={name} style={[styles.card, styles.swapCard]}>
                         <View style={styles.swapHead}>
-                          <LinearGradient colors={['#8B6BD9', '#6B46C1']} style={styles.rank}>
-                            <Text style={styles.rankText}>{index + 1}</Text>
-                          </LinearGradient>
+                          <FoodThumb uri={images[name]} pending={pendingImages.includes(name)}>
+                            <LinearGradient colors={['#8B6BD9', '#6B46C1']} style={styles.rank}>
+                              <Text style={styles.rankText}>{index + 1}</Text>
+                            </LinearGradient>
+                          </FoodThumb>
                           <View style={{ flex: 1 }}>
                             <Text style={styles.swapName}>{name}</Text>
                             {serving ? <Text style={styles.swapServing}>{serving}</Text> : null}
@@ -558,6 +636,7 @@ const styles = StyleSheet.create({
   loadingCard: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   loadingText: { flex: 1, fontSize: 14, color: Colors.textLight, fontWeight: '700' },
   eyebrow: { fontSize: 11.5, fontWeight: '900', color: Colors.textLight, textTransform: 'uppercase', letterSpacing: 0.5 },
+  originalTop: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   originalHead: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4, flexWrap: 'wrap' },
   originalName: { fontSize: 22, fontWeight: '900', color: Colors.brandNavy, textTransform: 'capitalize' },
   verdictPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 },
@@ -574,9 +653,21 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 18, fontWeight: '900', color: Colors.brandNavy },
   sectionMeta: { fontSize: 12.5, fontWeight: '800', color: Colors.textLight },
   swapCard: { gap: 10 },
-  swapHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  rank: { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  rankText: { color: 'white', fontWeight: '900', fontSize: 14 },
+  swapHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  thumb: { backgroundColor: '#F3EFFC', alignItems: 'center', justifyContent: 'center' },
+  rank: {
+    position: 'absolute',
+    top: -6,
+    left: -6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: 'white',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rankText: { color: 'white', fontWeight: '900', fontSize: 12 },
   swapName: { fontSize: 16, fontWeight: '900', color: Colors.brandNavy },
   swapServing: { fontSize: 12, color: Colors.textLight, marginTop: 1 },
   impactPill: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999 },

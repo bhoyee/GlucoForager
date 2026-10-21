@@ -6,13 +6,13 @@ import re
 import time
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response
 from openai import OpenAIError
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from ...api.dependencies import get_current_user, require_ai_feature_access
-from ...services import glucose_impact
+from ...services import food_image_library, glucose_impact
 from ...services import free_tier_service
 from ...database import get_db
 from ...models.user import User
@@ -78,11 +78,79 @@ def _http_error(*, status_code: int, code: str, message: str, **extra):
     raise HTTPException(status_code=status_code, detail=detail)
 
 
+def _absolute(url: str | None, request: Request) -> str | None:
+    if url and url.startswith("/"):
+        return f"{str(request.base_url).rstrip('/')}{url}"
+    return url
+
+
+def _with_images(payload: dict, *, db: Session, request: Request, background_tasks: BackgroundTasks) -> dict:
+    """Add library photos for the searched food and each swap; queue any that are missing."""
+    try:
+        swaps = payload.get("swaps") if isinstance(payload.get("swaps"), dict) else None
+        options = swaps.get("options") if swaps and isinstance(swaps.get("options"), list) else []
+        if not options:
+            return payload
+        food_name = str(payload.get("food") or "").strip()
+        original = payload.get("original") if isinstance(payload.get("original"), dict) else None
+        items: list[tuple[str, str | None]] = []
+        if food_name:
+            items.append((food_name, (original or {}).get("serving")))
+        for opt in options:
+            if isinstance(opt, dict) and str(opt.get("name") or "").strip():
+                items.append((str(opt["name"]).strip(), opt.get("serving")))
+        found = food_image_library.lookup(db, [n for n, _ in items])
+        missing = [(n, s) for n, s in items if not found.get(n) and food_image_library.needs_generation(db, n)]
+        if missing:
+            background_tasks.add_task(food_image_library.generate_missing, missing)
+        pending = {n for n, _ in missing}
+
+        out = dict(payload)
+        if food_name:
+            out["original"] = {**(original or {}), "image_url": _absolute(found.get(food_name), request)}
+        out["swaps"] = {
+            **swaps,
+            "options": [
+                {**opt, "image_url": _absolute(found.get(str(opt.get("name") or "").strip()), request)}
+                if isinstance(opt, dict)
+                else opt
+                for opt in options
+            ],
+        }
+        out["images_pending"] = sorted(pending)
+        return out
+    except Exception as exc:  # noqa: BLE001 - photos are optional; never break swaps.
+        logger.warning("Swap images failed: %s", str(exc)[:200])
+        return payload
+
+
+@router.get("/food-images")
+def get_food_images(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    name: list[str] = Query(default=[]),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),  # noqa: ARG001
+):
+    """Poll for library photos by food name; queues generation for any still missing."""
+    names = [n.strip()[:120] for n in name if n and n.strip()][:8]
+    found = food_image_library.lookup(db, names)
+    missing = [(n, None) for n in names if not found.get(n) and food_image_library.needs_generation(db, n)]
+    queue = [(n, s) for n, s in missing if not food_image_library.is_generating(n)]
+    if queue:
+        background_tasks.add_task(food_image_library.generate_missing, queue)
+    return {
+        "images": {n: _absolute(found.get(n), request) for n in names},
+        "pending": [n for n, _ in missing],
+    }
+
+
 @router.post("/swaps")
 def generate_food_swaps(
     payload: SwapsRequest,
     request: Request,
     response: Response,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -273,7 +341,7 @@ def generate_food_swaps(
                 cost_estimate=0.0,
                 device_id=device_id,
             )
-            return data
+            return _with_images(data, db=db, request=request, background_tasks=background_tasks)
         except Exception:
             pass
 
@@ -385,7 +453,7 @@ def generate_food_swaps(
                 "ip": request.client.host if request.client else None,
             }
         )
-        return client_payload
+        return _with_images(client_payload, db=db, request=request, background_tasks=background_tasks)
     except OpenAIError as e:
         msg = str(e or "")
         logger.warning("Swaps OpenAI call failed (%s): %s", e.__class__.__name__, msg[:200])
