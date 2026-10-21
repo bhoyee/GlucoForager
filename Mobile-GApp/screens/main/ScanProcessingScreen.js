@@ -237,10 +237,11 @@ export default function ScanProcessingScreen() {
         await pollJob(data.job_id);
         pollingRef.current = setInterval(() => {
           pollJob(data.job_id);
-        }, 3000);
+        }, 1500);
         const count = imagesBase64.length || (images?.length || 1);
-        // Backend work (vision -> ingredients) can occasionally be slow under load; don't hard-fail too early.
-        const overallTimeoutMs = count <= 2 ? 240000 : count <= 4 ? 360000 : 480000;
+        // Reading photos takes seconds, and the server runs the scan itself if its worker is slow,
+        // so anything past this is a real failure - don't leave people watching a spinner for minutes.
+        const overallTimeoutMs = count <= 2 ? 75000 : count <= 4 ? 120000 : 180000;
         timeoutRef.current = setTimeout(() => {
           stopPolling();
           Alert.alert(

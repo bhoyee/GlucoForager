@@ -269,7 +269,17 @@ class AIRecipeGenerator:
         if provider == "runware":
             if not self.runware_api_key:
                 return {"image_url": self._placeholder_image(recipe), "image_source": "placeholder"}
-            image_bytes = self._generate_image_runware(prompt, size=size)
+            try:
+                image_bytes = self._generate_image_runware(prompt, size=size, timeout_seconds=20.0)
+            except Exception as exc:  # noqa: BLE001 - overloaded/slow: try the backup provider.
+                logger.warning("Runware image failed, trying Gemini: %s", str(exc)[:200])
+                image_bytes = None
+            if not image_bytes and self.gemini_api_key:
+                try:
+                    image_bytes = self._generate_image_gemini(prompt, size=size)
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("Gemini image fallback failed: %s", str(exc)[:200])
+                    image_bytes = None
             if not image_bytes:
                 return {"image_url": self._placeholder_image(recipe), "image_source": "placeholder"}
         elif provider == "gemini":
@@ -421,7 +431,9 @@ class AIRecipeGenerator:
                 return bytes(data)
         raise RuntimeError("Gemini response did not include inline image data")
 
-    def _generate_image_runware(self, prompt: str, *, size: int, negative_prompt: str | None = None) -> bytes:
+    def _generate_image_runware(
+        self, prompt: str, *, size: int, negative_prompt: str | None = None, timeout_seconds: float = 45.0
+    ) -> bytes:
         """
         Generate an image using Runware API (e.g. FLUX Schnell).
 
@@ -462,7 +474,7 @@ class AIRecipeGenerator:
         }
 
         try:
-            resp = httpx.post(self.runware_api_url, json=payload, headers=headers, timeout=45.0)
+            resp = httpx.post(self.runware_api_url, json=payload, headers=headers, timeout=timeout_seconds)
         except Exception as exc:  # noqa: BLE001
             raise RuntimeError("Runware request failed") from exc
 
@@ -511,7 +523,7 @@ class AIRecipeGenerator:
             raise RuntimeError("Runware response missing image URL")
 
         try:
-            img_resp = httpx.get(image_url, timeout=45.0)
+            img_resp = httpx.get(image_url, timeout=timeout_seconds)
         except Exception as exc:  # noqa: BLE001
             raise RuntimeError("Failed to download Runware image") from exc
         if img_resp.status_code >= 400 or not img_resp.content:

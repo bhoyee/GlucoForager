@@ -4,6 +4,7 @@ import json
 from datetime import datetime, timezone
 import uuid
 import logging
+import time
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, status
@@ -35,6 +36,8 @@ pipeline = AIPipeline()
 cache = CacheService()
 image_helper = AIRecipeGenerator()
 VISION_CACHE_TTL_SECONDS = 21600
+from ...services.recipe_image_attach_service import _is_durable_recipe_image_url
+
 logger = logging.getLogger(__name__)
 
 
@@ -90,6 +93,16 @@ def _run_vision_job(job_id: str) -> None:
             return
         if job.status not in {"pending", "queued"}:
             return
+        # Claim atomically so the worker and the safety-net run never both process one job.
+        claimed = (
+            db.query(AIJob)
+            .filter(AIJob.id == job_id, AIJob.status.in_(["pending", "queued"]))
+            .update({AIJob.status: "running"}, synchronize_session=False)
+        )
+        db.commit()
+        if claimed != 1:
+            return
+        job = db.query(AIJob).filter(AIJob.id == job_id).first()
         try:
             queue_wait_ms = None
             if getattr(job, "created_at", None):
@@ -335,6 +348,24 @@ def _run_vision_job(job_id: str) -> None:
             pass
     finally:
         db.close()
+
+
+def _run_vision_job_delayed(job_id: str, delay_seconds: int = 10) -> None:
+    """Safety net for Redis queue mode: if the worker hasn't started the scan after a short
+    delay (worker down, restarting or busy), run it here so the app never waits for minutes."""
+    try:
+        time.sleep(max(0, int(delay_seconds)))
+    except Exception:
+        pass
+    db = SessionLocal()
+    try:
+        job = db.query(AIJob).filter(AIJob.id == job_id).first()
+        if not job or job.status not in {"pending", "queued"}:
+            return
+    finally:
+        db.close()
+    logger.warning("Vision job %s not picked up by the worker; running it in the API", job_id)
+    _run_vision_job(job_id)
 
 
 def _safe_job_error(message: str) -> str:
@@ -659,7 +690,9 @@ def generate_from_vision_async(
                 queued = True
         except Exception:
             queued = False
-        if not queued:
+        if queued:
+            background_tasks.add_task(_run_vision_job_delayed, job_id)
+        else:
             background_tasks.add_task(_run_vision_job, job_id)
     else:
         # DB queue mode: always run a background task as a safety net.
@@ -732,7 +765,9 @@ def generate_from_vision_batch_async(
                 queued = True
         except Exception:
             queued = False
-        if not queued:
+        if queued:
+            background_tasks.add_task(_run_vision_job_delayed, job_id)
+        else:
             background_tasks.add_task(_run_vision_job, job_id)
     else:
         # DB queue mode: always run a background task as a safety net.
@@ -828,6 +863,14 @@ def generate_recipe_image(
         title=str(recipe_payload["title"] or ""),
         ingredients=[str(item).strip() for item in (payload.ingredients or []) if item and str(item).strip()],
     )
+
+    # This exact recipe already has a finished image (any user, last 60 days): reuse it for free.
+    shared_url = cache.get(f"recipeimg:{fingerprint}:url")
+    if isinstance(shared_url, str) and _is_durable_recipe_image_url(shared_url):
+        _persist_image_to_history(
+            db, user_id=current_user.id, fingerprint=fingerprint, image_url=shared_url, title_norm=title_norm
+        )
+        return {"image_url": shared_url, "image_source": "ai", "cached": True, "size": settings.size, "daily_limit": daily_limit}
 
     per_recipe_key = f"imggen:{current_user.id}:{today}:{fingerprint}"
     per_recipe_count_raw = cache.get(per_recipe_key)

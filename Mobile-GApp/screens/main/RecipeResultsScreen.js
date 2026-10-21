@@ -18,7 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getCachedRecipeImageUrl, setCachedRecipeImageUrl } from '../../utils/recipeImageCache';
+import { getCachedRecipeImageUrl, setCachedRecipeImageUrl, isPlaceholderRecipeImageUrl } from '../../utils/recipeImageCache';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
@@ -50,6 +50,7 @@ export default function RecipeResultsScreen() {
   const [recipes, setRecipes] = useState([]);
   const [failedRecipeImages, setFailedRecipeImages] = useState({});
   const [generatingRecipeImages, setGeneratingRecipeImages] = useState({});
+  const [imageLimitHit, setImageLimitHit] = useState(false);
   const pollingRef = useRef(null);
   const phaseRef = useRef(null);
   const [statusLine, setStatusLine] = useState('Starting recipe generation...');
@@ -228,6 +229,8 @@ export default function RecipeResultsScreen() {
           );
           const data = await response.json().catch(() => ({}));
           if (!response.ok || !data?.image_url) {
+            if (response.status === 429) setImageLimitHit(true);
+            setFailedRecipeImages((prev) => ({ ...(prev || {}), [idx]: true }));
             addDebugLog({
               source: 'AI',
               level: 'warn',
@@ -262,6 +265,7 @@ export default function RecipeResultsScreen() {
             details: JSON.stringify({ title: title.slice(0, 60) }),
           });
         } catch (error) {
+          setFailedRecipeImages((prev) => ({ ...(prev || {}), [idx]: true }));
           addDebugLog({
             source: 'AI',
             level: 'warn',
@@ -278,9 +282,9 @@ export default function RecipeResultsScreen() {
         }
       };
 
-      // Concurrency=2 to avoid spiking the network/device.
+      // All three at once: each image is one server call, so this halves the wait.
       const queue = [...candidates];
-      const workers = new Array(Math.min(2, queue.length)).fill(0).map(async () => {
+      const workers = new Array(Math.min(3, queue.length)).fill(0).map(async () => {
         while (queue.length) {
           const item = queue.shift();
           if (!item) return;
@@ -408,7 +412,9 @@ export default function RecipeResultsScreen() {
               'Content-Type': 'application/json',
               'X-Device-Id': deviceId,
             },
-            body: JSON.stringify({ ingredients }),
+            // The user already confirmed these on the scan results screen, so skip the server's
+            // ingredient review step (it has no UI here and would otherwise fail the request).
+            body: JSON.stringify({ ingredients, ingredient_review_approved: true }),
           },
           { onUnauthorized: signOut, timeoutMs: 45000 }
         );
@@ -452,7 +458,7 @@ export default function RecipeResultsScreen() {
         await pollJob(data.job_id);
         pollingRef.current = setInterval(() => {
           pollJob(data.job_id);
-        }, 3000);
+        }, 1500);
       } catch {
         setIsLoading(false);
         if (!errorShownRef.current) {
@@ -625,7 +631,6 @@ export default function RecipeResultsScreen() {
     );
   }
 
-  const heroImage = photoUri || images?.[0]?.uri;
   const hasRecipes = recipes.length > 0;
   const hasDetectedIngredients = detectedIngredients.length > 0;
   const ignoredIngredients = Array.from(new Set([
@@ -635,64 +640,27 @@ export default function RecipeResultsScreen() {
     .map((item) => (typeof item === 'string' ? item.trim() : ''))
     .filter(Boolean)));
   const hasIgnoredIngredients = ignoredIngredients.length > 0;
-
-  const formatTime = (recipe) => {
-    const total = recipe?.total_time ?? recipe?.time ?? 0;
-    if (typeof total === 'number' && total > 0) {
-      return `${total} mins`;
-    }
-    const prep = recipe?.prep_time ?? 0;
-    const cook = recipe?.cook_time ?? 0;
-    const sum = prep + cook;
-    if (sum > 0) {
-      return `${sum} mins`;
-    }
-    return 'N/A';
-  };
-
-  const getMatchText = (recipe) => {
-    if (!selectedIngredients?.length) {
-      const count = Array.isArray(recipe?.ingredients) ? recipe.ingredients.length : 0;
-      return count ? `${count} ingredients` : 'Ingredients listed';
-    }
-    const selectedLower = selectedIngredients.map((item) => item.toLowerCase());
-    const recipeNames = Array.isArray(recipe?.ingredients)
-      ? recipe.ingredients
-          .map((item) => (typeof item === 'string' ? item : item?.name))
-          .filter(Boolean)
-          .map((item) => item.toLowerCase())
-      : [];
-    const matches = recipeNames.filter((item) => selectedLower.includes(item));
-    return `${matches.length}/${selectedIngredients.length} ingredients`;
-  };
-
-  const toIngredientImageUrl = (name) => {
-    if (!name) return null;
-    const cleaned = `${name}`.trim();
-    if (!cleaned) return null;
-    const encoded = encodeURIComponent(cleaned.replace(/\s+/g, '_'));
-    return `https://www.themealdb.com/images/ingredients/${encoded}.png`;
-  };
+  const selectedLower = (Array.isArray(selectedIngredients) ? selectedIngredients : [])
+    .map((item) => String(item || '').toLowerCase().trim())
+    .filter(Boolean);
 
   return (
     <View style={styles.container}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
+        contentContainerStyle={{ paddingBottom: contentBottomPadding + 24 }}
       >
-        <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
+        <View style={[styles.rHeader, { paddingTop: headerPaddingTop }]}>
           <View style={styles.header}>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => navigation.goBack()}
-              activeOpacity={0.85}
-            >
+            <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} activeOpacity={0.85}>
               <Ionicons name="arrow-back" size={22} color="white" />
             </TouchableOpacity>
             <View style={styles.headerCenter}>
-              <Text style={styles.headerTitle}>Recipe Results</Text>
+              <Text style={styles.headerTitle}>Your recipes</Text>
               <Text style={styles.headerSubtitle}>
-                {recipes.length ? `${recipes.length} diabetes-friendly ideas` : 'Your generated meal ideas'}
+                {recipes.length
+                  ? `${recipes.length} diabetes-friendly ideas${hasDetectedIngredients ? ` from ${detectedIngredients.length} ingredients` : ''}`
+                  : 'Your generated meal ideas'}
               </Text>
             </View>
             <TouchableOpacity
@@ -704,204 +672,194 @@ export default function RecipeResultsScreen() {
               <Ionicons name="camera-outline" size={20} color="white" />
             </TouchableOpacity>
           </View>
+          {hasDetectedIngredients ? (
+            <View style={styles.rChipsBlock}>
+              <Text style={styles.rChipsLabel}>{source === 'text' ? 'Your ingredients' : 'From your fridge'}</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rChips}>
+                {detectedIngredients.map((item) => (
+                  <View key={item.id} style={styles.rChip}>
+                    <Ionicons name="leaf" size={11} color="#B9F6CA" />
+                    <Text style={styles.rChipText}>{item.name}</Text>
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
         </View>
-        {heroImage && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Your Scan</Text>
-            <View style={styles.imageContainer}>
-              <Image source={{ uri: heroImage }} style={styles.image} resizeMode="cover" />
-              {hasDetectedIngredients && (
-                <View style={styles.imageOverlay}>
-                  <Text style={styles.imageOverlayText}>
-                    {detectedIngredients.length} ingredients detected
-                  </Text>
-                </View>
-              )}
-            </View>
-          </View>
-        )}
 
-        {warning && !hasIgnoredIngredients && (
-          <View style={styles.warningBanner}>
-            <Ionicons name="alert-circle-outline" size={18} color={Colors.warning} />
-            <Text style={styles.warningText}>{warning?.message || warning}</Text>
-          </View>
-        )}
-
-        {hasDetectedIngredients ? (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Detected Ingredients</Text>
-              <Text style={styles.ingredientCount}>{detectedIngredients.length} items</Text>
-            </View>
-
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.ingredientsScroll}
-            >
-              {detectedIngredients.map((item) => (
-                <View key={item.id} style={styles.ingredientCard}>
-                  <View style={styles.ingredientIconContainer}>
-                    {toIngredientImageUrl(item.name) ? (
-                      <Image
-                        source={{ uri: toIngredientImageUrl(item.name) }}
-                        style={styles.ingredientImage}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <Ionicons name="nutrition-outline" size={26} color={Colors.primary} />
-                    )}
-                  </View>
-                  <Text style={styles.ingredientName} numberOfLines={1}>{item.name}</Text>
-                  <View style={styles.confidenceBadge}>
-                    <Text style={styles.confidenceText}>{item.confidence}</Text>
-                  </View>
-                </View>
-              ))}
-            </ScrollView>
-          </View>
-        ) : null}
-
-        {hasIgnoredIngredients ? (
-          <View style={styles.safetyFilterBanner}>
-            <View style={styles.safetyFilterTitleRow}>
-              <View style={styles.safetyFilterIcon}>
-                <Ionicons name="warning-outline" size={18} color="#9A4D00" />
+        <View style={styles.rBody}>
+          {hasIgnoredIngredients ? (
+            <View style={styles.rNote}>
+              <Ionicons name="shield-checkmark" size={18} color="#B7791F" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.rNoteTitle}>Left out for steadier blood sugar</Text>
+                <Text style={styles.rNoteText}>{ignoredIngredients.join(', ')}</Text>
               </View>
-              <Text style={styles.safetyFilterTitle}>Left out for steadier blood sugar</Text>
             </View>
-            <Text style={styles.safetyFilterText}>
-              We did not use these in the recipes because they may be less suitable for diabetes-friendly meals.
-            </Text>
-            <View style={styles.safetyFilterChips}>
-              {ignoredIngredients.map((item) => (
-                <View key={item} style={styles.safetyFilterChip}>
-                  <Text style={styles.safetyFilterChipText}>{item}</Text>
-                </View>
-              ))}
+          ) : warning ? (
+            <View style={styles.rNote}>
+              <Ionicons name="alert-circle" size={18} color="#B7791F" />
+              <Text style={[styles.rNoteText, { flex: 1 }]}>{warning?.message || String(warning)}</Text>
             </View>
-          </View>
-        ) : null}
+          ) : null}
 
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Diabetes-Safe Recipes</Text>
-            <Text style={styles.recipeCount}>{recipes.length} recipes</Text>
-          </View>
-          <Text style={styles.sectionSubtitle}>
-            {hasDetectedIngredients ? 'Low glycemic recipes based on your ingredients' : 'Diabetes-friendly ideas you can try today'}
-          </Text>
+          {imageLimitHit ? (
+            <View style={[styles.rNote, styles.rNoteInfo]}>
+              <Ionicons name="images" size={17} color={Colors.primary} />
+              <Text style={[styles.rNoteText, { flex: 1, color: Colors.primaryDark }]}>
+                You&apos;ve used today&apos;s recipe photos. Your recipes work exactly the same, and photos are back tomorrow.
+              </Text>
+            </View>
+          ) : null}
 
-          {hasRecipes ? recipes.map((recipe, index) => {
-            const nutrition = recipe?.nutritional_info || {};
-            const calories = nutrition.calories ?? recipe?.calories ?? 'N/A';
-            const protein = nutrition.protein ?? recipe?.protein ?? 'N/A';
-            const fiber = nutrition.fiber ?? recipe?.fiber ?? 'N/A';
-            const title = recipe?.title || recipe?.name || `Recipe ${index + 1}`;
-            const matchText = getMatchText(recipe);
-            const imageKey = recipe.id || `${title}-${index}`;
-            const recipeImageUrl =
-              typeof recipe?.image_url === 'string' && recipe.image_url.trim()
-                ? recipe.image_url.trim()
-                : null;
-            const imageFailed = Boolean(failedRecipeImages?.[imageKey]);
-            const macroText = (label, value, unit = '') => {
-              const text = `${value ?? ''}`.trim();
-              if (!text || text.toLowerCase() === 'n/a') return `${label} --`;
-              if (unit && text.toLowerCase().endsWith(unit.toLowerCase())) return `${label} ${text}`;
-              return `${label} ${text}${unit}`;
-            };
-            return (
-              <TouchableOpacity
-                key={imageKey}
-                style={styles.recipeCard}
-                onPress={() =>
-                  navigation.navigate('RecipeDetail', {
-                    recipe,
-                    selectedIngredients,
-                    source,
-                  })
-                }
-              >
-                <View style={styles.recipeThumbWrap}>
-                  {recipeImageUrl && !imageFailed ? (
-                    <Image
-                      source={{ uri: recipeImageUrl }}
-                      style={styles.recipeThumb}
-                      resizeMode="cover"
-                      onError={() =>
-                        setFailedRecipeImages((prev) => ({
-                          ...(prev || {}),
-                          [imageKey]: true,
-                        }))
-                      }
-                    />
-                  ) : (
-                    <View style={styles.recipeThumbPlaceholder}>
-                      <ActivityIndicator size="small" color={Colors.textMuted} />
-                      <Text style={styles.recipeThumbPlaceholderText}>Generating image...</Text>
-                    </View>
-                  )}
-                </View>
-                <View style={styles.recipeInfo}>
-                  <View style={styles.recipeHeader}>
-                    <Text style={styles.recipeName} numberOfLines={2}>{title}</Text>
-                  </View>
-
-                  <View style={styles.recipeMeta}>
-                    <Text style={styles.metaText}>{formatTime(recipe)}</Text>
-                    <Text style={styles.recipeMetaDivider}>|</Text>
-                    <Text style={[styles.recipeMetaValue, styles.recipeCal]}>{macroText('Cal', calories)}</Text>
-                    <Text style={styles.recipeMetaDivider}>|</Text>
-                    <Text style={[styles.recipeMetaValue, styles.recipePro]}>{macroText('Pro', protein, 'g')}</Text>
-                    <Text style={styles.recipeMetaDivider}>|</Text>
-                    <Text style={[styles.recipeMetaValue, styles.recipeFib]}>{macroText('Fib', fiber, 'g')}</Text>
-                  </View>
-
-                  <View style={styles.matchContainer}>
-                    <LinearGradient
-                      colors={[Colors.success, Colors.primaryLight]}
-                      style={styles.matchBadge}
-                    >
-                      <Text style={styles.matchText}>{matchText}</Text>
-                    </LinearGradient>
-                  </View>
-                </View>
-
-                <Ionicons name="chevron-forward" size={24} color={Colors.textLight} />
-              </TouchableOpacity>
-            );
-          }) : (
+          {hasRecipes ? (
+            recipes.map((recipe, index) => (
+              <RecipeResultCard
+                key={recipe.id || `${recipe?.title || 'recipe'}-${index}`}
+                recipe={recipe}
+                index={index}
+                selectedLower={selectedLower}
+                generating={Boolean(generatingRecipeImages?.[`${index}:${String(recipe?.title || recipe?.name || '').trim() || 'recipe'}`])}
+                failed={Boolean(failedRecipeImages?.[index])}
+                onImageError={() => setFailedRecipeImages((prev) => ({ ...(prev || {}), [index]: true }))}
+                onPress={() => navigation.navigate('RecipeDetail', { recipe, selectedIngredients, source })}
+              />
+            ))
+          ) : (
             <View style={styles.emptyState}>
               <Ionicons name="alert-circle-outline" size={32} color={Colors.textLight} />
               <Text style={styles.emptyTitle}>No recipes available</Text>
               <Text style={styles.emptyText}>Try different ingredients to generate recipes.</Text>
             </View>
           )}
-        </View>
 
-        <View style={styles.actionButtons}>
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={() => navigation.navigate('ManualInput')}
-          >
-            <Ionicons name="add-circle-outline" size={22} color="white" />
-            <Text style={styles.primaryButtonText}>Add Another Ingredient</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() => navigation.navigate('Scan', { screen: 'ScanMain' })}
-          >
-            <Ionicons name="camera-outline" size={22} color={Colors.primary} />
-            <Text style={styles.secondaryButtonText}>Scan Another Fridge</Text>
-          </TouchableOpacity>
+          <View style={styles.rActions}>
+            <TouchableOpacity
+              style={styles.rActionShadow}
+              onPress={() => navigation.navigate('Scan', { screen: 'ScanMain' })}
+              activeOpacity={0.9}
+            >
+              <LinearGradient colors={['#23807E', '#0B5A46']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.rActionPrimary}>
+                <Ionicons name="camera" size={19} color="white" />
+                <Text style={styles.rActionPrimaryText}>Scan again</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.rActionSecondary} onPress={() => navigation.navigate('ManualInput')} activeOpacity={0.85}>
+              <Ionicons name="create-outline" size={19} color={Colors.primary} />
+              <Text style={styles.rActionSecondaryText}>Type ingredients</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
     </View>
   );
 }
+
+const IMPACT_BANDS = [
+  { max: 30, label: 'Low carb', color: '#2C8632', bg: '#E9F6EA' },
+  { max: 45, label: 'Moderate carb', color: '#B7791F', bg: '#FFF4DE' },
+  { max: Infinity, label: 'Higher carb', color: '#C53030', bg: '#FDECEC' },
+];
+
+const numberFrom = (value) => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  const m = String(value ?? '').match(/\d+(?:\.\d+)?/);
+  return m ? Number(m[0]) : null;
+};
+
+const minutesFor = (recipe) => {
+  const total = numberFrom(recipe?.total_time ?? recipe?.time);
+  if (total) return total;
+  const sum = (numberFrom(recipe?.prep_time) || 0) + (numberFrom(recipe?.cook_time) || 0);
+  return sum || null;
+};
+
+// Real photo, "plating" tile while it's made, or a clean branded tile - never a stock placeholder.
+const RecipeResultCard = React.memo(function RecipeResultCard({ recipe, index, selectedLower, generating, failed, onImageError, onPress }) {
+  const n = recipe?.nutritional_info || recipe?.nutrition || {};
+  const carbs = numberFrom(n.carbs ?? n.carbs_g ?? recipe?.carbs);
+  const protein = numberFrom(n.protein ?? recipe?.protein);
+  const fiber = numberFrom(n.fiber ?? n.fibre ?? recipe?.fiber);
+  const calories = numberFrom(n.calories ?? recipe?.calories);
+  const minutes = minutesFor(recipe);
+  const title = recipe?.title || recipe?.name || `Recipe ${index + 1}`;
+  const band = carbs != null ? IMPACT_BANDS.find((b) => carbs <= b.max) : null;
+  const url = typeof recipe?.image_url === 'string' ? recipe.image_url.trim() : '';
+  const showPhoto = Boolean(url) && !isPlaceholderRecipeImageUrl(url) && !failed;
+
+  const names = (Array.isArray(recipe?.ingredients) ? recipe.ingredients : [])
+    .map((item) => String(typeof item === 'string' ? item : item?.name || '').toLowerCase())
+    .filter(Boolean);
+  const used = selectedLower.filter((s) => names.some((nm) => nm.includes(s) || s.includes(nm))).length;
+
+  const stats = [
+    minutes ? ['time-outline', `${minutes} min`] : null,
+    carbs != null ? ['nutrition-outline', `${carbs}g carbs`] : null,
+    protein != null ? ['barbell-outline', `${protein}g protein`] : null,
+    fiber != null ? ['leaf-outline', `${fiber}g fibre`] : null,
+    calories != null ? ['flame-outline', `${calories} kcal`] : null,
+  ].filter(Boolean);
+
+  return (
+    <TouchableOpacity style={styles.rCard} onPress={onPress} activeOpacity={0.92}>
+      <View style={styles.rPhotoWrap}>
+        {showPhoto ? (
+          <Image source={{ uri: url }} style={styles.rPhoto} resizeMode="cover" onError={onImageError} />
+        ) : (
+          <LinearGradient colors={['#E6F2EF', '#CFE6E1']} style={[styles.rPhoto, styles.rPhotoEmpty]}>
+            <View style={styles.rPhotoIcon}>
+              {generating ? <ActivityIndicator color={Colors.primary} /> : <Ionicons name="restaurant" size={26} color={Colors.primary} />}
+            </View>
+            {generating ? <Text style={styles.rPhotoEmptyText}>Plating your dish…</Text> : null}
+          </LinearGradient>
+        )}
+        <LinearGradient colors={['transparent', 'rgba(6,30,26,0.82)']} style={styles.rPhotoShade} />
+        <View style={styles.rPhotoTop}>
+          {index === 0 ? (
+            <View style={styles.rBest}>
+              <Ionicons name="star" size={11} color="#7A4B00" />
+              <Text style={styles.rBestText}>Best match</Text>
+            </View>
+          ) : <View />}
+          {band ? (
+            <View style={[styles.rBand, { backgroundColor: band.bg }]}>
+              <Text style={[styles.rBandText, { color: band.color }]}>{band.label}</Text>
+            </View>
+          ) : null}
+        </View>
+        <View style={styles.rPhotoBottom}>
+          <Text style={styles.rTitle} numberOfLines={2}>{title}</Text>
+          {recipe?.difficulty ? <Text style={styles.rSubtitle}>{recipe.difficulty}{recipe?.servings ? ` · serves ${recipe.servings}` : ''}</Text> : null}
+        </View>
+      </View>
+
+      <View style={styles.rInfo}>
+        {stats.length ? (
+          <View style={styles.rStats}>
+            {stats.map(([icon, text]) => (
+              <View key={text} style={styles.rStat}>
+                <Ionicons name={icon} size={13} color={Colors.primary} />
+                <Text style={styles.rStatText}>{text}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+        {selectedLower.length ? (
+          <View style={styles.rMatch}>
+            <View style={styles.rMatchTrack}>
+              <View style={[styles.rMatchFill, { width: `${Math.max(6, Math.min(100, (used / selectedLower.length) * 100))}%` }]} />
+            </View>
+            <Text style={styles.rMatchText}>Uses {used} of your {selectedLower.length} ingredients</Text>
+          </View>
+        ) : null}
+        <View style={styles.rOpen}>
+          <Text style={styles.rOpenText}>View recipe</Text>
+          <Ionicons name="arrow-forward" size={15} color={Colors.primary} />
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -1477,4 +1435,58 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 8,
   },
+  // ---- Results (premium) ----
+  rHeader: { backgroundColor: Colors.primaryDark, paddingHorizontal: 20, paddingBottom: 18, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
+  rChipsBlock: { marginTop: 16 },
+  rChipsLabel: { fontSize: 11.5, fontWeight: '800', color: 'rgba(255,255,255,0.75)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 },
+  rChips: { gap: 6, paddingRight: 8 },
+  rChip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,255,255,0.14)', borderRadius: 999, paddingHorizontal: 11, paddingVertical: 6 },
+  rChipText: { color: 'white', fontSize: 12.5, fontWeight: '800', textTransform: 'capitalize' },
+  rBody: { padding: 16, gap: 16 },
+  rNote: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', backgroundColor: '#FFF7E8', borderColor: '#F6DFB0', borderWidth: 1, borderRadius: 16, padding: 12 },
+  rNoteInfo: { backgroundColor: '#E8F4F3', borderColor: '#CDE7E4', alignItems: 'center' },
+  rNoteTitle: { fontSize: 13.5, fontWeight: '900', color: '#7A4B00' },
+  rNoteText: { fontSize: 12.5, lineHeight: 18, color: '#6B4A1F', marginTop: 2, textTransform: 'none' },
+  rCard: {
+    backgroundColor: 'white',
+    borderRadius: 24,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#EDF0EA',
+    shadowColor: '#0F2A3A',
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+  },
+  rPhotoWrap: { height: 200, backgroundColor: '#E6F2EF' },
+  rPhoto: { width: '100%', height: '100%' },
+  rPhotoEmpty: { alignItems: 'center', justifyContent: 'center', gap: 8 },
+  rPhotoIcon: { width: 58, height: 58, borderRadius: 29, backgroundColor: 'rgba(255,255,255,0.75)', alignItems: 'center', justifyContent: 'center', marginTop: -30 },
+  rPhotoEmptyText: { fontSize: 12.5, fontWeight: '800', color: Colors.primary },
+  rPhotoShade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 110 },
+  rPhotoTop: { position: 'absolute', top: 12, left: 12, right: 12, flexDirection: 'row', justifyContent: 'space-between' },
+  rBest: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FFE7A8', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
+  rBestText: { fontSize: 11.5, fontWeight: '900', color: '#7A4B00' },
+  rBand: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
+  rBandText: { fontSize: 11.5, fontWeight: '900' },
+  rPhotoBottom: { position: 'absolute', left: 16, right: 16, bottom: 14 },
+  rTitle: { fontSize: 20, lineHeight: 25, fontWeight: '900', color: 'white' },
+  rSubtitle: { fontSize: 12.5, fontWeight: '700', color: 'rgba(255,255,255,0.85)', marginTop: 3 },
+  rInfo: { padding: 14, gap: 12 },
+  rStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  rStat: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F2F7F6', borderRadius: 10, paddingHorizontal: 9, paddingVertical: 6 },
+  rStatText: { fontSize: 12, fontWeight: '800', color: Colors.brandNavy },
+  rMatch: { gap: 6 },
+  rMatchTrack: { height: 6, borderRadius: 3, backgroundColor: '#E5EEEC', overflow: 'hidden' },
+  rMatchFill: { height: '100%', borderRadius: 3, backgroundColor: '#2C8632' },
+  rMatchText: { fontSize: 12, fontWeight: '700', color: Colors.textLight },
+  rOpen: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4 },
+  rOpenText: { fontSize: 13.5, fontWeight: '900', color: Colors.primary },
+  rActions: { gap: 10, marginTop: 4 },
+  rActionShadow: { borderRadius: 16, shadowColor: '#0B5A46', shadowOpacity: 0.22, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: 3 },
+  rActionPrimary: { height: 54, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  rActionPrimaryText: { color: 'white', fontSize: 16, fontWeight: '900' },
+  rActionSecondary: { height: 52, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#E8F4F3', borderWidth: 1.5, borderColor: '#CDE7E4' },
+  rActionSecondaryText: { color: Colors.primary, fontSize: 15, fontWeight: '900' },
 });

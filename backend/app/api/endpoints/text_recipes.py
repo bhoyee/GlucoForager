@@ -168,6 +168,25 @@ def _precheck_ingredient_input(raw_ingredients: list[str], *, mode: str, tier: s
     )
     return classified
 
+def _same_ingredient(a: str, b: str) -> bool:
+    """True when two names differ only by case, spacing, hyphens or a plural ending."""
+
+    def _base(value: str) -> str:
+        words = _review_key(value).split()
+        out = []
+        for w in words:
+            if w.endswith("ies") and len(w) > 4:
+                w = w[:-3] + "y"
+            elif w.endswith("oes") and len(w) > 4:
+                w = w[:-2]
+            elif w.endswith("s") and not w.endswith("ss") and len(w) > 3:
+                w = w[:-1]
+            out.append(w)
+        return " ".join(out)
+
+    return _base(a) == _base(b)
+
+
 def _review_key(value: str) -> str:
     return " ".join(str(value or "").strip().lower().replace("-", " ").split())
 
@@ -389,7 +408,7 @@ def _build_ingredient_review(review_pairs: list[dict], food_ingredients: list[st
             reason = "Better fit for diabetes-friendly recipe generation."
         final_ingredients.append(suggested or ingredient_text)
         item = {"type": "adjustment", "original": display_original, "suggested": suggested or ingredient_text, "reason": reason, "review_index": review_index}
-        if item["suggested"].strip().lower() != display_original.lower():
+        if not _same_ingredient(item["suggested"], display_original):
             changed = True
             item["changed"] = True
         else:

@@ -209,8 +209,9 @@ def get_recipe_image_settings(db: Session) -> RecipeImageSettings:
     size = _normalize_size(_to_int(_get_value(db, RECIPE_IMAGES_SIZE_KEY), 512))
 
     # Default to generating thumbnails for all 3 recipes in a typical response.
-    free_limit = _to_int(_get_value(db, RECIPE_IMAGES_FREE_DAILY_LIMIT_KEY), 3)
-    premium_limit = _to_int(_get_value(db, RECIPE_IMAGES_PREMIUM_DAILY_LIMIT_KEY), 10)
+    # A scan makes 3 photos: 12/day is ~4 free scans, 60/day ~20 Premium scans.
+    free_limit = _to_int(_get_value(db, RECIPE_IMAGES_FREE_DAILY_LIMIT_KEY), 12)
+    premium_limit = _to_int(_get_value(db, RECIPE_IMAGES_PREMIUM_DAILY_LIMIT_KEY), 60)
     max_per_recipe = _to_int(_get_value(db, RECIPE_IMAGES_MAX_PER_RECIPE_KEY), 1)
     cost_raw = (_get_value(db, RECIPE_IMAGES_COST_USD_KEY) or "").strip()
     try:
