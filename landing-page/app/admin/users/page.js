@@ -11,8 +11,8 @@ const ACCESS_META = {
   trialing: { label: 'Store trial', badge: 'success' },
   trial: { label: 'Store trial', badge: 'success' },
   cancelled_active: { label: 'Cancelled active', badge: 'warning' },
-  legacy_grace: { label: 'Welcome week', badge: 'warning' },
-  grace: { label: 'Welcome week', badge: 'warning' },
+  legacy_grace: { label: 'Welcome week', badge: 'welcome' },
+  grace: { label: 'Welcome week', badge: 'welcome' },
   // Free plan users who once had a store trial or subscription (win-back audience).
   expired: { label: 'Lapsed', badge: 'warning' },
   blocked: { label: 'Blocked', badge: 'danger' },
@@ -550,7 +550,7 @@ export default function AdminUsersPage() {
       <div className="admin-stat-grid" style={{ marginBottom: 18 }}>
         {[
           ['legacy_grace', 'Welcome week', accessSummary.legacy_grace, '#0e7490', 'New users with full access'],
-          ['premium', 'Premium', accessSummary.premium, '#c2410c', 'Paying subscribers'],
+          ['premium', 'Premium', accessSummary.premium, '#15803d', 'Paying subscribers'],
           ['cancelled_active', 'Cancelled active', accessSummary.cancelled_active, '#b45309', 'Access until their period ends'],
           ['free', 'Free plan', accessSummary.free, '#334155', 'Weekly free uses only'],
           ['expired', 'Lapsed', accessSummary.expired, '#a16207', 'Trial or subscription ended'],

@@ -1210,9 +1210,18 @@
   color: #4a4a4a;
 }
 
-.admin-badge.plan-premium {
-  background: rgba(245, 158, 11, 0.16);
-  color: #92400e;
+/* Premium: solid strong green so paying users stand out from everyone else. */
+.admin-badge.plan-premium,
+.admin-badge.admin-badge--premium {
+  background: #15803d;
+  color: #ffffff;
+}
+
+/* Welcome week: teal, distinct from Premium (green) and Lapsed (amber). */
+.admin-badge.welcome,
+.admin-badge.admin-badge--welcome {
+  background: rgba(14, 116, 144, 0.14);
+  color: #0e7490;
 }
 
 .admin-badge.plan-free {
