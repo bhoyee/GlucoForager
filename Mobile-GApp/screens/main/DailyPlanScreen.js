@@ -11,6 +11,9 @@ import { Colors } from '../../constants/Colors';
 import { trackEvent } from '../../utils/analytics';
 import RecipePlaceholder from '../../assets/images/recipe-placeholder.jpeg';
 import GlucoseImpactCard, { ImpactPill } from '../../components/GlucoseImpactCard';
+import { LinearGradient } from 'expo-linear-gradient';
+import { confirmMealLogged } from '../../utils/mealLogConfirm';
+import { generateIdempotencyKey } from '../../utils/idempotency';
 
 const isPlaceholderImage = (item) => {
   const src = String(item?.image_source || '').toLowerCase();
@@ -400,355 +403,556 @@ function MealPlanDetail({ meal, item, showImageLoading, onBack }) {
   );
 }
 
+const SLOT_TIME = { breakfast: '8:00', lunch: '13:00', snack: '16:00', dinner: '19:00' };
+const SLOT_ORDER = { breakfast: 1, lunch: 2, snack: 3, dinner: 4 };
+
+function addDays(key, n) {
+  const d = parsePlanDate(key);
+  d.setDate(d.getDate() + n);
+  return dateKey(d);
+}
+
+function rangeMid(value) {
+  const nums = String(value || '').match(/\d+(?:\.\d+)?/g);
+  if (!nums || !nums.length) return null;
+  const pick = nums.slice(0, 2).map(Number);
+  return Math.round(pick.reduce((a, b) => a + b, 0) / pick.length);
+}
+
+// One meal in the day's timeline: time, photo, carbs, impact, and I ate this / Swap.
+function TimelineMeal({ item, canEat, canSwap, busy, onOpen, onEat, onSwap, last }) {
+  const nutrition = item?.nutrition_estimate && typeof item.nutrition_estimate === 'object' ? item.nutrition_estimate : null;
+  const carbs = cleanNutritionValue(nutrition?.carbs_g);
+  const imageUrl = typeof item?.image_url === 'string' ? item.image_url.trim() : '';
+  const eaten = Boolean(item?.eaten);
+  const swapping = busy === `swap:${item?.meal}`;
+  return (
+    <View style={styles.tlRow}>
+      <View style={styles.tlRail}>
+        <View style={[styles.tlDot, eaten && styles.tlDotDone]}>
+          {eaten ? <Ionicons name="checkmark" size={12} color="white" /> : <Ionicons name={mealIcon(item?.meal)} size={12} color={Colors.primary} />}
+        </View>
+        {!last ? <View style={styles.tlLine} /> : null}
+      </View>
+      <Pressable style={[styles.tlCard, eaten && styles.tlCardDone]} onPress={onOpen}>
+        <View style={styles.tlTop}>
+          <Text style={styles.tlSlot}>
+            {titleCase(item?.meal || 'Meal')} · {SLOT_TIME[item?.meal] || ''}
+          </Text>
+          {item?.glucose_impact ? <ImpactPill impact={item.glucose_impact} small /> : null}
+        </View>
+        <View style={styles.tlBody}>
+          {imageUrl && !isPlaceholderImage(item) ? (
+            <Image source={{ uri: imageUrl }} style={styles.tlImage} />
+          ) : (
+            <Image source={RecipePlaceholder} style={styles.tlImage} />
+          )}
+          <View style={{ flex: 1 }}>
+            <Text style={styles.tlTitle} numberOfLines={2}>{item?.title || item?.name || '--'}</Text>
+            <Text style={styles.tlMeta}>
+              {carbs ? `${carbs} carbs` : ''}
+              {item?.time_minutes ? `${carbs ? ' · ' : ''}${item.time_minutes} min` : ''}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.tlActions}>
+          {eaten ? (
+            <View style={[styles.tlBtn, styles.tlBtnDone]}>
+              <Ionicons name="checkmark-circle" size={15} color="#2C8632" />
+              <Text style={[styles.tlBtnText, { color: '#2C8632' }]}>Eaten</Text>
+            </View>
+          ) : canEat ? (
+            <Pressable style={[styles.tlBtn, styles.tlBtnEat]} onPress={onEat} disabled={Boolean(busy)}>
+              <Ionicons name="restaurant" size={14} color="white" />
+              <Text style={[styles.tlBtnText, { color: 'white' }]}>I ate this</Text>
+            </Pressable>
+          ) : null}
+          {canSwap && !eaten ? (
+            <Pressable style={[styles.tlBtn, styles.tlBtnSwap]} onPress={onSwap} disabled={Boolean(busy)}>
+              {swapping ? <ActivityIndicator size="small" color="#6B46C1" /> : <Ionicons name="swap-horizontal" size={14} color="#6B46C1" />}
+              <Text style={[styles.tlBtnText, { color: '#6B46C1' }]}>{swapping ? 'Swapping…' : 'Swap'}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      </Pressable>
+    </View>
+  );
+}
+
 export default function DailyPlanScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { signOut } = useAuth();
   const todayKey = dateKey();
+  const lastKey = addDays(todayKey, 2);
   const [plan, setPlan] = useState(null);
   const [selectedDate, setSelectedDate] = useState(todayKey);
   const [loading, setLoading] = useState(false);
-  const [generating, setGenerating] = useState(false);
+  const [busy, setBusy] = useState(null); // 'generate' | 'range' | 'swap:<slot>' | 'eat' | 'shop'
+  const [rangeProgress, setRangeProgress] = useState(null);
   const [refreshingImages, setRefreshingImages] = useState(false);
   const [selectedMeal, setSelectedMeal] = useState(null);
+  const [planned, setPlanned] = useState([]);
+  const [carbGoal, setCarbGoal] = useState(null);
 
-  const loadPlanForDate = useCallback(async (targetDate = dateKey()) => {
+  const authHeaders = async () => {
     const token = await AsyncStorage.getItem('userToken');
-    if (!token) {
+    return token ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } : null;
+  };
+  const q = (extra = '') => `local_today=${todayKey}${extra}`;
+
+  const loadDays = useCallback(async () => {
+    const headers = await authHeaders();
+    if (!headers) return;
+    try {
+      const res = await apiFetch(`${API_URL}/api/app/daily-plan/days?${q()}`, { headers }, { onUnauthorized: signOut, timeoutMs: 8000 });
+      if (res.ok) setPlanned((await res.json())?.planned || []);
+    } catch {
+      // Optional ticks.
+    }
+    try {
+      const mid = new Date();
+      mid.setHours(0, 0, 0, 0);
+      const res = await apiFetch(
+        `${API_URL}/api/app/health-log/today?local_day_start=${encodeURIComponent(mid.toISOString())}`,
+        { headers },
+        { onUnauthorized: signOut, timeoutMs: 8000 }
+      );
+      if (res.ok) {
+        const d = await res.json();
+        setCarbGoal(d?.carb_goal_mode === 'ceiling' ? d?.carb_goal_g || null : null);
+      }
+    } catch {
+      // Optional.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signOut, todayKey]);
+
+  const loadPlanForDate = useCallback(async (targetDate = todayKey) => {
+    const headers = await authHeaders();
+    if (!headers) {
       setPlan(null);
       return null;
     }
     setLoading(true);
     try {
-      const safeDate = targetDate || dateKey();
       const response = await apiFetch(
-        `${API_URL}${API_ENDPOINTS.DAILY_PLAN_BY_DATE}?plan_date=${encodeURIComponent(safeDate)}`,
-        { method: 'GET', headers: { Authorization: `Bearer ${token}` } },
+        `${API_URL}${API_ENDPOINTS.DAILY_PLAN_BY_DATE}?plan_date=${encodeURIComponent(targetDate)}&${q()}`,
+        { method: 'GET', headers },
         { onUnauthorized: signOut, timeoutMs: 8000 }
       );
-      if (response.status === 403) {
+      if (!response.ok) {
         setPlan(null);
         return null;
       }
-      if (!response.ok) return null;
       const data = await response.json().catch(() => null);
-      const nextPlan = data?.plan || null;
-      setPlan(nextPlan);
+      setPlan(data?.plan || null);
       setSelectedMeal(null);
-      return nextPlan;
+      return data?.plan || null;
     } finally {
       setLoading(false);
     }
-  }, [signOut]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signOut, todayKey]);
 
   const refreshImagesUntilReady = useCallback(async () => {
     if (refreshingImages) return;
-    const token = await AsyncStorage.getItem('userToken');
-    if (!token) return;
+    const headers = await authHeaders();
+    if (!headers) return;
     setRefreshingImages(true);
     try {
       const started = Date.now();
-      const maxMs = 25000;
-      // Poll a few times while the backend background task attaches images.
-      // Stop early once all images are real.
+      // Poll while the backend attaches images; stop once all are real.
       // eslint-disable-next-line no-constant-condition
       while (true) {
         // eslint-disable-next-line no-await-in-loop
         await new Promise((r) => setTimeout(r, 3500));
         // eslint-disable-next-line no-await-in-loop
         const response = await apiFetch(
-          `${API_URL}${API_ENDPOINTS.DAILY_PLAN_BY_DATE}?plan_date=${encodeURIComponent(selectedDate)}`,
-          { method: 'GET', headers: { Authorization: `Bearer ${token}` } },
+          `${API_URL}${API_ENDPOINTS.DAILY_PLAN_BY_DATE}?plan_date=${encodeURIComponent(selectedDate)}&${q()}`,
+          { method: 'GET', headers },
           { onUnauthorized: signOut, timeoutMs: 8000 }
         );
         if (response.ok) {
           // eslint-disable-next-line no-await-in-loop
-          const data = await response.json().catch(() => null);
-          const nextPlan = data?.plan || null;
-          if (nextPlan) {
-            setPlan(nextPlan);
-            setSelectedMeal((current) => {
-              if (!current) return current;
-              const updatedMeals = Array.isArray(nextPlan?.meals) ? nextPlan.meals : [];
-              return updatedMeals.find((m) => String(m?.meal || '') === String(current?.meal || '')) || current;
-            });
-          }
+          const nextPlan = (await response.json().catch(() => null))?.plan || null;
+          if (nextPlan) setPlan(nextPlan);
           const meals = Array.isArray(nextPlan?.meals) ? nextPlan.meals : [];
-          if (meals.length && meals.every((m) => !isPlaceholderImage(m))) {
-            break;
-          }
+          if (meals.length && meals.every((m) => !isPlaceholderImage(m))) break;
         }
-        if (Date.now() - started >= maxMs) break;
+        if (Date.now() - started >= 25000) break;
       }
     } finally {
       setRefreshingImages(false);
     }
-  }, [refreshingImages, selectedDate, signOut]);
-
-  const hasAnyPlaceholderImages = useMemo(() => {
-    const meals = Array.isArray(plan?.meals) ? plan.meals : [];
-    if (!meals.length) return false;
-    return meals.some((m) => isPlaceholderImage(m));
-  }, [plan]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshingImages, selectedDate, signOut, todayKey]);
 
   useFocusEffect(
     useCallback(() => {
-      let active = true;
-      const run = async () => {
-        if (!active) return;
-        await loadPlanForDate(selectedDate);
-      };
-      run();
-      return () => {
-        active = false;
-      };
-    }, [loadPlanForDate, selectedDate])
+      loadDays();
+      loadPlanForDate(selectedDate);
+    }, [loadDays, loadPlanForDate, selectedDate])
   );
 
-  const generateToday = async ({ force } = {}) => {
-    const token = await AsyncStorage.getItem('userToken');
-    if (!token) return;
-    setSelectedDate(todayKey);
-    setGenerating(true);
+  // Plan one day (today or up to two days ahead). Returns the plan, or null with an alert.
+  const generateDay = async (dateToPlan, { force = false, quiet = false } = {}) => {
+    const headers = await authHeaders();
+    if (!headers) return null;
+    const response = await apiFetch(
+      `${API_URL}${API_ENDPOINTS.DAILY_PLAN_GENERATE}?plan_date=${dateToPlan}&${q(force ? '&force=1' : '')}`,
+      { method: 'POST', headers },
+      { onUnauthorized: signOut, timeoutMs: 65000 }
+    );
+    const data = await response.json().catch(() => null);
+    if (response.status === 403) {
+      Alert.alert('Premium required', 'Daily Meal Planner is available for Premium users.');
+      return null;
+    }
+    if (!response.ok) {
+      const detail = data?.detail;
+      const message = typeof detail === 'string' ? detail : detail?.message || 'Please try again.';
+      trackEvent('meal_plan_generation_blocked', { reason: response.status === 429 ? 'rate_limited' : 'error' });
+      if (!quiet) Alert.alert(response.status === 429 ? 'Limit reached' : 'Could not generate plan', String(message));
+      return { error: String(message) };
+    }
+    trackEvent('meal_plan_generated', { regenerated: force, days_ahead: Math.round((parsePlanDate(dateToPlan) - parsePlanDate(todayKey)) / 86400000) });
+    setPlanned((p) => Array.from(new Set([...p, dateToPlan])));
+    return data?.plan || null;
+  };
+
+  const handlePlanDay = async ({ force = false } = {}) => {
+    setBusy('generate');
     try {
-      const shouldForce = force === true;
-      const response = await apiFetch(
-        `${API_URL}${API_ENDPOINTS.DAILY_PLAN_GENERATE}${shouldForce ? '?force=1' : ''}`,
-        { method: 'POST', headers: { Authorization: `Bearer ${token}` } },
-        // Daily plan now generates meal images before responding (premium UX).
-        // Allow a bit more time so slower networks don't abort prematurely.
-        { onUnauthorized: signOut, timeoutMs: 65000 }
-      );
-      if (response.status === 403) {
-        Alert.alert('Premium required', 'Daily Meal Planner is available for Premium users.');
-        return;
+      const next = await generateDay(selectedDate, { force });
+      if (next && !next.error) {
+        setPlan(next);
+        setSelectedMeal(null);
       }
-
-      let data = null;
-      try {
-        data = await response.json();
-      } catch {
-        data = null;
-      }
-
-      if (!response.ok) {
-        const detail = data?.detail;
-        const message =
-          typeof detail === 'string'
-            ? detail
-            : typeof detail?.message === 'string'
-              ? detail.message
-              : response.status === 429
-                ? 'Limit reached. Upgrade to Premium to generate more meal plans.'
-                : 'Please try again.';
-
-        if (response.status === 429) {
-          trackEvent('meal_plan_generation_blocked', { reason: 'rate_limited' });
-          Alert.alert('Upgrade to Premium', String(message));
-        } else {
-          trackEvent('meal_plan_generation_blocked', { reason: 'error' });
-          Alert.alert('Could not generate plan', String(message));
-        }
-        return;
-      }
-      trackEvent('meal_plan_generated', { regenerated: shouldForce });
-      setPlan(data?.plan || null);
-      setSelectedMeal(null);
     } finally {
-      setGenerating(false);
+      setBusy(null);
     }
   };
 
-  const meals = Array.isArray(plan?.meals) ? plan.meals : [];
+  // Fill any unplanned day from today to two days ahead.
+  const handlePlanNextDays = async () => {
+    const missing = [0, 1, 2].map((n) => addDays(todayKey, n)).filter((k) => !planned.includes(k));
+    if (!missing.length) return;
+    setBusy('range');
+    try {
+      for (let i = 0; i < missing.length; i += 1) {
+        setRangeProgress(`Planning ${i + 1} of ${missing.length}…`);
+        // eslint-disable-next-line no-await-in-loop
+        const result = await generateDay(missing[i], { quiet: true });
+        if (result?.error) {
+          Alert.alert('Planning stopped', result.error);
+          break;
+        }
+        if (missing[i] === selectedDate && result) setPlan(result);
+      }
+    } finally {
+      setRangeProgress(null);
+      setBusy(null);
+      loadPlanForDate(selectedDate);
+    }
+  };
+
+  const handleSwap = (item) => {
+    Alert.alert(`Swap ${item.meal}?`, `We'll replace "${item.title}" with a new idea and keep the rest of the day.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Swap',
+        onPress: async () => {
+          const headers = await authHeaders();
+          if (!headers) return;
+          setBusy(`swap:${item.meal}`);
+          try {
+            const res = await apiFetch(
+              `${API_URL}/api/app/daily-plan/swap-meal?meal=${item.meal}&plan_date=${selectedDate}&${q()}`,
+              { method: 'POST', headers },
+              { onUnauthorized: signOut, timeoutMs: 65000 }
+            );
+            const data = await res.json().catch(() => null);
+            if (!res.ok) {
+              Alert.alert('Could not swap', data?.detail?.message || (typeof data?.detail === 'string' ? data.detail : 'Please try again.'));
+              return;
+            }
+            trackEvent('meal_plan_meal_swapped', { meal: item.meal });
+            setPlan(data?.plan || plan);
+          } finally {
+            setBusy(null);
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleAte = async (item) => {
+    const headers = await authHeaders();
+    if (!headers) return;
+    setBusy('eat');
+    try {
+      const carbs = rangeMid(item?.nutrition_estimate?.carbs_g);
+      const title = String(item?.title || 'Planned meal').slice(0, 200);
+      const res = await apiFetch(
+        `${API_URL}/api/app/meals`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            description: title,
+            food_name: title.slice(0, 80),
+            source: 'recipe',
+            ...(carbs != null ? { carbs_g: carbs, carbs_estimated: true } : {}),
+            idempotency_key: generateIdempotencyKey(),
+          }),
+        },
+        { onUnauthorized: signOut, timeoutMs: 8000 }
+      );
+      if (!res.ok) {
+        Alert.alert('Unable to log meal', 'Please try again.');
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      trackEvent('meal_logged', { source: 'meal_plan', has_carbs: carbs != null });
+      setPlan((p) =>
+        p ? { ...p, meals: p.meals.map((m) => (m.meal === item.meal ? { ...m, eaten: true } : m)), day: { ...(p.day || {}), eaten: (p.day?.eaten || 0) + 1 } } : p
+      );
+      if (!data?.duplicate) await confirmMealLogged({ name: title, loggedAt: data?.meal?.logged_at, carbs, carbsEstimated: true });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleShoppingList = async () => {
+    const headers = await authHeaders();
+    if (!headers) return;
+    const items = Array.from(
+      new Set(
+        (plan?.meals || [])
+          .flatMap((m) => (Array.isArray(m?.ingredients) ? m.ingredients : []))
+          .map((i) => String(i).trim())
+          .filter(Boolean)
+      )
+    );
+    if (!items.length) return;
+    setBusy('shop');
+    try {
+      const res = await apiFetch(
+        `${API_URL}${API_ENDPOINTS.SHOPPING_LIST}`,
+        { method: 'POST', headers, body: JSON.stringify({ title: `Meal plan · ${selectedDateLabel}`, items }) },
+        { onUnauthorized: signOut, timeoutMs: 10000 }
+      );
+      if (!res.ok) {
+        Alert.alert('Could not add', 'Please try again.');
+        return;
+      }
+      trackEvent('meal_plan_shopping_list', { items: items.length });
+      Alert.alert('Added to shopping list', `${items.length} ingredients for ${selectedDateLabel}.`, [
+        { text: 'OK' },
+        { text: 'View list', onPress: () => navigation.navigate('Profile', { screen: 'ShoppingList' }) },
+      ]);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const meals = (Array.isArray(plan?.meals) ? plan.meals : []).slice().sort((a, b) => (SLOT_ORDER[a?.meal] || 9) - (SLOT_ORDER[b?.meal] || 9));
   const isSelectedToday = selectedDate === todayKey;
-  const selectedDateLabel = parsePlanDate(selectedDate).toLocaleDateString('en-GB', {
-    weekday: 'long',
-    month: 'short',
-    day: 'numeric',
+  const isPast = selectedDate < todayKey;
+  const canPlan = selectedDate >= todayKey && selectedDate <= lastKey;
+  const relativeLabel = (key) =>
+    key === todayKey ? 'Today' : key === addDays(todayKey, 1) ? 'Tomorrow' : parsePlanDate(key).toLocaleDateString('en-GB', { weekday: 'long' });
+  const selectedDateLabel = relativeLabel(selectedDate);
+  const missingAhead = [0, 1, 2].map((n) => addDays(todayKey, n)).filter((k) => !planned.includes(k));
+  const day = plan?.day || {};
+  const carbPct = carbGoal && day.carbs_g ? Math.min(day.carbs_g / carbGoal, 1) : null;
+  const strip = [-3, -2, -1, 0, 1, 2].map((n) => {
+    const key = addDays(todayKey, n);
+    const d = parsePlanDate(key);
+    return {
+      key,
+      top: n === 0 ? 'Today' : n === 1 ? 'Tmrw' : d.toLocaleDateString('en-GB', { weekday: 'short' }),
+      date: d.getDate(),
+      planned: planned.includes(key),
+      future: n > 0,
+    };
   });
-  const dateChips = useMemo(() => buildWeekDateChips(selectedDate), [selectedDate]);
-  const dailyNutrition =
-    plan?.daily_nutrition_estimate && typeof plan.daily_nutrition_estimate === 'object'
-      ? plan.daily_nutrition_estimate
-      : null;
-  void dailyNutrition;
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) + 8 }]}>
+      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 32 }} showsVerticalScrollIndicator={false}>
+        <View style={[styles.pHeader, { paddingTop: Math.max(insets.top, 12) + 6 }]}>
           <View style={styles.headerRow}>
             <Pressable style={styles.backButton} onPress={() => navigation.navigate('Home')}>
               <Ionicons name="arrow-back" size={20} color="white" />
             </Pressable>
-            <View style={styles.headerTitleRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.headerTitle}>Daily Meal Planner</Text>
-                <Text style={styles.headerSubtitle}>A simple plan for steady blood sugar habits.</Text>
-              </View>
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={styles.headerTitle}>Meal Planner</Text>
+              <Text style={styles.headerSubtitle}>Plan today and up to 2 days ahead</Text>
             </View>
           </View>
-
-          {meals.length ? (
-            <View style={styles.headerActions}>
-              {isSelectedToday ? (
+          <View style={styles.pStrip}>
+            {strip.map((c) => {
+              const active = c.key === selectedDate;
+              return (
                 <Pressable
-                  disabled={generating}
-                  onPress={() => generateToday({ force: true })}
-                  style={[styles.headerPrimaryButton, generating ? { opacity: 0.7 } : null]}
+                  key={c.key}
+                  style={[styles.pDay, active && styles.pDayActive]}
+                  onPress={() => {
+                    setSelectedDate(c.key);
+                    setSelectedMeal(null);
+                  }}
                 >
-                  {generating ? (
-                    <ActivityIndicator size="small" color={Colors.primaryDark} />
-                  ) : (
-                    <Ionicons name="refresh-outline" size={16} color={Colors.primaryDark} />
-                  )}
-                  <Text style={styles.headerPrimaryButtonText}>Regenerate</Text>
+                  <Text style={[styles.pDayTop, active && styles.pDayTextActive]}>{c.top}</Text>
+                  <Text style={[styles.pDayDate, active && styles.pDayTextActive]}>{c.date}</Text>
+                  <View style={[styles.pDayMark, c.planned ? styles.pDayMarkOn : c.future ? styles.pDayMarkOpen : null]}>
+                    {c.planned ? <Ionicons name="checkmark" size={9} color="white" /> : c.future ? <Ionicons name="add" size={10} color="rgba(255,255,255,0.8)" /> : null}
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={styles.pBody}>
+          {loading && !plan ? (
+            <View style={styles.center}>
+              <ActivityIndicator size="large" color={Colors.primary} />
+              <Text style={styles.centerText}>Loading your plan…</Text>
+            </View>
+          ) : selectedMeal ? (
+            <MealPlanDetail meal={selectedMeal?.meal} item={selectedMeal} showImageLoading={refreshingImages} onBack={() => setSelectedMeal(null)} />
+          ) : meals.length ? (
+            <>
+              {/* Day overview */}
+              <LinearGradient colors={['#23807E', '#0B5A46']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.pSummary}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.pSummaryLabel}>{selectedDateLabel}&apos;s plan</Text>
+                  <Text style={styles.pSummaryCarbs}>
+                    {day.carbs_g != null ? `${day.carbs_g}g` : '—'}
+                    <Text style={styles.pSummaryOf}>{carbGoal ? ` of ${carbGoal}g carbs` : ' carbs'}</Text>
+                  </Text>
+                  {carbPct != null ? (
+                    <View style={styles.pBarTrack}>
+                      <View style={[styles.pBarFill, { width: `${carbPct * 100}%` }]} />
+                    </View>
+                  ) : null}
+                  <View style={styles.pSummaryChips}>
+                    {Object.entries(day.impact_counts || {}).map(([k, n]) => (
+                      <View key={k} style={styles.pSummaryChip}>
+                        <Text style={styles.pSummaryChipText}>
+                          {n} {k}
+                        </Text>
+                      </View>
+                    ))}
+                    {!isPast ? (
+                      <View style={styles.pSummaryChip}>
+                        <Text style={styles.pSummaryChipText}>
+                          {day.eaten || 0} of {day.total || meals.length} eaten
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                </View>
+                <View style={styles.pSummaryIcon}>
+                  <Ionicons name="calendar" size={24} color="white" />
+                </View>
+              </LinearGradient>
+
+              {typeof plan?.summary === 'string' && plan.summary.trim() ? <Text style={styles.pNote}>{plan.summary.trim()}</Text> : null}
+
+              {refreshingImages ? (
+                <View style={styles.imagesHintRow}>
+                  <ActivityIndicator size="small" color={Colors.primary} />
+                  <Text style={styles.imagesHintText}>Adding meal photos…</Text>
+                </View>
+              ) : meals.some((m) => isPlaceholderImage(m)) ? (
+                <Pressable style={styles.imagesHintRow} onPress={refreshImagesUntilReady}>
+                  <Ionicons name="images-outline" size={15} color={Colors.primary} />
+                  <Text style={styles.imagesHintText}>Some photos are missing. Tap to load them.</Text>
                 </Pressable>
               ) : null}
-              <Pressable onPress={() => loadPlanForDate(selectedDate)} style={styles.headerSecondaryButton}>
-                <Ionicons name="refresh-outline" size={16} color="white" />
-                <Text style={styles.headerSecondaryButtonText}>Refresh</Text>
-              </Pressable>
-            </View>
-          ) : null}
-        </View>
-        {loading ? (
-          <View style={styles.center}>
-            <ActivityIndicator size="large" color={Colors.primary} />
-            <Text style={styles.centerText}>Loading your daily plan...</Text>
-          </View>
-        ) : selectedMeal ? (
-          <MealPlanDetail
-            meal={selectedMeal?.meal}
-            item={selectedMeal}
-            showImageLoading={refreshingImages || generating}
-            onBack={() => setSelectedMeal(null)}
-          />
-        ) : meals.length ? (
-          <>
-            <View style={styles.summaryCard}>
-              <View style={styles.insightIcon}>
-                <Ionicons name="leaf-outline" size={24} color={Colors.primaryDark} />
-              </View>
-              <View style={styles.summaryCopy}>
-                <View style={styles.summaryTopRow}>
-                  <Text style={styles.summaryTitle}>Balanced for you</Text>
-                  <Ionicons name="chevron-forward" size={20} color={Colors.primaryDark} />
-                </View>
-                {typeof plan?.summary === 'string' && plan.summary.trim() ? (
-                  <Text style={styles.summaryText} numberOfLines={2}>{plan.summary.trim()}</Text>
-                ) : (
-                  <Text style={styles.summaryText} numberOfLines={2}>
-                    Designed with low glycemic ingredients to support stable blood sugar.
-                  </Text>
-                )}
-              </View>
-            </View>
 
-            <Text style={styles.sectionHeading}>{isSelectedToday ? "Today's Plan" : selectedDateLabel}</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.dateRail}
-            >
-              {dateChips.map((item) => (
-                <Pressable
-                  key={item.key}
-                  disabled={item.future}
-                  onPress={() => {
-                    setSelectedDate(item.key);
-                    setSelectedMeal(null);
-                    void loadPlanForDate(item.key);
-                  }}
-                  style={[
-                    styles.dayChip,
-                    item.active ? styles.dayChipActive : null,
-                    item.future ? styles.dayChipFuture : null,
-                  ]}
-                >
-                  <Text style={[styles.dayChipDay, item.active ? styles.dayChipDayActive : null]}>{item.day}</Text>
-                  <Text style={[styles.dayChipDate, item.active ? styles.dayChipDateActive : null]}>{item.date}</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-
-            {hasAnyPlaceholderImages ? (
-              <View style={styles.imagesHintRow}>
-                <Text style={styles.imagesHintText}>Some images are missing. Tap Refresh to try again.</Text>
-                <Pressable onPress={refreshImagesUntilReady} disabled={refreshingImages} style={styles.imagesHintButton}>
-                  <Text style={styles.imagesHintButtonText}>{refreshingImages ? 'Refreshing...' : 'Refresh'}</Text>
-                </Pressable>
+              {/* Timeline */}
+              <View style={{ marginTop: 6 }}>
+                {meals.map((item, idx) => (
+                  <TimelineMeal
+                    key={String(item?.meal || idx)}
+                    item={item}
+                    last={idx === meals.length - 1}
+                    canEat={selectedDate <= todayKey}
+                    canSwap={canPlan}
+                    busy={busy}
+                    onOpen={() => setSelectedMeal(item)}
+                    onEat={() => handleAte(item)}
+                    onSwap={() => handleSwap(item)}
+                  />
+                ))}
               </View>
-            ) : null}
 
-            {meals.map((item, idx) => (
-              <CompactMealCard
-                key={String(item?.meal || idx)}
-                meal={item?.meal}
-                item={item}
-                showImageLoading={refreshingImages || generating}
-                onPress={() => setSelectedMeal(item)}
-              />
-            ))}
-          </>
-        ) : (
-          <View style={styles.emptyWrap}>
-            <Text style={styles.sectionHeading}>{isSelectedToday ? "Today's Plan" : selectedDateLabel}</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.dateRail}
-            >
-              {dateChips.map((item) => (
-                <Pressable
-                  key={item.key}
-                  disabled={item.future}
-                  onPress={() => {
-                    setSelectedDate(item.key);
-                    setSelectedMeal(null);
-                    void loadPlanForDate(item.key);
-                  }}
-                  style={[
-                    styles.dayChip,
-                    item.active ? styles.dayChipActive : null,
-                    item.future ? styles.dayChipFuture : null,
-                  ]}
-                >
-                  <Text style={[styles.dayChipDay, item.active ? styles.dayChipDayActive : null]}>{item.day}</Text>
-                  <Text style={[styles.dayChipDate, item.active ? styles.dayChipDateActive : null]}>{item.date}</Text>
+              {/* Actions */}
+              <View style={styles.pActions}>
+                <Pressable style={[styles.pAction, styles.pActionShop]} onPress={handleShoppingList} disabled={Boolean(busy)}>
+                  {busy === 'shop' ? <ActivityIndicator size="small" color="#DD6B20" /> : <Ionicons name="cart" size={16} color="#DD6B20" />}
+                  <Text style={[styles.pActionText, { color: '#C05621' }]}>Shopping list</Text>
                 </Pressable>
-              ))}
-            </ScrollView>
-            <View style={styles.heroCard}>
-              <View style={styles.heroIcon}>
-                <Ionicons name="calendar-clear-outline" size={20} color="white" />
-              </View>
-              <Text style={styles.emptyTitle}>
-                {isSelectedToday ? 'Your plan for today' : `No plan for ${selectedDateLabel}`}
-              </Text>
-              <Text style={styles.emptyText}>
-                {isSelectedToday
-                  ? 'Generate a practical breakfast, lunch, dinner, and snack - tailored to your profile.'
-                  : 'No meal plan was generated for this day. Past plans stay available here when they exist.'}
-              </Text>
-              {isSelectedToday ? (
-                <>
+                {canPlan ? (
                   <Pressable
-                    disabled={generating}
-                    onPress={generateToday}
-                    style={[styles.primaryButton, generating ? { opacity: 0.65 } : null]}
+                    style={styles.pAction}
+                    onPress={() =>
+                      Alert.alert('New plan for this day?', 'Replace all four meals with new ideas.', [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'New plan', onPress: () => handlePlanDay({ force: true }) },
+                      ])
+                    }
+                    disabled={Boolean(busy)}
                   >
-                    {generating ? <ActivityIndicator size="small" color="white" /> : <Ionicons name="calendar-outline" size={16} color="white" />}
-                    <Text style={styles.primaryButtonText}>{generating ? 'Generating...' : "Generate today's plan"}</Text>
+                    {busy === 'generate' ? <ActivityIndicator size="small" color={Colors.primary} /> : <Ionicons name="refresh" size={16} color={Colors.primary} />}
+                    <Text style={styles.pActionText}>New plan</Text>
                   </Pressable>
-                  <Text style={styles.hintText}>
-                    You can generate a new plan anytime.
-                  </Text>
+                ) : null}
+              </View>
+              {missingAhead.length ? (
+                <Pressable style={styles.pRangeShadow} onPress={handlePlanNextDays} disabled={Boolean(busy)}>
+                  <LinearGradient colors={['#8B6BD9', '#6B46C1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.pRange}>
+                    {busy === 'range' ? <ActivityIndicator size="small" color="white" /> : <Ionicons name="calendar-number" size={18} color="white" />}
+                    <Text style={styles.pRangeText}>
+                      {rangeProgress || `Plan the next 3 days · ${missingAhead.length} day${missingAhead.length === 1 ? '' : 's'} to go`}
+                    </Text>
+                  </LinearGradient>
+                </Pressable>
+              ) : null}
+            </>
+          ) : (
+            <View style={styles.pEmpty}>
+              <View style={styles.pEmptyIcon}>
+                <Ionicons name={isPast ? 'time-outline' : 'calendar-clear'} size={28} color={Colors.primary} />
+              </View>
+              <Text style={styles.pEmptyTitle}>{isPast ? `No plan for ${parsePlanDate(selectedDate).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' })}` : `Plan ${selectedDateLabel.toLowerCase() === 'today' ? 'today' : selectedDateLabel}`}</Text>
+              <Text style={styles.pEmptyText}>
+                {isPast
+                  ? 'Past plans stay here when you make them.'
+                  : 'Breakfast, lunch, dinner and a snack, fitted to your carb goal and to what your own readings show works for you.'}
+              </Text>
+              {canPlan ? (
+                <>
+                  <Pressable style={styles.pRangeShadow} onPress={() => handlePlanDay()} disabled={Boolean(busy)}>
+                    <LinearGradient colors={['#23807E', '#0B5A46']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.pRange}>
+                      {busy === 'generate' ? <ActivityIndicator size="small" color="white" /> : <Ionicons name="sparkles" size={18} color="white" />}
+                      <Text style={styles.pRangeText}>{busy === 'generate' ? 'Planning…' : `Plan ${isSelectedToday ? 'today' : selectedDateLabel}`}</Text>
+                    </LinearGradient>
+                  </Pressable>
+                  {missingAhead.length > 1 ? (
+                    <Pressable style={styles.pLinkBtn} onPress={handlePlanNextDays} disabled={Boolean(busy)}>
+                      <Text style={styles.pLinkText}>{rangeProgress || `Or plan all ${missingAhead.length} days at once`}</Text>
+                    </Pressable>
+                  ) : null}
                 </>
               ) : null}
             </View>
-          </View>
-        )}
+          )}
+        </View>
       </ScrollView>
     </View>
   );
@@ -1376,4 +1580,72 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     lineHeight: 18,
   },
+  // ---- Planner (premium) ----
+  pHeader: { backgroundColor: Colors.primaryDark, paddingHorizontal: 20, paddingBottom: 18, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
+  pStrip: { flexDirection: 'row', gap: 6, marginTop: 16 },
+  pDay: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.1)' },
+  pDayActive: { backgroundColor: 'white' },
+  pDayTop: { fontSize: 11, fontWeight: '800', color: 'rgba(255,255,255,0.8)' },
+  pDayDate: { fontSize: 17, fontWeight: '900', color: 'white', marginTop: 2 },
+  pDayTextActive: { color: Colors.primaryDark },
+  pDayMark: { width: 14, height: 14, borderRadius: 7, marginTop: 4, alignItems: 'center', justifyContent: 'center' },
+  pDayMarkOn: { backgroundColor: '#56C75D' },
+  pDayMarkOpen: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)' },
+  pBody: { padding: 16, gap: 12 },
+  pSummary: { flexDirection: 'row', gap: 12, borderRadius: 22, padding: 18 },
+  pSummaryLabel: { fontSize: 12.5, fontWeight: '800', color: 'rgba(255,255,255,0.85)', textTransform: 'uppercase', letterSpacing: 0.5 },
+  pSummaryCarbs: { fontSize: 30, fontWeight: '900', color: 'white', marginTop: 4 },
+  pSummaryOf: { fontSize: 14, fontWeight: '700', color: 'rgba(255,255,255,0.85)' },
+  pBarTrack: { height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.22)', marginTop: 8, overflow: 'hidden' },
+  pBarFill: { height: '100%', borderRadius: 4, backgroundColor: '#B9F6CA' },
+  pSummaryChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
+  pSummaryChip: { backgroundColor: 'rgba(255,255,255,0.16)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
+  pSummaryChipText: { color: 'white', fontSize: 12, fontWeight: '800', textTransform: 'capitalize' },
+  pSummaryIcon: { width: 46, height: 46, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
+  pNote: { fontSize: 13, lineHeight: 19, color: Colors.textLight, paddingHorizontal: 4 },
+  tlRow: { flexDirection: 'row', gap: 10 },
+  tlRail: { alignItems: 'center', width: 26 },
+  tlDot: { width: 26, height: 26, borderRadius: 13, backgroundColor: '#E8F4F3', borderWidth: 2, borderColor: '#CDE7E4', alignItems: 'center', justifyContent: 'center' },
+  tlDotDone: { backgroundColor: '#2C8632', borderColor: '#2C8632' },
+  tlLine: { width: 2, flex: 1, backgroundColor: '#DCEBE9', marginVertical: 2 },
+  tlCard: {
+    flex: 1,
+    backgroundColor: 'white',
+    borderRadius: 18,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#EDF0EA',
+    shadowColor: '#0F2A3A',
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 1,
+  },
+  tlCardDone: { opacity: 0.75 },
+  tlTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  tlSlot: { fontSize: 12, fontWeight: '900', color: Colors.primary, textTransform: 'uppercase', letterSpacing: 0.4 },
+  tlBody: { flexDirection: 'row', gap: 12, alignItems: 'center' },
+  tlImage: { width: 64, height: 64, borderRadius: 14, backgroundColor: '#E5E7EB' },
+  tlTitle: { fontSize: 15.5, fontWeight: '900', color: Colors.brandNavy },
+  tlMeta: { fontSize: 12.5, color: Colors.textLight, marginTop: 3 },
+  tlActions: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  tlBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7 },
+  tlBtnEat: { backgroundColor: '#2C8632' },
+  tlBtnDone: { backgroundColor: '#E9F6EA' },
+  tlBtnSwap: { backgroundColor: '#F0EBFB' },
+  tlBtnText: { fontSize: 12.5, fontWeight: '900' },
+  pActions: { flexDirection: 'row', gap: 10 },
+  pAction: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 48, borderRadius: 14, backgroundColor: '#E8F4F3', borderWidth: 1.5, borderColor: '#CDE7E4' },
+  pActionShop: { backgroundColor: '#FFF1E6', borderColor: '#F8D9BD' },
+  pActionText: { fontSize: 14, fontWeight: '900', color: Colors.primary },
+  pRangeShadow: { borderRadius: 16, shadowColor: '#3F2A7A', shadowOpacity: 0.2, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: 3 },
+  pRange: { height: 54, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 14 },
+  pRangeText: { color: 'white', fontSize: 15, fontWeight: '900' },
+  pEmpty: { alignItems: 'center', backgroundColor: 'white', borderRadius: 22, padding: 22, borderWidth: 1, borderColor: '#EDF0EA', gap: 10 },
+  pEmptyIcon: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#E8F4F3', alignItems: 'center', justifyContent: 'center' },
+  pEmptyTitle: { fontSize: 19, fontWeight: '900', color: Colors.brandNavy, textAlign: 'center' },
+  pEmptyText: { fontSize: 13.5, lineHeight: 20, color: Colors.textLight, textAlign: 'center', marginBottom: 6 },
+  pLinkBtn: { paddingVertical: 6 },
+  pLinkText: { fontSize: 14, fontWeight: '900', color: '#6B46C1' },
 });

@@ -277,6 +277,7 @@ Return ONLY the required JSON.
         avoid_titles: list[str] | None = None,
         variation_seed: str | None = None,
         timeout_seconds: float = 18.0,
+        guidance: str | None = None,
     ) -> dict[str, Any]:
         if not settings.openai_api_key:
             raise RuntimeError("AI is not configured (missing OPENAI_API_KEY).")
@@ -289,7 +290,7 @@ Return ONLY the required JSON.
                 s = item.strip()
                 if s:
                     normalized_avoid.append(s)
-        normalized_avoid = list(dict.fromkeys(normalized_avoid))[:12]
+        normalized_avoid = list(dict.fromkeys(normalized_avoid))[:20]
 
         extra_hint_parts: list[str] = []
         if normalized_avoid:
@@ -298,6 +299,9 @@ Return ONLY the required JSON.
                 "Variety: Do NOT repeat meals with titles similar to these recent meals: "
                 f"{joined}. Choose different dishes and ingredients."
             )
+        # Personal guidance: carb goal, the user's own glucose results, meals to keep.
+        if isinstance(guidance, str) and guidance.strip():
+            extra_hint_parts.append(guidance.strip())
         # Seed nudges the model toward variety when users force-regenerate; it is not user-visible.
         seed = (variation_seed or "").strip() or uuid.uuid4().hex[:10]
         extra_hint_parts.append(f"Variation seed: {seed}")
