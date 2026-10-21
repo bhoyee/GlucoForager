@@ -6,12 +6,12 @@ import { useParams, useRouter } from 'next/navigation';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
 const ACCESS_META = {
-  premium: { label: 'Premium active', tone: 'success' },
+  premium: { label: 'Premium active', tone: 'premium' },
   trialing: { label: 'Store trial', tone: 'success' },
   trial: { label: 'Store trial', tone: 'success' },
   cancelled_active: { label: 'Cancelled active', tone: 'warning' },
-  legacy_grace: { label: 'Welcome week', tone: 'warning' },
-  grace: { label: 'Welcome week', tone: 'warning' },
+  legacy_grace: { label: 'Welcome week', tone: 'welcome' },
+  grace: { label: 'Welcome week', tone: 'welcome' },
   expired: { label: 'Lapsed (free plan)', tone: 'warning' },
   blocked: { label: 'Blocked', tone: 'danger' },
   suspended: { label: 'Suspended', tone: 'warning' },
