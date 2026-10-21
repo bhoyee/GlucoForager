@@ -982,6 +982,7 @@ export default function HomeScreen() {
       return {
         title: 'Your insight',
         text: h.text,
+        sub: h.sub || null,
         link: 'See all ›',
         icon: 'bulb',
         iconColor: '#C05621',
@@ -1294,6 +1295,7 @@ export default function HomeScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={[styles.hInsightCardTitle, { color: highlightCard.iconColor }]}>{highlightCard.title}</Text>
                 <Text style={styles.hInsightCardText}>{highlightCard.text}</Text>
+                {highlightCard.sub ? <Text style={styles.hInsightCardSub}>{highlightCard.sub}</Text> : null}
               </View>
               <Text style={styles.hSectionLink}>{highlightCard.link}</Text>
             </TouchableOpacity>
@@ -1547,6 +1549,7 @@ const styles = StyleSheet.create({
   hSafety: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, padding: 10, borderRadius: 12, backgroundColor: '#FFF5F5', borderWidth: 1, borderColor: '#FED7D7' },
   hSafetyText: { flex: 1, fontSize: 12.5, color: '#9B2C2C', fontWeight: '600' },
   hInsightCard: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12, padding: 14, borderRadius: 18, backgroundColor: '#FFF8EE', borderWidth: 1, borderColor: '#FBE3C4' },
+  hInsightCardSub: { fontSize: 12, color: Colors.textLight, marginTop: 4 },
   hInsightCardNudge: { backgroundColor: 'white', borderColor: '#E9ECE4' },
   hInsightCardCheck: { backgroundColor: '#E8F4F3', borderColor: '#BFE0DD' },
   hInsightBulb: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#FFEBD2', alignItems: 'center', justifyContent: 'center' },

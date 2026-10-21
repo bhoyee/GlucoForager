@@ -242,7 +242,73 @@ def _iso(dt: datetime) -> str:
     return dt.isoformat() + "Z"
 
 
-def _highlight(trends: dict, food: dict, patterns: dict, diary_items, now: datetime) -> dict:
+
+MEAL_SLOTS = [  # local hour ranges for "which meal of the day"
+    ("breakfast", "Breakfast", 5, 11),
+    ("lunch", "Lunch", 11, 16),
+    ("dinner", "Dinner", 16, 22),
+]
+MIN_CARB_MEALS = 3        # meals with carbs (last 7 days) before carb insights appear
+HIGH_CARB_REGULAR_G = 40  # a regular meal at or above this is worth pointing out
+
+
+def _carb_insights(meals, now: datetime, tz_offset_minutes: int, carb_goal_g: int | None, goal_mode: str) -> dict:
+    """Insights from carbs alone, so people who log meals but rarely test still learn
+    something about their own food. Uses the last 7 days for averages and the whole
+    window for "regular meals"."""
+    offset = timedelta(minutes=tz_offset_minutes)
+    with_carbs = [m for m in meals if getattr(m, "carbs_g", None) is not None]
+    week = [m for m in with_carbs if m.logged_at >= now - timedelta(days=7)]
+    insights: list[str] = []
+    out = {"meals_with_carbs": len(week), "avg_carbs_g": None, "per_meal_guide_g": None, "insights": insights}
+    if len(week) < MIN_CARB_MEALS:
+        return out
+
+    avg = sum(m.carbs_g for m in week) / len(week)
+    out["avg_carbs_g"] = round(avg)
+    if goal_mode == "ceiling" and carb_goal_g:
+        guide = round(carb_goal_g / 3)
+        out["per_meal_guide_g"] = guide
+        if avg > guide * 1.1:
+            insights.append(f"Your meals averaged {round(avg)}g carbs this week, a bit over your {guide}g per-meal guide.")
+        elif avg < guide * 0.9:
+            insights.append(f"Your meals averaged {round(avg)}g carbs this week, comfortably within your {guide}g per-meal guide.")
+        else:
+            insights.append(f"Your meals averaged {round(avg)}g carbs this week, right around your {guide}g per-meal guide.")
+    else:
+        insights.append(f"Your meals averaged {round(avg)}g carbs this week.")
+
+    # Lightest and heaviest meal of the day (needs 2+ meals in at least two slots).
+    by_slot: dict[str, list[float]] = {}
+    for m in week:
+        hour = (m.logged_at + offset).hour
+        for key, _label, start, end in MEAL_SLOTS:
+            if start <= hour < end:
+                by_slot.setdefault(key, []).append(m.carbs_g)
+    labels = {key: label for key, label, *_ in MEAL_SLOTS}
+    averages = {k: sum(v) / len(v) for k, v in by_slot.items() if len(v) >= 2}
+    if len(averages) >= 2:
+        light = min(averages, key=averages.get)
+        heavy = max(averages, key=averages.get)
+        if averages[heavy] - averages[light] >= 10:
+            insights.append(f"{labels[light]} is your lightest meal: about {round(averages[light])}g carbs on average.")
+
+    # Highest-carb food they eat regularly (2+ times in the window).
+    groups: dict[str, list] = {}
+    for m in with_carbs:
+        key = (getattr(m, "food_name", None) or "").strip().lower() or food_key(m.description or "")
+        if key:
+            groups.setdefault(key, []).append(m.carbs_g)
+    regular = {k: sum(v) / len(v) for k, v in groups.items() if len(v) >= 2}
+    if regular:
+        top = max(regular, key=regular.get)
+        if regular[top] >= HIGH_CARB_REGULAR_G:
+            insights.append(f"{top[:1].upper() + top[1:]} is your highest-carb regular meal: about {round(regular[top])}g.")
+    out["insights"] = insights[:3]
+    return out
+
+
+def _highlight(trends: dict, food: dict, patterns: dict, diary_items, now: datetime, carbs: dict | None = None) -> dict:
     """The one thing worth showing on Home. A meal that still needs its after-meal reading
     comes first (the moment to act); then real insights; otherwise a nudge that teaches
     the meal -> reading loop."""
@@ -266,6 +332,16 @@ def _highlight(trends: dict, food: dict, patterns: dict, diary_items, now: datet
         return {"kind": "insight", "text": patterns["insights"][0], "tab": "patterns", "action": None}
     if trends["readings"] >= 3 and trends["insights"]:
         return {"kind": "insight", "text": trends["insights"][0], "tab": "trends", "action": None}
+    if carbs and carbs.get("insights"):
+        # Meals logged but not enough readings for anything else: learn from the carbs,
+        # with a gentle nudge to add a reading.
+        return {
+            "kind": "insight",
+            "text": carbs["insights"][0],
+            "sub": "Check your glucose 2 hours after a meal to see its effect.",
+            "tab": "food",
+            "action": None,
+        }
     has_meals = any(i["kind"] == "meal" for i in diary_items)
     if trends["readings"] and not has_meals:
         return {
@@ -282,7 +358,8 @@ def _highlight(trends: dict, food: dict, patterns: dict, diary_items, now: datet
     }
 
 
-def build_insights(meals, readings, prev_readings, targets, days: int, tz_offset_minutes: int = 0, now=None) -> dict:
+def build_insights(meals, readings, prev_readings, targets, days: int, tz_offset_minutes: int = 0, now=None,
+                   carb_goal_g: int | None = None, goal_mode: str = "ceiling") -> dict:
     now = now or datetime.utcnow()
     keep = lambda obj: {  # noqa: E731 - minimal serializers for the pairing step
         k: getattr(obj, k) for k in ("id", "description", "food_name", "carbs_g", "value_mg_dl", "context", "logged_at") if hasattr(obj, k)
@@ -291,11 +368,14 @@ def build_insights(meals, readings, prev_readings, targets, days: int, tz_offset
     trends = _trends(readings, prev_readings, targets, days)
     food = _food_impact(diary)
     patterns = _patterns(readings, targets, tz_offset_minutes)
+    carbs = _carb_insights(meals, now, tz_offset_minutes, carb_goal_g, goal_mode)
+    food["carb_insights"] = carbs["insights"]
+    food["carbs"] = {k: v for k, v in carbs.items() if k != "insights"}
     return {
         "days": days,
         "generated_at": _iso(now),
         "trends": trends,
         "food": food,
         "patterns": patterns,
-        "highlight": _highlight(trends, food, patterns, diary, now),
+        "highlight": _highlight(trends, food, patterns, diary, now, carbs),
     }

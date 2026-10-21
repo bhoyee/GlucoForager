@@ -367,6 +367,35 @@ function FoodRow({ food, kind, unit, onPress, last }) {
   );
 }
 
+// "Your carbs": insights from logged meals alone (no readings needed).
+function CarbsCard({ food }) {
+  const items = food?.carb_insights || [];
+  if (!items.length) return null;
+  const c = food.carbs || {};
+  return (
+    <View style={styles.card}>
+      <View style={styles.cardHeaderRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.cardTitle}>Your carbs</Text>
+          <Text style={styles.cardSubtitle}>From the meals you logged this week</Text>
+        </View>
+        {c.avg_carbs_g != null ? (
+          <View style={styles.averageBadge}>
+            <Text style={styles.averageValue}>{c.avg_carbs_g}g</Text>
+            <Text style={styles.averageLabel}>per meal{c.per_meal_guide_g ? `\nguide ${c.per_meal_guide_g}g` : ''}</Text>
+          </View>
+        ) : null}
+      </View>
+      {items.map((text) => (
+        <View key={text} style={styles.carbRow}>
+          <Ionicons name="nutrition" size={15} color={Colors.primary} />
+          <Text style={styles.carbText}>{text}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function FoodTab({ days, setDays, data, unit, loading, navigation }) {
   const food = data?.food;
   const openMeals = (f) => navigation.navigate('FoodLog', { mealIds: f.meal_ids, focusTitle: f.name });
@@ -376,6 +405,8 @@ function FoodTab({ days, setDays, data, unit, loading, navigation }) {
       {loading && !food ? (
         <ActivityIndicator style={{ paddingVertical: 48 }} size="large" color={Colors.primary} />
       ) : !food ? null : food.needed > 0 ? (
+        <>
+        <CarbsCard food={food} />
         <NeedMore
           icon="restaurant-outline"
           title="See how your meals affect you"
@@ -383,12 +414,14 @@ function FoodTab({ days, setDays, data, unit, loading, navigation }) {
           actionLabel="Log a meal"
           onPress={() => navigation.navigate('LogMeal')}
         />
+        </>
       ) : (
         <>
           <KeyInsights
             items={food.insights}
             emptyText="No clear patterns yet. Keep pairing meals with a reading about 2 hours later."
           />
+          <CarbsCard food={food} />
           {food.foods_to_watch.length ? (
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Foods to watch</Text>
@@ -684,6 +717,8 @@ const styles = StyleSheet.create({
   primaryBtn: { backgroundColor: Colors.primary, borderRadius: 12, paddingHorizontal: 20, height: 46, justifyContent: 'center', marginTop: 16 },
   primaryBtnWide: { flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.primary, borderRadius: 14, height: 50 },
   primaryBtnText: { color: 'white', fontWeight: '900', fontSize: 15 },
+  carbRow: { flexDirection: 'row', gap: 8, paddingVertical: 6 },
+  carbText: { flex: 1, fontSize: 13.5, lineHeight: 19, color: Colors.brandNavy },
   footnote: { fontSize: 11.5, color: Colors.textMuted, textAlign: 'center', lineHeight: 17, paddingHorizontal: 8 },
   disclaimer: { fontSize: 11, color: Colors.textMuted, textAlign: 'center', lineHeight: 16, marginTop: 8 },
 });

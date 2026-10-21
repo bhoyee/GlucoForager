@@ -149,5 +149,44 @@ class HighlightTest(unittest.TestCase):
         self.assertEqual((h["kind"], h["tab"]), ("insight", "food"))
 
 
+class CarbInsightsTest(unittest.TestCase):
+    """Meals logged, no readings: insights come from carbs."""
+
+    def meals_only(self):
+        # T0 is 12:00 UTC on day 0; "now" is day 30. Week = days 24-30.
+        out = []
+        for d in range(24, 30):
+            out.append(meal(d, 8, "Oats with berries", 22))      # breakfast
+            out.append(meal(d, 19, "Jollof rice & chicken", 65))  # dinner
+        return out
+
+    def run_meals_only(self, **kw):
+        return build_insights(self.meals_only(), [], [], gt.GlucoseTargets(), 30, 0,
+                              now=T0 + timedelta(days=30), **kw)
+
+    def test_average_vs_meal_guide(self):
+        data = self.run_meals_only(carb_goal_g=130, goal_mode="ceiling")
+        ins = data["food"]["carb_insights"]
+        self.assertIn("Your meals averaged 44g carbs this week, right around your 43g per-meal guide.", ins)
+        self.assertIn("Breakfast is your lightest meal: about 22g carbs on average.", ins)
+        self.assertIn("Jollof rice is your highest-carb regular meal: about 65g.", ins)
+
+    def test_home_highlight_uses_carbs_for_meals_only_users(self):
+        h = self.run_meals_only(carb_goal_g=130, goal_mode="ceiling")["highlight"]
+        self.assertEqual((h["kind"], h["tab"]), ("insight", "food"))
+        self.assertTrue(h["text"].startswith("Your meals averaged"))
+        self.assertIn("2 hours after a meal", h["sub"])
+
+    def test_type1_no_goal_comparison(self):
+        ins = self.run_meals_only(carb_goal_g=None, goal_mode="none")["food"]["carb_insights"]
+        self.assertEqual(ins[0], "Your meals averaged 44g carbs this week.")
+
+    def test_too_few_meals(self):
+        data = build_insights([meal(29, 8, "Toast", 30)], [], [], gt.GlucoseTargets(), 30, 0,
+                              now=T0 + timedelta(days=30), carb_goal_g=130)
+        self.assertEqual(data["food"]["carb_insights"], [])
+        self.assertEqual(data["highlight"]["kind"], "nudge")
+
+
 if __name__ == "__main__":
     unittest.main()

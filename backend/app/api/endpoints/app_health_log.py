@@ -706,7 +706,10 @@ def get_glucose_insights(
     current = [r for r in readings if r.logged_at >= since]
     previous = [r for r in readings if r.logged_at < since]
     targets = glucose_targets.targets_for(current_user)
-    return glucose_insights.build_insights(meals, current, previous, targets, days, tz_offset_minutes)
+    carb_goal_g, goal_mode = _carb_goal_for_user(current_user)
+    return glucose_insights.build_insights(
+        meals, current, previous, targets, days, tz_offset_minutes, carb_goal_g=carb_goal_g, goal_mode=goal_mode
+    )
 
 
 @router.delete("/glucose/{reading_id}")
