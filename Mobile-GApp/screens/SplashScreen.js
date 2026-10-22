@@ -12,12 +12,13 @@ const BACKGROUND = '#FEFDF3'; // matches the artwork's cream background (no flas
 const TEAL = '#07A393';
 const TRACK = '#D0DBD4';
 
-export default function SplashScreen() {
+// `continued`: picks up where the first splash left off (no fade-in restart) while Home loads.
+export default function SplashScreen({ continued = false }) {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const sceneOpacity = useRef(new Animated.Value(0)).current;
-  const sceneScale = useRef(new Animated.Value(1.06)).current;
-  const progress = useRef(new Animated.Value(0)).current;
+  const sceneOpacity = useRef(new Animated.Value(continued ? 1 : 0)).current;
+  const sceneScale = useRef(new Animated.Value(continued ? 1 : 1.06)).current;
+  const progress = useRef(new Animated.Value(continued ? 0.75 : 0)).current;
 
   useEffect(() => {
     Animated.parallel([
@@ -32,7 +33,7 @@ export default function SplashScreen() {
 
     // Fill most of the bar quickly, then creep, so it never looks "done" while still loading.
     Animated.sequence([
-      Animated.timing(progress, { toValue: 0.75, duration: 1100, easing: Easing.out(Easing.quad), useNativeDriver: false }),
+      Animated.timing(progress, { toValue: 0.75, duration: continued ? 0 : 1100, easing: Easing.out(Easing.quad), useNativeDriver: false }),
       Animated.timing(progress, { toValue: 0.95, duration: 4000, easing: Easing.linear, useNativeDriver: false }),
     ]).start();
   }, [progress, sceneOpacity, sceneScale]);

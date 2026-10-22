@@ -234,23 +234,23 @@ export default function RecentRecipesScreen() {
   if (recipes.length === 0) {
     return (
       <View style={styles.container}>
-        <ScrollView
-        stickyHeaderIndices={[0]} showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
-          <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
-            <View style={styles.header}>
-              <TouchableOpacity
-                style={styles.backButton}
-                onPress={() => navigation.goBack()}
-              >
-                <Ionicons name="arrow-back" size={22} color="white" />
-              </TouchableOpacity>
-              <View style={styles.headerText}>
-                <Text style={styles.headerTitle}>{isHistoryMode ? 'Recipe History' : 'Recent Recipes'}</Text>
-                <Text style={styles.headerSubtitle}>Recipes you generated recently</Text>
-              </View>
-              <View style={styles.headerRight} />
+        <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
+          <View style={styles.header}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => navigation.goBack()}
+            >
+              <Ionicons name="arrow-back" size={22} color="white" />
+            </TouchableOpacity>
+            <View style={styles.headerText}>
+              <Text style={styles.headerTitle}>{isHistoryMode ? 'Recipe History' : 'Recent Recipes'}</Text>
+              <Text style={styles.headerSubtitle}>Recipes you generated recently</Text>
             </View>
+            <View style={styles.headerRight} />
           </View>
+        </View>
+        <ScrollView
+        style={{ marginTop: -28 }} showsVerticalScrollIndicator={false} contentContainerStyle={[{ flexGrow: 1 }, { paddingTop: 28 }]}>
 
           <View style={styles.emptyContainer}>
             <Ionicons name="time-outline" size={96} color={Colors.textLight} />
@@ -371,6 +371,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   headerPanel: {
+    zIndex: 10,
     backgroundColor: Colors.primaryDark,
     paddingHorizontal: 20,
     paddingBottom: 18,

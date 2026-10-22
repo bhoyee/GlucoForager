@@ -138,17 +138,17 @@ export default function GlucoseTargetsScreen() {
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView
-        stickyHeaderIndices={[0]} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
-        <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) }]}>
-          <TouchableOpacity style={styles.back} onPress={() => navigation.goBack()} activeOpacity={0.85}>
-            <Ionicons name="arrow-back" size={22} color="white" />
-          </TouchableOpacity>
-          <View style={{ flex: 1, marginLeft: 12 }}>
-            <Text style={styles.title}>My glucose targets</Text>
-            <Text style={styles.subtitle}>Used to show which readings are in range</Text>
-          </View>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) }]}>
+        <TouchableOpacity style={styles.back} onPress={() => navigation.goBack()} activeOpacity={0.85}>
+          <Ionicons name="arrow-back" size={22} color="white" />
+        </TouchableOpacity>
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Text style={styles.title}>My glucose targets</Text>
+          <Text style={styles.subtitle}>Used to show which readings are in range</Text>
         </View>
+      </View>
+      <ScrollView
+        style={{ marginTop: -28 }} keyboardShouldPersistTaps="handled" contentContainerStyle={[{ paddingBottom: insets.bottom + 24 }, { paddingTop: 28 }]}>
 
         {loading || !targets ? (
           <ActivityIndicator style={{ marginTop: 48 }} size="large" color={Colors.primary} />
@@ -226,7 +226,7 @@ export default function GlucoseTargetsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  header: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.primaryDark, paddingHorizontal: 20, paddingBottom: 18, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
+  header: { zIndex: 10, elevation: 5, flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.primaryDark, paddingHorizontal: 20, paddingBottom: 18, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
   back: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.16)', alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 20, fontWeight: '900', color: 'white' },
   subtitle: { marginTop: 3, fontSize: 12, color: 'rgba(255,255,255,0.78)', fontWeight: '700' },

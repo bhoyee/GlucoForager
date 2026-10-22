@@ -750,7 +750,7 @@ export default function DailyPlanScreen() {
       trackEvent('meal_plan_shopping_list', { items: items.length });
       Alert.alert('Added to shopping list', `${items.length} ingredients for ${selectedDateLabel}.`, [
         { text: 'OK' },
-        { text: 'View list', onPress: () => navigation.navigate('Profile', { screen: 'ShoppingList' }) },
+        { text: 'View list', onPress: () => navigation.navigate('Profile', { screen: 'ShoppingList', initial: false }) },
       ]);
     } finally {
       setBusy(null);
@@ -781,40 +781,40 @@ export default function DailyPlanScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        stickyHeaderIndices={[0]} contentContainerStyle={{ paddingBottom: insets.bottom + 32 }} showsVerticalScrollIndicator={false}>
-        <View style={[styles.pHeader, { paddingTop: Math.max(insets.top, 12) + 6 }]}>
-          <View style={styles.headerRow}>
-            <Pressable style={styles.backButton} onPress={() => navigation.navigate('Home')}>
-              <Ionicons name="arrow-back" size={20} color="white" />
-            </Pressable>
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={styles.headerTitle}>Meal Planner</Text>
-              <Text style={styles.headerSubtitle}>Plan today and up to 2 days ahead</Text>
-            </View>
-          </View>
-          <View style={styles.pStrip}>
-            {strip.map((c) => {
-              const active = c.key === selectedDate;
-              return (
-                <Pressable
-                  key={c.key}
-                  style={[styles.pDay, active && styles.pDayActive]}
-                  onPress={() => {
-                    setSelectedDate(c.key);
-                    setSelectedMeal(null);
-                  }}
-                >
-                  <Text style={[styles.pDayTop, active && styles.pDayTextActive]}>{c.top}</Text>
-                  <Text style={[styles.pDayDate, active && styles.pDayTextActive]}>{c.date}</Text>
-                  <View style={[styles.pDayMark, c.planned ? styles.pDayMarkOn : c.future ? styles.pDayMarkOpen : null]}>
-                    {c.planned ? <Ionicons name="checkmark" size={9} color="white" /> : c.future ? <Ionicons name="add" size={10} color="rgba(255,255,255,0.8)" /> : null}
-                  </View>
-                </Pressable>
-              );
-            })}
+      <View style={[styles.pHeader, { paddingTop: Math.max(insets.top, 12) + 6 }]}>
+        <View style={styles.headerRow}>
+          <Pressable style={styles.backButton} onPress={() => navigation.navigate('Home')}>
+            <Ionicons name="arrow-back" size={20} color="white" />
+          </Pressable>
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={styles.headerTitle}>Meal Planner</Text>
+            <Text style={styles.headerSubtitle}>Plan today and up to 2 days ahead</Text>
           </View>
         </View>
+        <View style={styles.pStrip}>
+          {strip.map((c) => {
+            const active = c.key === selectedDate;
+            return (
+              <Pressable
+                key={c.key}
+                style={[styles.pDay, active && styles.pDayActive]}
+                onPress={() => {
+                  setSelectedDate(c.key);
+                  setSelectedMeal(null);
+                }}
+              >
+                <Text style={[styles.pDayTop, active && styles.pDayTextActive]}>{c.top}</Text>
+                <Text style={[styles.pDayDate, active && styles.pDayTextActive]}>{c.date}</Text>
+                <View style={[styles.pDayMark, c.planned ? styles.pDayMarkOn : c.future ? styles.pDayMarkOpen : null]}>
+                  {c.planned ? <Ionicons name="checkmark" size={9} color="white" /> : c.future ? <Ionicons name="add" size={10} color="rgba(255,255,255,0.8)" /> : null}
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+      <ScrollView
+        style={{ marginTop: -28 }} contentContainerStyle={[{ paddingBottom: insets.bottom + 32 }, { paddingTop: 28 }]} showsVerticalScrollIndicator={false}>
 
         <View style={styles.pBody}>
           {loading && !plan ? (
@@ -1582,7 +1582,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   // ---- Planner (premium) ----
-  pHeader: { backgroundColor: Colors.primaryDark, paddingHorizontal: 20, paddingBottom: 18, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
+  pHeader: { zIndex: 10, elevation: 5, backgroundColor: Colors.primaryDark, paddingHorizontal: 20, paddingBottom: 18, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
   pStrip: { flexDirection: 'row', gap: 6, marginTop: 16 },
   pDay: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.1)' },
   pDayActive: { backgroundColor: 'white' },

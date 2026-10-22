@@ -266,7 +266,7 @@ export default function BarcodeScanScreen() {
           onScanAgain={handleScanAgain}
           onPhotoScan={() => navigation.replace('PhotoScan')}
           onFindSwap={() => navigation.navigate('Home', { screen: 'CarbSwaps', params: { query: result.name } })}
-          onChangeCountry={() => navigation.navigate('Profile', { screen: 'FoodPreferences' })}
+          onChangeCountry={() => navigation.navigate('Profile', { screen: 'FoodPreferences', initial: false })}
         />
       ) : result ? (
         <View style={[styles.resultCard, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]}>

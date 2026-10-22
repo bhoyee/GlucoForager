@@ -190,22 +190,22 @@ export default function WeeklyRecapScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        stickyHeaderIndices={[0]}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: contentBottomPadding }}
-      >
-        <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
-          <View style={styles.header}>
-            <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-              <Ionicons name="arrow-back" size={22} color="white" />
-            </TouchableOpacity>
-            <View style={styles.headerText}>
-              <Text style={styles.headerTitle}>Weekly Recap</Text>
-              <Text style={styles.headerSubtitle}>Last 7 days</Text>
-            </View>
+      <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={22} color="white" />
+          </TouchableOpacity>
+          <View style={styles.headerText}>
+            <Text style={styles.headerTitle}>Weekly Recap</Text>
+            <Text style={styles.headerSubtitle}>Last 7 days</Text>
           </View>
         </View>
+      </View>
+      <ScrollView
+        style={{ marginTop: -28 }}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[{ paddingBottom: contentBottomPadding }, { paddingTop: 28 }]}
+      >
 
         <View style={styles.content}>
           {!hasActivity ? (
@@ -381,6 +381,7 @@ const styles = StyleSheet.create({
   },
   loadingText: { marginTop: 12, fontSize: 16, color: Colors.textLight },
   headerPanel: {
+    zIndex: 10,
     backgroundColor: Colors.primaryDark,
     paddingHorizontal: 20,
     paddingBottom: 18,

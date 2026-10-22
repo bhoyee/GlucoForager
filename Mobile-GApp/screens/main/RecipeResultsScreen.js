@@ -646,47 +646,47 @@ export default function RecipeResultsScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        stickyHeaderIndices={[0]}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: contentBottomPadding + 24 }}
-      >
-        <View style={[styles.rHeader, { paddingTop: headerPaddingTop }]}>
-          <View style={styles.header}>
-            <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} activeOpacity={0.85}>
-              <Ionicons name="arrow-back" size={22} color="white" />
-            </TouchableOpacity>
-            <View style={styles.headerCenter}>
-              <Text style={styles.headerTitle}>Your recipes</Text>
-              <Text style={styles.headerSubtitle}>
-                {recipes.length
-                  ? `${recipes.length} diabetes-friendly ideas${hasDetectedIngredients ? ` from ${detectedIngredients.length} ingredients` : ''}`
-                  : 'Your generated meal ideas'}
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={styles.headerActionButton}
-              onPress={() => navigation.navigate('Scan', { screen: 'ScanMain' })}
-              activeOpacity={0.85}
-              accessibilityLabel="Scan again"
-            >
-              <Ionicons name="camera-outline" size={20} color="white" />
-            </TouchableOpacity>
+      <View style={[styles.rHeader, { paddingTop: headerPaddingTop }]}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} activeOpacity={0.85}>
+            <Ionicons name="arrow-back" size={22} color="white" />
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle}>Your recipes</Text>
+            <Text style={styles.headerSubtitle}>
+              {recipes.length
+                ? `${recipes.length} diabetes-friendly ideas${hasDetectedIngredients ? ` from ${detectedIngredients.length} ingredients` : ''}`
+                : 'Your generated meal ideas'}
+            </Text>
           </View>
-          {hasDetectedIngredients ? (
-            <View style={styles.rChipsBlock}>
-              <Text style={styles.rChipsLabel}>{source === 'text' ? 'Your ingredients' : 'From your fridge'}</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rChips}>
-                {detectedIngredients.map((item) => (
-                  <View key={item.id} style={styles.rChip}>
-                    <Ionicons name="leaf" size={11} color="#B9F6CA" />
-                    <Text style={styles.rChipText}>{item.name}</Text>
-                  </View>
-                ))}
-              </ScrollView>
-            </View>
-          ) : null}
+          <TouchableOpacity
+            style={styles.headerActionButton}
+            onPress={() => navigation.navigate('Scan', { screen: 'ScanMain' })}
+            activeOpacity={0.85}
+            accessibilityLabel="Scan again"
+          >
+            <Ionicons name="camera-outline" size={20} color="white" />
+          </TouchableOpacity>
         </View>
+        {hasDetectedIngredients ? (
+          <View style={styles.rChipsBlock}>
+            <Text style={styles.rChipsLabel}>{source === 'text' ? 'Your ingredients' : 'From your fridge'}</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rChips}>
+              {detectedIngredients.map((item) => (
+                <View key={item.id} style={styles.rChip}>
+                  <Ionicons name="leaf" size={11} color="#B9F6CA" />
+                  <Text style={styles.rChipText}>{item.name}</Text>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        ) : null}
+      </View>
+      <ScrollView
+        style={{ marginTop: -28 }}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[{ paddingBottom: contentBottomPadding + 24 }, { paddingTop: 28 }]}
+      >
 
         <View style={styles.rBody}>
           {hasIgnoredIngredients ? (
@@ -1437,7 +1437,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   // ---- Results (premium) ----
-  rHeader: { backgroundColor: Colors.primaryDark, paddingHorizontal: 20, paddingBottom: 18, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
+  rHeader: { zIndex: 10, elevation: 5, backgroundColor: Colors.primaryDark, paddingHorizontal: 20, paddingBottom: 18, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
   rChipsBlock: { marginTop: 16 },
   rChipsLabel: { fontSize: 11.5, fontWeight: '800', color: 'rgba(255,255,255,0.75)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 },
   rChips: { gap: 6, paddingRight: 8 },

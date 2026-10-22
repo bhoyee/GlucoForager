@@ -840,7 +840,7 @@ const RecipeDetailsScreen = () => {
         { text: 'OK', style: 'cancel' },
         {
           text: 'View list',
-          onPress: () => navigation.navigate('Profile', { screen: 'ShoppingList' }),
+          onPress: () => navigation.navigate('Profile', { screen: 'ShoppingList', initial: false }),
         },
       ]);
     } catch (error) {

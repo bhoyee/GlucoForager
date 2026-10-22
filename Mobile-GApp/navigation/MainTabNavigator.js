@@ -269,8 +269,15 @@ export default function MainTabNavigator() {
         }}
         listeners={({ navigation, route }) => ({
           tabPress: (e) => {
+            // Always land on the Profile page itself - also when another tab opened a Profile
+            // sub-screen (e.g. Shopping list) as the first screen of this stack.
             const state = route?.state;
-            if (state && typeof state.index === 'number' && state.index > 0) {
+            const offTop = state && typeof state.index === 'number' && state.index > 0;
+            const wrongRoot = state?.routes?.[0]?.name && state.routes[0].name !== 'ProfileMain';
+            if (wrongRoot) {
+              e.preventDefault();
+              navigation.navigate('Profile', { state: { index: 0, routes: [{ name: 'ProfileMain' }] } });
+            } else if (offTop) {
               e.preventDefault();
               navigation.navigate('Profile', { screen: 'ProfileMain' });
             }

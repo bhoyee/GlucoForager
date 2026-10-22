@@ -11,23 +11,23 @@ export default function TermsScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
-      <ScrollView
-        stickyHeaderIndices={[0]}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
-      >
-        <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
-          <View style={styles.header}>
-            <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} activeOpacity={0.85}>
-              <Ionicons name="arrow-back" size={22} color="white" />
-            </TouchableOpacity>
-            <View style={styles.headerText}>
-              <Text style={styles.headerTitle}>Terms & Conditions</Text>
-              <Text style={styles.headerSubtitle}>How GlucoForager works for you</Text>
-            </View>
-            <View style={styles.headerRight} />
+      <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} activeOpacity={0.85}>
+            <Ionicons name="arrow-back" size={22} color="white" />
+          </TouchableOpacity>
+          <View style={styles.headerText}>
+            <Text style={styles.headerTitle}>Terms & Conditions</Text>
+            <Text style={styles.headerSubtitle}>How GlucoForager works for you</Text>
           </View>
+          <View style={styles.headerRight} />
         </View>
+      </View>
+      <ScrollView
+        style={{ marginTop: -28 }}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[[styles.scrollContent, { paddingBottom: contentBottomPadding }], { paddingTop: 28 }]}
+      >
         <View style={styles.card}>
         <Text style={styles.updated}>Last updated: January 12, 2026</Text>
 
@@ -123,6 +123,7 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   headerPanel: {
+    zIndex: 10,
     backgroundColor: Colors.primaryDark,
     paddingHorizontal: 20,
     paddingBottom: 18,

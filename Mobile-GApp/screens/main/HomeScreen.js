@@ -41,6 +41,7 @@ import { parseServerDate } from '../../utils/dateUtils';
 import CountryPromptCard from '../../components/CountryPromptCard';
 import { reportRegion } from '../../utils/region';
 import { SAFETY_LINES, describeReading, formatGlucose, getGlucoseUnit, statusMeta, timeAgo } from '../../utils/glucose';
+import { markHomeReady } from '../../utils/appReady';
 
 // "Last used" ingredients older than this are hidden - fridge contents change.
 const LAST_USED_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -409,6 +410,7 @@ export default function HomeScreen() {
       setIsLoading(false);
       setIsRefreshing(false);
       setIsInitialLoad(false);
+      markHomeReady();
     }
   }, [isInitialLoad]);
 
@@ -663,12 +665,12 @@ export default function HomeScreen() {
   const handleOpenShoppingList = () => {
     setShowShoppingListNewDot(false);
     AsyncStorage.setItem('seen_feature_shopping_list_v1', 'true').catch(() => {});
-    navigation.navigate('Profile', { screen: 'ShoppingList' });
+    navigation.navigate('Profile', { screen: 'ShoppingList', initial: false });
   };
   const handleOpenWeeklyRecap = () => {
     setShowWeeklyRecapNewDot(false);
     AsyncStorage.setItem('seen_feature_weekly_recap_v1', 'true').catch(() => {});
-    navigation.navigate('Profile', { screen: 'WeeklyRecap' });
+    navigation.navigate('Profile', { screen: 'WeeklyRecap', initial: false });
   };
   const handleOpenChallenge = () => navigation.navigate('Challenge');
   const handleOpenTip = () => navigation.navigate('TodayTip', { tip: todayTip });
@@ -885,8 +887,8 @@ export default function HomeScreen() {
   if (isLoading && isInitialLoad) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-        <Text style={styles.loadingText}>Loading...</Text>
+        <Image source={require('../../assets/logo.png')} style={styles.loadingLogo} />
+        <ActivityIndicator size="small" color="#07A393" style={{ marginTop: 18 }} />
       </View>
     );
   }
@@ -1007,21 +1009,20 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
+      {/* Brand bar: fixed above Home; everything else scrolls below it. */}
+      <View style={[styles.hTopBar, { paddingTop: headerPaddingTop + 6 }]}>
+        <View style={styles.hBrandRow}>
+          <Image source={require('../../assets/logo.png')} style={styles.hLogo} />
+          <View style={{ flex: 1 }}>
+            <BrandWordmark size={22} />
+            <Text style={styles.hTagline} numberOfLines={1}>Smarter food choices for a healthier you</Text>
+          </View>
+        </View>
+      </View>
       <ScrollView
-        stickyHeaderIndices={[0]}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding + 12 }]}
       >
-        {/* Brand bar: pinned while the rest of Home scrolls up under it. */}
-        <View style={[styles.hTopBar, { paddingTop: headerPaddingTop + 6 }]}>
-          <View style={styles.hBrandRow}>
-            <Image source={require('../../assets/logo.png')} style={styles.hLogo} />
-            <View style={{ flex: 1 }}>
-              <BrandWordmark size={22} />
-              <Text style={styles.hTagline} numberOfLines={1}>Smarter food choices for a healthier you</Text>
-            </View>
-          </View>
-        </View>
         <View style={styles.hHeader}>
 
           {/* Greeting + plan status */}
@@ -1121,7 +1122,7 @@ export default function HomeScreen() {
             <Pressable
               style={({ pressed }) => [styles.urgentCard, pressed && styles.cardPressed]}
               android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
-              onPress={() => navigation.navigate('Profile', { screen: 'FoodPreferences' })}
+              onPress={() => navigation.navigate('Profile', { screen: 'FoodPreferences', initial: false })}
             >
               <View style={styles.urgentIcon}>
                 <Ionicons name="alert-circle-outline" size={20} color={Colors.error} />
@@ -1623,8 +1624,9 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.brandCream,
   },
+  loadingLogo: { width: 84, height: 84 },
   loadingText: {
     marginTop: 16,
     fontSize: 16,

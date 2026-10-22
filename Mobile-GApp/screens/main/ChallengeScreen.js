@@ -112,27 +112,27 @@ export default function ChallengeScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        stickyHeaderIndices={[0]}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: contentBottomPadding }}
-      >
-        <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
-          <View style={styles.header}>
-            <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} activeOpacity={0.85}>
-              <Ionicons name="arrow-back" size={22} color="white" />
-            </TouchableOpacity>
-            <View style={styles.headerText}>
-              <Text style={styles.headerTitle}>Today's Challenge</Text>
-              <Text style={styles.headerSubtitle}>
-                {progress.completed}/{progress.total} completed
-              </Text>
-            </View>
-            <TouchableOpacity style={styles.resetButton} onPress={() => void loadChallenge()} activeOpacity={0.85}>
-              <Ionicons name="refresh" size={18} color="white" />
-            </TouchableOpacity>
+      <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} activeOpacity={0.85}>
+            <Ionicons name="arrow-back" size={22} color="white" />
+          </TouchableOpacity>
+          <View style={styles.headerText}>
+            <Text style={styles.headerTitle}>Today's Challenge</Text>
+            <Text style={styles.headerSubtitle}>
+              {progress.completed}/{progress.total} completed
+            </Text>
           </View>
+          <TouchableOpacity style={styles.resetButton} onPress={() => void loadChallenge()} activeOpacity={0.85}>
+            <Ionicons name="refresh" size={18} color="white" />
+          </TouchableOpacity>
         </View>
+      </View>
+      <ScrollView
+        style={{ marginTop: -28 }}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[{ paddingBottom: contentBottomPadding }, { paddingTop: 28 }]}
+      >
 
         <View style={styles.content}>
         <View style={styles.hero}>
@@ -253,6 +253,7 @@ export default function ChallengeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   headerPanel: {
+    zIndex: 10,
     backgroundColor: Colors.primaryDark,
     paddingHorizontal: 20,
     paddingBottom: 18,

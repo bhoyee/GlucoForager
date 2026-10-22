@@ -122,25 +122,25 @@ export default function TodayTipScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        stickyHeaderIndices={[0]}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: contentBottomPadding }}
-      >
-        <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
-          <View style={styles.header}>
-            <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-              <Ionicons name="arrow-back" size={22} color="white" />
-            </TouchableOpacity>
-            <View style={styles.headerCenter}>
-              <Text style={styles.headerTitle}>Daily Guidance</Text>
-              <Text style={styles.headerSubtitle}>Small habits for steadier days</Text>
-            </View>
-            <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
-              <Ionicons name="share-social-outline" size={20} color="white" />
-            </TouchableOpacity>
+      <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={22} color="white" />
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle}>Daily Guidance</Text>
+            <Text style={styles.headerSubtitle}>Small habits for steadier days</Text>
           </View>
+          <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
+            <Ionicons name="share-social-outline" size={20} color="white" />
+          </TouchableOpacity>
         </View>
+      </View>
+      <ScrollView
+        style={{ marginTop: -28 }}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[{ paddingBottom: contentBottomPadding }, { paddingTop: 28 }]}
+      >
         <View style={styles.content}>
         <View style={styles.heroCard}>
           <View style={styles.heroTopRow}>
@@ -280,6 +280,7 @@ export default function TodayTipScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   headerPanel: {
+    zIndex: 10,
     backgroundColor: Colors.primaryDark,
     paddingHorizontal: 20,
     paddingBottom: 18,

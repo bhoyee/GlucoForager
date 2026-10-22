@@ -112,20 +112,20 @@ export default function EatNowScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        stickyHeaderIndices={[0]} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: contentBottomPadding }}>
-        <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
-          <View style={styles.header}>
-            <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-              <Ionicons name="arrow-back" size={22} color="white" />
-            </TouchableOpacity>
-            <View style={styles.headerText}>
-              <Text style={styles.headerTitle}>Eat Now</Text>
-              <Text style={styles.headerSubtitle}>Quick ideas for right now</Text>
-            </View>
-            <View style={styles.headerRight} />
+      <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={22} color="white" />
+          </TouchableOpacity>
+          <View style={styles.headerText}>
+            <Text style={styles.headerTitle}>Eat Now</Text>
+            <Text style={styles.headerSubtitle}>Quick ideas for right now</Text>
           </View>
+          <View style={styles.headerRight} />
         </View>
+      </View>
+      <ScrollView
+        style={{ marginTop: -28 }} showsVerticalScrollIndicator={false} contentContainerStyle={[{ paddingBottom: contentBottomPadding }, { paddingTop: 28 }]}>
 
         <View style={styles.content}>
           {cards.map((card) => (
@@ -163,6 +163,7 @@ export default function EatNowScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   headerPanel: {
+    zIndex: 10,
     backgroundColor: Colors.primaryDark,
     paddingHorizontal: 20,
     paddingBottom: 18,

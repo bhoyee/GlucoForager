@@ -709,33 +709,33 @@ export default function ManualInputScreen() {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
+      <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="arrow-back" size={22} color="white" />
+          </TouchableOpacity>
+          <View style={styles.headerText}>
+            <Text style={styles.headerTitle}>Type Ingredients</Text>
+            <Text style={styles.headerSubtitle}>Build recipes from what you have</Text>
+          </View>
+          <View style={styles.headerRight} />
+        </View>
+      </View>
       <ScrollView
-        stickyHeaderIndices={[0]}
+        style={{ marginTop: -28 }}
         ref={scrollRef}
-        contentContainerStyle={[
+        contentContainerStyle={[[
           styles.scrollContent,
           { paddingBottom: keyboardScrollPadding },
-        ]}
+        ], { paddingTop: 28 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
       >
-        <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
-          <View style={styles.header}>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => navigation.goBack()}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="arrow-back" size={22} color="white" />
-            </TouchableOpacity>
-            <View style={styles.headerText}>
-              <Text style={styles.headerTitle}>Type Ingredients</Text>
-              <Text style={styles.headerSubtitle}>Build recipes from what you have</Text>
-            </View>
-            <View style={styles.headerRight} />
-          </View>
-        </View>
 
         <View style={styles.pBody}>
           {/* Intro */}
@@ -1483,6 +1483,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   headerPanel: {
+    zIndex: 10,
     backgroundColor: Colors.primaryDark,
     paddingHorizontal: 20,
     paddingBottom: 18,

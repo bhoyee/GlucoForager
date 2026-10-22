@@ -617,27 +617,27 @@ export default function ProfileScreen() {
   return (
     <View style={styles.container}>
       <View style={{ flex: 1, paddingBottom: versionFooterBottom + versionFooterHeight }}>
-        <ScrollView
-        stickyHeaderIndices={[0]}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
-        >
-          <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
-            <View style={styles.header}>
-              <View style={styles.headerLeft}>
-                <TouchableOpacity style={styles.backButton} onPress={() => navigation.navigate('Home')}>
-                  <Ionicons name="arrow-back" size={20} color="white" />
-                </TouchableOpacity>
-                <View style={styles.headerTitleBlock}>
-                  <Text style={styles.title} numberOfLines={1}>Profile</Text>
-                  <Text style={styles.headerSubtitle} numberOfLines={1}>Account, preferences, and reminders</Text>
-                </View>
-              </View>
-              <TouchableOpacity style={styles.logoutButton} onPress={signOut}>
-                <Text style={styles.logoutText} numberOfLines={1}>Logout</Text>
+        <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
+          <View style={styles.header}>
+            <View style={styles.headerLeft}>
+              <TouchableOpacity style={styles.backButton} onPress={() => navigation.navigate('Home')}>
+                <Ionicons name="arrow-back" size={20} color="white" />
               </TouchableOpacity>
+              <View style={styles.headerTitleBlock}>
+                <Text style={styles.title} numberOfLines={1}>Profile</Text>
+                <Text style={styles.headerSubtitle} numberOfLines={1}>Account, preferences, and reminders</Text>
+              </View>
             </View>
+            <TouchableOpacity style={styles.logoutButton} onPress={signOut}>
+              <Text style={styles.logoutText} numberOfLines={1}>Logout</Text>
+            </TouchableOpacity>
           </View>
+        </View>
+        <ScrollView
+        style={{ marginTop: -28 }}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[styles.scrollContent, { paddingTop: 28 }]}
+        >
       <Modal
         visible={premiumModalVisible}
         animationType="slide"
@@ -1033,6 +1033,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   headerPanel: {
+    zIndex: 10,
     backgroundColor: Colors.primaryDark,
     paddingHorizontal: 20,
     paddingBottom: 18,

@@ -1,10 +1,11 @@
 // App.js - COMPLETE FIXED VERSION
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import * as Notifications from 'expo-notifications';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { ActivityIndicator, Alert, Linking, LogBox, Modal, Pressable, View, Text } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Linking, LogBox, Modal, Pressable, StyleSheet, View, Text } from 'react-native';
+import { onHomeReady } from './utils/appReady';
 import { PostHogProvider } from 'posthog-react-native';
 
 // Import Auth Provider
@@ -200,6 +201,32 @@ function AppNavigator() {
     };
   }, [hasFeatureAccess, isLoading, minimumSplashDone, updatePrompt?.available, userToken]);
 
+  // Cold start: keep the branded splash over the app until Home has its first data (max 5s),
+  // then fade it out - no blank "Loading..." screen in between.
+  const [splashOverlay, setSplashOverlay] = useState(true);
+  const overlayOpacity = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (isLoading || !minimumSplashDone || !splashOverlay) return undefined;
+    if (!userToken || needsFoodProfileOnboarding) {
+      setSplashOverlay(false);
+      return undefined;
+    }
+    let done = false;
+    const hide = () => {
+      if (done) return;
+      done = true;
+      Animated.timing(overlayOpacity, { toValue: 0, duration: 300, useNativeDriver: true }).start(() =>
+        setSplashOverlay(false)
+      );
+    };
+    const unsubscribe = onHomeReady(hide);
+    const fallback = setTimeout(hide, 5000);
+    return () => {
+      unsubscribe();
+      clearTimeout(fallback);
+    };
+  }, [isLoading, minimumSplashDone, needsFoodProfileOnboarding, overlayOpacity, splashOverlay, userToken]);
+
   devLog('AppNavigator state:', { isLoading, hasToken: Boolean(userToken), hasAuthContext: !!authContext });
 
   if (isLoading || !minimumSplashDone) {
@@ -210,6 +237,7 @@ function AppNavigator() {
   devLog('Showing main navigation. User token:', userToken ? 'Present' : 'None');
 
   return (
+    <View style={{ flex: 1, backgroundColor: '#FEFDF3' }}>
     <NavigationContainer
       linking={linking}
       ref={navigationRef}
@@ -414,6 +442,12 @@ function AppNavigator() {
       </Stack.Navigator>
     </AnalyticsBoundary>
     </NavigationContainer>
+    {splashOverlay ? (
+      <Animated.View style={[StyleSheet.absoluteFill, { opacity: overlayOpacity }]}>
+        <SplashScreen continued />
+      </Animated.View>
+    ) : null}
+    </View>
   );
 }
 

@@ -354,26 +354,25 @@ export default function FoodPreferencesScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
+      <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
+        <TouchableOpacity style={styles.headerButton} onPress={handleBack}>
+          <Ionicons name="arrow-back" size={22} color={Colors.text} />
+        </TouchableOpacity>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.headerTitle}>Food preferences</Text>
+          <Text style={styles.headerSubtitle}>Personalize your meals in ~30 seconds.</Text>
+        </View>
+        {forced ? (
+          <TouchableOpacity style={styles.headerButton} onPress={handleSkip} disabled={saving}>
+            <Text style={[styles.skipText, saving ? { opacity: 0.6 } : null]}>Skip</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={{ width: 56 }} />
+        )}
+      </View>
       {busy ? (
         <ScrollView
-        stickyHeaderIndices={[0]}
         contentContainerStyle={[styles.content, { paddingBottom: contentBottomPadding }]}>
-          <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
-            <TouchableOpacity style={styles.headerButton} onPress={handleBack}>
-              <Ionicons name="arrow-back" size={22} color={Colors.text} />
-            </TouchableOpacity>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.headerTitle}>Food preferences</Text>
-              <Text style={styles.headerSubtitle}>Personalize your meals in ~30 seconds.</Text>
-            </View>
-            {forced ? (
-              <TouchableOpacity style={styles.headerButton} onPress={handleSkip} disabled={saving}>
-                <Text style={[styles.skipText, saving ? { opacity: 0.6 } : null]}>Skip</Text>
-              </TouchableOpacity>
-            ) : (
-              <View style={{ width: 56 }} />
-            )}
-          </View>
           <View style={styles.loading}>
             <ActivityIndicator size="small" color={Colors.primary} />
             <Text style={styles.loadingText}>Loading...</Text>
@@ -381,22 +380,6 @@ export default function FoodPreferencesScreen({ navigation }) {
         </ScrollView>
       ) : (
         <ScrollView contentContainerStyle={[styles.content, { paddingBottom: contentBottomPadding }]}>
-          <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
-            <TouchableOpacity style={styles.headerButton} onPress={handleBack}>
-              <Ionicons name="arrow-back" size={22} color={Colors.text} />
-            </TouchableOpacity>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.headerTitle}>Food preferences</Text>
-              <Text style={styles.headerSubtitle}>Personalize your meals in ~30 seconds.</Text>
-            </View>
-            {forced ? (
-              <TouchableOpacity style={styles.headerButton} onPress={handleSkip} disabled={saving}>
-                <Text style={[styles.skipText, saving ? { opacity: 0.6 } : null]}>Skip</Text>
-              </TouchableOpacity>
-            ) : (
-              <View style={{ width: 56 }} />
-            )}
-          </View>
           {step >= 0 ? <StepHeader /> : null}
 
           {step === -1 ? (
@@ -627,7 +610,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   header: {
     backgroundColor: Colors.background,
-    marginHorizontal: -16,
     paddingHorizontal: 32,
     flexDirection: 'row',
     alignItems: 'center',

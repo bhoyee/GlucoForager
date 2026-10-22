@@ -251,24 +251,25 @@ export default function LogGlucoseScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        stickyHeaderIndices={[0]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
-          <View style={styles.header}>
-            <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} activeOpacity={0.85}>
-              <Ionicons name="arrow-back" size={22} color="white" />
-            </TouchableOpacity>
-            <View style={styles.headerText}>
-              <Text style={styles.headerTitle}>Log glucose</Text>
-              <Text style={styles.headerSubtitle}>
-                {minutesAgo === 0
-                  ? 'Logged as right now'
-                  : `Logged as ${TIME_AGO_OPTIONS.find((o) => o.minutesAgo === minutesAgo)?.label}`}
-              </Text>
-            </View>
-            <View style={{ width: 44 }} />
+      <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} activeOpacity={0.85}>
+            <Ionicons name="arrow-back" size={22} color="white" />
+          </TouchableOpacity>
+          <View style={styles.headerText}>
+            <Text style={styles.headerTitle}>Log glucose</Text>
+            <Text style={styles.headerSubtitle}>
+              {minutesAgo === 0
+                ? 'Logged as right now'
+                : `Logged as ${TIME_AGO_OPTIONS.find((o) => o.minutesAgo === minutesAgo)?.label}`}
+            </Text>
           </View>
+          <View style={{ width: 44 }} />
         </View>
+      </View>
+      <ScrollView
+        contentContainerStyle={{ paddingTop: 28 }}
+        style={{ marginTop: -28 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
         <View style={styles.content}>
           <View style={styles.card}>
@@ -408,6 +409,7 @@ function SectionHead({ icon, color, title, subtitle }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   headerPanel: {
+    zIndex: 10, elevation: 5,
     backgroundColor: Colors.primaryDark,
     paddingHorizontal: 20,
     paddingBottom: 18,

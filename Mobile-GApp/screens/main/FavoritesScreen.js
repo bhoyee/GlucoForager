@@ -170,22 +170,22 @@ export default function FavoritesScreen() {
   if (favorites.length === 0) {
     return (
       <View style={styles.container}>
-        <ScrollView
-        stickyHeaderIndices={[0]} showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
-          <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
-            <View style={styles.header}>
-              <TouchableOpacity
-                style={styles.backButton}
-                onPress={() => navigation.navigate('Home')}
-              >
-                <Ionicons name="arrow-back" size={22} color="white" />
-              </TouchableOpacity>
-              <View style={styles.headerText}>
-                <Text style={styles.headerTitle}>My Favorites</Text>
-                <Text style={styles.headerSubtitle}>Saved recipes you love</Text>
-              </View>
+        <View style={[styles.headerPanel, { paddingTop: headerPaddingTop }]}>
+          <View style={styles.header}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => navigation.navigate('Home')}
+            >
+              <Ionicons name="arrow-back" size={22} color="white" />
+            </TouchableOpacity>
+            <View style={styles.headerText}>
+              <Text style={styles.headerTitle}>My Favorites</Text>
+              <Text style={styles.headerSubtitle}>Saved recipes you love</Text>
             </View>
           </View>
+        </View>
+        <ScrollView
+        style={{ marginTop: -28 }} showsVerticalScrollIndicator={false} contentContainerStyle={[{ flexGrow: 1 }, { paddingTop: 28 }]}>
 
           <View style={styles.emptyContainer}>
             <Ionicons name="heart-outline" size={100} color={Colors.textLight} />
@@ -345,6 +345,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   headerPanel: {
+    zIndex: 10,
     backgroundColor: Colors.primaryDark,
     paddingHorizontal: 20,
     paddingBottom: 18,

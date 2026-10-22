@@ -439,32 +439,30 @@ export default function GlucoGuideScreen({ navigation }) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 76}
     >
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 14) + 8 }]}>
+        <Pressable style={styles.backButton} onPress={() => navigation.navigate('Home')}>
+          <Ionicons name="arrow-back" size={20} color="white" />
+        </Pressable>
+        <GuideAvatar size={42} />
+        <View style={styles.headerCopy}>
+          <Text style={styles.headerTitle}>GlucoGuide AI</Text>
+          <View style={styles.onlineRow}>
+            <View style={styles.onlineDot} />
+            <Text style={styles.headerSubtitle}>Diabetes-aware food support</Text>
+          </View>
+        </View>
+        <View style={styles.headerBadge}>
+          <Ionicons name="shield-checkmark" size={14} color="#B9F6CA" />
+          <Text style={styles.headerBadgeText}>Safe</Text>
+        </View>
+      </View>
       <ScrollView
-        stickyHeaderIndices={[0]}
         ref={scrollRef}
         style={styles.messages}
         contentContainerStyle={[styles.messagesContent, { paddingBottom: 26 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={[styles.header, { paddingTop: Math.max(insets.top, 14) + 8 }]}>
-          <Pressable style={styles.backButton} onPress={() => navigation.navigate('Home')}>
-            <Ionicons name="arrow-back" size={20} color="white" />
-          </Pressable>
-          <GuideAvatar size={42} />
-          <View style={styles.headerCopy}>
-            <Text style={styles.headerTitle}>GlucoGuide AI</Text>
-            <View style={styles.onlineRow}>
-              <View style={styles.onlineDot} />
-              <Text style={styles.headerSubtitle}>Diabetes-aware food support</Text>
-            </View>
-          </View>
-          <View style={styles.headerBadge}>
-            <Ionicons name="shield-checkmark" size={14} color="#B9F6CA" />
-            <Text style={styles.headerBadgeText}>Safe</Text>
-          </View>
-        </View>
-
         {showWelcome ? (
           <View style={styles.welcome}>
             <GuideAvatar size={64} />
@@ -632,9 +630,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginHorizontal: -16,
-    marginTop: -20,
-    marginBottom: 20,
+    zIndex: 2,
     shadowColor: '#000',
     shadowOpacity: 0.16,
     shadowRadius: 18,
@@ -678,12 +674,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '900',
   },
+  // Tucks up under the header's rounded corners so messages scroll beneath it.
   messages: {
     flex: 1,
+    marginTop: -30,
   },
   messagesContent: {
     padding: 16,
-    paddingTop: 20,
+    paddingTop: 50,
     gap: 11,
   },
   bubble: {

@@ -103,42 +103,41 @@ export default function DebugLogsScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        stickyHeaderIndices={[0]}
-        contentContainerStyle={styles.content}>
-        <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
-          <TouchableOpacity onPress={handleClose}>
-            <Ionicons name="arrow-back" size={24} color={Colors.text} />
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
+        <TouchableOpacity onPress={handleClose}>
+          <Ionicons name="arrow-back" size={24} color={Colors.text} />
+        </TouchableOpacity>
+        <Text style={styles.title}>Debug Logs</Text>
+        <View style={styles.headerActions}>
+          <TouchableOpacity style={styles.actionButton} onPress={handleClose}>
+            <Ionicons name="close" size={20} color={Colors.text} />
           </TouchableOpacity>
-          <Text style={styles.title}>Debug Logs</Text>
-          <View style={styles.headerActions}>
-            <TouchableOpacity style={styles.actionButton} onPress={handleClose}>
-              <Ionicons name="close" size={20} color={Colors.text} />
+          <TouchableOpacity style={styles.actionButton} onPress={handleSend} disabled={isSending}>
+            {isSending ? (
+              <ActivityIndicator size="small" color={Colors.text} />
+            ) : (
+              <Ionicons name="cloud-upload-outline" size={20} color={Colors.text} />
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionButton} onPress={handleShare} disabled={!logText}>
+            <Ionicons name="share-social-outline" size={20} color={logText ? Colors.text : Colors.textLight} />
+          </TouchableOpacity>
+          {__DEV__ ? (
+            <TouchableOpacity style={styles.actionButton} onPress={handleTestDailyGuidance}>
+              <Ionicons name="notifications-outline" size={20} color={Colors.text} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton} onPress={handleSend} disabled={isSending}>
-              {isSending ? (
-                <ActivityIndicator size="small" color={Colors.text} />
-              ) : (
-                <Ionicons name="cloud-upload-outline" size={20} color={Colors.text} />
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton} onPress={handleShare} disabled={!logText}>
-              <Ionicons name="share-social-outline" size={20} color={logText ? Colors.text : Colors.textLight} />
-            </TouchableOpacity>
-            {__DEV__ ? (
-              <TouchableOpacity style={styles.actionButton} onPress={handleTestDailyGuidance}>
-                <Ionicons name="notifications-outline" size={20} color={Colors.text} />
-              </TouchableOpacity>
-            ) : null}
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => clearDebugLogs()}
-              disabled={!logs.length}
-            >
-              <Ionicons name="trash-outline" size={20} color={logs.length ? Colors.text : Colors.textLight} />
-            </TouchableOpacity>
-          </View>
+          ) : null}
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => clearDebugLogs()}
+            disabled={!logs.length}
+          >
+            <Ionicons name="trash-outline" size={20} color={logs.length ? Colors.text : Colors.textLight} />
+          </TouchableOpacity>
         </View>
+      </View>
+      <ScrollView
+        contentContainerStyle={styles.content}>
         {logs.length === 0 ? (
           <Text style={styles.emptyText}>No logs yet.</Text>
         ) : (
@@ -166,7 +165,6 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: Colors.background,
-    marginHorizontal: -16,
     paddingHorizontal: 32,
     flexDirection: 'row',
     alignItems: 'center',
