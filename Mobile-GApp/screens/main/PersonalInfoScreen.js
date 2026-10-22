@@ -20,6 +20,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
 import { useAuth } from '../../context/authContext';
+import KeyboardAwareScrollView from '../../components/KeyboardAwareScrollView';
 
 const genders = ['Male', 'Female', 'Other', 'Prefer not to say'];
 
@@ -221,7 +222,7 @@ export default function PersonalInfoScreen({ navigation }) {
         <Text style={styles.title}>Personal Info</Text>
         <View style={{ width: 32 }} />
       </View>
-      <ScrollView
+      <KeyboardAwareScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
       >
@@ -371,7 +372,7 @@ export default function PersonalInfoScreen({ navigation }) {
           </View>
         </View>
       </Modal>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }

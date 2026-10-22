@@ -13,6 +13,7 @@ import { API_URL } from '../../config/api';
 import { trackEvent } from '../../utils/analytics';
 import TimeAgoSelector, { TIME_AGO_OPTIONS, loggedAtFromMinutesAgo } from '../../components/TimeAgoSelector';
 import { generateIdempotencyKey } from '../../utils/idempotency';
+import KeyboardAwareScrollView from '../../components/KeyboardAwareScrollView';
 
 const UNIT_PREF_KEY = 'glucose_unit_pref_v1';
 const MGDL_PER_MMOL = 18.0182;
@@ -267,7 +268,7 @@ export default function LogGlucoseScreen() {
           <View style={{ width: 44 }} />
         </View>
       </View>
-      <ScrollView
+      <KeyboardAwareScrollView
         contentContainerStyle={{ paddingTop: 28 }}
         style={{ marginTop: -28 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
@@ -386,7 +387,7 @@ export default function LogGlucoseScreen() {
             <Text style={styles.trendsLinkText}>See your glucose insights</Text>
           </TouchableOpacity>
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }

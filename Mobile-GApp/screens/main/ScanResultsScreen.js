@@ -20,6 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { addDebugLog } from '../../utils/debugLogger';
+import KeyboardAwareScrollView from '../../components/KeyboardAwareScrollView';
 
 const LAST_INGREDIENTS_KEY = 'last_used_ingredients_v1';
 
@@ -284,7 +285,7 @@ export default function ScanResultsScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView 
+      <KeyboardAwareScrollView 
         showsVerticalScrollIndicator={false}
         horizontal={false}
         directionalLockEnabled
@@ -488,7 +489,7 @@ export default function ScanResultsScreen() {
             </Text>
           </View>
         )}
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }

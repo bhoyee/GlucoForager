@@ -24,6 +24,7 @@ import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
 import { FREE_FEATURES, freeUsesLabel, getFreeUsage, isFreeLimitDetail, showFreeLimitAlert } from '../../utils/freeTier';
+import KeyboardAwareScrollView from '../../components/KeyboardAwareScrollView';
 
 export default function ManualInputScreen() {
   const navigation = useNavigation();
@@ -725,7 +726,7 @@ export default function ManualInputScreen() {
           <View style={styles.headerRight} />
         </View>
       </View>
-      <ScrollView
+      <KeyboardAwareScrollView
         style={{ marginTop: -28 }}
         ref={scrollRef}
         contentContainerStyle={[[
@@ -876,7 +877,7 @@ export default function ManualInputScreen() {
           </View>
         </View>
 
-      </ScrollView>
+      </KeyboardAwareScrollView>
       {!typingActive ? (
         <View
           style={[

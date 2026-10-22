@@ -24,6 +24,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS, API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
 import { useAuth } from '../../context/authContext';
+import KeyboardAwareScrollView from '../../components/KeyboardAwareScrollView';
 
 const checkedStorageKey = (listId) => `shopping_checked_${listId}`;
 
@@ -394,7 +395,7 @@ export default function ShoppingListScreen() {
         ) : null}
       </View>
 
-      <ScrollView
+      <KeyboardAwareScrollView
         style={{ marginTop: -28 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -569,7 +570,7 @@ export default function ShoppingListScreen() {
             })
           )}
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       <Modal visible={showCreateModal} animationType="slide" transparent onRequestClose={closeCreateModal}>
         <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>

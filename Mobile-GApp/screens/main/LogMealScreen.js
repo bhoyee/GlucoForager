@@ -17,6 +17,7 @@ import { API_URL } from '../../config/api';
 import { trackEvent } from '../../utils/analytics';
 import TimeAgoSelector, { TIME_AGO_OPTIONS, loggedAtFromMinutesAgo } from '../../components/TimeAgoSelector';
 import { generateIdempotencyKey } from '../../utils/idempotency';
+import KeyboardAwareScrollView from '../../components/KeyboardAwareScrollView';
 
 const PORTIONS = [
   { key: 'small', label: 'Small', factor: 0.7 },
@@ -331,7 +332,7 @@ export default function LogMealScreen() {
           <View style={{ width: 44 }} />
         </View>
       </View>
-      <ScrollView
+      <KeyboardAwareScrollView
         contentContainerStyle={{ paddingTop: 28 }}
         style={{ marginTop: -28 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
@@ -440,7 +441,7 @@ export default function LogMealScreen() {
             </LinearGradient>
           </TouchableOpacity>
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }
