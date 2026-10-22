@@ -27,6 +27,8 @@ export default function AdminRecipesList() {
   const [search, setSearch] = useState('');
   const [mealType, setMealType] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  // user_generated = saved automatically from users' recipe results (the recipe bank).
+  const [sourceFilter, setSourceFilter] = useState('all');
   const [sortKey, setSortKey] = useState('created_at');
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
@@ -282,6 +284,7 @@ export default function AdminRecipesList() {
     .filter((recipe) => recipe.name.toLowerCase().includes(search.toLowerCase()))
     .filter((recipe) => (mealType === 'all' ? true : recipe.meal_type === mealType))
     .filter((recipe) => (statusFilter === 'all' ? true : (recipe.status || 'published') === statusFilter))
+    .filter((recipe) => (sourceFilter === 'all' ? true : sourceFilter === 'user_generated' ? recipe.source === 'user_generated' : recipe.source !== 'user_generated'))
     .sort((a, b) => {
       if (sortKey === 'name') return a.name.localeCompare(b.name);
       if (sortKey === 'meal_type') return a.meal_type.localeCompare(b.meal_type);
@@ -394,6 +397,19 @@ export default function AdminRecipesList() {
               <option value="draft">Drafts ({statusCounts.draft})</option>
               <option value="published">Published ({statusCounts.published})</option>
               <option value="archived">Archived ({statusCounts.archived})</option>
+            </select>
+
+            <select
+              value={sourceFilter}
+              onChange={(event) => {
+                setSourceFilter(event.target.value);
+                setPage(1);
+              }}
+              className="admin-filter-select"
+            >
+              <option value="all">All sources</option>
+              <option value="user_generated">From users ({recipes.filter((r) => r.source === 'user_generated').length})</option>
+              <option value="admin">Added by admin ({recipes.filter((r) => r.source !== 'user_generated').length})</option>
             </select>
             
             <select 

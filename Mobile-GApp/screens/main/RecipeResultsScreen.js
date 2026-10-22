@@ -57,6 +57,8 @@ export default function RecipeResultsScreen() {
   const errorShownRef = useRef(false);
   const lastJobStatusRef = useRef(null);
   const autoImageStartedRef = useRef(false);
+  // The server sends quick recipe cards first; full recipes replace them a few seconds later.
+  const cardsShownRef = useRef(false);
   const imageInFlightRef = useRef(new Set());
   const loadingPulse = useRef(new Animated.Value(0)).current;
   const loadingSweep = useRef(new Animated.Value(0)).current;
@@ -320,6 +322,13 @@ export default function RecipeResultsScreen() {
       }
       if (data.status === 'running') {
         setStatusLine('Generating recipes...');
+        const cards = data?.result?.stage === 'cards' && Array.isArray(data.result.results) ? data.result.results : [];
+        if (cards.length && !cardsShownRef.current) {
+          cardsShownRef.current = true;
+          setRecipes(cards);
+          setIsLoading(false);
+          addDebugLog({ source: 'AI', level: 'info', message: 'Recipe cards shown', details: JSON.stringify({ job_id: jobId, count: cards.length }) });
+        }
       }
       if (data.status === 'completed') {
         if (pollingRef.current) clearInterval(pollingRef.current);
@@ -720,10 +729,16 @@ export default function RecipeResultsScreen() {
                 recipe={recipe}
                 index={index}
                 selectedLower={selectedLower}
-                generating={Boolean(generatingRecipeImages?.[`${index}:${String(recipe?.title || recipe?.name || '').trim() || 'recipe'}`])}
+                generating={
+                  Boolean(recipe?._partial) ||
+                  Boolean(generatingRecipeImages?.[`${index}:${String(recipe?.title || recipe?.name || '').trim() || 'recipe'}`])
+                }
                 failed={Boolean(failedRecipeImages?.[index])}
                 onImageError={() => setFailedRecipeImages((prev) => ({ ...(prev || {}), [index]: true }))}
-                onPress={() => navigation.navigate('RecipeDetail', { recipe, selectedIngredients, source })}
+                onPress={() => {
+                  if (recipe?._partial) return; // Steps are still being written.
+                  navigation.navigate('RecipeDetail', { recipe, selectedIngredients, source });
+                }}
               />
             ))
           ) : (
@@ -853,10 +868,17 @@ const RecipeResultCard = React.memo(function RecipeResultCard({ recipe, index, s
             <Text style={styles.rMatchText}>Uses {used} of your {selectedLower.length} ingredients</Text>
           </View>
         ) : null}
-        <View style={styles.rOpen}>
-          <Text style={styles.rOpenText}>View recipe</Text>
-          <Ionicons name="arrow-forward" size={15} color={Colors.primary} />
-        </View>
+        {recipe?._partial ? (
+          <View style={styles.rOpen}>
+            <ActivityIndicator size="small" color={Colors.textLight} />
+            <Text style={[styles.rOpenText, { color: Colors.textLight }]}>Writing the steps…</Text>
+          </View>
+        ) : (
+          <View style={styles.rOpen}>
+            <Text style={styles.rOpenText}>View recipe</Text>
+            <Ionicons name="arrow-forward" size={15} color={Colors.primary} />
+          </View>
+        )}
       </View>
     </TouchableOpacity>
   );

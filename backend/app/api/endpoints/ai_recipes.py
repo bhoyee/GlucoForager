@@ -4,6 +4,7 @@ import json
 from datetime import datetime, timezone
 import uuid
 import logging
+import threading
 import time
 from urllib.parse import urlsplit
 
@@ -37,6 +38,7 @@ cache = CacheService()
 image_helper = AIRecipeGenerator()
 VISION_CACHE_TTL_SECONDS = 21600
 from ...services.recipe_image_attach_service import _is_durable_recipe_image_url
+from ...services import recipe_bank
 
 logger = logging.getLogger(__name__)
 
@@ -280,6 +282,14 @@ def _run_vision_job(job_id: str) -> None:
             "warning": result.get("warning"),
         }
         job.status = "completed"
+        # Remember what this scan approved, so the recipe request for these ingredients
+        # doesn't repeat the same AI checks (text_recipes._from_recent_scan).
+        try:
+            approved = sorted({str(x).strip().lower() for x in (result.get("detected") or []) if str(x).strip()})
+            if approved:
+                cache.set(f"scanok:{job.user_id}", json.dumps(approved), ttl_seconds=30 * 60)
+        except Exception:
+            pass
         # Async scans count against the free allowance only once they succeed.
         free_tier_service.record_use_if_free(db, job.user_id, free_tier_service.INGREDIENT_SCAN)
         job.error = None
@@ -962,6 +972,8 @@ def generate_recipe_image(
     # Also store a longer-lived mapping so "recent recipes" can show images without relying on
     # mutating recipe_history JSON (which can be brittle if the client-side recipe differs slightly).
     cache.set(f"recipeimg:{fingerprint}:url", str(image_url), ttl_seconds=60 * 24 * 60 * 60)
+    # A recipe saved to the bank without a photo gets this one (and may now be published).
+    threading.Thread(target=recipe_bank.attach_image, args=(recipe_payload["title"], str(image_url)), daemon=True).start()
     if daily_limit != -1:
         daily_key = f"imggen:{current_user.id}:{today}:count"
         cache.incr(daily_key, ttl_seconds=24 * 60 * 60)

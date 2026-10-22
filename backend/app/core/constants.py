@@ -83,13 +83,13 @@ FORMAT: Return VALID JSON with this EXACT structure:
       "instructions": ["Step 1", "Step 2", "Step 3", "Step 4", "Step 5"],
       "description": "Short diabetes-friendly description here.",
       "nutrition_per_serving": {
-        "calories": 320,
-        "carbs": 15,
-        "protein": 35,
-        "fat": 12,
-        "fiber": 6,
-        "sugar": 3,
-        "sodium": 400
+        "calories": <number>,
+        "carbs": <number>,
+        "protein": <number>,
+        "fat": <number>,
+        "fiber": <number>,
+        "sugar": <number>,
+        "sodium": <number>
       },
       "diabetes_analysis": {
         "glycemic_impact": "Low",
@@ -117,6 +117,7 @@ INGREDIENT_RECIPES_PROMPT = """Create 3 diabetes-friendly recipes using these se
 
 RULES:
 - Return ONLY a single valid JSON object. No markdown, no code fences, no commentary.
+- Nutrition is per serving: estimate it for each recipe from its ingredients and portions (never copy example numbers).
 - Use the selected ingredients as the main ingredients.
 - You may add only basic pantry staples in small amounts: water, salt, pepper, dried herbs/spices, lemon/lime, vinegar, garlic, onion, olive oil.
 - Do not add other non-pantry ingredients.
@@ -139,12 +140,12 @@ FORMAT (VALID JSON):
       ],
       "instructions": ["Step 1", "Step 2", "Step 3", "Step 4", "Step 5"],
       "nutritional_info": {
-        "calories": 320,
-        "carbs": 24,
-        "protein": 18,
-        "fat": 12,
-        "fiber": 6,
-        "sugar": 5
+        "calories": <number>,
+        "carbs": <number>,
+        "protein": <number>,
+        "fat": <number>,
+        "fiber": <number>,
+        "sugar": <number>
       },
       "tags": ["diabetes-friendly"]
     }
@@ -158,6 +159,7 @@ EAT_NOW_PROMPT = """Create 3 diabetes-friendly meal ideas. Use common, easy-to-f
 
 RULES:
 - Return ONLY a single valid JSON object. No markdown, no code fences, no commentary.
+- Nutrition is per serving: estimate it for each recipe from its ingredients and portions (never copy example numbers).
 - Provide exactly 3 recipes.
 - Follow the schema EXACTLY. Do not add extra keys like "tips", "diabetes_analysis", "sodium", etc.
 - All string values must be single-line (no newline characters). Use spaces instead.
@@ -180,12 +182,12 @@ FORMAT (VALID JSON):
       ],
       "instructions": ["Step 1", "Step 2"],
       "nutritional_info": {
-        "calories": 320,
-        "carbs": 18,
-        "protein": 28,
-        "fat": 12,
-        "fiber": 7,
-        "sugar": 4
+        "calories": <number>,
+        "carbs": <number>,
+        "protein": <number>,
+        "fat": <number>,
+        "fiber": <number>,
+        "sugar": <number>
       },
       "tags": ["diabetes-friendly", "low-carb"]
     }

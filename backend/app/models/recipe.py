@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import Column, DateTime, Integer, JSON, String
+from sqlalchemy.dialects.postgresql import ARRAY
 
 from ..database import Base
 
@@ -34,3 +35,9 @@ class Recipe(Base):
     generated_by_admin_user_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
+    # Recipe bank (user-generated recipes are saved here too):
+    # title_key - normalised title, unique, so the same recipe is never stored twice;
+    # ingredient_keys - simplified main ingredients, GIN-indexed for instant fridge matching.
+    title_key = Column(String(160), nullable=True)
+    ingredient_keys = Column(ARRAY(String), nullable=True)
+    times_served = Column(Integer, nullable=False, default=0, server_default="0")

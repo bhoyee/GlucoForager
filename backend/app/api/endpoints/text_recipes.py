@@ -27,6 +27,7 @@ from ...services import free_tier_service
 from ...services.subscription_service import get_effective_subscription_tier
 from ...core.config import settings
 from ...services.redis_ai_queue import RedisAIQueue
+from ...services import fast_recipes
 from ...services.system_log_service import log_system_event
 from ...services.user_activity_service import add_user_activity
 from .ai_recipes import _safe_job_error
@@ -185,6 +186,17 @@ def _same_ingredient(a: str, b: str) -> bool:
         return " ".join(out)
 
     return _base(a) == _base(b)
+
+
+def _from_recent_scan(user_id: int, ingredients: list[str]) -> bool:
+    """True when every ingredient was approved by this user's fridge scan (last 30 minutes)."""
+    try:
+        raw = CacheService().get(f"scanok:{user_id}")
+        approved = set(json.loads(raw)) if raw else set()
+    except Exception:
+        return False
+    wanted = {str(x).strip().lower() for x in ingredients or [] if str(x).strip()}
+    return bool(wanted) and wanted.issubset(approved)
 
 
 def _review_key(value: str) -> str:
@@ -574,7 +586,14 @@ def _run_text_job(job_id: str) -> None:
             },
         )
 
-        if mode not in ("surprise", "quick"):
+        if mode not in ("surprise", "quick") and payload.get("prechecked"):
+            classified = {
+                "food": ingredients,
+                "non_food": [],
+                "source": "precheck",
+                "normalization": payload.get("normalization") or {"corrections": []},
+            }
+        elif mode not in ("surprise", "quick"):
             try:
                 classified = _precheck_ingredient_input(ingredients, mode=mode, tier=tier, user=user, review_approved=True)
             except IngredientValidationError as exc:
@@ -651,17 +670,46 @@ def _run_text_job(job_id: str) -> None:
                 )
             except Exception:
                 pass
-            recipes = pipeline.text_to_recipes(
-                db,
-                user.id,
-                tier,
-                ingredients,
-                filters=filters,
-                exclude_titles=exclude_titles,
-                variety_mode=variety_mode,
-                mode=mode,
-                device_id=device_id,
-            )
+            recipes = None
+            fast_path = mode == "ingredients"
+            if fast_path:
+
+                def _show_cards(cards: list[dict]) -> None:
+                    # The app shows these while the full recipes are written.
+                    job.result = {"stage": "cards", "results": cards, "detected": classified["food"]}
+                    db.commit()
+
+                try:
+                    recipes = fast_recipes.generate(
+                        db,
+                        user,
+                        tier,
+                        ingredients,
+                        pipeline=pipeline,
+                        filters=filters,
+                        exclude_titles=exclude_titles,
+                        base_url=base_url,
+                        device_id=device_id,
+                        on_partial=_show_cards,
+                    )
+                except IngredientValidationError:
+                    raise
+                except Exception as exc:  # noqa: BLE001 - fall back to the original generator.
+                    db.rollback()
+                    fast_path = False
+                    logger.warning("Fast recipes failed (%s); using the standard generator", str(exc)[:200])
+            if recipes is None:
+                recipes = pipeline.text_to_recipes(
+                    db,
+                    user.id,
+                    tier,
+                    ingredients,
+                    filters=filters,
+                    exclude_titles=exclude_titles,
+                    variety_mode=variety_mode,
+                    mode=mode,
+                    device_id=device_id,
+                )
             try:
                 log_system_event(
                     {
@@ -715,7 +763,8 @@ def _run_text_job(job_id: str) -> None:
                 base_url=base_url,
                 # Ensure recent recipes and detail pages have a real thumbnail immediately.
                 # The client can still generate the remaining images in the background.
-                max_generate=1,
+                # (The fast path already made its photos alongside the recipes.)
+                max_generate=0 if fast_path else 1,
             )
             latest_history = (
                 db.query(RecipeHistory)
@@ -1039,13 +1088,24 @@ def generate_from_text_async(
         )
 
     try:
-        classified = _precheck_ingredient_input(
-            payload.ingredients,
-            mode=payload.mode,
-            tier=tier,
-            user=current_user,
-            review_approved=payload.ingredient_review_approved,
-        )
+        if payload.mode == "ingredients" and payload.ingredient_review_approved and _from_recent_scan(
+            current_user.id, payload.ingredients
+        ):
+            # Every ingredient was approved by this user's scan a few minutes ago.
+            classified = {
+                "food": [str(x).strip() for x in payload.ingredients if str(x).strip()],
+                "non_food": [],
+                "source": "scan",
+                "normalization": {"corrections": []},
+            }
+        else:
+            classified = _precheck_ingredient_input(
+                payload.ingredients,
+                mode=payload.mode,
+                tier=tier,
+                user=current_user,
+                review_approved=payload.ingredient_review_approved,
+            )
     except IngredientValidationError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -1081,6 +1141,8 @@ def generate_from_text_async(
             "precheck_filtered_out": precheck_filtered_out,
             "precheck_warning": precheck_warning,
             "ingredient_review_approved": payload.ingredient_review_approved,
+            # The request already ran the ingredient check; the job doesn't repeat it.
+            "prechecked": payload.mode == "ingredients",
             "filters": payload.filters or [],
             "exclude_titles": payload.exclude_titles or [],
             "variety_mode": payload.variety_mode,

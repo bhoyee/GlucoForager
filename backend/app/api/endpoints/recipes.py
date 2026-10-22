@@ -2,6 +2,7 @@ import random
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ...database import get_db
@@ -317,7 +318,8 @@ def recipe_suggestions(
     query = db.query(Recipe).filter(Recipe.status == "published")
     if meal_type:
         query = query.filter(Recipe.meal_type == meal_type.lower())
-    items = query.all()
+    # The bank grows with every generated recipe: score a random sample, not the whole table.
+    items = query.order_by(func.random()).limit(300).all()
     if not items:
         return {"items": []}
     limit = max(1, min(limit, 6))
