@@ -10,6 +10,17 @@ on:
       message:
         description: 'Update message (shown in the EAS dashboard / rollback history)'
         required: true
+      app_version:
+        description: >-
+          Which installed app version gets this update. "current" = the version in app.json (normal).
+          "1.0.10" = users still on the previous store version, during the 1.0.11 rollout. Only send
+          an update to an older version if it needs no new native modules (1.0.11 added none).
+        required: true
+        default: 'current'
+        type: choice
+        options:
+          - current
+          - '1.0.10'
 
 concurrency:
   group: eas-update-${{ github.ref }}
@@ -42,6 +53,14 @@ jobs:
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Target an older app version
+        if: ${{ github.event.inputs.app_version != 'current' }}
+        # runtimeVersion uses the "appVersion" policy, so the version decides which installs get it.
+        # Only changed inside this run; the repo keeps the current version.
+        run: |
+          node -e "const f='app.json';const j=require('./'+f);j.expo.version='${{ github.event.inputs.app_version }}';require('fs').writeFileSync(f,JSON.stringify(j,null,2))"
+          node -e "console.log('Publishing for app version', require('./app.json').expo.version)"
 
       - name: EAS Update
         env:

@@ -70,7 +70,19 @@ COMPARE_RULES = [
      "Rice on its own", dict(carbs_g=45, fiber_g=1, protein_g=4, fat_g=1)),
 ]
 
-PERSONAL_EVERY_OTHER_DAY = True
+# Personal tips: at most twice a week (on two days 3 apart, offset per user so not everyone gets
+# theirs on the same day), rotating through the user's foods to watch so it never repeats a food
+# back to back. A food drops off by itself once readings after it are mostly on target again.
+PERSONAL_DAYS = (1, 4)
+
+
+def _personal_slot(user_id: int, day: date) -> int | None:
+    """Running number of today's personal tip for this user, or None if today isn't one."""
+    shifted = day.toordinal() + (int(user_id) % 7)
+    pos = shifted % 7
+    if pos not in PERSONAL_DAYS:
+        return None
+    return (shifted // 7) * len(PERSONAL_DAYS) + PERSONAL_DAYS.index(pos)
 
 
 def _impact(macros: dict) -> dict | None:
@@ -112,7 +124,7 @@ def _photo_for_tip(text: str) -> str | None:
     return None
 
 
-def _personal(db: Session, user) -> dict | None:
+def _personal(db: Session, user, slot: int = 0) -> dict | None:
     """A tip built from the user's own after-meal readings, or None."""
     from ..models.glucose_reading import GlucoseReading
     from ..models.meal_log_entry import MealLogEntry
@@ -124,9 +136,10 @@ def _personal(db: Session, user) -> dict | None:
     if not meals or not readings:
         return None
     food = glucose_insights.build_insights(meals, readings, [], glucose_targets.targets_for(user), 60)["food"]
-    watch = (food.get("foods_to_watch") or [None])[0]
-    if not watch:
+    to_watch = food.get("foods_to_watch") or []
+    if not to_watch:
         return None
+    watch = to_watch[slot % len(to_watch)]  # a different food each personal day
     name = watch["name"]
     by_id = {m.id: m for m in meals}
     carbs = [by_id[i].carbs_g for i in watch.get("meal_ids", []) if i in by_id and by_id[i].carbs_g]
@@ -162,12 +175,13 @@ def _personal(db: Session, user) -> dict | None:
 
 
 def enrich(db: Session, user, tip: dict, *, on_date: date | None = None) -> dict:
-    """Personal tip on alternate days when the data supports one; photo and comparison for every tip."""
+    """Personal tip twice a week when the data supports one; photo and comparison for every tip."""
     day = on_date or datetime.utcnow().date()
     out = dict(tip or {})
-    if user and (not PERSONAL_EVERY_OTHER_DAY or day.toordinal() % 2 == 0):
+    slot = _personal_slot(user.id, day) if user else None
+    if slot is not None:
         try:
-            personal = _personal(db, user)
+            personal = _personal(db, user, slot)
             if personal:
                 out = personal
         except Exception as exc:  # noqa: BLE001
