@@ -91,4 +91,11 @@ def get_tip_today(request: Request, db: Session = Depends(get_db)):
         return {"tip": None}
     if user:
         tip = personalize_tip_for_user(tip, user)
+    # Personal tip from the user's own readings (alternate days), food photo, glucose comparison.
+    try:
+        from ...services import tip_extras
+
+        tip = tip_extras.enrich(db, user, tip)
+    except Exception:  # noqa: BLE001 - a plain tip is still a good tip
+        pass
     return {"tip": tip}

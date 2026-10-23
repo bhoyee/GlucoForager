@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from ...api.dependencies import get_current_user
 from ...database import get_db
 from ...models.user import User
-from ...services.daily_challenge_service import get_challenge_view, set_task_completed
+from ...services.daily_challenge_service import get_challenge_view, set_task_completed, swap_task
 from ...services.user_activity_service import add_user_activity
 
 
@@ -52,4 +52,22 @@ def complete_challenge_task(
             metadata={"task_id": payload.task_id},
             commit=True,
         )
+    return {"challenge": view}
+
+
+class ChallengeSwapPayload(BaseModel):
+    task_id: str = Field(..., min_length=1, max_length=80)
+
+
+@router.post("/challenge/swap")
+def swap_challenge_task(
+    payload: ChallengeSwapPayload,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Replace one unfinished task with another of the same kind (limited swaps per day)."""
+    try:
+        view = swap_task(db, user=user, task_id=payload.task_id)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
     return {"challenge": view}

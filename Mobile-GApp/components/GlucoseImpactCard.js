@@ -43,7 +43,8 @@ export function ImpactPill({ impact, small }) {
   );
 }
 
-export default function GlucoseImpactCard({ impact, compare, lastTime, title = 'Estimated glucose impact', style }) {
+// simple: for tips - the two options, "X% gentler", the curves and one plain sentence (explain); no stats.
+export default function GlucoseImpactCard({ impact, compare, lastTime, title = 'Estimated glucose impact', style, simple = false, explain = null }) {
   const [width, setWidth] = useState(0);
   const [unit, setUnit] = useState('mg/dL');
   useEffect(() => {
@@ -81,12 +82,35 @@ export default function GlucoseImpactCard({ impact, compare, lastTime, title = '
       <View style={styles.head}>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>{title}</Text>
-          {impact.portion ? <Text style={styles.sub}>Typical response {impact.portion}</Text> : null}
+          {impact.portion && !simple ? <Text style={styles.sub}>Typical response {impact.portion}</Text> : null}
         </View>
-        <ImpactPill impact={impact} />
+        {simple ? null : <ImpactPill impact={impact} />}
       </View>
+      {explain ? <Text style={styles.explain}>{explain}</Text> : null}
 
-      {comparePoints ? (
+      {comparePoints && simple ? (
+        // Tips: one full-width row per option so long names are never cut off; doubles as the key.
+        <View style={styles.optionRows}>
+          {[
+            { label: compare.label || 'Original', style: compareStyle, dashed: true },
+            { label: compare.mainLabel || 'Better choice', style: s, dashed: false },
+          ].map((o) => (
+            <View key={o.label} style={[styles.optionRow, !o.dashed && { backgroundColor: s.bg, borderColor: `${s.color}55` }]}>
+              {o.dashed ? (
+                <View style={styles.legendDashRow}>
+                  {[0, 1, 2].map((i) => (
+                    <View key={i} style={[styles.legendDash, { backgroundColor: ORIGINAL_COLOR }]} />
+                  ))}
+                </View>
+              ) : (
+                <View style={[styles.legendLine, { backgroundColor: s.color }]} />
+              )}
+              <Text style={styles.optionLabel}>{o.label}</Text>
+              <Text style={[styles.optionValue, { color: o.style?.color || ORIGINAL_COLOR }]}>{o.style?.label || '—'}</Text>
+            </View>
+          ))}
+        </View>
+      ) : comparePoints ? (
         <View style={styles.compareRow}>
           <View style={[styles.compareBox, { borderColor: '#CBD5E1' }]}>
             <Text style={styles.statLabel} numberOfLines={1}>{compare.label || 'Original'}</Text>
@@ -105,6 +129,7 @@ export default function GlucoseImpactCard({ impact, compare, lastTime, title = '
         </Text>
       ) : null}
 
+      {simple ? null : (
       <View style={styles.stats}>
         <View style={styles.stat}>
           <Text style={styles.statLabel}>Peak</Text>
@@ -119,6 +144,7 @@ export default function GlucoseImpactCard({ impact, compare, lastTime, title = '
           </View>
         ) : null}
       </View>
+      )}
 
       <View style={{ height: H }} onLayout={(e) => setWidth(Math.round(e.nativeEvent.layout.width))}>
         {width > 0 ? (
@@ -195,7 +221,7 @@ export default function GlucoseImpactCard({ impact, compare, lastTime, title = '
         ) : null}
       </View>
 
-      {compare?.impact ? (
+      {compare?.impact && !simple ? (
         <View style={styles.legend}>
           <View style={styles.legendItem}>
             <View style={[styles.legendLine, { backgroundColor: s.color }]} />
@@ -215,7 +241,7 @@ export default function GlucoseImpactCard({ impact, compare, lastTime, title = '
         </View>
       ) : null}
 
-      {impact.factors?.length ? (
+      {impact.factors?.length && !simple ? (
         <View style={styles.factors}>
           {impact.factors.map((f) => (
             <View key={f} style={styles.factor}>
@@ -258,6 +284,11 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   head: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 8 },
+  optionRows: { gap: 8, marginTop: 10 },
+  optionRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10 },
+  optionLabel: { flex: 1, fontSize: 14, fontWeight: '800', color: Colors.brandNavy },
+  optionValue: { fontSize: 13, fontWeight: '900' },
+  explain: { fontSize: 13.5, lineHeight: 19, color: Colors.brandNavy, fontWeight: '600', marginTop: 6, marginBottom: 4 },
   title: { fontSize: 16, fontWeight: '900', color: Colors.brandNavy },
   sub: { fontSize: 12.5, color: Colors.textLight, marginTop: 2 },
   stats: { flexDirection: 'row', gap: 8, marginBottom: 6 },

@@ -1,5 +1,6 @@
 import json
 import random
+import re
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -383,10 +384,63 @@ def get_or_create_today(db: Session, *, user: User, on_date: date | None = None)
     return row
 
 
+def _auto_complete(db: Session, *, user: User, row: UserDailyChallenge, tasks: list, completed_ids: set[str]) -> set[str]:
+    """Tick tasks the user has already done in the app today (see challenge_actions)."""
+    from . import challenge_actions
+
+    try:
+        facts = challenge_actions.todays_facts(
+            db, user.id, row.date, has_plan_tomorrow=challenge_actions.plan_tomorrow_checker(db, user.id, row.date)
+        )
+    except Exception:  # noqa: BLE001 - never break the challenge over this
+        return completed_ids
+    newly = {
+        str(t.get("id"))
+        for t in tasks
+        if isinstance(t, dict)
+        and str(t.get("id") or "") not in completed_ids
+        and challenge_actions.classify(str(t.get("text") or "")).get("auto") in facts
+    }
+    if not newly:
+        return completed_ids
+    completed_ids = completed_ids | newly
+    row.completed_task_ids_json = json.dumps(sorted(completed_ids), ensure_ascii=False)
+    all_ids = {str(t.get("id") or "") for t in tasks if isinstance(t, dict)} - {""}
+    row.completed_at = datetime.utcnow() if all_ids and completed_ids.issuperset(all_ids) else row.completed_at
+    row.updated_at = datetime.utcnow()
+    db.commit()
+    return completed_ids
+
+
+def _week(db: Session, *, user: User, end: date) -> list[dict[str, Any]]:
+    """Last 7 days for the streak strip: done / partly / missed."""
+    start = end.fromordinal(end.toordinal() - 6)
+    rows = {
+        r.date: r
+        for r in db.query(UserDailyChallenge)
+        .filter(UserDailyChallenge.user_id == user.id, UserDailyChallenge.date >= start, UserDailyChallenge.date <= end)
+        .all()
+    }
+    out = []
+    for i in range(7):
+        d = start.fromordinal(start.toordinal() + i)
+        r = rows.get(d)
+        state = "none"
+        if r:
+            ids = {str(t.get("id") or "") for t in _parse_json_list(r.tasks_json) if isinstance(t, dict)} - {""}
+            done = {str(x) for x in _parse_json_list(r.completed_task_ids_json) if isinstance(x, str)}
+            state = "done" if ids and ids.issubset(done) else ("partial" if done & ids else "none")
+        out.append({"date": d.isoformat(), "state": state})
+    return out
+
+
 def get_challenge_view(db: Session, *, user: User, on_date: date | None = None) -> dict[str, Any]:
+    from . import challenge_actions
+
     row = get_or_create_today(db, user=user, on_date=on_date)
     tasks = _parse_json_list(row.tasks_json)
     completed_ids = set(str(x) for x in _parse_json_list(row.completed_task_ids_json) if isinstance(x, str))
+    completed_ids = _auto_complete(db, user=user, row=row, tasks=tasks, completed_ids=completed_ids)
 
     clean_tasks: list[dict[str, Any]] = []
     for item in tasks:
@@ -396,12 +450,15 @@ def get_challenge_view(db: Session, *, user: User, on_date: date | None = None) 
         text = str(item.get("text") or "").strip()
         if not tid or not text:
             continue
+        how = challenge_actions.classify(text)
         clean_tasks.append(
             {
                 "id": tid,
                 "text": text,
                 "category": str(item.get("category") or "general").strip() or "general",
                 "completed": tid in completed_ids,
+                "auto_hint": challenge_actions.AUTO_HINTS.get(how["auto"]) if how["auto"] else None,
+                "action": how["action"],
             }
         )
 
@@ -415,6 +472,8 @@ def get_challenge_view(db: Session, *, user: User, on_date: date | None = None) 
         "progress": {"completed": completed_count, "total": total},
         "completed_today": completed_today,
         "streak_days": get_streak_days(db, user=user, up_to=row.date),
+        "week": _week(db, user=user, end=row.date),
+        "swaps_left": swaps_left(user.id, row.date),
     }
 
 
@@ -497,3 +556,86 @@ def get_streak_days(db: Session, *, user: User, up_to: date | None = None, max_d
             break
         cur = cur.fromordinal(cur.toordinal() - 1)
     return streak
+
+
+# ---- Swapping a task ---------------------------------------------------------------------
+# A task that doesn't suit today can be swapped for another of the same kind, a few times a day.
+# (Regenerating the whole list on demand would let anyone skip to the easiest tasks.)
+SWAPS_PER_DAY = 3
+
+
+def _swap_keys(user_id: int, day: date) -> tuple[str, str]:
+    return f"challenge:swaps:{user_id}:{day.isoformat()}", f"challenge:swapped:{user_id}:{day.isoformat()}"
+
+
+def swaps_left(user_id: int, day: date) -> int:
+    from .cache_service import CacheService
+
+    try:
+        used = int(CacheService().get(_swap_keys(user_id, day)[0]) or 0)
+    except Exception:  # noqa: BLE001
+        used = 0
+    return max(0, SWAPS_PER_DAY - used)
+
+
+def _same_task_text(text: str) -> str:
+    t = str(text or "").lower().strip().rstrip(".")
+    return re.sub(r"\s+(today|tonight)$", "", t)
+
+
+def swap_task(db: Session, *, user: User, task_id: str, on_date: date | None = None) -> dict[str, Any]:
+    from .cache_service import CacheService
+
+    row = get_or_create_today(db, user=user, on_date=on_date)
+    tasks = [t for t in _parse_json_list(row.tasks_json) if isinstance(t, dict)]
+    idx = next((i for i, t in enumerate(tasks) if str(t.get("id")) == task_id), None)
+    if idx is None:
+        raise ValueError("That task isn't in today's challenge.")
+    completed = {str(x) for x in _parse_json_list(row.completed_task_ids_json) if isinstance(x, str)}
+    if task_id in completed:
+        raise ValueError("Finished tasks can't be swapped.")
+    if swaps_left(user.id, row.date) <= 0:
+        raise ValueError(f"You've used today's {SWAPS_PER_DAY} swaps. New tasks tomorrow!")
+
+    cache = CacheService()
+    count_key, swapped_key = _swap_keys(user.id, row.date)
+    try:
+        swapped_out = set(json.loads(cache.get(swapped_key) or "[]"))
+    except Exception:  # noqa: BLE001
+        swapped_out = set()
+
+    bsp = _normalize_blood_sugar_profile(getattr(user, "blood_sugar_profile", None))
+    applicable = [
+        c for c in get_catalog(db)
+        if isinstance(c, dict) and c.get("active", True) and str(c.get("id") or "").strip()
+        and str(c.get("task_text") or "").strip() and _matches_profile(c, bsp)
+    ]
+    current_ids = {str(t.get("id")) for t in tasks}
+    current_texts = {_same_task_text(t.get("text")) for t in tasks}
+    category = str(tasks[idx].get("category") or "general")
+
+    def fresh(c: dict) -> bool:
+        cid = str(c.get("id"))
+        return cid not in current_ids and cid not in swapped_out and _same_task_text(c.get("task_text")) not in current_texts
+
+    pool = [c for c in applicable if fresh(c) and str(c.get("category") or "general") == category]
+    if not pool:
+        pool = [c for c in applicable if fresh(c)]
+    if not pool:
+        raise ValueError("No other tasks to swap in right now.")
+    pick = random.Random().choice(pool)
+
+    tasks[idx] = {
+        "id": str(pick.get("id")).strip(),
+        "text": str(pick.get("task_text")).strip(),
+        "category": str(pick.get("category") or "general").strip() or "general",
+    }
+    row.tasks_json = json.dumps(tasks, ensure_ascii=False)
+    row.updated_at = datetime.utcnow()
+    db.commit()
+    try:
+        cache.incr(count_key, ttl_seconds=2 * 24 * 60 * 60)
+        cache.set(swapped_key, json.dumps(sorted(swapped_out | {task_id})), ttl_seconds=2 * 24 * 60 * 60)
+    except Exception:  # noqa: BLE001
+        pass
+    return get_challenge_view(db, user=user, on_date=row.date)

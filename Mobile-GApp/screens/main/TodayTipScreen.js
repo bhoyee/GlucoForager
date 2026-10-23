@@ -1,5 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Share, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Share, ScrollView, Image, ActivityIndicator } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import GlucoseImpactCard from '../../components/GlucoseImpactCard';
+import { apiFetch } from '../../utils/api';
+import { API_URL } from '../../config/api';
+import { formatGlucose, getGlucoseUnit } from '../../utils/glucose';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -41,6 +46,51 @@ export default function TodayTipScreen() {
   }, [route.params]);
 
   const [feedback, setFeedback] = useState(null);
+  const [photoUrl, setPhotoUrl] = useState(tip?.photo?.url || null);
+  const [unit, setUnit] = useState('mg/dL');
+  const personal = tip?.personal || null;
+
+  useEffect(() => {
+    getGlucoseUnit().then(setUnit).catch(() => {});
+  }, []);
+
+  // A food photo made for the first time takes a few seconds: check back until it's ready.
+  useEffect(() => {
+    setPhotoUrl(tip?.photo?.url || null);
+    const name = tip?.photo?.name;
+    if (!name || tip?.photo?.url || !tip?.photo?.pending) return undefined;
+    let cancelled = false;
+    let tries = 0;
+    let timer;
+    const poll = async () => {
+      if (cancelled) return;
+      tries += 1;
+      try {
+        const token = await AsyncStorage.getItem('userToken');
+        const res = await apiFetch(
+          `${API_URL}/api/app/food-images?name=${encodeURIComponent(name)}`,
+          { headers: token ? { Authorization: `Bearer ${token}` } : undefined },
+          { timeoutMs: 8000 }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          const url = data?.images?.[name];
+          if (url && !cancelled) {
+            setPhotoUrl(url);
+            return;
+          }
+        }
+      } catch {
+        // Photo is optional.
+      }
+      if (!cancelled && tries < 14) timer = setTimeout(poll, 3000);
+    };
+    timer = setTimeout(poll, 2500);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [tip]);
   const [pendingNotUseful, setPendingNotUseful] = useState(false);
   const feedbackDayKey = useMemo(() => getLocalDayKey(), []);
   const feedbackStorageId = useMemo(() => `${feedbackDayKey}:${getTipStorageId(tip)}`, [feedbackDayKey, tip]);
@@ -143,6 +193,24 @@ export default function TodayTipScreen() {
       >
         <View style={styles.content}>
         <View style={styles.heroCard}>
+          {photoUrl || tip?.photo?.pending ? (
+            <View style={styles.photoWrap}>
+              {photoUrl ? (
+                <Image source={{ uri: photoUrl }} style={styles.photo} resizeMode="cover" />
+              ) : (
+                <LinearGradient colors={['#E6F2EF', '#CFE6E1']} style={[styles.photo, styles.photoEmpty]}>
+                  <ActivityIndicator color={Colors.primary} />
+                </LinearGradient>
+              )}
+              <LinearGradient colors={['transparent', 'rgba(6,30,26,0.55)']} style={styles.photoShade} />
+              {personal ? (
+                <View style={styles.personalBadge}>
+                  <Ionicons name="person" size={11} color="#7A4B00" />
+                  <Text style={styles.personalBadgeText}>Based on your readings</Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
           <View style={styles.heroTopRow}>
             <View style={styles.iconBubble}>
               <Ionicons name="sparkles-outline" size={22} color={Colors.primaryDark} />
@@ -155,10 +223,20 @@ export default function TodayTipScreen() {
 
           <Text style={styles.heroBody}>{tip.tip || tip.body}</Text>
 
+          {personal ? (
+            <View style={styles.personalStat}>
+              <Ionicons name="analytics" size={16} color="#C05621" />
+              <Text style={styles.personalStatText}>
+                Above target {personal.above} of {personal.times} times after {String(personal.food || '').toLowerCase()}
+                {personal.avg_after_mg_dl ? ` · average ${formatGlucose(personal.avg_after_mg_dl, unit)}` : ''}
+              </Text>
+            </View>
+          ) : null}
+
           <View style={styles.guidanceMetaRow}>
             <View style={styles.metaChip}>
               <Ionicons name="shield-checkmark-outline" size={15} color={Colors.primaryDark} />
-              <Text style={styles.metaChipText}>Blood sugar friendly</Text>
+              <Text style={styles.metaChipText}>{personal ? 'Personal tip' : 'Blood sugar friendly'}</Text>
             </View>
             <View style={styles.metaChip}>
               <Ionicons name="time-outline" size={15} color={Colors.primaryDark} />
@@ -177,6 +255,16 @@ export default function TodayTipScreen() {
               <Text style={styles.body}>{tip.why}</Text>
             </View>
           </View>
+        ) : null}
+
+        {tip?.compare?.main?.impact && tip?.compare?.other?.impact ? (
+          <GlucoseImpactCard
+            simple
+            title={`${tip.compare.title || 'See the difference'}: how your blood sugar responds`}
+            explain={tip.compare.note || null}
+            impact={tip.compare.main.impact}
+            compare={{ impact: tip.compare.other.impact, label: tip.compare.other.label, mainLabel: tip.compare.main.label }}
+          />
         ) : null}
 
         {tip.try_today ? (
@@ -555,4 +643,12 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: Colors.secondary,
   },
+  photoWrap: { height: 180, marginHorizontal: -18, marginTop: -18, marginBottom: 16, borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden', backgroundColor: '#E6F2EF' },
+  photo: { width: '100%', height: '100%' },
+  photoEmpty: { alignItems: 'center', justifyContent: 'center' },
+  photoShade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 70 },
+  personalBadge: { position: 'absolute', top: 12, left: 12, flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#FFE7A8', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
+  personalBadgeText: { fontSize: 11.5, fontWeight: '900', color: '#7A4B00' },
+  personalStat: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFF1E6', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, marginTop: 12 },
+  personalStatText: { flex: 1, fontSize: 13, fontWeight: '800', color: '#9C4221' },
 });

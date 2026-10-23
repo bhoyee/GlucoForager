@@ -233,3 +233,23 @@ def generate_missing(items: list[tuple[str, str | None]]) -> None:
 def is_generating(name: str) -> bool:
     key = food_key(name)
     return bool(key) and bool(CacheService().get(f"foodimg:lock:{key}"))
+
+
+def lookup_one(name: str) -> str | None:
+    """Library photo for one food (own session) - for callers without a db handy."""
+    db = SessionLocal()
+    try:
+        return lookup(db, [name]).get(name)
+    finally:
+        db.close()
+
+
+def needs_generation_quick(name: str) -> bool:
+    """Missing from the library and not already being generated."""
+    if is_generating(name):
+        return False
+    db = SessionLocal()
+    try:
+        return needs_generation(db, name)
+    finally:
+        db.close()
