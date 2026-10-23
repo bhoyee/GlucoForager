@@ -648,19 +648,6 @@ export default function HomeScreen() {
     );
   };
 
-  const handleShuffleSuggestions = async () => {
-    try {
-      setIsFetchingRecipes(true);
-      const token = await AsyncStorage.getItem('userToken');
-      if (!token) return;
-      await fetchSuggestions(token);
-    } catch (error) {
-      Alert.alert('Error', 'Unable to refresh suggestions right now.');
-    } finally {
-      setIsFetchingRecipes(false);
-    }
-  };
-
   const handleOpenSwaps = () => navigation.navigate('CarbSwaps');
   const handleOpenShoppingList = () => {
     setShowShoppingListNewDot(false);
@@ -849,10 +836,7 @@ export default function HomeScreen() {
   };
 
   const handleViewAllRecipes = () => {
-    navigation.navigate('RecipeResults', { 
-      title: 'All Recipes',
-      showBack: true 
-    });
+    navigation.navigate('RecipeLibrary');
   };
 
   const handleUpgradePress = () => {
@@ -1311,9 +1295,9 @@ export default function HomeScreen() {
         <View style={styles.hSection}>
           <View style={styles.hSectionHead}>
             <Text style={styles.hSectionTitle}>3 Picks for You</Text>
-            <TouchableOpacity onPress={handleShuffleSuggestions} disabled={isFetchingRecipes} hitSlop={10} style={styles.hShuffle}>
-              {isFetchingRecipes ? <ActivityIndicator size="small" color={Colors.primary} /> : <Ionicons name="shuffle" size={16} color={Colors.primary} />}
-              <Text style={styles.hSectionLink}>Shuffle</Text>
+            <TouchableOpacity onPress={handleViewAllRecipes} hitSlop={10} style={styles.hSeeAll}>
+              <Text style={styles.hSectionLink}>See all</Text>
+              <Ionicons name="chevron-forward" size={15} color={Colors.primary} />
             </TouchableOpacity>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hCardsRow}>
@@ -1372,6 +1356,19 @@ export default function HomeScreen() {
                     </TouchableOpacity>
                   );
                 })}
+            {suggestedRecipes.length ? (
+              // People who swipe through the picks want more: the last card opens the full library.
+              <TouchableOpacity style={[styles.hPick, styles.hPickMore]} onPress={handleViewAllRecipes} activeOpacity={0.9}>
+                <LinearGradient colors={['#23807E', '#0B5A46']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hPickMoreInner}>
+                  <View style={styles.hPickMoreIcon}>
+                    <Ionicons name="grid" size={22} color="white" />
+                  </View>
+                  <Text style={styles.hPickMoreTitle}>Browse all recipes</Text>
+                  <Text style={styles.hPickMoreText}>Filter by breakfast, lunch, dinner or snack</Text>
+                  <Ionicons name="arrow-forward" size={18} color="white" />
+                </LinearGradient>
+              </TouchableOpacity>
+            ) : null}
           </ScrollView>
         </View>
         ) : null}
@@ -1548,7 +1545,7 @@ const styles = StyleSheet.create({
   hSectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
   hSectionTitle: { fontSize: 19, fontWeight: '900', color: Colors.brandNavy },
   hSectionLink: { fontSize: 13.5, fontWeight: '800', color: Colors.primary },
-  hShuffle: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  hSeeAll: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   hCard: { backgroundColor: 'white', borderRadius: 20, borderWidth: 1, borderColor: '#E9ECE4', padding: 14 },
   hTrackCard: { marginHorizontal: -10, paddingHorizontal: 12, paddingVertical: 16 },
   hRings: { flexDirection: 'row', gap: 8 },
@@ -1593,6 +1590,11 @@ const styles = StyleSheet.create({
   hCardsRow: { gap: 10, paddingRight: 18 },
   hPick: { width: 168, backgroundColor: 'white', borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: '#E9ECE4' },
   hPickImage: { width: '100%', height: 108 },
+  hPickMore: { borderWidth: 0 },
+  hPickMoreInner: { flex: 1, minHeight: 190, padding: 14, justifyContent: 'center', gap: 8 },
+  hPickMoreIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
+  hPickMoreTitle: { fontSize: 16, fontWeight: '900', color: 'white' },
+  hPickMoreText: { fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.85)', lineHeight: 16 },
   hPickImageEmpty: { backgroundColor: '#E8F4F3', alignItems: 'center', justifyContent: 'center' },
   hLabel: { position: 'absolute', left: 8, bottom: 8, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3 },
   hLabelLow: { backgroundColor: '#E7F4E8' },

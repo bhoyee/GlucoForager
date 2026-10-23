@@ -397,6 +397,107 @@ def recipe_suggestions(
     }
 
 
+BROWSE_QUICK = {"low_carb", "under_20", "high_protein", "vegetarian"}
+BROWSE_SCAN_LIMIT = 600  # rows scored per request; the database filters first
+
+
+def _nutrition_num(recipe: Recipe, key: str) -> float | None:
+    try:
+        value = (recipe.nutrition or {}).get(key)
+        return float(value) if value is not None else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+@router.get("/browse")
+def browse_recipes(
+    meal_type: str | None = Query(None, description="breakfast | lunch | dinner | snack"),
+    q: str | None = Query(None, max_length=60),
+    quick: str | None = Query(None, description="Comma list: low_carb, under_20, high_protein, vegetarian"),
+    offset: int = Query(0, ge=0, le=5000),
+    limit: int = Query(20, ge=1, le=40),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The recipe library (admin recipes + the recipe bank), best match first.
+
+    The user's allergies, exclusions and diet are always applied (never a user-facing filter).
+    """
+    from ...models.favorite import Favorite
+
+    quick_set = {x.strip() for x in str(quick or "").split(",") if x.strip() in BROWSE_QUICK}
+    query = db.query(Recipe).filter(Recipe.status == "published")
+    if meal_type and meal_type.lower() in {"breakfast", "lunch", "dinner", "snack"}:
+        query = query.filter(Recipe.meal_type == meal_type.lower())
+    term = " ".join(str(q or "").split())[:60]
+    if term:
+        query = query.filter(Recipe.name.ilike(f"%{term}%"))
+    if "under_20" in quick_set:
+        query = query.filter(
+            func.coalesce(Recipe.prep_time_minutes, 0) + func.coalesce(Recipe.cook_time_minutes, 0) <= 20,
+            func.coalesce(Recipe.prep_time_minutes, 0) + func.coalesce(Recipe.cook_time_minutes, 0) > 0,
+        )
+    rows = query.order_by(Recipe.id.desc()).limit(BROWSE_SCAN_LIMIT).all()
+
+    profile = extract_food_profile(current_user)
+    has_hard = bool(profile.get("allergens")) or bool(profile.get("food_exclusions")) or (
+        str(profile.get("dietary_pattern") or "").lower() not in {"", "none"}
+    )
+
+    def keep(r: Recipe) -> bool:
+        if has_hard and not _profile_hard_allows(r, profile=profile):
+            return False
+        carbs = _nutrition_num(r, "carbs")
+        if "low_carb" in quick_set and (carbs is None or carbs > 30):
+            return False
+        protein = _nutrition_num(r, "protein")
+        if "high_protein" in quick_set and (protein is None or protein < 20):
+            return False
+        if "vegetarian" in quick_set and "vegetarian" not in _recipe_tags(r, "dietary_tags"):
+            return False
+        return True
+
+    allowed = [r for r in rows if keep(r)]
+    fingerprints = {r.id: _curated_recipe_fingerprint(r) for r in allowed}
+    feelings = get_latest_feelings(db, current_user.id, list(fingerprints.values())) if allowed else {}
+    bonus = {"great": 5, "not_great": -8}
+    # Best match for this user first; newest breaks ties (rows are already newest-first).
+    ranked = sorted(
+        allowed,
+        key=lambda r: -(int(_profile_score(r, profile=profile)) + bonus.get(feelings.get(fingerprints[r.id]), 0)),
+    )
+    page = ranked[offset: offset + limit]
+
+    favorites = {
+        " ".join(str(t or "").lower().split()): fid
+        for fid, t in db.query(Favorite.id, Favorite.title).filter(Favorite.user_id == current_user.id).all()
+    }
+    return {
+        "total": len(ranked),
+        "offset": offset,
+        "has_more": offset + limit < len(ranked),
+        "items": [
+            {
+                "id": r.id,
+                "name": r.name,
+                "meal_type": r.meal_type,
+                "description": r.description,
+                "prep_time_minutes": r.prep_time_minutes,
+                "cook_time_minutes": r.cook_time_minutes,
+                "servings": r.servings,
+                "image_url": r.image_url,
+                "nutrition": r.nutrition,
+                "ingredients": r.ingredients,
+                "instructions": r.instructions,
+                "last_feeling": feelings.get(fingerprints[r.id]),
+                "favorite_id": favorites.get(" ".join(str(r.name or "").lower().split())),
+                **_recipe_metadata_payload(r),
+            }
+            for r in page
+        ],
+    }
+
+
 @router.get("/recent")
 def recent_recipes(
     request: Request,
@@ -460,7 +561,13 @@ def recent_recipes(
                 _persist_history_recipes(db, latest, recipes)
             except Exception:
                 db.rollback()
-    return {"items": recipes[:3]}
+    # When and how this batch was made, for the app's "Today · From your fridge scan" line.
+    made_at = latest.created_at.isoformat() if latest.created_at else None
+    items = [
+        {**r, "history_created_at": made_at, "history_source": latest.source} if isinstance(r, dict) else r
+        for r in recipes[:3]
+    ]
+    return {"items": items}
 
 
 @router.get("/history")

@@ -42,6 +42,7 @@ import FoodPreferencesScreen from '../screens/main/FoodPreferencesScreen';
 import DailyPlanScreen from '../screens/main/DailyPlanScreen';
 import GlucoGuideScreen from '../screens/main/GlucoGuideScreen';
 import ShoppingListScreen from '../screens/main/ShoppingListScreen';
+import RecipeLibraryScreen from '../screens/main/RecipeLibraryScreen';
 import WeeklyRecapScreen from '../screens/main/WeeklyRecapScreen';
 
 const Tab = createBottomTabNavigator();
@@ -64,6 +65,7 @@ function HomeStackNavigator() {
       <HomeStack.Screen name="RecipeDetail" component={RecipeDetailScreen} />
       <HomeStack.Screen name="StartCooking" component={StartCookingScreen} />
       <HomeStack.Screen name="RecentRecipes" component={RecentRecipesScreen} />
+      <HomeStack.Screen name="RecipeLibrary" component={RecipeLibraryScreen} />
       <HomeStack.Screen name="EatNow" component={EatNowScreen} />
       <HomeStack.Screen name="CarbSwaps" component={CarbSwapsScreen} />
       <HomeStack.Screen name="Challenge" component={ChallengeScreen} />
