@@ -113,9 +113,34 @@ def _ensure_images(recipes: list[dict], tier: str, ingredients: list[str]) -> li
     return recipes
 
 
+# Things printed on drink and packet labels that aren't foods you can cook a meal from.
+_LABEL_ONLY = re.compile(
+    r"^(water|sparkling water|carbonated water|mineral water|ice|"
+    r"citric acid|ascorbic acid|malic acid|lactic acid|phosphoric acid|acetic acid|"
+    r"sodium (citrate|benzoate|chloride|bicarbonate)|potassium (sorbate|citrate|chloride)|calcium chloride|"
+    r"natural flavou?rings?|flavou?rings?|natural flavou?rs?|aromas?|colou?rs?|colou?rings?|caramel colou?r|"
+    r"preservatives?|stabili[sz]ers?|emulsifiers?|thickeners?|antioxidants?|acidity regulators?|"
+    r"sweeteners?|aspartame|sucralose|acesulfame k|acesulfame potassium|stevia extract|steviol glycosides|"
+    r"caffeine|xanthan gum|guar gum|e ?\d{3}[a-z]?)$",
+    re.I,
+)
+
+
+def _only_label_additives(ingredients: list[str]) -> bool:
+    items = [" ".join(str(x or "").lower().replace("-", " ").split()) for x in ingredients or []]
+    items = [x for x in items if x]
+    return bool(items) and all(_LABEL_ONLY.match(x) for x in items)
+
+
 def _precheck_ingredient_input(raw_ingredients: list[str], *, mode: str, tier: str, user: User | None = None, review_approved: bool = False) -> dict:
     if mode in ("surprise", "quick"):
         return {"food": [], "non_food": [], "source": "mode", "normalization": {"corrections": []}}
+    if _only_label_additives(raw_ingredients):
+        raise IngredientValidationError(
+            "label_additives_only",
+            "These look like ingredients from a drink or packet label, not foods to cook with. "
+            "Try adding a main food like eggs, chicken, rice, beans or vegetables.",
+        )
 
     normalized = normalizer.normalize(raw_ingredients)
     review_pairs = _ingredient_review_pairs(raw_ingredients, normalized.get("ingredients") or [])

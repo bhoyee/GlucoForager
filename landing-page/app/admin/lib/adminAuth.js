@@ -41,6 +41,18 @@ export async function refreshAdminAccessToken(options = {}) {
   }
 }
 
+let redirectingToSignIn = false;
+
+function expireAdminSession() {
+  if (typeof window === 'undefined' || redirectingToSignIn) return;
+  // Only when signed in before (a missing token is the sign-in page's normal state).
+  if (!getAdminAccessToken() && !getAdminRefreshToken()) return;
+  clearAdminTokens();
+  if (window.location.pathname.replace(/\/+$/, '') === '/admin') return;
+  redirectingToSignIn = true;
+  window.location.replace('/admin?expired=1');
+}
+
 export async function adminFetch(url, options = {}) {
   const accessToken = getAdminAccessToken();
   const headers = { ...(options.headers || {}) };
@@ -49,7 +61,12 @@ export async function adminFetch(url, options = {}) {
   if (first.status !== 401) return first;
 
   const refreshed = await refreshAdminAccessToken({ signal: options.signal });
-  if (!refreshed) return first;
+  if (!refreshed) {
+    // The session can't be renewed: sign out and go to sign-in once, rather than letting every
+    // background check (inbox, notifications...) keep failing and filling the system log.
+    expireAdminSession();
+    return first;
+  }
 
   const headers2 = { ...(options.headers || {}), Authorization: `Bearer ${refreshed}` };
   return fetch(url, { ...options, headers: headers2 });

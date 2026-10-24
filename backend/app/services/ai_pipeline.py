@@ -67,6 +67,14 @@ class AIPipeline:
                 internal_message=f"{internal_prefix}: {reason_text}",
                 error_type="invalid_input",
             )
+        if reason_text.startswith(("missing_nutrition", "non_numeric_nutrition")):
+            return RecipeGenerationError(
+                "I couldn't make good recipes from these ingredients. "
+                "Please add one or two main foods you have, like eggs, chicken, rice, beans or vegetables.",
+                code="recipe_validation_failed",
+                internal_message=f"{internal_prefix}: {reason_text}",
+                error_type="invalid_input",
+            )
         if any(reason_text.startswith(prefix) for prefix in actionable_reasons):
             return RecipeGenerationError(
                 "I couldn't build reliable diabetes-friendly recipes from those ingredients yet. "

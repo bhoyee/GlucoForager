@@ -24,6 +24,15 @@ export default function AdminLoginPage() {
   const [message, setMessage] = useState('');
   const [messageTone, setMessageTone] = useState('info'); // info | success | warning | danger
 
+  // Sent here by adminFetch when a session can't be renewed.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (new URLSearchParams(window.location.search).get('expired') === '1') {
+      setMessage('Your session expired. Please sign in again.');
+      setMessageTone('warning');
+    }
+  }, []);
+
   const [mfaRequired, setMfaRequired] = useState(false);
   const [mfaChallengeId, setMfaChallengeId] = useState(null);
   const [mfaCode, setMfaCode] = useState('');
