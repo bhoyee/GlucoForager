@@ -20,7 +20,7 @@ permissions:
 jobs:
   try-launch:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 355
     env:
       OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING: 'True'
       INSTANCE_NAME: glucoforager-arm
@@ -72,31 +72,45 @@ jobs:
             --query 'data[?!contains("display-name", `Minimal`)] | [0].id' --raw-output)
           printf '%s\n' "$SSH_PUBKEY" > /tmp/key.pub
 
-          for size in "2 12" "2 6" "1 6" "1 4"; do
-            set -- $size
-            for ad in 1 2; do
-              out=$(oci compute instance launch -c "$T" --availability-domain "iKjF:UK-LONDON-1-AD-$ad" \
-                --shape VM.Standard.A1.Flex --shape-config "{\"ocpus\":$1,\"memoryInGBs\":$2}" \
-                --subnet-id "$SUBNET" --image-id "$IMAGE" --assign-public-ip true \
-                --display-name "$INSTANCE_NAME" --boot-volume-size-in-gbs 50 \
-                --ssh-authorized-keys-file /tmp/key.pub --no-retry \
-                --query 'data.id' --raw-output 2>&1) || true
-              if [[ "$out" == ocid1.instance* ]]; then
-                echo "SUCCESS: AD-$ad ${1} OCPU / ${2} GB -> $out"
-                {
-                  echo "result=created"
-                  echo "detail=AD-$ad, ${1} OCPU / ${2} GB"
-                } >> "$GITHUB_OUTPUT"
-                exit 0
-              fi
-              msg=$(echo "$out" | grep -oE '"message": "[^"]{0,90}' | head -1)
-              echo "AD-$ad ${1}/${2}: ${msg:-$(echo "$out" | tail -1 | cut -c1-150)}"
-              if echo "$out" | grep -qiE 'NotAuthenticated|NotAuthorized'; then
-                echo "::error::OCI authentication failed - check the OCI_* secrets"
-                exit 1
-              fi
-              sleep 5
+          # Every availability domain this tenancy has (London has more than two).
+          ADS=$(oci iam availability-domain list -c "$T" | jq -r '.data[].name')
+          [ -n "$ADS" ] || { echo "::error::Could not list availability domains"; exit 1; }
+          echo "Availability domains: $(echo $ADS)"
+
+          # Free slots open for minutes at a time and GitHub only starts this every few hours,
+          # so each run keeps trying (public repo: Actions minutes are free).
+          deadline=$(( $(date +%s) + 5*3600 + 40*60 ))
+          round=0
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            round=$((round + 1))
+            for size in "2 12" "2 6" "1 6" "1 4"; do
+              set -- $size
+              for ad in $ADS; do
+                out=$(oci compute instance launch -c "$T" --availability-domain "$ad"                   --shape VM.Standard.A1.Flex --shape-config "{\"ocpus\":$1,\"memoryInGBs\":$2}"                   --subnet-id "$SUBNET" --image-id "$IMAGE" --assign-public-ip true                   --display-name "$INSTANCE_NAME" --boot-volume-size-in-gbs 50                   --ssh-authorized-keys-file /tmp/key.pub --no-retry                   --query 'data.id' --raw-output 2>&1) || true
+                if [[ "$out" == ocid1.instance* ]]; then
+                  echo "SUCCESS (round $round): $ad ${1} OCPU / ${2} GB -> $out"
+                  {
+                    echo "result=created"
+                    echo "detail=$ad, ${1} OCPU / ${2} GB"
+                  } >> "$GITHUB_OUTPUT"
+                  exit 0
+                fi
+                if echo "$out" | grep -qiE 'NotAuthenticated|NotAuthorized'; then
+                  echo "::error::OCI authentication failed - check the OCI_* secrets"
+                  exit 1
+                fi
+                if echo "$out" | grep -qiE 'LimitExceeded'; then
+                  echo "::error::Free-tier limit reached (an A1 instance may already exist) - $(echo "$out" | grep -oE '"message": "[^"]{0,120}' | head -1)"
+                  exit 1
+                fi
+                sleep 3
+              done
             done
+            # Log a line every 10 rounds so the run shows progress without huge logs.
+            if [ $((round % 10)) -eq 1 ]; then
+              echo "Round $round: no capacity yet ($(echo "$out" | grep -oE '"message": "[^"]{0,60}' | head -1))"
+            fi
+            sleep 60
           done
           echo "result=no-capacity" >> "$GITHUB_OUTPUT"
 
