@@ -4,6 +4,7 @@ for app users, and the right people left out."""
 import os
 import unittest
 from datetime import datetime
+from unittest import mock
 
 from app.services.email_service import blog_email_teaser, render_blog_post_newsletter_email, render_blog_post_to_user_email
 
@@ -66,6 +67,7 @@ class RecipientsTest(unittest.TestCase):
 
     def test_all_users_skips_unsubscribed_deleted_suspended_and_excluded(self):
         from app.api.endpoints.admin_blog import _user_recipients
+        from app.core.config import settings
         from app.models.user import User
 
         db = self.Session()
@@ -80,14 +82,15 @@ class RecipientsTest(unittest.TestCase):
         user("optout", dunning_opt_out=True)
         user("deleted", deleted_at=datetime.utcnow())
         user("suspended", suspended_at=datetime.utcnow())
-        if not db.query(User).filter(User.email == "missblair26@gmail.com").first():
-            db.add(User(email="missblair26@gmail.com", hashed_password="x", public_id=f"bemb{stamp}", subscription_tier="free"))
+        user("excluded")
         db.commit()
 
-        emails = {e for _, e in _user_recipients(db)}
+        excluded = f"be-excluded-{stamp}@example.com"
+        with mock.patch.object(settings, "email_broadcast_exclude", excluded):
+            emails = {e for _, e in _user_recipients(db)}
         mine = {e.split("-")[1] for e in emails if e.endswith(f"-{stamp}@example.com")}
         self.assertEqual(mine, {"ok"})
-        self.assertNotIn("missblair26@gmail.com", emails)
+        self.assertNotIn(excluded, emails)
         db.close()
 
 
