@@ -65,13 +65,9 @@ It's priced to be accessible: core tracking is free forever, AI features have we
 
 ## Screenshots
 
-| Home | Food scan verdict | Type ingredients | Recipe results |
-|:---:|:---:|:---:|:---:|
-| <img src="landing-page/public/screenshots/home-screen.jpeg" width="200" alt="Home screen with carb ring, challenge and quick actions"> | <img src="landing-page/public/screenshots/food-scan-verdict.png" width="200" alt="Food scan verdict"> | <img src="landing-page/public/screenshots/type-ingredients.png" width="200" alt="Typing ingredients"> | <img src="landing-page/public/screenshots/recipe-result.jpeg" width="200" alt="Recipe results"> |
-| **Food swaps** | **GlucoGuide AI** | **Glucose logging** | **Daily carb goal** |
-| <img src="landing-page/public/screenshots/food-swaps.png" width="200" alt="Food swaps"> | <img src="landing-page/public/screenshots/glucoguide-ai.png" width="200" alt="GlucoGuide AI chat"> | <img src="landing-page/public/screenshots/glucose-logging.png" width="200" alt="Glucose logging"> | <img src="landing-page/public/screenshots/carb-goal.png" width="200" alt="Daily carb goal ring"> |
-| **Daily meal planner** | **Shopping list** | **Favourites & history** | **Profile** |
-| <img src="landing-page/public/screenshots/daily-meal-planner.png" width="200" alt="Daily meal planner"> | <img src="landing-page/public/screenshots/shopping-list.jpeg" width="200" alt="Shopping list"> | <img src="landing-page/public/screenshots/favorites-history.jpg" width="200" alt="Favourites and history"> | <img src="landing-page/public/screenshots/profile.jpeg" width="200" alt="Profile"> |
+| Home | Quick actions & picks | Glucose insights: trends |
+|:---:|:---:|:---:|
+| <img src="docs/screenshots/home.png" width="260" alt="Home: greeting, scan fridge, type foods, suggest meal, last-used ingredients and Track Today rings"> | <img src="docs/screenshots/home-actions-picks.png" width="260" alt="Home: log meal, log glucose, snap a meal, scan barcode, after-meal glucose check reminder and recipe picks"> | <img src="docs/screenshots/glucose-insights-trends.jpg" width="260" alt="Glucose insights trends: 7-day glucose chart against target range with key insights"> |
 
 ---
 
@@ -270,7 +266,7 @@ GlucoForager/
 │   └── components/, lib/, public/
 │
 ├── status-worker/               Cloudflare Worker: uptime check + /status for the app
-├── docs/                        architecture diagram
+├── docs/                        architecture + user-flow diagrams, README screenshots
 ├── .github/workflows/           CI/CD and ops workflows (see below)
 └── docker-compose.yml           api, worker, db (Postgres 15), redis (7)
 ```
