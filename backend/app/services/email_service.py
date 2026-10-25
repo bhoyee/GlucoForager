@@ -631,6 +631,97 @@ def send_free_guide_email(to_email: str, subscriber_id: int) -> None:
     logger.info("Sent free guide email to %s", to_email)
 
 
+def _blog_post_email(
+    *, post_title: str, post_excerpt: str | None, post_url: str, image_url: str | None, footer_html: str
+) -> tuple[str, str]:
+    """Teaser email for a blog post: title, short excerpt, cover image and a link to read
+    the full article on the website. The article body itself is never emailed."""
+    site_url = (settings.site_url or "https://www.glucoforager.com").rstrip("/")
+    logo_url = f"{site_url}/images/logo.png"
+
+    def _strip_tags(value: str) -> str:
+        import re
+
+        return re.sub(r"<[^>]*>", "", value or "").strip()
+
+    safe_title = _html.escape((post_title or "New post").strip())
+    safe_excerpt = _html.escape(_html.unescape(_strip_tags((post_excerpt or "").strip())))
+    safe_image = _html.escape((image_url or "").strip())
+
+    image_block = ""
+    if safe_image:
+        image_block = f"""
+          <div style="margin-top:14px; overflow:hidden; border-radius:14px; border:1px solid #e5e7eb;">
+            <a href="{_html.escape(post_url)}"><img src="{safe_image}" alt="{safe_title}" style="width:100%; display:block;" /></a>
+          </div>
+        """
+
+    excerpt_block = ""
+    if safe_excerpt:
+        excerpt_block = f"""
+          <p style="margin-top:12px; line-height:1.6; font-size:14px; color:#0C1824;">{safe_excerpt}</p>
+        """
+
+    subject = f"New on GlucoForager: {_strip_tags(post_title or 'New post')}".strip()[:160]
+    html_body = f"""
+    <html>
+      <body style="font-family: Arial, sans-serif; color: #0C1824;">
+        <div style="max-width:640px; margin:0 auto; border:1px solid #e5e7eb; border-radius:14px; padding:22px;">
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+            <img src="{logo_url}" alt="GlucoForager" width="36" height="36" style="display:block; border-radius:10px;" />
+            <div style="font-weight:800; font-size:18px; color:#0C1824;">GlucoForager</div>
+          </div>
+
+          <h2 style="color:#0FB7A5; margin-top:0; margin-bottom:0;">New blog post</h2>
+          <h1 style="margin-top:10px; font-size:22px; line-height:1.2; color:#0C1824;">{safe_title}</h1>
+          {excerpt_block}
+          {image_block}
+
+          <div style="margin-top:18px;">
+            <a href="{_html.escape(post_url)}" style="display:inline-block; background:#0D9488; color:white; text-decoration:none; padding:12px 16px; border-radius:999px; font-weight:700;">
+              Read the full article
+            </a>
+          </div>
+
+          <p style="margin-top:22px; color:#6b7280; font-size:12px; line-height:1.5;">
+            {footer_html}
+          </p>
+        </div>
+      </body>
+    </html>
+    """
+    return subject, html_body
+
+
+def render_blog_post_newsletter_email(
+    *, post_title: str, post_excerpt: str | None, post_url: str, image_url: str | None, unsubscribe_url: str
+) -> tuple[str, str]:
+    footer = (
+        "You received this email because you subscribed to GlucoForager updates.<br/>"
+        f'Unsubscribe anytime: <a href="{_html.escape(unsubscribe_url)}" style="color:#0FB7A5;">Unsubscribe</a>'
+    )
+    return _blog_post_email(
+        post_title=post_title, post_excerpt=post_excerpt, post_url=post_url, image_url=image_url, footer_html=footer
+    )
+
+
+def render_blog_post_to_user_email(
+    *, user_id: int, to_email: str, post_title: str, post_excerpt: str | None, post_url: str, image_url: str | None
+) -> tuple[str, str]:
+    """For app users (not newsletter subscribers). The unsubscribe link sets the same
+    per-user marketing opt-out the welcome-week and win-back emails respect."""
+    from .user_email_tokens import make_dunning_unsubscribe_token
+
+    unsubscribe_url = f"{_site_url()}/unsubscribe?type=dunning&token={make_dunning_unsubscribe_token(user_id, to_email)}"
+    footer = (
+        "You're receiving this because you have a GlucoForager account.<br/>"
+        f"Don't want these emails? <a href=\"{_html.escape(unsubscribe_url)}\" style=\"color:#0FB7A5;\">Unsubscribe</a>"
+    )
+    return _blog_post_email(
+        post_title=post_title, post_excerpt=post_excerpt, post_url=post_url, image_url=image_url, footer_html=footer
+    )
+
+
 def send_blog_post_newsletter_email(
     to_email: str,
     post_title: str,
@@ -639,150 +730,24 @@ def send_blog_post_newsletter_email(
     image_url: str | None,
     unsubscribe_url: str,
 ) -> None:
-    site_url = (settings.site_url or "https://www.glucoforager.com").rstrip("/")
-    logo_url = f"{site_url}/images/logo.png"
-    def _escape(value: str) -> str:
-        return (
-            (value or "")
-            .replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace('"', "&quot;")
-            .replace("'", "&#39;")
-        )
-
-    def _strip_tags(value: str) -> str:
-        import re
-
-        return re.sub(r"<[^>]*>", "", value or "").strip()
-
-    safe_title = _escape((post_title or "New post").strip())
-    safe_excerpt = _escape(_strip_tags((post_excerpt or "").strip()))
-    safe_image = (image_url or "").strip()
-
-    image_block = ""
-    if safe_image:
-        image_block = f"""
-          <div style="margin-top:14px; overflow:hidden; border-radius:14px; border:1px solid #e5e7eb;">
-            <img src="{safe_image}" alt="{safe_title}" style="width:100%; display:block;" />
-          </div>
-        """
-
-    excerpt_block = ""
-    if safe_excerpt:
-        excerpt_block = f"""
-          <p style="margin-top:12px; line-height:1.6; font-size:14px; color:#0C1824;">{safe_excerpt}</p>
-        """
-
-    subject = f"New on GlucoForager: {_strip_tags(post_title or 'New post')}".strip()[:160]
-    html_body = f"""
-    <html>
-      <body style="font-family: Arial, sans-serif; color: #0C1824;">
-        <div style="max-width:640px; margin:0 auto; border:1px solid #e5e7eb; border-radius:14px; padding:22px;">
-          <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
-            <img src="{logo_url}" alt="GlucoForager" width="36" height="36" style="display:block; border-radius:10px;" />
-            <div style="font-weight:800; font-size:18px; color:#0C1824;">GlucoForager</div>
-          </div>
-
-          <h2 style="color:#0FB7A5; margin-top:0; margin-bottom:0;">New blog post</h2>
-          <h1 style="margin-top:10px; font-size:22px; line-height:1.2; color:#0C1824;">{safe_title}</h1>
-          {excerpt_block}
-          {image_block}
-
-          <div style="margin-top:18px;">
-            <a href="{_escape(post_url)}" style="display:inline-block; background:#0D9488; color:white; text-decoration:none; padding:12px 16px; border-radius:999px; font-weight:700;">
-              Read the post
-            </a>
-          </div>
-
-          <p style="margin-top:22px; color:#6b7280; font-size:12px; line-height:1.5;">
-            You received this email because you subscribed to GlucoForager updates.
-            <br/>
-            Unsubscribe anytime:
-            <a href="{_escape(unsubscribe_url)}" style="color:#0FB7A5;">Unsubscribe</a>
-          </p>
-        </div>
-      </body>
-    </html>
-    """
+    subject, html_body = render_blog_post_newsletter_email(
+        post_title=post_title, post_excerpt=post_excerpt, post_url=post_url, image_url=image_url, unsubscribe_url=unsubscribe_url
+    )
     _send_email(to_email, subject, html_body)
     logger.info("Sent blog post newsletter email to %s", to_email)
 
 
 def send_blog_post_to_user_email(
     to_email: str,
+    user_id: int,
     post_title: str,
     post_excerpt: str | None,
     post_url: str,
     image_url: str | None,
 ) -> None:
-    """Same visual template as send_blog_post_newsletter_email, but for the app's
-    User audience rather than NewsletterSignup subscribers - no unsubscribe link,
-    since these recipients aren't on the newsletter opt-in/opt-out list."""
-    site_url = (settings.site_url or "https://www.glucoforager.com").rstrip("/")
-    logo_url = f"{site_url}/images/logo.png"
-
-    def _escape(value: str) -> str:
-        return (
-            (value or "")
-            .replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace('"', "&quot;")
-            .replace("'", "&#39;")
-        )
-
-    def _strip_tags(value: str) -> str:
-        import re
-
-        return re.sub(r"<[^>]*>", "", value or "").strip()
-
-    safe_title = _escape((post_title or "New post").strip())
-    safe_excerpt = _escape(_strip_tags((post_excerpt or "").strip()))
-    safe_image = (image_url or "").strip()
-
-    image_block = ""
-    if safe_image:
-        image_block = f"""
-          <div style="margin-top:14px; overflow:hidden; border-radius:14px; border:1px solid #e5e7eb;">
-            <img src="{safe_image}" alt="{safe_title}" style="width:100%; display:block;" />
-          </div>
-        """
-
-    excerpt_block = ""
-    if safe_excerpt:
-        excerpt_block = f"""
-          <p style="margin-top:12px; line-height:1.6; font-size:14px; color:#0C1824;">{safe_excerpt}</p>
-        """
-
-    subject = f"New on GlucoForager: {_strip_tags(post_title or 'New post')}".strip()[:160]
-    html_body = f"""
-    <html>
-      <body style="font-family: Arial, sans-serif; color: #0C1824;">
-        <div style="max-width:640px; margin:0 auto; border:1px solid #e5e7eb; border-radius:14px; padding:22px;">
-          <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
-            <img src="{logo_url}" alt="GlucoForager" width="36" height="36" style="display:block; border-radius:10px;" />
-            <div style="font-weight:800; font-size:18px; color:#0C1824;">GlucoForager</div>
-          </div>
-
-          <h2 style="color:#0FB7A5; margin-top:0; margin-bottom:0;">New blog post</h2>
-          <h1 style="margin-top:10px; font-size:22px; line-height:1.2; color:#0C1824;">{safe_title}</h1>
-          {excerpt_block}
-          {image_block}
-
-          <div style="margin-top:18px;">
-            <a href="{_escape(post_url)}" style="display:inline-block; background:#0D9488; color:white; text-decoration:none; padding:12px 16px; border-radius:999px; font-weight:700;">
-              Read the post
-            </a>
-          </div>
-
-          <p style="margin-top:22px; color:#6b7280; font-size:12px; line-height:1.5;">
-            You're receiving this because you're a GlucoForager user.
-          </p>
-        </div>
-      </body>
-    </html>
-    """
+    subject, html_body = render_blog_post_to_user_email(
+        user_id=user_id, to_email=to_email, post_title=post_title, post_excerpt=post_excerpt, post_url=post_url, image_url=image_url
+    )
     _send_email(to_email, subject, html_body)
     logger.info("Sent blog post user-broadcast email to %s", to_email)
 
