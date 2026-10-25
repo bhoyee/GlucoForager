@@ -163,9 +163,15 @@ class DiabetesFriendlyClassifier:
                     {"role": "user", "content": ", ".join(ingredients)},
                 ],
                 temperature=0.1,
-                max_tokens=120,
+                max_tokens=220,
+                # JSON mode: without it the model sometimes wraps the answer in ```json fences,
+                # which json.loads rejects ("Expecting value: line 1 column 1").
+                response_format={"type": "json_object"},
+                timeout=15,
             )
-            content = resp.choices[0].message.content or ""
+            content = (resp.choices[0].message.content or "").strip()
+            if content.startswith("```"):
+                content = content.strip("`").removeprefix("json").strip()
             result = json.loads(content)
             if "diabetes_friendly" not in result:
                 raise ValueError("Invalid classifier response")
