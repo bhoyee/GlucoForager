@@ -70,6 +70,7 @@ from .api.endpoints import (
     admin_backups,
     blog,
     admin_blog,
+    admin_blog_autopilot,
     newsletter,
     contact,
     admin_newsletter,
@@ -124,6 +125,7 @@ from .services.backup_scheduler import start_backup_scheduler
 from .services.dunning_scheduler import start_dunning_scheduler
 from .services.welcome_week_scheduler import start_welcome_week_scheduler
 from .services.streak_nudge_scheduler import start_streak_nudge_scheduler
+from .services.blog_autopilot_scheduler import start_blog_autopilot_scheduler
 from .services.recipe_auto_generation_scheduler import start_recipe_auto_generation_scheduler
 from .services.user_activity_maintenance import start_user_activity_cleanup_scheduler
 from .services.user_deletion_service import start_soft_deleted_user_cleanup_scheduler
@@ -387,6 +389,10 @@ def on_startup():
         start_streak_nudge_scheduler()
     except Exception as exc:  # noqa: BLE001
         logger.warning("Streak nudge scheduler start failed: %s", exc)
+    try:
+        start_blog_autopilot_scheduler()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Blog autopilot scheduler start failed: %s", exc)
     try:
         # Only run the DB-backed in-process runner when configured.
         if (settings.ai_queue_backend or "db").strip().lower() == "db":
@@ -731,6 +737,7 @@ app.include_router(system_logs.router, prefix="/api")
 app.include_router(admin_health.router, prefix="/api")
 app.include_router(admin_backups.router, prefix="/api")
 app.include_router(blog.router, prefix="/api")
+app.include_router(admin_blog_autopilot.router, prefix="/api")
 app.include_router(admin_blog.router, prefix="/api")
 app.include_router(newsletter.router, prefix="/api")
 app.include_router(contact.router, prefix="/api")

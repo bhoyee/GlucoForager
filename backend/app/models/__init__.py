@@ -42,6 +42,7 @@ from .recipe_history import RecipeHistory  # noqa: F401
 from .recipe_check_in import RecipeCheckIn  # noqa: F401
 from .blog_post import BlogPost  # noqa: F401
 from .blog_comment import BlogComment  # noqa: F401
+from .blog_topic import BlogTopic  # noqa: F401
 from .newsletter_signup import NewsletterSignup  # noqa: F401
 from .app_setting import AppSetting  # noqa: F401
 from .food_image import FoodImage  # noqa: F401

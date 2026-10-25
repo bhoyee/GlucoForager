@@ -1244,6 +1244,11 @@
   color: #b71c1c;
 }
 
+.admin-badge.info {
+  background: rgba(15, 118, 110, 0.14);
+  color: #0f5f58;
+}
+
 .admin-health-page {
   padding-bottom: 28px;
 }
