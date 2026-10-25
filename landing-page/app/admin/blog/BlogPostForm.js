@@ -99,6 +99,10 @@ export default function BlogPostForm({
 
   const [uploadBusy, setUploadBusy] = useState(false);
   const [uploadMessage, setUploadMessage] = useState('');
+  const [emailPreview, setEmailPreview] = useState(null);
+  const [emailPreviewTab, setEmailPreviewTab] = useState('subscribers');
+  const [emailPreviewBusy, setEmailPreviewBusy] = useState(false);
+  const [emailPreviewError, setEmailPreviewError] = useState('');
 
   const previewUrl = useMemo(() => {
     const value = String(form.image_url || '').trim();
@@ -107,6 +111,37 @@ export default function BlogPostForm({
     if (value.startsWith('http://') || value.startsWith('https://')) return value;
     return '';
   }, [form.image_url]);
+
+  const openEmailPreview = async (tab) => {
+    if (!adminToken) return;
+    setEmailPreviewBusy(true);
+    setEmailPreviewError('');
+    try {
+      const response = await fetch(`${API_URL}/api/admin/blog/email-preview`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: form.title,
+          content: form.content || null,
+          author_name: form.author_name || null,
+          slug: form.slug || null,
+          excerpt: form.excerpt || null,
+          image_url: previewUrl || form.image_url || null,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setEmailPreviewError(typeof data?.detail === 'string' ? data.detail : 'Could not load the email preview.');
+        return;
+      }
+      setEmailPreviewTab(tab);
+      setEmailPreview(data);
+    } catch {
+      setEmailPreviewError('Could not load the email preview.');
+    } finally {
+      setEmailPreviewBusy(false);
+    }
+  };
 
   const handleFileUpload = async (file) => {
     if (!file || !adminToken) return;
@@ -396,10 +431,84 @@ export default function BlogPostForm({
           <span>Send to all users</span>
         </label>
         <p className="admin-help">
-          Emails every GlucoForager app user (not just newsletter subscribers). Only works when Status is set to
-          Published. Sends at most once per post.
+          Emails GlucoForager app users (not just newsletter subscribers), skipping anyone who unsubscribed and the
+          always-excluded list. Only works when Status is set to Published. Sends at most once per post.
         </p>
       </div>
+
+      <div className="admin-field">
+        <button
+          type="button"
+          className="admin-button secondary"
+          onClick={() => openEmailPreview(form.notify_all_users && !form.notify_newsletter ? 'users' : 'subscribers')}
+          disabled={emailPreviewBusy || !form.title.trim()}
+        >
+          {emailPreviewBusy ? 'Loading preview…' : 'Preview emails'}
+        </button>
+        <p className="admin-help">
+          See exactly what subscribers and app users will receive, and how many people, before you tick a box and publish.
+        </p>
+        {emailPreviewError ? <p className="admin-help" style={{ color: '#b91c1c' }}>{emailPreviewError}</p> : null}
+      </div>
+
+      {emailPreview ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Email preview"
+          onClick={() => setEmailPreview(null)}
+          style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '24px 12px', overflowY: 'auto' }}
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            style={{ width: '100%', maxWidth: 760, background: '#fff', borderRadius: 16, padding: 18, boxShadow: '0 20px 50px rgba(0,0,0,0.25)' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <strong style={{ fontSize: 18, marginRight: 'auto' }}>Email preview</strong>
+              {[
+                ['subscribers', 'Newsletter subscribers'],
+                ['users', 'All app users'],
+              ].map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={`admin-button ${emailPreviewTab === key ? '' : 'secondary'}`}
+                  onClick={() => setEmailPreviewTab(key)}
+                >
+                  {label} ({emailPreview[key]?.count ?? 0})
+                </button>
+              ))}
+              <button type="button" className="admin-button neutral" onClick={() => setEmailPreview(null)}>
+                Close
+              </button>
+            </div>
+            <div style={{ margin: '12px 0', fontSize: 14, lineHeight: 1.6 }}>
+              <div>
+                <span style={{ color: '#6b7280' }}>Subject:</span> <strong>{emailPreview[emailPreviewTab]?.subject}</strong>
+              </div>
+              <div>
+                <span style={{ color: '#6b7280' }}>Will be sent to:</span>{' '}
+                <strong>{emailPreview[emailPreviewTab]?.count ?? 0} people</strong>
+                {emailPreviewTab === 'users' ? " (active accounts that haven't unsubscribed)" : ' (subscribed to the newsletter)'}
+              </div>
+              <div style={{ color: '#6b7280' }}>Never sent to: {(emailPreview.excluded || []).join(', ') || 'nobody'}</div>
+              {(emailPreview.warnings || []).map((w) => (
+                <div key={w} style={{ color: '#92400e' }}>⚠ {w}</div>
+              ))}
+            </div>
+            <iframe
+              title="Email preview"
+              sandbox=""
+              srcDoc={emailPreview[emailPreviewTab]?.html || ''}
+              style={{ width: '100%', height: 820, border: '1px solid #e5e7eb', borderRadius: 12, background: '#fff' }}
+            />
+            <p className="admin-help" style={{ marginTop: 8 }}>
+              Links are disabled in this preview. The email shows the excerpt, the opening of the article and its main
+              sections, then a button to read the full article on the website.
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       <div className="admin-field">
         <label>Published at</label>

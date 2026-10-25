@@ -85,6 +85,8 @@ class Settings(BaseSettings):
     blog_autopilot_model: str = Field("gpt-4.1", env="BLOG_AUTOPILOT_MODEL")
     blog_autopilot_notify_email: str | None = Field(None, env="BLOG_AUTOPILOT_NOTIFY_EMAIL")
     bing_webmaster_api_key: str | None = Field(None, env="BING_WEBMASTER_API_KEY")
+    # Extra comma-separated addresses never sent blog broadcast emails (on top of the built-in list).
+    email_broadcast_exclude: str | None = Field(None, env="EMAIL_BROADCAST_EXCLUDE")
 
     # General API burst limits (requests per minute).
     # These protect the API from accidental client retry loops and basic scraping.

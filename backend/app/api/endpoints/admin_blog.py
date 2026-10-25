@@ -20,7 +20,12 @@ from ...models.blog_post import BlogPost
 from ...models.newsletter_signup import NewsletterSignup
 from ...models.user import User
 from ...services.cache_service import CacheService
-from ...services.email_service import send_blog_post_newsletter_email, send_blog_post_to_user_email
+from ...services.email_service import (
+    render_blog_post_newsletter_email,
+    render_blog_post_to_user_email,
+    send_blog_post_newsletter_email,
+    send_blog_post_to_user_email,
+)
 from ...services.html_sanitizer import RICH_CONTENT_ALLOWED_ATTRS, RICH_CONTENT_ALLOWED_TAGS, sanitize_html
 from ...services.newsletter_tokens import make_unsubscribe_token
 from ...services.r2_storage_service import r2_upload_bytes
@@ -130,6 +135,55 @@ def _unsubscribe_url(subscriber_id: int, email: str) -> str:
     return f"{base}/unsubscribe?token={token}"
 
 
+# Never emailed by blog broadcasts (subscribers or all users), whatever list they're on.
+EXCLUDED_BROADCAST_EMAILS = {"missblair26@gmail.com"}
+BROADCAST_LIMIT = 2000
+
+
+def _excluded_emails() -> set[str]:
+    extra = {e.strip().lower() for e in (settings.email_broadcast_exclude or "").split(",") if e.strip()}
+    return EXCLUDED_BROADCAST_EMAILS | extra
+
+
+def _newsletter_recipients(db: Session) -> list[tuple[int, str]]:
+    excluded = _excluded_emails()
+    rows = (
+        db.query(NewsletterSignup.id, NewsletterSignup.email)
+        .filter(NewsletterSignup.status == "subscribed")
+        .order_by(NewsletterSignup.id.asc())
+        .limit(BROADCAST_LIMIT)
+        .all()
+    )
+    return [(i, e) for i, e in rows if e and e.strip().lower() not in excluded]
+
+
+def _user_recipients(db: Session) -> list[tuple[int, str]]:
+    """App users who can receive a blog email: active accounts that haven't unsubscribed
+    from marketing emails, minus the always-excluded list, one email per address."""
+    excluded = _excluded_emails()
+    rows = (
+        db.query(User.id, User.email)
+        .filter(
+            User.email.is_not(None),
+            User.deleted_at.is_(None),
+            User.suspended_at.is_(None),
+            User.dunning_opt_out.is_(False),
+        )
+        .order_by(desc(User.created_at), desc(User.id))
+        .limit(BROADCAST_LIMIT)
+        .all()
+    )
+    seen: set[str] = set()
+    out = []
+    for user_id, email in rows:
+        normalized = str(email or "").strip().lower()
+        if not normalized or normalized in seen or normalized in excluded:
+            continue
+        seen.add(normalized)
+        out.append((user_id, normalized))
+    return out
+
+
 def _send_post_to_newsletter_task(post_id: int) -> None:
     db = SessionLocal()
     try:
@@ -137,28 +191,24 @@ def _send_post_to_newsletter_task(post_id: int) -> None:
         if not post or post.status != "published":
             return
 
-        recipients = (
-            db.query(NewsletterSignup)
-            .filter(NewsletterSignup.status == "subscribed")
-            .order_by(NewsletterSignup.id.asc())
-            .limit(2000)
-            .all()
-        )
+        recipients = _newsletter_recipients(db)
         if not recipients:
             post.newsletter_sent_at = _utcnow()
             db.commit()
             return
 
         post_url = _post_url(post.slug)
-        for recipient in recipients:
+        for subscriber_id, email in recipients:
             try:
                 send_blog_post_newsletter_email(
-                    to_email=recipient.email,
+                    to_email=email,
                     post_title=post.title,
                     post_excerpt=post.excerpt,
                     post_url=post_url,
                     image_url=post.image_url,
-                    unsubscribe_url=_unsubscribe_url(recipient.id, recipient.email),
+                    post_content=post.content,
+                    author_name=post.author_name,
+                    unsubscribe_url=_unsubscribe_url(subscriber_id, email),
                 )
             except Exception:
                 continue
@@ -176,25 +226,11 @@ def _send_post_to_all_users_task(post_id: int, campaign_id: int | None) -> None:
         if not post or post.status != "published":
             return
 
-        rows = (
-            db.query(User.email)
-            .filter(User.email.is_not(None))
-            .order_by(desc(User.created_at), desc(User.id))
-            .limit(2000)
-            .all()
-        )
-        seen: set[str] = set()
-        emails: list[str] = []
-        for (email,) in rows:
-            normalized = str(email or "").strip().lower()
-            if not normalized or normalized in seen:
-                continue
-            seen.add(normalized)
-            emails.append(normalized)
+        recipients = _user_recipients(db)
 
         campaign = db.query(AdminEmailCampaign).filter(AdminEmailCampaign.id == campaign_id).first() if campaign_id else None
 
-        if not emails:
+        if not recipients:
             post.all_users_notified_at = _utcnow()
             if campaign:
                 campaign.sent_count = 0
@@ -203,14 +239,17 @@ def _send_post_to_all_users_task(post_id: int, campaign_id: int | None) -> None:
 
         post_url = _post_url(post.slug)
         sent = 0
-        for email in emails:
+        for user_id, email in recipients:
             try:
                 send_blog_post_to_user_email(
                     to_email=email,
+                    user_id=user_id,
                     post_title=post.title,
                     post_excerpt=post.excerpt,
                     post_url=post_url,
                     image_url=post.image_url,
+                    post_content=post.content,
+                    author_name=post.author_name,
                 )
             except Exception:
                 continue
@@ -777,4 +816,60 @@ def blog_audit(
             }
             for r in rows
         ]
+    }
+
+
+class EmailPreviewPayload(BaseModel):
+    title: str = Field("", max_length=160)
+    content: str | None = Field(None, max_length=1000000)
+    author_name: str | None = Field(None, max_length=120)
+    slug: str | None = Field(None, max_length=80)
+    excerpt: str | None = Field(None, max_length=5000)
+    image_url: str | None = Field(None, max_length=600)
+
+
+@router.post("/email-preview")
+def blog_email_preview(
+    payload: EmailPreviewPayload,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),  # noqa: ARG001
+    staff: AdminUser = Depends(require_staff_permission("blog.read")),  # noqa: ARG001
+):
+    """Exactly what 'Send to newsletter subscribers' and 'Send to all users' would email
+    for this post (title, excerpt, cover image, read link), plus who would get it."""
+    title = (payload.title or "").strip() or "Untitled post"
+    post_url = _post_url((payload.slug or "").strip() or _slugify(title) or "post")
+    image_url = (payload.image_url or "").strip() or None
+
+    subscribers = _newsletter_recipients(db)
+    users = _user_recipients(db)
+    sub_subject, sub_html = render_blog_post_newsletter_email(
+        post_title=title,
+        post_excerpt=payload.excerpt,
+        post_url=post_url,
+        image_url=image_url,
+        post_content=payload.content,
+        author_name=payload.author_name,
+        unsubscribe_url=_unsubscribe_url(0, "preview@example.com"),
+    )
+    user_subject, user_html = render_blog_post_to_user_email(
+        user_id=0,
+        to_email="preview@example.com",
+        post_title=title,
+        post_excerpt=payload.excerpt,
+        post_url=post_url,
+        image_url=image_url,
+        post_content=payload.content,
+        author_name=payload.author_name,
+    )
+    excerpt_text = re.sub(r"<[^>]*>", "", payload.excerpt or "").strip()
+    return {
+        "subscribers": {"subject": sub_subject, "html": sub_html, "count": len(subscribers)},
+        "users": {"subject": user_subject, "html": user_html, "count": len(users)},
+        "excluded": sorted(_excluded_emails()),
+        "warnings": [w for w in (
+            None if excerpt_text else "No excerpt: the email will show only the title, image and link.",
+            None if image_url else "No cover image.",
+            "Excerpt is long for an email (aim for 1-2 sentences)." if len(excerpt_text) > 320 else None,
+        ) if w],
     }
