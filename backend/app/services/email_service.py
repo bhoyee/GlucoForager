@@ -1010,3 +1010,83 @@ def _send_plain_welcome_email(to_email: str, full_name: str | None) -> None:
         button_label="Open GlucoForager", button_url=_site_url(),
     )
     _send_email(to_email, "Welcome to GlucoForager", html)
+
+
+def _blog_autopilot_shell(heading: str, body_html: str, button_url: str, button_label: str) -> str:
+    return f"""
+    <html>
+      <body style="font-family: Arial, sans-serif; color: #0C1824;">
+        <div style="max-width:640px; margin:0 auto; border:1px solid #e5e7eb; border-radius:14px; padding:22px;">
+          <h2 style="color:#0FB7A5; margin-top:0;">{heading}</h2>
+          {body_html}
+          <p style="margin:22px 0 6px 0;">
+            <a href="{button_url}" style="background:#0F766E; color:#ffffff; padding:12px 20px; border-radius:999px; text-decoration:none; font-weight:bold;">{button_label}</a>
+          </p>
+          <p style="margin-top:20px; color:#6b7280; font-size:12px;">Blog autopilot - nothing is published until you publish it.</p>
+        </div>
+      </body>
+    </html>
+    """
+
+
+def send_blog_week_plan_email(to_email: str, topics: list) -> None:
+    """Admin-only: the week's researched blog topics, so they can be swapped before drafting."""
+    planned = sorted((t for t in topics if t.status == "planned"), key=lambda t: t.planned_for)
+    reserves = [t for t in topics if t.status == "reserve"]
+    rows = "".join(
+        f"""<tr>
+          <td style="padding:10px 8px 10px 0; vertical-align:top; color:#6b7280; width:90px;">{t.planned_for.strftime('%a %d %b')}</td>
+          <td style="padding:10px 0; vertical-align:top;"><strong>{_html.escape(t.title_idea or t.keyword)}</strong><br/>
+            <span style="color:#0F766E; font-size:13px;">Keyword: {_html.escape(t.keyword)}</span><br/>
+            <span style="color:#6b7280; font-size:13px;">{_html.escape(t.reason or '')}</span></td>
+        </tr>"""
+        for t in planned
+    )
+    spare = ", ".join(_html.escape(t.keyword) for t in reserves) or "none"
+    body = f"""
+      <p>Here's next week's plan, picked from what people in the US and UK are searching. Drafts arrive by email at 6am on each day.</p>
+      <table style="width:100%; border-collapse:collapse; font-size:14px;">{rows}</table>
+      <p style="font-size:13px; color:#6b7280;">Reserves (used if you swap a topic): {spare}</p>
+    """
+    _send_email(
+        to_email,
+        f"Blog plan for next week: {len(planned)} topics",
+        _blog_autopilot_shell("This week's blog topics", body, f"{_site_url()}/admin/blog/autopilot", "Review or swap topics"),
+    )
+
+
+def send_blog_draft_ready_email(to_email: str, post, topic) -> None:
+    checks = (topic.signals or {}).get("checks") or []
+    words = (topic.signals or {}).get("words")
+    checks_html = (
+        "<p style='font-size:13px;'><strong>Worth a look:</strong></p><ul style='font-size:13px; color:#92400e;'>"
+        + "".join(f"<li>{_html.escape(c)}</li>" for c in checks)
+        + "</ul>"
+        if checks
+        else "<p style='font-size:13px; color:#15803d;'>All automatic checks passed.</p>"
+    )
+    body = f"""
+      <p style="font-size:18px; margin:0 0 6px 0;"><strong>{_html.escape(post.title)}</strong></p>
+      <p style="color:#6b7280; margin:0 0 14px 0;">Keyword: {_html.escape(topic.keyword)}{f" &middot; {words:,} words" if words else ""}</p>
+      <p>{_html.escape(post.excerpt or '')}</p>
+      {checks_html}
+      <p style="font-size:13px;">Before publishing: check the facts and numbers, add a personal touch if you like, then Publish or Schedule.</p>
+    """
+    _send_email(
+        to_email,
+        f"New blog draft ready: {post.title}"[:160],
+        _blog_autopilot_shell("A new draft is ready to review", body, f"{_site_url()}/admin/blog/{post.id}", "Review the draft"),
+    )
+
+
+def send_blog_autopilot_failed_email(to_email: str, topic) -> None:
+    body = f"""
+      <p>The draft for <strong>{_html.escape(topic.keyword)}</strong> couldn't be written.</p>
+      <p style="font-size:13px; color:#6b7280;">{_html.escape(topic.error or 'Unknown error')}</p>
+      <p>You can retry it from the autopilot page.</p>
+    """
+    _send_email(
+        to_email,
+        f"Blog draft failed: {topic.keyword}"[:160],
+        _blog_autopilot_shell("A blog draft failed", body, f"{_site_url()}/admin/blog/autopilot", "Open autopilot"),
+    )

@@ -79,6 +79,13 @@ class Settings(BaseSettings):
     work_plans_scheduler_poll_seconds: float = Field(30.0, env="WORK_PLANS_SCHEDULER_POLL_SECONDS")
     work_plans_scheduler_batch_size: int = Field(50, env="WORK_PLANS_SCHEDULER_BATCH_SIZE")
 
+    # Blog autopilot: weekly keyword research (Sunday) + AI drafts Mon/Wed/Fri, saved as
+    # drafts for a human to review. Off unless enabled, so local/test runs never call out.
+    blog_autopilot_enabled: bool = Field(False, env="BLOG_AUTOPILOT_ENABLED")
+    blog_autopilot_model: str = Field("gpt-4.1", env="BLOG_AUTOPILOT_MODEL")
+    blog_autopilot_notify_email: str | None = Field(None, env="BLOG_AUTOPILOT_NOTIFY_EMAIL")
+    bing_webmaster_api_key: str | None = Field(None, env="BING_WEBMASTER_API_KEY")
+
     # General API burst limits (requests per minute).
     # These protect the API from accidental client retry loops and basic scraping.
     # AI endpoints have their own per-user limits (see ai_rate_limit_*).
