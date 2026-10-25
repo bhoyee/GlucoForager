@@ -50,15 +50,26 @@ export async function generateMetadata({ params }) {
   };
 }
 
-function Stat({ label, value, unit, highlight }) {
+// Each nutrient gets its own colour; carbs (the number that matters most) stays the solid one.
+const STAT_TONES = {
+  carbs: { box: 'bg-teal-700 border-teal-700', value: 'text-white', label: 'text-teal-100' },
+  fiber: { box: 'bg-green-50 border-green-200', value: 'text-green-800', label: 'text-green-700' },
+  sugar: { box: 'bg-amber-50 border-amber-200', value: 'text-amber-800', label: 'text-amber-700' },
+  protein: { box: 'bg-sky-50 border-sky-200', value: 'text-sky-800', label: 'text-sky-700' },
+  fat: { box: 'bg-violet-50 border-violet-200', value: 'text-violet-800', label: 'text-violet-700' },
+  calories: { box: 'bg-rose-50 border-rose-200', value: 'text-rose-800', label: 'text-rose-700' },
+};
+
+function Stat({ label, value, unit, tone }) {
   if (value == null) return null;
+  const t = STAT_TONES[tone];
   return (
-    <div className={`rounded-2xl p-4 text-center ${highlight ? 'bg-teal-700 text-white' : 'bg-gray-50 text-gray-900'}`}>
-      <div className="text-2xl font-extrabold">
+    <div className={`rounded-2xl border p-4 text-center ${t.box}`}>
+      <div className={`text-2xl font-extrabold ${t.value}`}>
         {round(value)}
         <span className="text-base font-semibold">{unit}</span>
       </div>
-      <div className={`text-xs font-semibold uppercase tracking-wide ${highlight ? 'text-teal-100' : 'text-gray-500'}`}>{label}</div>
+      <div className={`text-xs font-semibold uppercase tracking-wide ${t.label}`}>{label}</div>
     </div>
   );
 }
@@ -135,9 +146,9 @@ export default async function RecipePage({ params }) {
     <main className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
       {/* eslint-disable-next-line react/no-danger */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-      <BlogTopBar rightHref="/download" rightLabel="Get the app" />
+      <BlogTopBar rightHref="/download" rightLabel="Get the app" wide />
 
-      <div className="container mx-auto max-w-6xl px-4 py-8">
+      <div className="mx-auto w-full max-w-screen-2xl px-4 py-8 sm:px-6 lg:px-10">
         <nav aria-label="Breadcrumb" className="text-sm text-gray-500">
           <Link href="/" className="hover:text-teal-700">Home</Link>
           <span className="mx-2">/</span>
@@ -146,9 +157,10 @@ export default async function RecipePage({ params }) {
           <Link href={`/recipes?meal=${recipe.meal_type}`} className="hover:text-teal-700">{meal}</Link>
         </nav>
 
-        <div className="mt-6 grid grid-cols-1 gap-10 lg:grid-cols-[1fr_320px]">
+        <div className="mt-6 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_340px]">
           <article className="min-w-0 space-y-8">
-            <header className="space-y-4">
+            <div className="grid grid-cols-1 gap-8 xl:grid-cols-2 xl:items-center">
+            <header className="space-y-4 xl:order-2">
               <span className="text-sm font-semibold uppercase tracking-wide text-teal-700">Diabetes-friendly {meal.toLowerCase()}</span>
               <h1 className="text-3xl font-extrabold leading-tight text-gray-900 md:text-4xl">{recipe.name}</h1>
               {recipe.description ? <p className="text-lg leading-8 text-gray-700">{recipe.description}</p> : null}
@@ -161,23 +173,25 @@ export default async function RecipePage({ params }) {
 
             {image ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={image} alt={recipe.name} className="aspect-[16/10] w-full rounded-3xl object-cover shadow-sm" />
+              <img src={image} alt={recipe.name} className="aspect-[16/10] w-full rounded-3xl object-cover shadow-sm xl:order-1 xl:aspect-[4/3]" />
             ) : null}
+            </div>
 
             <section aria-labelledby="nutrition-heading">
               <h2 id="nutrition-heading" className="text-xl font-bold text-gray-900">Nutrition per serving</h2>
               <div className="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-6">
-                <Stat label="Carbs" value={n.carbs} unit="g" highlight />
-                <Stat label="Fiber" value={n.fiber} unit="g" />
-                <Stat label="Sugar" value={n.sugar} unit="g" />
-                <Stat label="Protein" value={n.protein} unit="g" />
-                <Stat label="Fat" value={n.fat} unit="g" />
-                <Stat label="Calories" value={n.calories} unit="" />
+                <Stat label="Carbs" value={n.carbs} unit="g" tone="carbs" />
+                <Stat label="Fiber" value={n.fiber} unit="g" tone="fiber" />
+                <Stat label="Sugar" value={n.sugar} unit="g" tone="sugar" />
+                <Stat label="Protein" value={n.protein} unit="g" tone="protein" />
+                <Stat label="Fat" value={n.fat} unit="g" tone="fat" />
+                <Stat label="Calories" value={n.calories} unit="" tone="calories" />
               </div>
               <p className="mt-2 text-xs text-gray-500">Estimated values per serving.</p>
             </section>
 
-            <section aria-labelledby="ingredients-heading" className="rounded-3xl border border-gray-200 bg-white p-6">
+            <div className="grid grid-cols-1 gap-8 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] xl:items-start">
+            <section aria-labelledby="ingredients-heading" className="rounded-3xl border border-gray-200 bg-white p-6 xl:sticky xl:top-24">
               <h2 id="ingredients-heading" className="text-xl font-bold text-gray-900">Ingredients</h2>
               <ul className="mt-4 space-y-2">
                 {ingredients.map((item, i) => (
@@ -200,6 +214,7 @@ export default async function RecipePage({ params }) {
                 ))}
               </ol>
             </section>
+            </div>
 
             <section className="rounded-3xl bg-gradient-to-br from-teal-800 to-emerald-700 p-6 text-white md:p-8">
               <h2 className="text-2xl font-bold">Make it fit your blood sugar goals</h2>

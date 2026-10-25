@@ -1,10 +1,10 @@
 import Link from 'next/link';
 import Image from 'next/image';
 
-export default function BlogTopBar({ rightHref = '/', rightLabel = 'Back to home' }) {
+export default function BlogTopBar({ rightHref = '/', rightLabel = 'Back to home', wide = false }) {
   return (
     <header className="w-full bg-white/95 backdrop-blur border-b border-gray-200">
-      <div className="container mx-auto max-w-6xl flex h-20 items-center justify-between px-4">
+      <div className={`mx-auto flex h-20 w-full items-center justify-between ${wide ? 'max-w-screen-2xl px-4 sm:px-6 lg:px-10' : 'container max-w-6xl px-4'}`}>
         <Link href="/" className="flex items-center gap-3">
           <div className="relative h-10 w-10">
             <Image
