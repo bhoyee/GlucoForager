@@ -1,0 +1,168 @@
+name: Oracle account audit
+
+# Read-only check of everything in the Oracle Cloud account against the Always Free limits,
+# so nothing quietly starts costing money (e.g. after upgrading to Pay As You Go).
+# Optional: create a monthly budget with email alerts (budgets are free; they warn, they don't cap).
+
+on:
+  workflow_dispatch:
+    inputs:
+      create_budget:
+        description: 'Also create a monthly budget with email alerts (only if none exists yet)'
+        type: boolean
+        default: false
+      budget_amount:
+        description: 'Budget amount per month, in the account currency (e.g. 1 = £1)'
+        default: '1'
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING: 'True'
+    steps:
+      - name: Install OCI CLI
+        run: pip install --quiet oci-cli
+
+      - name: Write OCI config
+        env:
+          OCI_KEY: ${{ secrets.OCI_KEY }}
+          OCI_USER: ${{ secrets.OCI_USER }}
+          OCI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
+          OCI_TENANCY: ${{ secrets.OCI_TENANCY }}
+          OCI_REGION: ${{ secrets.OCI_REGION }}
+        run: |
+          mkdir -p ~/.oci
+          printf '%s\n' "$OCI_KEY" > ~/.oci/key.pem
+          chmod 600 ~/.oci/key.pem
+          cat > ~/.oci/config <<EOF
+          [DEFAULT]
+          user=$OCI_USER
+          fingerprint=$OCI_FINGERPRINT
+          tenancy=$OCI_TENANCY
+          region=$OCI_REGION
+          key_file=~/.oci/key.pem
+          EOF
+          chmod 600 ~/.oci/config
+
+      - name: Audit resources against Always Free limits
+        env:
+          T: ${{ secrets.OCI_TENANCY }}
+        run: |
+          set -u
+          # Every compartment (resources can hide outside the root one).
+          COMPARTMENTS=$( (echo "$T"; oci iam compartment list -c "$T" --compartment-id-in-subtree true --all \
+            --query 'data[?"lifecycle-state"==`ACTIVE`].id' 2>/dev/null | jq -r '.[]?') | sort -u)
+          ADS=$(oci iam availability-domain list -c "$T" | jq -r '.data[].name')
+          warn=0
+          short() { echo "${1:0:20}…${1: -6}"; }
+
+          echo "=== Account ==="
+          oci iam tenancy get --tenancy-id "$T" | jq -r '.data | "Tenancy: \(.name)  home region: \(."home-region-key")"'
+
+          echo "=== Compute instances (not terminated) ==="
+          a1_ocpu=0; a1_mem=0; micro=0
+          for c in $COMPARTMENTS; do
+            oci compute instance list -c "$c" --all 2>/dev/null | jq -r '.data[]? | select(."lifecycle-state"!="TERMINATED") |
+              [."display-name", .shape, ."lifecycle-state", (."shape-config".ocpus // 0), (."shape-config"."memory-in-gbs" // 0)] | @tsv'
+          done > /tmp/instances.tsv
+          if [ -s /tmp/instances.tsv ]; then
+            while IFS=$'\t' read -r name shape state ocpu mem; do
+              free="Always Free"
+              case "$shape" in
+                VM.Standard.A1.Flex) a1_ocpu=$(echo "$a1_ocpu + $ocpu" | bc); a1_mem=$(echo "$a1_mem + $mem" | bc) ;;
+                VM.Standard.E2.1.Micro) micro=$((micro + 1)) ;;
+                *) free="NOT FREE"; warn=1 ;;
+              esac
+              echo "  $name | $shape | $state | ${ocpu} OCPU / ${mem} GB | $free"
+            done < /tmp/instances.tsv
+          else
+            echo "  (none)"
+          fi
+          echo "  Totals: A1 ${a1_ocpu} OCPU / ${a1_mem} GB (free up to 4 / 24), E2.1.Micro x${micro} (free up to 2)"
+          if [ "$(echo "$a1_ocpu > 4" | bc)" = 1 ] || [ "$(echo "$a1_mem > 24" | bc)" = 1 ] || [ "$micro" -gt 2 ]; then
+            echo "  ⚠ Over the Always Free compute limits"; warn=1
+          fi
+
+          echo "=== Block storage (boot + block volumes; free up to 200 GB total) ==="
+          total=0
+          for c in $COMPARTMENTS; do
+            for ad in $ADS; do
+              oci bv boot-volume list -c "$c" --availability-domain "$ad" --all 2>/dev/null | jq -r '.data[]? | select(."lifecycle-state"!="TERMINATED") | ["boot", ."display-name", ."size-in-gbs", ."lifecycle-state"] | @tsv'
+            done
+            oci bv volume list -c "$c" --all 2>/dev/null | jq -r '.data[]? | select(."lifecycle-state"!="TERMINATED") | ["block", ."display-name", ."size-in-gbs", ."lifecycle-state"] | @tsv'
+          done > /tmp/volumes.tsv
+          if [ -s /tmp/volumes.tsv ]; then
+            while IFS=$'\t' read -r kind name size state; do
+              echo "  $kind | $name | ${size} GB | $state"
+              total=$((total + size))
+            done < /tmp/volumes.tsv
+          else
+            echo "  (none)"
+          fi
+          echo "  Total: ${total} GB of 200 GB free"
+          [ "$total" -gt 200 ] && { echo "  ⚠ Over 200 GB: this storage would be billed"; warn=1; }
+
+          echo "=== Volume backups (free up to 5 in total) ==="
+          backups=0
+          for c in $COMPARTMENTS; do
+            n1=$(oci bv boot-volume-backup list -c "$c" --all 2>/dev/null | jq '[.data[]? | select(."lifecycle-state"!="TERMINATED")] | length')
+            n2=$(oci bv backup list -c "$c" --all 2>/dev/null | jq '[.data[]? | select(."lifecycle-state"!="TERMINATED")] | length')
+            backups=$((backups + ${n1:-0} + ${n2:-0}))
+          done
+          echo "  $backups backup(s)"
+          [ "$backups" -gt 5 ] && { echo "  ⚠ More than 5 backups: extra ones would be billed"; warn=1; }
+
+          echo "=== Other services that can cost money ==="
+          for c in $COMPARTMENTS; do
+            oci lb load-balancer list -c "$c" --all 2>/dev/null | jq -r '.data[]? | "  Load balancer: \(."display-name") shape=\(."shape-name")"'
+            oci db autonomous-database list -c "$c" --all 2>/dev/null | jq -r '.data[]? | select(."lifecycle-state"!="TERMINATED") | "  Autonomous DB: \(."display-name") free_tier=\(."is-free-tier")"'
+            oci db system list -c "$c" --all 2>/dev/null | jq -r '.data[]? | "  ⚠ DB system (not free): \(."display-name")"'
+            oci network public-ip list -c "$c" --scope REGION --lifetime RESERVED --all 2>/dev/null | jq -r '.data[]? | "  Reserved public IP: \(."display-name" // .["ip-address"])"'
+          done | tee /tmp/other.txt
+          [ -s /tmp/other.txt ] || echo "  (none)"
+          grep -q "⚠" /tmp/other.txt && warn=1
+          grep -q "free_tier=false" /tmp/other.txt && { echo "  ⚠ A non-free Autonomous DB exists"; warn=1; }
+
+          echo "=== Object storage (free up to 20 GB) ==="
+          NS=$(oci os ns get | jq -r '.data')
+          for c in $COMPARTMENTS; do
+            oci os bucket list -c "$c" --namespace "$NS" --all 2>/dev/null | jq -r '.data[]?.name'
+          done | while read -r b; do
+            [ -n "$b" ] || continue
+            size=$(oci os bucket get --namespace "$NS" --bucket-name "$b" --fields approximateSize 2>/dev/null | jq -r '.data."approximate-size" // 0')
+            echo "  bucket $b: $(echo "scale=2; $size/1073741824" | bc) GB"
+          done
+
+          echo "=== Budgets ==="
+          oci budgets budget list -c "$T" --all 2>/dev/null | jq -r '.data[]? | "  \(."display-name"): \(.amount)/month, spent so far \(."actual-spend" // 0), forecast \(."forecasted-spend" // 0)"' | tee /tmp/budgets.txt
+          [ -s /tmp/budgets.txt ] || echo "  (no budget set)"
+
+          echo "==============================================="
+          if [ "$warn" = 1 ]; then
+            echo "::warning::Something is outside the Always Free limits - see the ⚠ lines above."
+          else
+            echo "✅ Everything found is within the Always Free limits."
+          fi
+
+      - name: Create budget with email alerts
+        if: ${{ github.event.inputs.create_budget == 'true' }}
+        env:
+          T: ${{ secrets.OCI_TENANCY }}
+          ALERT_TO: ${{ secrets.ALERT_TO }}
+          AMOUNT: ${{ github.event.inputs.budget_amount }}
+        run: |
+          set -eu
+          if [ "$(oci budgets budget list -c "$T" --all | jq '.data | length')" != "0" ]; then
+            echo "A budget already exists - not creating another."; exit 0
+          fi
+          BUDGET=$(oci budgets budget create -c "$T" --amount "$AMOUNT" --reset-period MONTHLY \
+            --target-type COMPARTMENT --targets "[\"$T\"]" --display-name "glucoforager-zero-spend" \
+            --description "Warns if anything starts costing money" | jq -r '.data.id')
+          for kind in ACTUAL FORECAST; do
+            oci budgets alert-rule create --budget-id "$BUDGET" --type "$kind" --threshold 100 \
+              --threshold-type PERCENTAGE --display-name "spend-${kind,,}-100" \
+              --recipients "$ALERT_TO" --message "GlucoForager Oracle account: ${kind,,} spend has reached the ${AMOUNT}/month budget. Check Billing > Cost Analysis." >/dev/null
+          done
+          echo "Budget created: $AMOUNT per month, alerts on actual and forecast spend -> email"
