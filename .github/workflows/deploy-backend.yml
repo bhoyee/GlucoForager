@@ -52,7 +52,6 @@ jobs:
             git reset --hard origin/main
             docker compose up -d --build
             docker compose run --rm api alembic upgrade head
-            # Rebuilding glucoforager-api gives it a new container IP. The
-            # shared nginx (pingloyal-nginx-1) caches that IP at its own
-            # startup and won't notice, so reload it to avoid stale 502s.
-            docker exec pingloyal-nginx-1 nginx -s reload || echo "warning: nginx reload failed or container not found"
+            # edge-nginx resolves the API container per request, so a rebuild needs no
+            # restart; reloading anyway is cheap and picks up any config change.
+            docker exec edge-nginx nginx -s reload || echo "warning: nginx reload failed or container not found"
