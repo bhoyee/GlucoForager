@@ -15,7 +15,7 @@ class KeywordTest(unittest.TestCase):
 
     def test_medication_diagnosis_and_off_niche_searches_are_dropped(self):
         self.assertTrue(is_relevant("can diabetics eat watermelon"))
-        for text in ("what to eat when blood sugar is low", "ozempic for diabetes", "signs of diabetes in women", "diabetic dog food", "metformin side effects diabetes"):
+        for text in ("diabetic coma", "what to eat when blood sugar is low", "ozempic for diabetes", "signs of diabetes in women", "diabetic dog food", "metformin side effects diabetes"):
             self.assertFalse(is_relevant(text), text)
 
     def test_cluster_names_topic_after_most_widely_seen_phrase(self):
@@ -40,6 +40,23 @@ class KeywordTest(unittest.TestCase):
         base = Candidate("x", "x", ["x"], {("google", "us")}, 5)
         rich = Candidate("x", "x", ["x", "y"], {("google", "us"), ("bing", "gb")}, 0, bing_volume=5000, trend=1.5)
         self.assertGreater(score(rich), score(base))
+
+
+class BingStatsTest(unittest.TestCase):
+    def test_volume_and_trend_ignore_the_unfinished_current_week(self):
+        from datetime import datetime, timedelta, timezone
+
+        from app.services import blog_keyword_research as kr
+
+        def week(days_ago, count):
+            ms = int((datetime.now(timezone.utc) - timedelta(days=days_ago)).timestamp() * 1000)
+            return {"Date": f"/Date({ms})/", "BroadImpressions": count}
+
+        rows = [week(d, 10) for d in (63, 56, 49, 42)] + [week(d, 20) for d in (35, 28, 21, 14)] + [week(1, 3)]
+        with mock.patch.object(kr, "_bing_api", return_value=rows):
+            total, trend = kr.bing_keyword_stats(None, "x", "us")
+        self.assertEqual(total, 80)
+        self.assertAlmostEqual(trend, 2.0)
 
 
 class PlanningTest(unittest.TestCase):

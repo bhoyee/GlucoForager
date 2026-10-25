@@ -59,7 +59,7 @@ TOPIC_RE = re.compile(r"diabet|blood sugar|glucose|a1c|insulin|prediabet|carb", 
 BLOCK_RE = re.compile(
     r"ozempic|mounjaro|wegovy|zepbound|metformin|jardiance|trulicity|semaglutide|tirzepatide|glipizide|"
     r"insulin (dose|dosage|pump|pen|price|cost)|dosage|symptom|sign of|signs of|diagnos|cure|reverse|"
-    r"dka|ketoacidosis|blood sugar is low|sugar low\b|sugar levels low|low blood sugar|hypoglyc|hypo\b|amputat|neuropathy|retinopathy|\bdog\b|\bcat\b|\bpet\b|socks|shoes|tattoo|meme|"
+    r"dka|ketoacidosis|coma|seizure|faint|emergency|blood sugar is low|sugar low\b|sugar levels low|low blood sugar|hypoglyc|hypo\b|amputat|neuropathy|retinopathy|\bdog\b|\bcat\b|\bpet\b|socks|shoes|tattoo|meme|"
     r"insurance|lawsuit|near me|reddit|walmart|amazon|costco|\bdied\b|death",
     re.I,
 )
@@ -175,7 +175,7 @@ def bing_keyword_stats(client: httpx.Client, query: str, country: str) -> tuple[
     for row in rows:
         d = _bing_date(row.get("Date"))
         count = row.get("BroadImpressions") or row.get("Impressions") or row.get("BroadCount") or 0
-        if d:
+        if d and d <= date.today() - timedelta(days=7):  # skip the current, still-counting week
             weekly.append((d, int(count or 0)))
     weekly.sort()
     if not weekly:
