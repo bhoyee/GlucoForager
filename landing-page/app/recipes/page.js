@@ -122,10 +122,10 @@ export default async function RecipesIndexPage({ searchParams }) {
     <main className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
       {/* eslint-disable-next-line react/no-danger */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-      <BlogTopBar rightHref="/download" rightLabel="Get the app" />
+      <BlogTopBar rightHref="/download" rightLabel="Get the app" wide />
 
       <section className="bg-gradient-to-br from-teal-800 to-emerald-700 text-white">
-        <div className="container mx-auto max-w-6xl px-4 py-12 md:py-16">
+        <div className="mx-auto w-full max-w-screen-2xl px-4 sm:px-6 lg:px-10 py-12 md:py-16">
           <p className="text-sm font-semibold uppercase tracking-widest text-teal-100">Free recipe library</p>
           <h1 className="mt-2 max-w-3xl text-3xl font-extrabold leading-tight md:text-5xl">{title}</h1>
           <p className="mt-4 max-w-2xl text-lg text-teal-50/90">
@@ -143,7 +143,7 @@ export default async function RecipesIndexPage({ searchParams }) {
         </div>
       </section>
 
-      <div className="container mx-auto max-w-6xl px-4 py-8">
+      <div className="mx-auto w-full max-w-screen-2xl px-4 sm:px-6 lg:px-10 py-8">
         <nav aria-label="Recipe filters" className="space-y-3">
           <div className="flex gap-2 overflow-x-auto pb-1">
             <FilterChip href={recipesHref({ quick })} active={!meal}>All meals</FilterChip>
@@ -176,18 +176,21 @@ export default async function RecipesIndexPage({ searchParams }) {
             <Link href="/recipes" className="font-semibold text-teal-700">See all recipes</Link>
           </p>
         ) : (
-          <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {items.map((recipe, i) => (
               <Fragment key={recipe.id}>
                 <RecipeCard recipe={recipe} />
-                {i === 5 ? (
-                  <div className="flex flex-col justify-center rounded-2xl bg-teal-50 p-6 sm:col-span-2 lg:col-span-1">
-                    <p className="text-sm font-semibold uppercase tracking-wide text-teal-700">In the app</p>
-                    <h2 className="mt-1 text-xl font-bold text-gray-900">Snap your fridge, get recipes like these</h2>
-                    <p className="mt-2 text-gray-700">
-                      Personalised to your diabetes type, cuisine and the foods you avoid. Try Premium free for 7 days, no card needed.
-                    </p>
-                    <Link href="/download" className="mt-4 inline-flex w-fit rounded-full bg-teal-700 px-5 py-2.5 font-semibold text-white hover:bg-teal-800">
+                {/* After 12 recipes (full rows at 4, 3 or 2 per row): a full-width app banner. */}
+                {i === 11 && items.length > 12 ? (
+                  <div className="col-span-full flex flex-col gap-4 rounded-2xl bg-teal-50 p-6 md:flex-row md:items-center md:justify-between md:p-8">
+                    <div className="max-w-2xl">
+                      <p className="text-sm font-semibold uppercase tracking-wide text-teal-700">In the app</p>
+                      <h2 className="mt-1 text-xl font-bold text-gray-900 md:text-2xl">Snap your fridge, get recipes like these</h2>
+                      <p className="mt-2 text-gray-700">
+                        Personalised to your diabetes type, cuisine and the foods you avoid. Try Premium free for 7 days, no card needed.
+                      </p>
+                    </div>
+                    <Link href="/download" className="inline-flex w-fit flex-none rounded-full bg-teal-700 px-6 py-3 font-semibold text-white hover:bg-teal-800">
                       Download GlucoForager
                     </Link>
                   </div>
