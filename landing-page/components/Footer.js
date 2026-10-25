@@ -138,6 +138,7 @@ export default function Footer() {
             <ul className="space-y-3">
               <li><a href={homeSectionHref('#features')} className="text-gray-400 hover:text-teal-400 transition-colors">Features</a></li>
               <li><Link href="/careers" className="text-gray-400 hover:text-teal-400 transition-colors">Careers</Link></li>
+              <li><Link href="/recipes" className="text-gray-400 hover:text-teal-400 transition-colors">Diabetes-friendly recipes</Link></li>
               <li><Link href="/blog" className="text-gray-400 hover:text-teal-400 transition-colors">Blog</Link></li>
               <li><Link href="/download" className="text-gray-400 hover:text-teal-400 transition-colors">Download</Link></li>
             </ul>

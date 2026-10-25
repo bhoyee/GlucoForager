@@ -7,7 +7,7 @@ GlucoForager answers the question people with diabetes face several times a day:
 It supports **Type 1, Type 2, prediabetes and gestational diabetes**, and adapts to each user's goals, country, cuisine, foods to avoid, cooking time and kitchen equipment.
 
 - 📱 **Mobile app**: iOS (App Store) and Android (Google Play), bundle id `com.glucoforager.app`
-- 🌐 **Website**: [glucoforager.com](https://www.glucoforager.com) (marketing site, blog, pricing)
+- 🌐 **Website**: [glucoforager.com](https://www.glucoforager.com) (marketing site, [free diabetes-friendly recipes](https://www.glucoforager.com/recipes), blog, pricing)
 - 🛠️ **Admin & staff console**: [glucoforager.com/admin](https://www.glucoforager.com/admin)
 - ⚙️ **API**: `api.glucoforager.com`
 

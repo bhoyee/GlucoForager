@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Integer, JSON, String
+from sqlalchemy import Boolean, Column, DateTime, Integer, JSON, String
 from sqlalchemy.dialects.postgresql import ARRAY
 
 from ..database import Base
@@ -41,3 +41,6 @@ class Recipe(Base):
     title_key = Column(String(160), nullable=True)
     ingredient_keys = Column(ARRAY(String), nullable=True)
     times_served = Column(Integer, nullable=False, default=0, server_default="0")
+    # Public website (glucoforager.com/recipes): admins can hide a recipe from the site
+    # while it stays available in the app.
+    web_hidden = Column(Boolean, nullable=False, default=False, server_default="false")

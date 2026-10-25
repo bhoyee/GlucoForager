@@ -26,6 +26,9 @@ export default function BlogTopBar({ rightHref = '/', rightLabel = 'Back to home
           <Link href="/#faq" className="text-gray-600 hover:text-teal-600 transition-colors">
             FAQ
           </Link>
+          <Link href="/recipes" className="text-gray-600 hover:text-teal-600 transition-colors">
+            Recipes
+          </Link>
           <Link href="/blog" className="text-gray-600 hover:text-teal-600 transition-colors">
             Blog
           </Link>

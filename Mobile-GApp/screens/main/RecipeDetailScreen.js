@@ -22,6 +22,7 @@ import { useAuth } from '../../context/authContext';
 import { apiFetch } from '../../utils/api';
 import { getRecipeImageSettings } from '../../utils/recipeImageSettings';
 import { trackEvent } from '../../utils/analytics';
+import { recordPositiveMoment } from '../../utils/ratingPrompt';
 import { confirmMealLogged } from '../../utils/mealLogConfirm';
 import GlucoseImpactCard from '../../components/GlucoseImpactCard';
 import { generateIdempotencyKey } from '../../utils/idempotency';
@@ -662,6 +663,7 @@ const RecipeDetailsScreen = () => {
       }
       setRecipe({ ...recipe, isBookmarked: true });
       trackEvent('recipe_favorited');
+      void recordPositiveMoment();
       Alert.alert('Saved', 'Recipe added to favorites.');
     } catch (error) {
       Alert.alert('Error', 'Unable to save favorite right now.');

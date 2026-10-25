@@ -389,11 +389,37 @@ def list_recipes(
                 "servings": r.servings,
                 "nutrition": r.nutrition,
                 "created_at": r.created_at,
+                "web_hidden": bool(r.web_hidden),
                 **_recipe_metadata_payload(r),
             }
             for r in items
         ]
     }
+
+
+class RecipeWebVisibilityPayload(BaseModel):
+    hidden: bool
+
+
+@router.post("/recipes/{recipe_id}/web-visibility")
+def set_recipe_web_visibility(
+    recipe_id: int,
+    payload: RecipeWebVisibilityPayload,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),  # noqa: ARG001
+):
+    """Show or hide a recipe on the public website (glucoforager.com/recipes). The app is unaffected."""
+    from ...services.cache_service import CacheService
+
+    recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
+    if not recipe:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recipe not found")
+    recipe.web_hidden = bool(payload.hidden)
+    db.commit()
+    cache = CacheService()
+    cache.delete(f"public_recipes:detail:v1:{recipe_id}")
+    cache.delete("public_recipes:sitemap:v1")
+    return {"id": recipe_id, "web_hidden": recipe.web_hidden}
 
 
 def _batch_subscriptions_for_users(db: Session, user_ids: list[int]) -> tuple[dict[int, Subscription], dict[int, Subscription]]:

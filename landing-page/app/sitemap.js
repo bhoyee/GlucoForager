@@ -11,6 +11,7 @@ export default async function sitemap() {
     '/download',
     '/careers',
     '/blog',
+    '/recipes',
     '/privacy-policy',
     '/terms',
     '/cookie-policy',
@@ -51,7 +52,26 @@ export default async function sitemap() {
       if (items.length < pageSize) break;
     }
 
-    return [...staticEntries, ...blogEntries];
+    const recipeEntries = [];
+    try {
+      const recipeRes = await fetch(`${API_URL}/api/public/recipes/sitemap`, { next: { revalidate: 600 } });
+      if (recipeRes.ok) {
+        const recipeData = await recipeRes.json();
+        for (const recipe of Array.isArray(recipeData?.items) ? recipeData.items : []) {
+          if (!recipe?.slug) continue;
+          recipeEntries.push({
+            url: `${siteUrl}/recipes/${recipe.slug}`,
+            lastModified: recipe.updated_at ? new Date(recipe.updated_at) : now,
+            changeFrequency: 'monthly',
+            priority: 0.7,
+          });
+        }
+      }
+    } catch {
+      // Recipes are optional in the sitemap; never fail the whole sitemap over them.
+    }
+
+    return [...staticEntries, ...blogEntries, ...recipeEntries];
   } catch {
     return staticEntries;
   }

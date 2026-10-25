@@ -10,6 +10,7 @@ import { Colors } from '../../constants/Colors';
 import { apiFetch } from '../../utils/api';
 import { API_URL } from '../../config/api';
 import { cancelTodaysDailyGuidanceNotification } from '../../utils/mealReminders';
+import { recordPositiveMoment } from '../../utils/ratingPrompt';
 
 const CATEGORY = {
   meal_structure: { label: 'Meals', icon: 'restaurant', color: '#2C8632', bg: '#E9F6EA' },
@@ -151,6 +152,7 @@ export default function ChallengeScreen() {
       setChallenge(data?.challenge || null);
       void maybeCelebrateStreak(data?.challenge);
       if (data?.challenge?.completed_today) {
+        if (nextCompleted) void recordPositiveMoment();
         void cancelTodaysDailyGuidanceNotification();
       }
     } catch {

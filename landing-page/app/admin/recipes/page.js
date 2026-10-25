@@ -36,6 +36,7 @@ export default function AdminRecipesList() {
   const [pendingAction, setPendingAction] = useState(null);
   const [actionBusy, setActionBusy] = useState(false);
   const [publishingId, setPublishingId] = useState(null);
+  const [webVisibilityId, setWebVisibilityId] = useState(null);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [bulkPublishing, setBulkPublishing] = useState(false);
 
@@ -149,6 +150,33 @@ export default function AdminRecipesList() {
       setMessage(error.message || 'Failed to publish recipe.');
     } finally {
       setPublishingId(null);
+    }
+  };
+
+  // Show or hide a published recipe on the public website (glucoforager.com/recipes); the app is unaffected.
+  const handleWebVisibility = async (recipe) => {
+    const hidden = !recipe.web_hidden;
+    setWebVisibilityId(recipe.id);
+    setMessage('');
+    try {
+      const response = await fetch(`${API_URL}/api/admin/recipes/${recipe.id}/web-visibility`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hidden }),
+      });
+      if (response.status === 401) {
+        localStorage.removeItem('adminToken');
+        router.push('/admin');
+        return;
+      }
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.detail || 'Failed to update website visibility.');
+      setRecipes((current) => current.map((item) => (item.id === recipe.id ? { ...item, web_hidden: hidden } : item)));
+      setMessage(hidden ? `"${recipe.name}" is hidden from the website.` : `"${recipe.name}" can show on the website again.`);
+    } catch (error) {
+      setMessage(error.message || 'Failed to update website visibility.');
+    } finally {
+      setWebVisibilityId(null);
     }
   };
 
@@ -513,6 +541,7 @@ export default function AdminRecipesList() {
                           <span className={`admin-badge ${(recipe.status || 'published') === 'published' ? 'success' : 'warning'}`}>
                             {recipe.status || 'published'}
                           </span>
+                          {recipe.web_hidden ? <span className="admin-badge warning">Hidden from website</span> : null}
                           {(recipe.status || 'published') !== 'published' && recipe.safety_flags?.length ? (
                             <span className={`admin-badge ${recipe.safety_flags.some((item) => item?.level === 'danger') ? 'danger' : 'warning'}`}>
                               Nutrition review
@@ -549,6 +578,17 @@ export default function AdminRecipesList() {
                           disabled={publishingId === recipe.id}
                         >
                           <span>🚀</span> {publishingId === recipe.id ? 'Publishing...' : 'Publish'}
+                        </button>
+                      )}
+                      {(recipe.status || 'published') === 'published' && (
+                        <button
+                          type="button"
+                          className="admin-button admin-button-edit"
+                          onClick={() => handleWebVisibility(recipe)}
+                          disabled={webVisibilityId === recipe.id}
+                          title="Controls glucoforager.com/recipes only - the app is unaffected"
+                        >
+                          <span>🌐</span> {recipe.web_hidden ? 'Show on website' : 'Hide from website'}
                         </button>
                       )}
                       <button
@@ -633,6 +673,7 @@ export default function AdminRecipesList() {
                           <span className={`admin-badge ${(recipe.status || 'published') === 'published' ? 'success' : 'warning'}`}>
                             {recipe.status || 'published'}
                           </span>
+                          {recipe.web_hidden ? <span className="admin-badge warning">Hidden from website</span> : null}
                           {(recipe.status || 'published') !== 'published' && recipe.safety_flags?.length ? (
                             <span className={`admin-badge ${recipe.safety_flags.some((item) => item?.level === 'danger') ? 'danger' : 'warning'}`}>
                               Nutrition review
@@ -663,6 +704,17 @@ export default function AdminRecipesList() {
                                 disabled={publishingId === recipe.id}
                               >
                                 {publishingId === recipe.id ? 'Publishing...' : 'Publish'}
+                              </button>
+                            )}
+                            {(recipe.status || 'published') === 'published' && (
+                              <button
+                                type="button"
+                                className="admin-button admin-button-small admin-button-edit"
+                                onClick={() => handleWebVisibility(recipe)}
+                                disabled={webVisibilityId === recipe.id}
+                                title="Controls glucoforager.com/recipes only - the app is unaffected"
+                              >
+                                {recipe.web_hidden ? 'Show on site' : 'Hide on site'}
                               </button>
                             )}
                             <button
