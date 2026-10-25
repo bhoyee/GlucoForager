@@ -135,30 +135,9 @@ Next.js app under `landing-page/app/admin/`, with **role-based access** (Admin, 
 
 ## Architecture
 
-<img width="1536" height="1024" alt="GlucoForager system architecture" src="https://github.com/user-attachments/assets/1e7eb354-06db-4726-ad34-b5dd8ca78422" />
-
 A **modular monolith**: one FastAPI backend and one PostgreSQL database, with **queue-driven background workers** for slow AI work.
 
-```
- Mobile app (Expo)         Website + admin (Next.js on Vercel)
-        │                               │
-        └──────────────┬────────────────┘
-                       ▼  HTTPS
-             nginx (edge-nginx, TLS)
-                       │
-              ┌────────┴─────────┐
-              ▼                  ▼
-     glucoforager-api     glucoforager-worker
-     (FastAPI, REST,      (AI jobs from Redis
-      schedulers)          Streams: text + vision pools)
-              │                  │
-              ├──────┬───────────┤
-              ▼      ▼           ▼
-       PostgreSQL   Redis     External services
-       (system of   (queue,   OpenAI / Gemini (AI), Runware (images),
-        record)     cache,    Cloudflare R2 (files, backups), Resend (email),
-                    limits)   RevenueCat (subscriptions), Expo (push, OTA)
-```
+![GlucoForager architecture: mobile app and website/admin over HTTPS to edge-nginx, then the FastAPI API and the background worker, backed by PostgreSQL, Redis and file storage, calling OpenAI/Gemini, Runware, Cloudflare R2, Resend, RevenueCat and Expo](docs/architecture.png)
 
 **Why this shape**
 - **Async AI, fast API.** AI calls can take 10–60 s and may be rate-limited. Requests create an `ai_jobs` row and return at once; workers do the work and the app polls. The API never blocks on a model.
