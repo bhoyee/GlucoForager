@@ -91,28 +91,7 @@ It supports **Type 1, Type 2, prediabetes and gestational diabetes**, and adapts
 
 ## How a user moves through the app
 
-```
-Install ─► Onboarding (diagnosis, goals, country, cuisine, foods to avoid, equipment)
-              │
-              ▼
-          Welcome week: 7 days of Premium, no card needed
-              │
-              ▼
-┌──────────────────────── Home ─────────────────────────┐
-│ carb-goal ring · today's challenge · tip of the day    │
-│ quick actions: scan food · scan fridge · type · swaps  │
-└───────────────┬───────────────────────────────────────┘
-     ┌──────────┼──────────────┬──────────────┬──────────────┐
-     ▼          ▼              ▼              ▼              ▼
- Food scan   Fridge scan    Type ingredients  Swaps        Log glucose / meal
- (barcode/   → review       → ingredient      → better     → carb ring updates
-  photo)       ingredients    check             options    → spike check
- → verdict   → recipes  ◄───┘                             → challenge auto-ticks
-              → recipe detail → start cooking / favourite / shopping list
-                                     │
-                                     ▼
-                 Insights · weekly recap · personal tips (from own data)
-```
+![How a user moves through GlucoForager: install, onboarding, welcome week, home, then food scan, fridge scan, typed ingredients, food swaps and logging, leading to insights, weekly recap and personal tips](docs/user-flow.png)
 
 **Recipe generation flow (fast path):**
 1. Ingredients are validated (food check, additive-only check, cached approval for ingredients that came from a recent scan).
@@ -156,30 +135,9 @@ Next.js app under `landing-page/app/admin/`, with **role-based access** (Admin, 
 
 ## Architecture
 
-<img width="1536" height="1024" alt="GlucoForager system architecture" src="https://github.com/user-attachments/assets/1e7eb354-06db-4726-ad34-b5dd8ca78422" />
-
 A **modular monolith**: one FastAPI backend and one PostgreSQL database, with **queue-driven background workers** for slow AI work.
 
-```
- Mobile app (Expo)         Website + admin (Next.js on Vercel)
-        │                               │
-        └──────────────┬────────────────┘
-                       ▼  HTTPS
-             nginx (edge-nginx, TLS)
-                       │
-              ┌────────┴─────────┐
-              ▼                  ▼
-     glucoforager-api     glucoforager-worker
-     (FastAPI, REST,      (AI jobs from Redis
-      schedulers)          Streams: text + vision pools)
-              │                  │
-              ├──────┬───────────┤
-              ▼      ▼           ▼
-       PostgreSQL   Redis     External services
-       (system of   (queue,   OpenAI / Gemini (AI), Runware (images),
-        record)     cache,    Cloudflare R2 (files, backups), Resend (email),
-                    limits)   RevenueCat (subscriptions), Expo (push, OTA)
-```
+![GlucoForager architecture: mobile app and website/admin over HTTPS to edge-nginx, then the FastAPI API and the background worker, backed by PostgreSQL, Redis and file storage, calling OpenAI/Gemini, Runware, Cloudflare R2, Resend, RevenueCat and Expo](docs/architecture.png)
 
 **Why this shape**
 - **Async AI, fast API.** AI calls can take 10–60 s and may be rate-limited. Requests create an `ai_jobs` row and return at once; workers do the work and the app polls. The API never blocks on a model.
