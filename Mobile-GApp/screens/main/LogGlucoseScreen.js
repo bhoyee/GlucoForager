@@ -11,6 +11,7 @@ import { cancelAfterMealCheck } from '../../utils/afterMealCheck';
 import { DEFAULT_TARGETS, classifyReading, statusMeta } from '../../utils/glucose';
 import { API_URL } from '../../config/api';
 import { trackEvent } from '../../utils/analytics';
+import { recordPositiveMoment } from '../../utils/ratingPrompt';
 import TimeAgoSelector, { TIME_AGO_OPTIONS, loggedAtFromMinutesAgo } from '../../components/TimeAgoSelector';
 import { generateIdempotencyKey } from '../../utils/idempotency';
 import KeyboardAwareScrollView from '../../components/KeyboardAwareScrollView';
@@ -217,6 +218,7 @@ export default function LogGlucoseScreen() {
       // A reading 30 min - 3 h after a logged meal: tell them how that meal did.
       if (data?.paired_meal && data?.after_meal_result) {
         const result = data.after_meal_result;
+        if (result.status === 'in_range') void recordPositiveMoment();
         const outcome =
           result.status === 'in_range'
             ? 'was on target'
@@ -226,6 +228,7 @@ export default function LogGlucoseScreen() {
         done(`Your reading after "${data.paired_meal.description}" ${outcome}. It's now in your meal diary and food impact.`, 'food');
         return;
       }
+      void recordPositiveMoment();
       done(pickRandom(NORMAL_MESSAGES));
     } catch {
       Alert.alert('Unable to log reading', 'Network request failed. Please check your connection.');

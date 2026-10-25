@@ -57,6 +57,9 @@ export default function Header({ onDownloadClick }) {
           <a href={homeSectionHref('#faq')} className="text-gray-600 hover:text-teal-600 transition-colors">
             FAQ
           </a>
+          <a href="/recipes" className="text-gray-600 hover:text-teal-600 transition-colors">
+            Recipes
+          </a>
           <a href={homeSectionHref('#blog')} className="text-gray-600 hover:text-teal-600 transition-colors">
             Blog
           </a>
@@ -118,6 +121,13 @@ export default function Header({ onDownloadClick }) {
               className="block py-3 px-4 text-gray-700 hover:text-teal-600 hover:bg-gray-50 rounded-lg transition-colors"
             >
               FAQ
+            </a>
+            <a
+              href="/recipes"
+              onClick={() => setIsMenuOpen(false)}
+              className="block py-3 px-4 text-gray-700 hover:text-teal-600 hover:bg-gray-50 rounded-lg transition-colors"
+            >
+              Recipes
             </a>
             <a
               href={homeSectionHref('#blog')}

@@ -23,6 +23,7 @@ import {
 } from './utils/mealReminders';
 import { checkForAppUpdate, dismissUpdateForVersion, openStoreForUpdate } from './utils/appUpdate';
 import ServiceStatusBanner from './components/ServiceStatusBanner';
+import RatingPrompt from './components/RatingPrompt';
 import { AFTER_MEAL_CHECK_TYPE } from './utils/afterMealCheck';
 
 // Import screens
@@ -507,6 +508,7 @@ export default function App() {
         <MealRemindersBootstrap />
         <AppNavigator />
         <ServiceStatusBanner />
+        <RatingPrompt />
       </AuthProvider>
     </SafeAreaProvider>
   );

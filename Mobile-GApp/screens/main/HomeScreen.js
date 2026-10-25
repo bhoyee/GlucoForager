@@ -34,6 +34,7 @@ import { scheduleDailyPlanNotifications } from '../../utils/mealReminders';
 import CarbGoalRing, { getCarbGoalRingColor } from '../../components/CarbGoalRing';
 import { getCarbGoalTitle, getCarbGoalSubtitle, getCarbGoalDisclaimer } from '../../utils/carbGoal';
 import { trackEvent } from '../../utils/analytics';
+import { maybeShowRatingPrompt } from '../../utils/ratingPrompt';
 import { FREE_FEATURES, getFreeUsage, hasFreeUsesLeft, showFreeLimitAlert } from '../../utils/freeTier';
 import BrandWordmark from '../../components/BrandWordmark';
 import GlucoseRangeRing from '../../components/GlucoseRangeRing';
@@ -421,6 +422,8 @@ export default function HomeScreen() {
       const loadIfActive = async () => {
         if (!isActive) return;
         await loadUserData();
+        // A calm moment after Home has loaded: ask for a rating if a happy moment made it due.
+        if (isActive) void maybeShowRatingPrompt();
       };
       loadIfActive();
       return () => {

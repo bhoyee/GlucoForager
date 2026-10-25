@@ -13,6 +13,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
+import { recordPositiveMoment } from '../../utils/ratingPrompt';
 
 const { width, height } = Dimensions.get('window');
 
@@ -165,6 +166,7 @@ const StartCookingScreen = ({ navigation, route }) => {
       setTimerActive(false);
     } else {
       // All steps completed
+      void recordPositiveMoment();
       navigation.navigate('CookingComplete', {
         recipeName: cookingData.recipeName,
         totalTime: cookingData.totalTime,
