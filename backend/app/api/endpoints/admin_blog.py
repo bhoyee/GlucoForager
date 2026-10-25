@@ -136,7 +136,8 @@ def _unsubscribe_url(subscriber_id: int, email: str) -> str:
 
 
 # Never emailed by blog broadcasts (subscribers or all users), whatever list they're on.
-EXCLUDED_BROADCAST_EMAILS = {"missblair26@gmail.com"}
+# Empty by default; add addresses here or via EMAIL_BROADCAST_EXCLUDE.
+EXCLUDED_BROADCAST_EMAILS: set[str] = set()
 BROADCAST_LIMIT = 2000
 
 

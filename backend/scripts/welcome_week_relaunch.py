@@ -28,8 +28,8 @@ from app.services.free_tier_service import start_welcome_week  # noqa: E402
 from app.services.settings_service import get_free_tier_settings  # noqa: E402
 from app.services.trial_access_service import get_access_snapshot  # noqa: E402
 
-# Paying customers who'd find a "free Premium week" email unfair.
-EXCLUDED_EMAILS = {"missblair26@gmail.com"}
+# Addresses to leave out (e.g. paying customers who'd find a "free Premium week" email unfair).
+EXCLUDED_EMAILS: set[str] = set()
 
 
 def main() -> None:
