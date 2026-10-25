@@ -122,6 +122,8 @@ export default function BlogPostForm({
         headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: form.title,
+          content: form.content || null,
+          author_name: form.author_name || null,
           slug: form.slug || null,
           excerpt: form.excerpt || null,
           image_url: previewUrl || form.image_url || null,
@@ -498,11 +500,11 @@ export default function BlogPostForm({
               title="Email preview"
               sandbox=""
               srcDoc={emailPreview[emailPreviewTab]?.html || ''}
-              style={{ width: '100%', height: 720, border: '1px solid #e5e7eb', borderRadius: 12, background: '#fff' }}
+              style={{ width: '100%', height: 820, border: '1px solid #e5e7eb', borderRadius: 12, background: '#fff' }}
             />
             <p className="admin-help" style={{ marginTop: 8 }}>
-              Links are disabled in this preview. The email only contains the title, excerpt and cover image, with a
-              button to read the full article on the website. Edit the Excerpt field above to change the email text.
+              Links are disabled in this preview. The email shows the excerpt, the opening of the article and its main
+              sections, then a button to read the full article on the website.
             </p>
           </div>
         </div>

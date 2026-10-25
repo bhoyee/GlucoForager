@@ -206,6 +206,8 @@ def _send_post_to_newsletter_task(post_id: int) -> None:
                     post_excerpt=post.excerpt,
                     post_url=post_url,
                     image_url=post.image_url,
+                    post_content=post.content,
+                    author_name=post.author_name,
                     unsubscribe_url=_unsubscribe_url(subscriber_id, email),
                 )
             except Exception:
@@ -246,6 +248,8 @@ def _send_post_to_all_users_task(post_id: int, campaign_id: int | None) -> None:
                     post_excerpt=post.excerpt,
                     post_url=post_url,
                     image_url=post.image_url,
+                    post_content=post.content,
+                    author_name=post.author_name,
                 )
             except Exception:
                 continue
@@ -817,6 +821,8 @@ def blog_audit(
 
 class EmailPreviewPayload(BaseModel):
     title: str = Field("", max_length=160)
+    content: str | None = Field(None, max_length=1000000)
+    author_name: str | None = Field(None, max_length=120)
     slug: str | None = Field(None, max_length=80)
     excerpt: str | None = Field(None, max_length=5000)
     image_url: str | None = Field(None, max_length=600)
@@ -842,6 +848,8 @@ def blog_email_preview(
         post_excerpt=payload.excerpt,
         post_url=post_url,
         image_url=image_url,
+        post_content=payload.content,
+        author_name=payload.author_name,
         unsubscribe_url=_unsubscribe_url(0, "preview@example.com"),
     )
     user_subject, user_html = render_blog_post_to_user_email(
@@ -851,6 +859,8 @@ def blog_email_preview(
         post_excerpt=payload.excerpt,
         post_url=post_url,
         image_url=image_url,
+        post_content=payload.content,
+        author_name=payload.author_name,
     )
     excerpt_text = re.sub(r"<[^>]*>", "", payload.excerpt or "").strip()
     return {

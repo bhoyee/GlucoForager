@@ -5,7 +5,7 @@ import os
 import unittest
 from datetime import datetime
 
-from app.services.email_service import render_blog_post_newsletter_email, render_blog_post_to_user_email
+from app.services.email_service import blog_email_teaser, render_blog_post_newsletter_email, render_blog_post_to_user_email
 
 POST = dict(
     post_title="Can Diabetics Eat Watermelon?",
@@ -18,15 +18,36 @@ POST = dict(
 class RenderTest(unittest.TestCase):
     def test_user_email_is_a_teaser_with_read_link_and_unsubscribe(self):
         subject, html = render_blog_post_to_user_email(user_id=7, to_email="a@example.com", **POST)
-        self.assertEqual(subject, "New on GlucoForager: Can Diabetics Eat Watermelon?")
+        self.assertEqual(subject, "Can Diabetics Eat Watermelon?")
         self.assertIn("Yes, in sensible portions &amp; with protein.", html)  # excerpt, tags stripped, not double-escaped
         self.assertIn('href="https://www.glucoforager.com/blog/can-diabetics-eat-watermelon"', html)
-        self.assertIn("Read the full article", html)
+        self.assertIn("Continue reading", html)
         self.assertIn("/unsubscribe?type=dunning&amp;token=", html)
 
     def test_newsletter_email_keeps_its_unsubscribe_link(self):
         _, html = render_blog_post_newsletter_email(unsubscribe_url="https://x.test/unsubscribe?token=abc", **POST)
         self.assertIn("https://x.test/unsubscribe?token=abc", html)
+
+
+class TeaserTest(unittest.TestCase):
+    ARTICLE = (
+        "<p><strong>Can Diabetics Eat Watermelon? A Full Guide</strong></p>"
+        + "".join(f"<h2>Section {i}</h2><p>{'Watermelon is mostly water and fits in a balanced plan. ' * 6}</p>" for i in range(6))
+        + "<h2>Frequently asked questions</h2><p>Is it ok every day? Yes, in sensible portions for most people.</p>"
+    )
+
+    def test_email_shows_an_opening_not_the_whole_article(self):
+        t = blog_email_teaser(self.ARTICLE, "<p>Short summary.</p>", title="Can Diabetics Eat Watermelon?")
+        words = sum(len(p.split()) for p in t["paragraphs"])
+        self.assertLessEqual(words, 110)
+        self.assertTrue(t["paragraphs"][-1].endswith("…"))
+        self.assertNotIn("A Full Guide", " ".join(t["paragraphs"]))  # bold title line is not body text
+        self.assertEqual(t["headings"], [f"Section {i}" for i in range(5)])  # FAQ skipped, max 5
+        self.assertEqual(t["lead"], "Short summary.")
+
+    def test_bold_line_headings_are_used_when_a_post_has_no_h2(self):
+        html = "".join(f"<p><strong>{n}. Tip number {n}</strong></p><p>{'Some helpful body text here. ' * 4}</p>" for n in (1, 2, 3))
+        self.assertEqual(blog_email_teaser(html, None, title="Tips")["headings"], ["1. Tip number 1", "2. Tip number 2", "3. Tip number 3"])
 
 
 @unittest.skipUnless(os.getenv("TEST_DATABASE_URL"), "needs TEST_DATABASE_URL (Postgres)")

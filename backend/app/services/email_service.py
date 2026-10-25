@@ -631,123 +631,292 @@ def send_free_guide_email(to_email: str, subscriber_id: int) -> None:
     logger.info("Sent free guide email to %s", to_email)
 
 
+_BLOG_SKIP_HEADINGS = re.compile(r"frequently asked|faq|make it easier|references|sources|further reading", re.I)
+
+
+def _plain(value: str | None) -> str:
+    text = re.sub(r"<[^>]*>", " ", value or "")
+    return re.sub(r"\s+", " ", _html.unescape(text)).strip()
+
+
+_BOLD_LINE = re.compile(r"<p[^>]*>\s*<(?:strong|b)>(.*?)</(?:strong|b)>\s*</p>", re.I | re.S)
+
+
+def _is_sentence(text: str) -> bool:
+    return len(text.split()) >= 15 or text.rstrip("\"')”").endswith((".", "!", "?"))
+
+
+def _email_headings(content: str, title: str) -> list[str]:
+    """Section titles for 'In this article': H2s, else H3s, else short bold-only lines
+    (older posts use bold paragraphs as headings). Skips FAQ questions, the post title
+    repeated, and promo blocks."""
+    for pattern in (r"<h2[^>]*>(.*?)</h2>", r"<h3[^>]*>(.*?)</h3>"):
+        found = [_plain(h) for h in re.findall(pattern, content, flags=re.I | re.S)]
+        found = [h for h in found if h and not _BLOG_SKIP_HEADINGS.search(h)]
+        if len(found) >= 2:
+            return found[:5]
+    title_words = set(_plain(title).lower().split())
+    out = []
+    for raw in _BOLD_LINE.findall(content):
+        text = _plain(raw).rstrip(":")
+        words = text.lower().split()
+        if not text or len(words) > 12 or text.endswith("?") or _BLOG_SKIP_HEADINGS.search(text):
+            continue
+        if re.search(r"glucoguide|feature highlight|download|the app", text, re.I):
+            continue
+        if title_words and len(set(words) & title_words) / max(len(set(words)), 1) >= 0.4:
+            continue
+        out.append(text)
+    return out[:5] if len(out) >= 3 else []
+
+
+def blog_email_teaser(content: str | None, excerpt: str | None, *, title: str = "", max_words: int = 110) -> dict:
+    """What the email shows from the article: an opening teaser (cut off part-way so
+    readers click through), up to 5 section headings, and the reading time."""
+    content = content or ""
+    excerpt_text = _plain(excerpt)
+    body = re.split(r"<h[23][^>]*>\s*(?:frequently asked|faq)", content, maxsplit=1, flags=re.I)[0]
+    paragraphs = []
+    for raw in re.findall(r"<p[^>]*>(.*?)</p>", body, flags=re.I | re.S):
+        if re.fullmatch(r"\s*<(strong|b)>.*?</>\s*", raw, flags=re.I | re.S):
+            continue  # a bold line used as a heading, not body text
+        text = _plain(raw)
+        if len(text.split()) >= 6 and text != excerpt_text and _is_sentence(text):
+            paragraphs.append(text)
+
+    teaser, used = [], 0
+    for p in paragraphs:
+        words = p.split()
+        if used + len(words) <= max_words:
+            teaser.append(p)
+            used += len(words)
+            continue
+        room = max_words - used
+        if room >= 15:
+            teaser.append(" ".join(words[:room]).rstrip(",;:.") + "…")
+        elif teaser:
+            teaser[-1] = teaser[-1].rstrip(".") + "…"
+        break
+
+    words_total = len(_plain(content).split())
+    return {
+        "lead": excerpt_text,
+        "paragraphs": teaser,
+        "headings": _email_headings(content, title),
+        "read_minutes": max(1, round(words_total / 220)) if words_total else None,
+    }
+
+
 def _blog_post_email(
-    *, post_title: str, post_excerpt: str | None, post_url: str, image_url: str | None, footer_html: str
+    *,
+    post_title: str,
+    post_excerpt: str | None,
+    post_url: str,
+    image_url: str | None,
+    reason_html: str,
+    unsubscribe_url: str,
+    post_content: str | None = None,
+    author_name: str | None = None,
 ) -> tuple[str, str]:
-    """Teaser email for a blog post: title, short excerpt, cover image and a link to read
-    the full article on the website. The article body itself is never emailed."""
-    site_url = (settings.site_url or "https://www.glucoforager.com").rstrip("/")
-    logo_url = f"{site_url}/images/logo.png"
+    """Professional teaser email for a blog post. Table-based, inline-styled layout so it
+    renders the same in Gmail, Outlook and Apple Mail. The full article is never emailed:
+    readers get the opening, what the article covers, and a button to read the rest."""
+    site = _site_url()
+    esc = _html.escape
+    title = (post_title or "New article").strip()
+    teaser = blog_email_teaser(post_content, post_excerpt, title=title)
+    url = esc(post_url)
+    preheader = esc((teaser["lead"] or (teaser["paragraphs"] or [""])[0])[:140])
 
-    def _strip_tags(value: str) -> str:
-        import re
+    byline_bits = [esc((author_name or "").strip() or "The GlucoForager Team")]
+    if teaser["read_minutes"]:
+        byline_bits.append(f"{teaser['read_minutes']} min read")
+    byline = " &nbsp;&middot;&nbsp; ".join(byline_bits)
 
-        return re.sub(r"<[^>]*>", "", value or "").strip()
+    image_row = ""
+    if (image_url or "").strip():
+        image_row = f"""
+        <tr><td style="padding:0;">
+          <a href="{url}" target="_blank"><img src="{esc(image_url.strip())}" width="600" alt="{esc(title)}"
+            style="display:block; width:100%; max-width:600px; height:auto; border:0;" /></a>
+        </td></tr>"""
 
-    safe_title = _html.escape((post_title or "New post").strip())
-    safe_excerpt = _html.escape(_html.unescape(_strip_tags((post_excerpt or "").strip())))
-    safe_image = _html.escape((image_url or "").strip())
+    lead_html = (
+        f'<p style="margin:0 0 16px 0; font-size:18px; line-height:28px; color:#0f172a; font-weight:600;">{esc(teaser["lead"])}</p>'
+        if teaser["lead"]
+        else ""
+    )
+    paragraphs_html = "".join(
+        f'<p style="margin:0 0 16px 0; font-size:16px; line-height:26px; color:#334155;">{esc(p)}</p>'
+        for p in teaser["paragraphs"]
+    )
+    headings_html = ""
+    if teaser["headings"]:
+        items = "".join(
+            f"""<tr><td width="24" valign="top" style="padding:4px 0; color:#0d9488; font-size:15px; line-height:24px; font-weight:700;">&#10003;</td>
+              <td style="padding:4px 0; font-size:15px; line-height:24px; color:#0f172a;">{esc(h)}</td></tr>"""
+            for h in teaser["headings"]
+        )
+        headings_html = f"""
+        <tr><td style="padding:8px 32px 0 32px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdfa; border:1px solid #ccfbf1; border-radius:12px;">
+            <tr><td style="padding:18px 20px;">
+              <p style="margin:0 0 8px 0; font-size:12px; letter-spacing:1.2px; text-transform:uppercase; font-weight:700; color:#0f766e;">In this article</p>
+              <table role="presentation" cellpadding="0" cellspacing="0">{items}</table>
+            </td></tr>
+          </table>
+        </td></tr>"""
 
-    image_block = ""
-    if safe_image:
-        image_block = f"""
-          <div style="margin-top:14px; overflow:hidden; border-radius:14px; border:1px solid #e5e7eb;">
-            <a href="{_html.escape(post_url)}"><img src="{safe_image}" alt="{safe_title}" style="width:100%; display:block;" /></a>
-          </div>
-        """
+    subject = title[:160]
+    html_body = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="x-apple-disable-message-reformatting" />
+  <title>{esc(title)}</title>
+</head>
+<body style="margin:0; padding:0; background:#eef2f5; -webkit-text-size-adjust:100%;">
+  <div style="display:none; max-height:0; overflow:hidden; opacity:0; color:#eef2f5;">{preheader}</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f5;">
+    <tr><td align="center" style="padding:24px 12px;">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0"
+        style="width:100%; max-width:600px; background:#ffffff; border-radius:16px; overflow:hidden; font-family:Helvetica, Arial, sans-serif;">
 
-    excerpt_block = ""
-    if safe_excerpt:
-        excerpt_block = f"""
-          <p style="margin-top:12px; line-height:1.6; font-size:14px; color:#0C1824;">{safe_excerpt}</p>
-        """
+        <tr><td style="padding:16px 32px; background:#0f766e;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+            <td valign="middle">
+              <a href="{site}" target="_blank" style="text-decoration:none;">
+                <img src="{site}/images/logo.png" width="32" height="32" alt="" style="display:inline-block; vertical-align:middle; border-radius:8px; background:#ffffff; border:0;" />
+                <span style="display:inline-block; vertical-align:middle; margin-left:8px; font-size:18px; font-weight:700; color:#ffffff;">GlucoForager</span>
+              </a>
+            </td>
+            <td align="right" valign="middle" style="font-size:12px; color:#ccfbf1; letter-spacing:1px; text-transform:uppercase;">The Blog</td>
+          </tr></table>
+        </td></tr>
+        {image_row}
 
-    subject = f"New on GlucoForager: {_strip_tags(post_title or 'New post')}".strip()[:160]
-    html_body = f"""
-    <html>
-      <body style="font-family: Arial, sans-serif; color: #0C1824;">
-        <div style="max-width:640px; margin:0 auto; border:1px solid #e5e7eb; border-radius:14px; padding:22px;">
-          <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
-            <img src="{logo_url}" alt="GlucoForager" width="36" height="36" style="display:block; border-radius:10px;" />
-            <div style="font-weight:800; font-size:18px; color:#0C1824;">GlucoForager</div>
-          </div>
+        <tr><td style="padding:28px 32px 4px 32px;">
+          <p style="margin:0 0 10px 0; font-size:12px; letter-spacing:1.2px; text-transform:uppercase; font-weight:700; color:#0d9488;">New article</p>
+          <h1 style="margin:0 0 10px 0; font-size:28px; line-height:36px; font-weight:800; color:#0f172a;">
+            <a href="{url}" target="_blank" style="color:#0f172a; text-decoration:none;">{esc(title)}</a>
+          </h1>
+          <p style="margin:0 0 22px 0; font-size:13px; color:#64748b;">{byline}</p>
+          {lead_html}
+          {paragraphs_html}
+        </td></tr>
+        {headings_html}
 
-          <h2 style="color:#0FB7A5; margin-top:0; margin-bottom:0;">New blog post</h2>
-          <h1 style="margin-top:10px; font-size:22px; line-height:1.2; color:#0C1824;">{safe_title}</h1>
-          {excerpt_block}
-          {image_block}
+        <tr><td align="center" style="padding:28px 32px 8px 32px;">
+          <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+            <td align="center" style="border-radius:999px; background:#0d9488;">
+              <a href="{url}" target="_blank"
+                style="display:inline-block; padding:15px 34px; font-size:16px; font-weight:700; color:#ffffff; text-decoration:none; border-radius:999px;">
+                Continue reading &rarr;
+              </a>
+            </td>
+          </tr></table>
+        </td></tr>
 
-          <div style="margin-top:18px;">
-            <a href="{_html.escape(post_url)}" style="display:inline-block; background:#0D9488; color:white; text-decoration:none; padding:12px 16px; border-radius:999px; font-weight:700;">
-              Read the full article
-            </a>
-          </div>
+        <tr><td style="padding:24px 32px 8px 32px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #e2e8f0;"><tr>
+            <td style="padding:22px 0 0 0;">
+              <p style="margin:0 0 6px 0; font-size:16px; font-weight:700; color:#0f172a;">Put it into practice with GlucoForager</p>
+              <p style="margin:0 0 12px 0; font-size:14px; line-height:22px; color:#475569;">
+                Snap the food you already have and get diabetes-friendly recipes with carbs per serving,
+                smart swaps and a glucose log that shows how meals affect you.
+              </p>
+              <a href="{site}/download" target="_blank" style="font-size:14px; font-weight:700; color:#0d9488; text-decoration:none;">Try it free &rarr;</a>
+              &nbsp;&nbsp;&nbsp;
+              <a href="{site}/recipes" target="_blank" style="font-size:14px; font-weight:700; color:#0d9488; text-decoration:none;">Browse free recipes &rarr;</a>
+            </td>
+          </tr></table>
+        </td></tr>
 
-          <p style="margin-top:22px; color:#6b7280; font-size:12px; line-height:1.5;">
-            {footer_html}
+        <tr><td style="padding:24px 32px 28px 32px; background:#f8fafc; border-top:1px solid #e2e8f0;">
+          <p style="margin:0 0 8px 0; font-size:13px; font-weight:700; color:#0f172a;">GlucoForager</p>
+          <p style="margin:0 0 12px 0; font-size:12px; line-height:18px; color:#64748b;">
+            Diabetes-friendly recipes, meal ideas and blood sugar insights.<br/>
+            <a href="{site}/blog" target="_blank" style="color:#0f766e; text-decoration:none;">Blog</a> &nbsp;&middot;&nbsp;
+            <a href="{site}/recipes" target="_blank" style="color:#0f766e; text-decoration:none;">Recipes</a> &nbsp;&middot;&nbsp;
+            <a href="{site}/download" target="_blank" style="color:#0f766e; text-decoration:none;">Get the app</a> &nbsp;&middot;&nbsp;
+            <a href="mailto:hello@glucoforager.com" style="color:#0f766e; text-decoration:none;">hello@glucoforager.com</a>
           </p>
-        </div>
-      </body>
-    </html>
-    """
+          <p style="margin:0 0 12px 0; font-size:11px; line-height:17px; color:#94a3b8;">
+            Our articles are general information, not medical advice. Talk to your doctor, diabetes nurse or dietitian
+            before making changes to your diet or treatment.
+          </p>
+          <p style="margin:0; font-size:11px; line-height:17px; color:#94a3b8;">
+            {reason_html}
+            <a href="{esc(unsubscribe_url)}" target="_blank" style="color:#64748b; text-decoration:underline;">Unsubscribe</a>
+          </p>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
     return subject, html_body
 
 
 def render_blog_post_newsletter_email(
-    *, post_title: str, post_excerpt: str | None, post_url: str, image_url: str | None, unsubscribe_url: str
-) -> tuple[str, str]:
-    footer = (
-        "You received this email because you subscribed to GlucoForager updates.<br/>"
-        f'Unsubscribe anytime: <a href="{_html.escape(unsubscribe_url)}" style="color:#0FB7A5;">Unsubscribe</a>'
-    )
-    return _blog_post_email(
-        post_title=post_title, post_excerpt=post_excerpt, post_url=post_url, image_url=image_url, footer_html=footer
-    )
-
-
-def render_blog_post_to_user_email(
-    *, user_id: int, to_email: str, post_title: str, post_excerpt: str | None, post_url: str, image_url: str | None
-) -> tuple[str, str]:
-    """For app users (not newsletter subscribers). The unsubscribe link sets the same
-    per-user marketing opt-out the welcome-week and win-back emails respect."""
-    from .user_email_tokens import make_dunning_unsubscribe_token
-
-    unsubscribe_url = f"{_site_url()}/unsubscribe?type=dunning&token={make_dunning_unsubscribe_token(user_id, to_email)}"
-    footer = (
-        "You're receiving this because you have a GlucoForager account.<br/>"
-        f"Don't want these emails? <a href=\"{_html.escape(unsubscribe_url)}\" style=\"color:#0FB7A5;\">Unsubscribe</a>"
-    )
-    return _blog_post_email(
-        post_title=post_title, post_excerpt=post_excerpt, post_url=post_url, image_url=image_url, footer_html=footer
-    )
-
-
-def send_blog_post_newsletter_email(
-    to_email: str,
+    *,
     post_title: str,
     post_excerpt: str | None,
     post_url: str,
     image_url: str | None,
     unsubscribe_url: str,
-) -> None:
-    subject, html_body = render_blog_post_newsletter_email(
-        post_title=post_title, post_excerpt=post_excerpt, post_url=post_url, image_url=image_url, unsubscribe_url=unsubscribe_url
+    post_content: str | None = None,
+    author_name: str | None = None,
+) -> tuple[str, str]:
+    return _blog_post_email(
+        post_title=post_title,
+        post_excerpt=post_excerpt,
+        post_url=post_url,
+        image_url=image_url,
+        post_content=post_content,
+        author_name=author_name,
+        reason_html="You're receiving this because you subscribed to GlucoForager updates.",
+        unsubscribe_url=unsubscribe_url,
     )
-    _send_email(to_email, subject, html_body)
-    logger.info("Sent blog post newsletter email to %s", to_email)
 
 
-def send_blog_post_to_user_email(
-    to_email: str,
+def render_blog_post_to_user_email(
+    *,
     user_id: int,
+    to_email: str,
     post_title: str,
     post_excerpt: str | None,
     post_url: str,
     image_url: str | None,
-) -> None:
-    subject, html_body = render_blog_post_to_user_email(
-        user_id=user_id, to_email=to_email, post_title=post_title, post_excerpt=post_excerpt, post_url=post_url, image_url=image_url
+    post_content: str | None = None,
+    author_name: str | None = None,
+) -> tuple[str, str]:
+    """For app users (not newsletter subscribers). The unsubscribe link sets the same
+    per-user marketing opt-out the welcome-week and win-back emails respect."""
+    from .user_email_tokens import make_dunning_unsubscribe_token
+
+    return _blog_post_email(
+        post_title=post_title,
+        post_excerpt=post_excerpt,
+        post_url=post_url,
+        image_url=image_url,
+        post_content=post_content,
+        author_name=author_name,
+        reason_html="You're receiving this because you have a GlucoForager account.",
+        unsubscribe_url=f"{_site_url()}/unsubscribe?type=dunning&token={make_dunning_unsubscribe_token(user_id, to_email)}",
     )
+
+
+def send_blog_post_newsletter_email(to_email: str, unsubscribe_url: str, **post) -> None:
+    subject, html_body = render_blog_post_newsletter_email(unsubscribe_url=unsubscribe_url, **post)
+    _send_email(to_email, subject, html_body)
+    logger.info("Sent blog post newsletter email to %s", to_email)
+
+
+def send_blog_post_to_user_email(to_email: str, user_id: int, **post) -> None:
+    subject, html_body = render_blog_post_to_user_email(user_id=user_id, to_email=to_email, **post)
     _send_email(to_email, subject, html_body)
     logger.info("Sent blog post user-broadcast email to %s", to_email)
 
