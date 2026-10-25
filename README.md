@@ -15,19 +15,61 @@ It supports **Type 1, Type 2, prediabetes and gestational diabetes**, and adapts
 
 ## Contents
 
-1. [What the app does](#what-the-app-does)
-2. [How a user moves through the app](#how-a-user-moves-through-the-app)
-3. [Plans: Free, welcome week and Premium](#plans-free-welcome-week-and-premium)
-4. [Admin & staff console](#admin--staff-console)
-5. [Architecture](#architecture)
-6. [AI system](#ai-system)
-7. [Repository structure](#repository-structure)
-8. [Tech stack](#tech-stack)
-9. [Running locally](#running-locally)
-10. [Testing](#testing)
-11. [Deployment & hosting](#deployment--hosting)
-12. [Operations: monitoring, backups, scheduled jobs](#operations-monitoring-backups-scheduled-jobs)
-13. [Configuration](#configuration)
+1. [The problem](#the-problem)
+2. [The solution](#the-solution)
+3. [Screenshots](#screenshots)
+4. [What the app does](#what-the-app-does)
+5. [How a user moves through the app](#how-a-user-moves-through-the-app)
+6. [Plans: Free, welcome week and Premium](#plans-free-welcome-week-and-premium)
+7. [Admin & staff console](#admin--staff-console)
+8. [Architecture](#architecture)
+9. [AI system](#ai-system)
+10. [Error handling & resilience](#error-handling--resilience)
+11. [Repository structure](#repository-structure)
+12. [Tech stack](#tech-stack)
+13. [Running locally](#running-locally)
+14. [Testing](#testing)
+15. [Deployment & hosting](#deployment--hosting)
+16. [Operations: monitoring, backups, scheduled jobs](#operations-monitoring-backups-scheduled-jobs)
+17. [Configuration](#configuration)
+
+---
+
+## The problem
+
+Around **589 million adults** live with diabetes worldwide (IDF Diabetes Atlas, 2024), and many more have prediabetes. For all of them, food is the hardest part of daily management:
+
+- **Every meal is a decision.** People are told to "watch carbs" and "eat healthily", but at 7 pm in front of the fridge that advice doesn't say *what to cook tonight with what's actually there*.
+- **Generic advice doesn't fit real lives.** Most diet apps and recipe sites ignore the type of diabetes, the person's country and cuisine, their budget, the foods they must avoid and the equipment they own. Advice built for someone else gets abandoned.
+- **Labels and portions are confusing.** Knowing whether a packaged food or a plate of food is a good choice means reading nutrition labels, counting carbs and guessing the glucose impact, every time.
+- **Cause and effect are invisible.** People log readings in one place and meals in another (or not at all), so they rarely learn *which* of their own foods spike them.
+- **Motivation fades.** Long programmes and strict diets feel like punishment, so habits don't stick.
+
+The result is decision fatigue, guesswork, repeated spikes and people giving up on healthier eating.
+
+## The solution
+
+GlucoForager turns diabetes food management into **quick, personal answers at the moment of decision**:
+
+| Problem | How GlucoForager solves it |
+|---|---|
+| "What can I cook with what I have?" | Scan the fridge or type ingredients → diabetes-friendly recipes built from **those** ingredients, with simple steps and nutrition. |
+| "Is this food OK for me?" | Scan a barcode or photo → an instant verdict with carbs, sugar, fibre and a plain-English glucose-impact note. |
+| Advice that doesn't fit | Every answer adapts to diagnosis (Type 1, Type 2, prediabetes, gestational), goals, country, cuisine, foods to avoid, cooking time and equipment. |
+| Giving up familiar foods | Food swaps keep the foods people love, with smarter versions instead of bans. |
+| Not knowing what affects *me* | Glucose and meal logging in one place, spike alerts, and insights built only from the user's own data. |
+| Decision fatigue across the day | A daily carb goal, a daily meal planner and "what can I eat now?" suggestions. |
+| Habits that don't stick | One small daily challenge that ticks itself when the user does it, plus short daily tips that turn personal twice a week. |
+
+It's priced to be accessible: core tracking is free forever, AI features have weekly free uses, and new users get a 7-day Premium welcome week with no card required.
+
+## Screenshots
+
+A few screens from the mobile app. This is only a selection; the app has many more screens (food scan, recipes, swaps, GlucoGuide, meal planner, challenges and more), described in [What the app does](#what-the-app-does).
+
+| Home | Quick actions & picks | Glucose insights: trends |
+|:---:|:---:|:---:|
+| <img src="docs/screenshots/home.png" width="260" alt="Home: greeting, scan fridge, type foods, suggest meal, last-used ingredients and Track Today rings"> | <img src="docs/screenshots/home-actions-picks.png" width="260" alt="Home: log meal, log glucose, snap a meal, scan barcode, after-meal glucose check reminder and recipe picks"> | <img src="docs/screenshots/glucose-insights-trends.jpg" width="260" alt="Glucose insights trends: 7-day glucose chart against target range with key insights"> |
 
 ---
 
@@ -158,6 +200,39 @@ A **modular monolith**: one FastAPI backend and one PostgreSQL database, with **
 
 ---
 
+## Error handling & resilience
+
+The goal: **users always get a clear message, never a crash or a silent failure, and every problem is visible to the team.**
+
+### Backend (FastAPI)
+| Situation | What happens |
+|---|---|
+| Invalid request body | Global `RequestValidationError` handler returns a clean `422` and records the details in the system log. |
+| Expected errors (not found, forbidden, limit reached…) | Raised as `HTTPException` with a user-readable `detail` that the app shows as-is. |
+| Database unreachable | Middleware catches it and returns `503 "Database temporarily unavailable"` instead of a stack trace. |
+| Any unexpected exception | Caught by a catch-all handler → `500 "Internal server error"` for the user, full error logged for the team. |
+| Too many requests | Per-minute rate limiting returns `429` with a `Retry-After` header; AI features also have per-user daily caps. Login attempts are throttled. |
+| AI provider slow, down or rate-limited | Strict timeouts, then a fallback model/provider. The job fails cleanly with an **operational** reason ("try again shortly") and is never charged against the user's free uses. |
+| AI input can't work ("only additives", "not food", nutrition missing) | Rejected **before** spending AI tokens, with an **invalid input** reason telling the user exactly what to change. |
+| AI returns malformed output | JSON-mode responses are validated (nutrition numbers, ingredient match, duplicates); a bad result is retried once, then rejected rather than shown. |
+| Worker crash mid-job | Jobs live in Postgres, so a stuck job is detected and rescued with an atomic claim (no double processing). |
+| Duplicate submissions (double taps, retries on bad networks) | Glucose readings, meals and plans carry a client-generated **idempotency key**; the server ignores repeats. |
+
+All warnings and errors go to the **System logs** page in the admin console (path, method, status, details), with noise from internet scanners filtered out. Staff actions go to the **Audit** log.
+
+### Mobile app
+- **Timeouts everywhere:** every API call has a timeout (10 s default) and one automatic retry with a longer timeout on network failure.
+- **Silent session refresh:** an expired token is refreshed and the request retried once; only if that fails is the user asked to sign in again.
+- **Friendly messages:** server `detail` messages are shown directly; `429` responses tell the user how many seconds to wait.
+- **Outage banner:** a Cloudflare Worker checks the API every minute, independently of the server, so the app can show "we're having issues" even when the API is unreachable, including on the login screen.
+- **Remote diagnostics:** client-side errors are buffered on the device and uploaded to the backend, where they appear on the admin **Mobile logs** page.
+- **Safe updates:** OTA updates are checked on launch with a short fallback timeout, so a slow network never blocks the app from opening.
+
+### Admin console
+- Expired sessions are detected locally (JWT expiry), refreshed once for all parallel requests, and redirected to sign-in with a clear "session expired" message, with no burst of failing requests.
+
+---
+
 ## Repository structure
 
 ```
@@ -193,7 +268,7 @@ GlucoForager/
 │   └── components/, lib/, public/
 │
 ├── status-worker/               Cloudflare Worker: uptime check + /status for the app
-├── docs/                        architecture diagram
+├── docs/                        architecture + user-flow diagrams, README screenshots
 ├── .github/workflows/           CI/CD and ops workflows (see below)
 └── docker-compose.yml           api, worker, db (Postgres 15), redis (7)
 ```
@@ -242,7 +317,26 @@ Inside Docker, services reach each other as `db:5432` (Postgres) and `redis:6379
 
 ## Testing
 
-The backend has a `unittest` suite in `backend/tests/` (recipe bank, label/additive checks, tip rotation, challenges and more). Run it against a **separate test database**, never production:
+| Suite | Tool | Size | Location |
+|---|---|---|---|
+| Backend unit & integration tests | Python `unittest` | 126 tests, 17 files | `backend/tests/` |
+| Mobile logic tests | Jest | 32 tests, 6 files | `Mobile-GApp/utils/__tests__/` |
+
+### What is covered
+**Backend**
+| Area | Test file(s) |
+|---|---|
+| Plans & access: free weekly uses, welcome week, trial access, feature usage | `test_free_tier_service.py`, `test_feature_usage.py`, `test_trial_access_service.py`, `test_dependencies.py` |
+| Payments: dunning only for paying users | `test_dunning_paid_only.py` |
+| Glucose: targets per diagnosis, impact verdicts, insights and patterns | `test_glucose_targets.py`, `test_glucose_impact.py`, `test_glucose_insights.py` |
+| Food & meals: label reading, additive-only rejection, carb estimates, meal diary, meal options | `test_food_label.py`, `test_label_additives.py`, `test_meal_carb_estimate.py`, `test_meal_diary.py`, `test_recipe_meal_options.py` |
+| Habits: daily challenge auto-tick and swaps, personal tip rotation | `test_daily_challenge_service.py`, `test_tip_rotation.py` |
+| Platform: country detection for pricing, durable recipe images | `test_geo_country.py`, `test_recipe_image_durable.py` |
+
+**Mobile:** after-meal check timing, free-tier display, glucose reading classification, recipe image cache, scan tracking and today's tips.
+
+### Running the tests
+Backend: run against a **separate test database**, never production:
 
 ```bash
 cd backend
@@ -252,7 +346,17 @@ REDIS_URL=redis://localhost:6379/9 \
 python -m unittest discover -s tests -t .
 ```
 
-CI runs a compile check of the backend on every deploy.
+Mobile:
+
+```bash
+cd Mobile-GApp
+npm test
+```
+
+### Quality gates
+- **CI:** every backend deploy compile-checks the code first and stops if it fails.
+- **Migrations:** schema changes go through Alembic and run automatically on deploy.
+- **Manual QA:** new features are tested end to end on a dev build against a local test stack before release; production gets OTA updates only after that.
 
 ---
 
