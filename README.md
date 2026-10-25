@@ -65,6 +65,8 @@ It's priced to be accessible: core tracking is free forever, AI features have we
 
 ## Screenshots
 
+A few screens from the mobile app. This is only a selection; the app has many more screens (food scan, recipes, swaps, GlucoGuide, meal planner, challenges and more), described in [What the app does](#what-the-app-does).
+
 | Home | Quick actions & picks | Glucose insights: trends |
 |:---:|:---:|:---:|
 | <img src="docs/screenshots/home.png" width="260" alt="Home: greeting, scan fridge, type foods, suggest meal, last-used ingredients and Track Today rings"> | <img src="docs/screenshots/home-actions-picks.png" width="260" alt="Home: log meal, log glucose, snap a meal, scan barcode, after-meal glucose check reminder and recipe picks"> | <img src="docs/screenshots/glucose-insights-trends.jpg" width="260" alt="Glucose insights trends: 7-day glucose chart against target range with key insights"> |
