@@ -162,7 +162,9 @@ jobs:
           AMOUNT: ${{ github.event.inputs.budget_amount }}
         run: |
           set -eu
-          if [ "$(oci budgets budget budget list -c "$T" --all | jq '.data | length')" != "0" ]; then
+          # The CLI prints nothing at all when there are no budgets.
+          existing=$(oci budgets budget budget list -c "$T" --all | jq -r '(.data // []) | length' 2>/dev/null || true)
+          if [ -n "$existing" ] && [ "$existing" != "0" ]; then
             echo "A budget already exists - not creating another."; exit 0
           fi
           BUDGET=$(oci budgets budget budget create -c "$T" --amount "$AMOUNT" --reset-period MONTHLY \
