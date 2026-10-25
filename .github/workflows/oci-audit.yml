@@ -136,8 +136,16 @@ jobs:
           done
 
           echo "=== Budgets ==="
-          oci budgets budget list -c "$T" --all 2>/dev/null | jq -r '.data[]? | "  \(."display-name"): \(.amount)/month, spent so far \(."actual-spend" // 0), forecast \(."forecasted-spend" // 0)"' | tee /tmp/budgets.txt
-          [ -s /tmp/budgets.txt ] || echo "  (no budget set)"
+          braw=$(oci budgets budget list -c "$T" --all 2>&1 || true)
+          if echo "$braw" | jq -e . >/dev/null 2>&1; then
+            echo "$braw" | jq -r '.data[]? | "  \(."display-name"): \(.amount)/month, spent so far \(."actual-spend" // 0), forecast \(."forecasted-spend" // 0)"' | tee /tmp/budgets.txt
+            [ -s /tmp/budgets.txt ] || echo "  (no budget set)"
+          elif [ -z "$braw" ]; then
+            echo "  (no budget set)"
+          else
+            echo "  Could not read budgets: $(echo "$braw" | grep -oE '"(code|message)": "[^"]{0,140}' | paste -sd ' ' | head -c 300)"
+            echo "$braw" | grep -v '^\s*$' | head -5
+          fi
 
           echo "==============================================="
           if [ "$warn" = 1 ]; then
