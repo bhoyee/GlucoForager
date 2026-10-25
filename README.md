@@ -1,139 +1,346 @@
 # GlucoForager
 
-GlucoForager is a mobile-first diabetes food decision assistant. The app helps people decide what to eat by scanning fridge or pantry ingredients, accepting typed ingredients, generating blood-sugar-friendly meal ideas, suggesting smarter food swaps, building daily meal plans, and giving profile-based tips and challenges. It is designed for real daily use: quick decisions, simple cooking steps, nutrition estimates, favorites, recent history, and guidance tailored to diabetes type, goals, preferences, cuisine, lifestyle, and available kitchen equipment.
+**A daily food decision assistant for people living with diabetes.**
 
-Beyond the mobile app, this repo includes a production FastAPI backend, asynchronous AI job workers, a marketing site, and a full internal admin/staff console with staff roles and permissions, work plans, daily work logs, requests and approvals, inbox, notifications, asset libraries, payroll views, health checks, backups, and operational tooling.
+GlucoForager answers the question people with diabetes face several times a day: *"What can I eat right now that won't spike my blood sugar?"* Users scan their fridge, type what they have, scan a barcode or a plate of food, and get a clear, personalised answer: a diabetes-friendly verdict, recipe ideas built from their own ingredients, smarter swaps for familiar foods, or a full day's meal plan. They also log glucose readings and meals, see how food actually affects them, and build habits through small daily challenges and tips.
 
-## Tech Stack
-- **Backend**: FastAPI, SQLAlchemy, Alembic, PostgreSQL, Redis
-- **AI**: asynchronous jobs + provider fallback (text/vision), optional recipe image generation (Runware/Gemini)
-- **Admin/Staff Console + Marketing**: Next.js (App Router) + Tailwind
-- **Mobile**: Expo React Native + EAS (updates/build/submit)
+It supports **Type 1, Type 2, prediabetes and gestational diabetes**, and adapts to each user's goals, country, cuisine, foods to avoid, cooking time and kitchen equipment.
 
-## Repository Layout
-- `backend/`: FastAPI backend (REST API), PostgreSQL models/migrations, AI job engine, email + file storage adapters.
-- `landing-page/`: Next.js (App Router) marketing site **and** staff/admin console UI (role-based).
-- `Mobile-GApp/`: Expo React Native mobile app (EAS updates/builds).
-- `docker-compose.yml`: Local/prod-ish compose for `api`, `worker`, `db`, `redis`.
+- 📱 **Mobile app**: iOS (App Store) and Android (Google Play), bundle id `com.glucoforager.app`
+- 🌐 **Website**: [glucoforager.com](https://www.glucoforager.com) (marketing site, blog, pricing)
+- 🛠️ **Admin & staff console**: [glucoforager.com/admin](https://www.glucoforager.com/admin)
+- ⚙️ **API**: `api.glucoforager.com`
 
-## High-Level Architecture
+---
 
-<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/1e7eb354-06db-4726-ad34-b5dd8ca78422" />
+## Contents
 
-## What Architecture Is This?
-This project uses a **modular monolith** (single FastAPI backend + one database) with **asynchronous background workers** for long-running/AI workloads.
+1. [What the app does](#what-the-app-does)
+2. [How a user moves through the app](#how-a-user-moves-through-the-app)
+3. [Plans: Free, welcome week and Premium](#plans-free-welcome-week-and-premium)
+4. [Admin & staff console](#admin--staff-console)
+5. [Architecture](#architecture)
+6. [AI system](#ai-system)
+7. [Repository structure](#repository-structure)
+8. [Tech stack](#tech-stack)
+9. [Running locally](#running-locally)
+10. [Testing](#testing)
+11. [Deployment & hosting](#deployment--hosting)
+12. [Operations: monitoring, backups, scheduled jobs](#operations-monitoring-backups-scheduled-jobs)
+13. [Configuration](#configuration)
 
-- **Not microservices (yet):** we intentionally keep one backend deployable to reduce complexity (network hops, distributed tracing, service orchestration, and data consistency issues).
-- **Not a “pure monolith” either:** AI work is decoupled into jobs + workers (queue-driven), which gives many of the resilience benefits of event-driven systems without the overhead of a full microservices fleet.
+---
 
-### Deployment topology
-- `glucoforager-api`: serves HTTP requests (mobile + admin/staff).
-- `glucoforager-worker`: processes queued AI jobs (and other long-running tasks where needed).
-- `glucoforager-db`: PostgreSQL as the system of record.
-- `glucoforager-redis`: queue/caching primitives.
+## What the app does
 
-This keeps the API responsive under burst traffic while the worker absorbs AI latency/overload.
+### Know before you eat
+| Feature | What it does |
+|---|---|
+| **Barcode & photo food scan** | Scan a product barcode or photograph any food or meal for an instant diabetes-friendly verdict, with carbs, sugar and fibre, plus a simple glucose-impact explanation. |
+| **"What can I eat now?"** | Quick suggestions for the moment a user needs an answer immediately, based on their profile and time of day. |
+| **GlucoGuide AI** | A chat assistant for everyday food questions: "is this OK?", plate balance, swaps, eating out. Answers are aware of the user's profile, favourites and plans. |
 
-## Backend (FastAPI) Design
-- **API surface**: Mobile endpoints + internal staff/admin endpoints. Interactive docs are available via FastAPI (OpenAPI/Swagger).
-- **Data layer**: PostgreSQL (SQLAlchemy) for core product data, staff operations data, and AI job state/results.
-- **AI is asynchronous by default**: AI requests create `ai_jobs` and return quickly; background workers generate results and the client polls/reads job status.
-- **Operational features**: staff inbox, tickets, requests/approvals, work plans & milestones, work logs (rich text notes/summary), payroll views, notifications and badge counts, file uploads with per-feature limits.
+### Cook with what you have
+| Feature | What it does |
+|---|---|
+| **Fridge / pantry scan** | Photograph a fridge or cupboard; the app identifies usable ingredients, lets the user review them, then generates recipes. |
+| **Type ingredients** | No photo needed: type what you have and get recipe ideas. Ingredients are checked first (non-food and additive-only lists are rejected with a clear message). |
+| **Recipe results & details** | Diabetes-friendly recipes with realistic food photos, nutrition estimates (calories, carbs, protein, fibre), glucose-impact notes and simple steps. |
+| **Start cooking mode** | Step-by-step cooking view designed to be followed in the kitchen. |
+| **Recipe library** | Browse the growing bank of approved recipes, with filters, alongside the user's own recent recipes. |
+| **Favourites & recent history** | Save meals and revisit past results, so what works becomes easy to repeat. |
+| **Shopping list** | Build a list from scratch or straight from a recipe; tick items off while shopping. |
 
-## System Design Highlights
-- **Async-first AI**: request/response returns fast (job id + status); heavy work runs in workers with bounded concurrency.
-- **Backpressure & parallelism controls**: separate pools for text vs vision (`AI_JOB_RUNNER_TEXT_WORKERS`, `AI_JOB_RUNNER_VISION_WORKERS`).
-- **Scheduled/triggered operations**: scheduled work-plan tasks become visible at “show time” and drive notification badges (see `WORK_PLANS_SCHEDULER_*` in `backend/.env.example`).
-- **Storage abstraction**: consistent upload handling across modules, backed by local disk in dev or FTP on shared hosting.
-- **Role-based operations**: the admin/staff console is designed for real ops workflows (approvals, auditability, soft delete patterns where needed).
+### Better choices for familiar foods
+| Feature | What it does |
+|---|---|
+| **Food swaps** | Smarter alternatives for snacks, drinks and common foods, each with a realistic photo and the reason it's better. |
+| **Carb swaps** | Lower-carb swaps for everyday staples. |
 
-### Why this design (vs alternatives)
-- **Why async jobs instead of synchronous AI calls?** LLMs can take 10–60s and may be rate-limited. Synchronous calls tie up API workers and cause timeouts on mobile networks. Jobs let the API return quickly and the worker retries/fails cleanly.
-- **Why Redis Streams instead of RabbitMQ/Kafka right now?** Streams are “good enough” at this stage: lightweight, easy to run on small servers, and integrated into the same Redis used for caching. If throughput grows, the design can migrate to a dedicated queue without rewriting business logic because job state is stored in Postgres.
-- **Why one database (Postgres)?** Strong consistency for operational workflows (work logs, approvals, notifications) and simpler reporting/auditability. We avoid distributed transactions across services.
+### Plan the day
+| Feature | What it does |
+|---|---|
+| **Daily meal planner** (Premium) | Breakfast, lunch, dinner and snacks that fit the user's profile, preferences and carb goal. |
+| **Daily carb goal** | A personalised daily carb target shown as a ring on the home screen, filled automatically as meals are logged. |
 
-### Scaling path (when traffic grows)
-This repo is built so you can scale incrementally:
-- **Scale-out API**: run multiple `api` instances behind a load balancer.
-- **Scale workers independently**: run more `worker` replicas and tune `AI_JOB_RUNNER_*` for CPU/RAM.
-- **Move queue to managed services**: if Redis becomes a bottleneck, switch to a dedicated queue while keeping `ai_jobs` as the source of truth.
-- **Isolate hotspots**: if a specific subsystem (e.g., AI) needs separation, it can become its own service later because it is already job- and message-oriented.
+### Track how food affects *you*
+| Feature | What it does |
+|---|---|
+| **Glucose log** | Log readings (before/after meals, fasting, bedtime) against personal targets for the user's diagnosis. Hypo-aware guidance for low readings. |
+| **Meal / food log** | Log meals with carb estimates; links to readings so food impact can be measured. |
+| **Spike alerts** | Flags a reading that rose more than expected after a meal. |
+| **Glucose insights** | Trends, food impact and time-of-day patterns built only from the user's own data, always showing the counts behind each insight ("3 of 3 times"). |
+| **Weekly recap** | A summary of the week: readings in range, meals logged, challenges done. |
 
-## AI Job System (Resilience + Parallel Optimization)
-The system is designed to stay responsive even when AI providers are slow or rate-limited.
+### Build habits
+| Feature | What it does |
+|---|---|
+| **Daily challenge** | One small action a day (for example a walk after dinner or a fibre swap). Tasks **tick themselves** when the user logs a matching meal, reading, recipe or plan, and up to 3 tasks a day can be swapped. Streaks and nudges keep momentum. |
+| **Daily guidance / tip of the day** | Short, practical tips matched to the profile. Twice a week the tip is **personal**, built from the user's own logged meals and readings (e.g. comparing two foods they eat), rotating through different foods each time. A tips archive keeps past tips. |
 
-- **Queue backends** (see `backend/.env.example`):
-  - `AI_QUEUE_BACKEND=redis` (recommended): enqueue to Redis Streams; process in `glucoforager-worker` (`backend/app/workers/ai_jobs.py`).
-  - `AI_QUEUE_BACKEND=db`: fallback “lightweight in-process runner” using DB polling and `SKIP LOCKED` (`backend/app/services/ai_job_runner.py`).
-- **Bounded parallelism** (separate pools):
-  - `AI_JOB_RUNNER_TEXT_WORKERS` (text jobs)
-  - `AI_JOB_RUNNER_VISION_WORKERS` (vision/batch jobs)
-- **Provider strategy**: primary + fallback models/providers, strict timeouts/budgets, output validation, and clear failure reasons (operational vs invalid input).
-- **Recipe images**: generated via `RECIPE_IMAGE_PROVIDER` (e.g. `runware` or `gemini`) after recipe JSON is accepted.
+### App experience
+- Onboarding that captures diagnosis, goals, country, cuisine, preferences, equipment and foods to avoid (all editable later in Profile).
+- Regional pricing and currency display, and a branded splash screen.
+- Over-the-air updates: the app checks for a new update on launch, so most fixes reach users without a store release.
+- Push notifications (Expo) for challenges, streaks and campaigns.
+- Offline-friendly status banner when the service is down (fed by the status worker).
 
-## Admin & Staff Console (Next.js)
-Located under `landing-page/` (App Router + Tailwind). Key concepts:
-- **Role-based access** (Admin/HR/Operations/Marketer, etc.).
-- **Staff operations**: staff management, role assignment, editable staff fields (including bank details where enabled).
-- **Work system**: work plans + milestones, scheduled tasks (show at a future time), daily work logs with “mark done”/“mark unfinished” (reason), attachments, and admin visibility into tasks + notes + summary.
-- **Communication**: staff inbox messaging, help tickets, notifications + badge counts.
-- **Content ops**: blog tooling (including scheduling/publishing where enabled) and SSR/SEO improvements on the marketing site.
+**Bottom tabs:** Home · Scan · Favourites · Daily plan · Guide (GlucoGuide) · Profile
 
-## Mobile App (Expo / EAS)
-Located under `Mobile-GApp/`.
+---
 
-App identifiers (from `Mobile-GApp/app.json`):
-- iOS bundle id: `com.glucoforager.app`
-- Android package: `com.glucoforager.app`
+## How a user moves through the app
 
-### Mobile app features and value
-- **Ingredient scan and typed input**: Users can scan a fridge or pantry photo, or type ingredients they already have. This removes the "what can I cook?" problem without requiring a new shopping trip.
-- **Blood-sugar-friendly meal suggestions**: Recipe ideas are generated with diabetes-aware constraints, helping users reduce guesswork and avoid meals that may cause sharper glucose spikes.
-- **Food Swap Engine**: Users can ask for better alternatives for foods, snacks, and drinks, making it easier to improve familiar meals without restrictive dieting.
-- **Personalized food guidance**: Suggestions adapt to diabetes type, goals, dietary preferences, foods to avoid, country, cuisine preference, cooking time, and available equipment.
-- **Daily diabetes challenges**: Simple daily actions encourage consistency and habit-building without overwhelming users.
-- **Profile-based daily tips**: Short, practical guidance teaches users in small steps instead of long generic advice.
-- **Meal planning with daily structure**: The app can suggest breakfast, lunch, dinner, and snacks to reduce decision fatigue across the day.
-- **Nutrition estimates**: Recipe details include calories, carbs, protein, and fibre so users can compare options without manual tracking.
-- **Save and reuse favorites**: Users can save meals and build a personal library of reliable food choices.
-- **Recent history**: Previously generated meals are easy to revisit, so users can reuse past successful choices.
-- **Real-life cooking focus**: Meals are designed around simple ingredients and clear cooking steps so users can actually follow through.
-- **Multi-condition support**: Guidance supports Type 1 diabetes, Type 2 diabetes, prediabetes, and gestational diabetes.
-- **Cuisine and lifestyle adaptation**: Recommendations can reflect country, cuisine preference, cooking time, and kitchen equipment so meals feel practical and culturally relevant.
-- **What can I eat right now guidance**: Quick suggestions solve the common real-world moment when a user needs an answer immediately.
-- **Simple cooking instructions**: Recipes use clean, easy-to-follow steps so cooking is accessible.
-- **No-guesswork decision system**: Ingredient input, user profile, daily guidance, swaps, and meal planning work together so GlucoForager behaves like a daily food decision assistant rather than a static content app.
+```
+Install ─► Onboarding (diagnosis, goals, country, cuisine, foods to avoid, equipment)
+              │
+              ▼
+          Welcome week: 7 days of Premium, no card needed
+              │
+              ▼
+┌──────────────────────── Home ─────────────────────────┐
+│ carb-goal ring · today's challenge · tip of the day    │
+│ quick actions: scan food · scan fridge · type · swaps  │
+└───────────────┬───────────────────────────────────────┘
+     ┌──────────┼──────────────┬──────────────┬──────────────┐
+     ▼          ▼              ▼              ▼              ▼
+ Food scan   Fridge scan    Type ingredients  Swaps        Log glucose / meal
+ (barcode/   → review       → ingredient      → better     → carb ring updates
+  photo)       ingredients    check             options    → spike check
+ → verdict   → recipes  ◄───┘                             → challenge auto-ticks
+              → recipe detail → start cooking / favourite / shopping list
+                                     │
+                                     ▼
+                 Insights · weekly recap · personal tips (from own data)
+```
 
-### Engine and reliability model
-- The app calls the backend and typically receives a **job id quickly** for AI workloads; results are fetched when ready (avoids long “waiting for LLM” requests on weak networks).
-- The backend uses bounded worker concurrency + queueing so AI provider latency/rate limits don’t freeze the app UI.
+**Recipe generation flow (fast path):**
+1. Ingredients are validated (food check, additive-only check, cached approval for ingredients that came from a recent scan).
+2. The **recipe bank** is checked first: approved recipes matching the user's ingredients are served instantly.
+3. If more are needed, the AI produces recipe **cards first**, then fills in the details for each in parallel, and the app shows results as they arrive.
+4. Photos come from a shared **food photo library**; missing ones are generated once and reused for everyone.
+5. New recipes that pass the quality gate (nutrition checks, near-duplicate check) join the bank for future users.
 
-EAS configuration:
-- `Mobile-GApp/eas.json` (development/preview/production channels).
+---
 
-## File Storage (Local Disk or FTP)
-For staff assets/attachments, the backend supports:
-- **Local storage** (dev): writes under `backend/uploads/` and serves via `/uploads`.
-- **FTP storage** (shared hosting): configure `*_STORAGE_BACKEND=ftp`, base dirs, and public base URLs.
+## Plans: Free, welcome week and Premium
 
-Configured modules include Library, Inbox attachments, Requests attachments, MyDrive/StaffDrive, and recipe image uploads (see `backend/.env.example`).
+| | Free | Welcome week | Premium |
+|---|---|---|---|
+| Who | Everyone after the welcome week | New users, first 7 days, no card | Store subscription (or admin-granted) |
+| Logging, insights, challenges, tips, favourites, shopping list | ✅ | ✅ | ✅ |
+| AI features: GlucoGuide, fridge scan, recipe generation, food scan, swaps | **3 free uses each per week** (resets Monday 00:00 UTC) | Unlimited | Unlimited |
+| Daily meal planner | ❌ | ✅ | ✅ |
 
-## Running Locally (Docker Compose)
-From repo root:
-- Start everything: `docker compose up -d --build`
-- API: `http://localhost:8011` (or your `HOST_API_PORT`)
-- Stop: `docker compose down`
+- A free use is only counted **after the AI call succeeds**, so failures never cost a use.
+- Weekly limits and the welcome-week length are **editable in the admin console**; a limit of 0 makes a feature Premium-only.
+- Subscriptions run through the App Store / Google Play via **RevenueCat**, with webhooks keeping the backend in sync. Lapsed-payment ("dunning") and win-back flows exist; lifecycle emails are switched off unless explicitly enabled.
 
-Inside Docker, services are wired as:
-- API/worker → Postgres: `postgresql://glucoforager:glucoforager@db:5432/glucoforager`
-- API/worker → Redis: `redis://redis:6379/0`
+---
 
-## Production Notes (Small Servers)
-This project can run on small instances (e.g. 1 vCPU / 2 GB), but AI workloads must be bounded:
-- Reduce worker concurrency via `AI_JOB_RUNNER_TEXT_WORKERS` / `AI_JOB_RUNNER_VISION_WORKERS`.
-- Keep `AI_QUEUE_BACKEND=redis` so the API remains responsive under burst traffic.
-- Prefer async jobs + polling for AI results instead of synchronous “wait for LLM” requests.
+## Admin & staff console
+
+Next.js app under `landing-page/app/admin/`, with **role-based access** (Admin, HR, Operations, Marketer and more). Sessions use short-lived JWTs with automatic refresh; expired sessions redirect cleanly to sign-in.
+
+| Area | Pages |
+|---|---|
+| **Product & users** | Users (plans, welcome week, free usage, lapsed cards), user email, recipes (bank, sources, approval), challenge, tips, mobile logs |
+| **Growth & marketing** | Push campaigns, newsletter, win-back, blog (scheduling, SEO), reports |
+| **Settings** | Free weekly allowances, welcome-week length and other feature switches |
+| **Staff operations** | Staff & roles, my team, attendance (clock in/out), work plans & milestones, scheduled tasks, daily work logs, stand-up notes, requests & approvals, expenses, payroll / my payroll |
+| **Communication** | Inbox, help tickets, notifications with badge counts, intranet updates |
+| **Files** | Library, my drive, staff drive |
+| **System** | System health (disk, CPU, memory, services), system logs, audit trail, database backups (download/restore) |
+
+---
+
+## Architecture
+
+<img width="1536" height="1024" alt="GlucoForager system architecture" src="https://github.com/user-attachments/assets/1e7eb354-06db-4726-ad34-b5dd8ca78422" />
+
+A **modular monolith**: one FastAPI backend and one PostgreSQL database, with **queue-driven background workers** for slow AI work.
+
+```
+ Mobile app (Expo)         Website + admin (Next.js on Vercel)
+        │                               │
+        └──────────────┬────────────────┘
+                       ▼  HTTPS
+             nginx (edge-nginx, TLS)
+                       │
+              ┌────────┴─────────┐
+              ▼                  ▼
+     glucoforager-api     glucoforager-worker
+     (FastAPI, REST,      (AI jobs from Redis
+      schedulers)          Streams: text + vision pools)
+              │                  │
+              ├──────┬───────────┤
+              ▼      ▼           ▼
+       PostgreSQL   Redis     External services
+       (system of   (queue,   OpenAI / Gemini (AI), Runware (images),
+        record)     cache,    Cloudflare R2 (files, backups), Resend (email),
+                    limits)   RevenueCat (subscriptions), Expo (push, OTA)
+```
+
+**Why this shape**
+- **Async AI, fast API.** AI calls can take 10–60 s and may be rate-limited. Requests create an `ai_jobs` row and return at once; workers do the work and the app polls. The API never blocks on a model.
+- **Redis Streams, not Kafka/RabbitMQ.** Light enough for a small server and shared with caching/rate limits. Job state lives in Postgres, so the queue can be swapped later without touching business logic.
+- **One database.** Strong consistency for subscriptions, approvals, payroll and audit; no distributed transactions.
+- **Room to grow.** API and workers scale independently (more replicas, tuned `AI_JOB_RUNNER_*` pools); AI could become its own service later because it is already job-based.
+
+---
+
+## AI system
+
+- **Queue backends:** `AI_QUEUE_BACKEND=redis` (recommended, `backend/app/workers/ai_jobs.py`) or `db` (in-process runner using `SKIP LOCKED`, `backend/app/services/ai_job_runner.py`).
+- **Bounded parallelism:** separate pools for text and vision (`AI_JOB_RUNNER_TEXT_WORKERS`, `AI_JOB_RUNNER_VISION_WORKERS`). Stuck vision jobs are rescued with a delayed retry and an atomic claim.
+- **Providers:** primary + fallback models with strict timeouts, JSON-mode output and validation; failures are classified as *operational* (retry/try later) or *invalid input* (clear message to the user).
+- **Guards before spending tokens:** ingredient food check and diabetes-friendly classifier, additive-only rejection, rate limits, daily caps, free-tier allowance and abuse detection. Every AI request is cost-tracked.
+- **Recipe bank** (`recipe_bank.py`, `recipe_keys.py`): approved recipes indexed by ingredient keys (GIN index) and served before calling AI; quality gate, near-duplicate check and nutrition sanity checks before a recipe is stored.
+- **Food photo library** (`food_image_library.py`): one shared, realistic photo per food/recipe stored in R2, generated with Runware (Gemini fallback) only when missing.
+
+---
+
+## Repository structure
+
+```
+GlucoForager/
+├── Mobile-GApp/                 Expo React Native app
+│   ├── App.js, app.json, eas.json   app config, version, EAS build/update channels
+│   ├── screens/                 one file per screen (Home, Scan*, Recipe*, DailyPlan,
+│   │                            GlucoGuide, LogGlucose, FoodLog, GlucoseInsights,
+│   │                            Challenge, TodayTip, WeeklyRecap, ShoppingList, Profile…)
+│   ├── navigation/              tab + stack navigators
+│   ├── components/              shared UI (GlucoseImpactCard, KeyboardAwareScrollView…)
+│   ├── context/, utils/, config/, constants/, assets/
+│
+├── backend/                     FastAPI service
+│   ├── app/
+│   │   ├── main.py              app setup, middleware, startup schedulers
+│   │   ├── api/endpoints/       routes: app_* (mobile), admin_* (console), auth, recipes,
+│   │   │                        text_recipes, ai_recipes, meal_plan, shopping_list,
+│   │   │                        revenuecat, webhooks…
+│   │   ├── services/            business logic: AI pipeline, recipe bank, swaps, glucose
+│   │   │                        insights, challenges, tips, free tier, subscriptions,
+│   │   │                        storage (local/FTP/R2), email, push, schedulers…
+│   │   ├── workers/ai_jobs.py   Redis Streams AI worker
+│   │   ├── models/              SQLAlchemy models
+│   │   └── core/, data/, assets/
+│   ├── alembic/                 database migrations
+│   ├── tests/                   unittest suite
+│   └── Dockerfile, requirements.txt, .env.example
+│
+├── landing-page/                Next.js (App Router) + Tailwind
+│   ├── app/                     marketing pages, blog, pricing, legal, sitemap/robots
+│   ├── app/admin/               admin & staff console (see above)
+│   └── components/, lib/, public/
+│
+├── status-worker/               Cloudflare Worker: uptime check + /status for the app
+├── docs/                        architecture diagram
+├── .github/workflows/           CI/CD and ops workflows (see below)
+└── docker-compose.yml           api, worker, db (Postgres 15), redis (7)
+```
+
+---
+
+## Tech stack
+
+| Layer | Technology |
+|---|---|
+| Mobile | Expo SDK 54, React Native 0.81 (new architecture), React 19, EAS Build/Submit/Update |
+| Backend | Python 3.11, FastAPI, SQLAlchemy, Alembic, APScheduler |
+| Data | PostgreSQL 15, Redis 7 (Streams, cache, rate limits) |
+| AI | OpenAI (GPT-4.1 family) with Gemini fallback; Runware / Gemini for food images |
+| Web & admin | Next.js 14 (App Router), React 18, Tailwind CSS |
+| Storage | Cloudflare R2 (photos, uploads, backups), local disk or FTP per module |
+| Payments | RevenueCat (App Store / Google Play subscriptions) |
+| Email & push | Resend, Expo push notifications |
+| Hosting | Oracle Cloud (API, worker, DB, Redis in Docker behind nginx), Vercel (website/admin), Cloudflare Workers (status) |
+
+---
+
+## Running locally
+
+**Requirements:** Docker, Node 18+, Python 3.11 (only for running tests outside Docker).
+
+```bash
+# 1. Backend: API, worker, Postgres, Redis
+cp backend/.env.example backend/.env      # fill in keys you need
+docker compose up -d --build
+docker compose run --rm api alembic upgrade head
+# API → http://localhost:8011   (docs at /docs)
+
+# 2. Website + admin
+cd landing-page && npm install
+NEXT_PUBLIC_API_URL=http://localhost:8011 npm run dev   # http://localhost:3000
+
+# 3. Mobile app (needs a dev client build)
+cd Mobile-GApp && npm install
+npx expo start --dev-client
+```
+
+Inside Docker, services reach each other as `db:5432` (Postgres) and `redis:6379`.
+
+---
+
+## Testing
+
+The backend has a `unittest` suite in `backend/tests/` (recipe bank, label/additive checks, tip rotation, challenges and more). Run it against a **separate test database**, never production:
+
+```bash
+cd backend
+TEST_DATABASE_URL=postgresql://glucoforager:glucoforager@localhost:15432/gf_tests \
+DATABASE_URL=postgresql://glucoforager:glucoforager@localhost:15432/gf_tests \
+REDIS_URL=redis://localhost:6379/9 \
+python -m unittest discover -s tests -t .
+```
+
+CI runs a compile check of the backend on every deploy.
+
+---
+
+## Deployment & hosting
+
+| What | How |
+|---|---|
+| **Backend** | Push to `main` (backend paths) → `deploy-backend.yml` compile-checks, then SSHes to the server, resets to `origin/main`, rebuilds with `docker compose up -d --build`, runs `alembic upgrade head` and reloads `edge-nginx`. |
+| **Website & admin** | Vercel builds `landing-page/` on push to `main`. |
+| **Mobile OTA update** | `eas-update.yml` (manual) publishes a JS update to production; can target the current or previous app version. |
+| **Mobile store build** | `eas build` / `eas submit` (iOS → App Store Connect, Android `.aab` → Play Console); `eas-android.yml` for Android builds. |
+
+**Branching:** work happens on `dev`; `main` is production. Merging `dev` → `main` deploys.
+
+**Server:** an Oracle Cloud Always Free Ampere A1 VM (2 OCPU / 12 GB, Ubuntu 24.04, ARM64) runs the Docker stack behind `edge-nginx` with Let's Encrypt certificates (certbot, webroot). Hosting cost is **£0**; a monthly budget alert warns if anything would ever start costing money.
+
+---
+
+## Operations: monitoring, backups, scheduled jobs
+
+**Monitoring**
+- `status-worker/` (Cloudflare Worker) checks `/health` every minute, emails on outage and serves `/status` for the app's service banner.
+- Admin **System health** shows disk, CPU, memory and service status; **System logs** and **Audit** record errors and staff actions.
+
+**Backups**
+- The API writes a database dump daily at 02:00 UTC; a cron job uploads it to Cloudflare R2 at 02:10, keeps 7 days (never fewer than 3) and emails if anything fails. Backups can also be downloaded from the admin console.
+
+**Scheduled jobs (inside the API)**
+Database backup · work-plan task reveal & notifications · user-activity cleanup (60 days) · soft-deleted account removal (3 days) · recipe bank auto-generation · streak nudges · welcome-week and dunning emails (off unless enabled).
+
+**Ops workflows (`.github/workflows/`)**
+| Workflow | Purpose |
+|---|---|
+| `deploy-backend.yml` | Deploy backend to the server |
+| `eas-update.yml`, `eas-android.yml` | Mobile OTA updates and Android builds |
+| `oci-audit.yml` | Read-only check of the Oracle account against Always Free limits; optional budget alert setup |
+| `oci-a1-retry.yml` | Capacity hunt for an Always Free A1 VM (disables itself on success) |
+| `run-backfill.yml`, `check-backfill-log.yml` | One-off data backfills and their logs |
+| `check-proxy-ip.yml` | Network diagnostics |
+
+---
 
 ## Configuration
-Copy and edit:
-- `backend/.env.example` → `backend/.env`
+
+- **Backend:** copy `backend/.env.example` → `backend/.env`. Key groups: database/Redis URLs, AI keys and models, `AI_QUEUE_BACKEND` and worker pool sizes, image provider (`RECIPE_IMAGE_PROVIDER`), storage backends per module (`*_STORAGE_BACKEND=local|ftp|r2` + `R2_*`), email (Resend), RevenueCat, push, scheduler switches.
+- **Website/admin:** `NEXT_PUBLIC_API_URL` points at the API.
+- **Mobile:** `Mobile-GApp/app.json` (version, build numbers, OTA settings) and `eas.json` (development / preview / production channels).
+
+> Never commit `.env` files or keystores; they are git-ignored.
