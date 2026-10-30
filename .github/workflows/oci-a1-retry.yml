@@ -122,7 +122,7 @@ jobs:
           DETAIL: ${{ steps.launch.outputs.detail }}
         run: |
           jq -n --arg to "$ALERT_TO" --arg detail "$DETAIL" '{
-            from: "GlucoForager Monitor <hello@salisu.dev>",
+            from: "GlucoForager Monitor <hello@glucoforager.com>",
             to: ($to | split(",") | map(gsub("^\\s+|\\s+$"; ""))),
             subject: "🎉 Oracle A1 server created",
             text: ("The free ARM server \"glucoforager-arm\" was created (" + $detail + ").\n\nNext: attach the restored disk and migrate GlucoForager to it. This workflow has disabled itself.")

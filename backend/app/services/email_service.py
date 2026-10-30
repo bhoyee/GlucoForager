@@ -1102,25 +1102,179 @@ def send_welcome_week_ended_email(
     return _send_email(to_email, "Your welcome week has ended. Here's what's still free", html)
 
 
+_UPDATE_HIGHLIGHTS = [
+    ("A brand-new Home", "Your day at a glance: carbs, glucose and three quick ways to log or find a meal."),
+    ("Glucose insights", "Trends, the foods that affect you most, patterns, and after-meal reminders."),
+    ("Meal planner", "Plan two days ahead, swap any meal, and get your shopping list built for you."),
+    ("Faster recipes and a recipe library", "Search and filter by meal or by quick options, with your allergies applied."),
+    ("Scan anything", "Fridge photos, plates of food and barcodes, with an instant diabetes-friendly verdict."),
+]
+
+_UPDATE_ALSO_NEW = [
+    "Daily challenge with streaks to keep you on track",
+    "Food swaps with real photos of each option",
+    "GlucoGuide AI for any food or blood sugar question",
+    "200+ free diabetes-friendly recipes on our website",
+]
+
+
+def render_welcome_week_relaunch_email(
+    to_email: str, full_name: str | None, user_id: int, *, welcome_days: int = 7
+) -> tuple[str, str]:
+    """"Your Friday update": what's new in the app, plus a fresh welcome week of Premium
+    (already granted by the relaunch script) as the reason to come back and try it.
+    Text-led, table-based and inline-styled so it stays short and renders everywhere."""
+    from .user_email_tokens import make_dunning_unsubscribe_token
+
+    esc = _html.escape
+    site = _site_url()
+    period = f"{welcome_days} day{'' if welcome_days == 1 else 's'}"
+    first = esc(_first_name(full_name))
+    download_url = f"{site}/download"
+    unsubscribe_url = f"{site}/unsubscribe?type=dunning&token={make_dunning_unsubscribe_token(user_id, to_email)}"
+    subject = f"Your Friday update: a new GlucoForager (and {period} of Premium on us)"
+    preheader = f"Here's what we've been building, and {period} of Premium is already unlocked on your account."
+
+    highlights = "".join(
+        f"""<tr>
+              <td width="36" valign="top" style="padding:9px 0;">
+                <div style="width:26px; height:26px; line-height:26px; border-radius:8px; background:#ccfbf1; color:#0f766e; font-size:13px; font-weight:800; text-align:center;">{i}</div>
+              </td>
+              <td valign="top" style="padding:9px 0;">
+                <p style="margin:0; font-size:15px; font-weight:700; color:#0f172a;">{esc(title)}</p>
+                <p style="margin:2px 0 0 0; font-size:14px; line-height:21px; color:#475569;">{esc(text)}</p>
+              </td>
+            </tr>"""
+        for i, (title, text) in enumerate(_UPDATE_HIGHLIGHTS, start=1)
+    )
+    also_new = "".join(
+        f"""<tr>
+              <td width="20" valign="top" style="padding:3px 0; color:#0d9488; font-size:14px; line-height:21px; font-weight:700;">&#10003;</td>
+              <td valign="top" style="padding:3px 0; font-size:14px; line-height:21px; color:#334155;">{esc(item)}</td>
+            </tr>"""
+        for item in _UPDATE_ALSO_NEW
+    )
+
+    html_body = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="x-apple-disable-message-reformatting" />
+  <title>{esc(subject)}</title>
+</head>
+<body style="margin:0; padding:0; background:#eef2f5; -webkit-text-size-adjust:100%;">
+  <div style="display:none; max-height:0; overflow:hidden; opacity:0; color:#eef2f5;">{esc(preheader)}</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f5;">
+    <tr><td align="center" style="padding:24px 12px;">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0"
+        style="width:100%; max-width:600px; background:#ffffff; border-radius:16px; overflow:hidden; font-family:Helvetica, Arial, sans-serif;">
+
+        <tr><td style="padding:16px 32px; background:#0f766e;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+            <td valign="middle">
+              <a href="{site}" target="_blank" style="text-decoration:none;">
+                <img src="{site}/images/logo.png" width="32" height="32" alt="" style="display:inline-block; vertical-align:middle; border-radius:8px; background:#ffffff; border:0;" />
+                <span style="display:inline-block; vertical-align:middle; margin-left:8px; font-size:18px; font-weight:700; color:#ffffff;">GlucoForager</span>
+              </a>
+            </td>
+            <td align="right" valign="middle" style="font-size:12px; color:#ccfbf1; letter-spacing:1px; text-transform:uppercase;">Friday update</td>
+          </tr></table>
+        </td></tr>
+
+        <tr><td style="padding:30px 32px 6px 32px;">
+          <p style="margin:0 0 10px 0; font-size:12px; letter-spacing:1.2px; text-transform:uppercase; font-weight:700; color:#0d9488;">Your Friday update</p>
+          <h1 style="margin:0 0 12px 0; font-size:28px; line-height:35px; font-weight:800; color:#0f172a;">A lot has changed in GlucoForager</h1>
+          <p style="margin:0; font-size:16px; line-height:26px; color:#334155;">
+            Hi {first}, here's what we've been building since you last looked, and a gift so you can try all of it.
+          </p>
+        </td></tr>
+
+        <tr><td style="padding:20px 32px 0 32px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0f766e; border-radius:14px;">
+            <tr><td align="center" style="padding:22px 20px;">
+              <p style="margin:0 0 4px 0; font-size:18px; line-height:25px; font-weight:800; color:#ffffff;">{period} of Premium, on us</p>
+              <p style="margin:0 0 16px 0; font-size:14px; line-height:21px; color:#ccfbf1;">Already unlocked on your account. No card needed, nothing to cancel.</p>
+              <table role="presentation" cellpadding="0" cellspacing="0" align="center"><tr>
+                <td align="center" style="border-radius:999px; background:#ffffff;">
+                  <a href="{download_url}" target="_blank"
+                    style="display:inline-block; padding:13px 30px; font-size:15px; font-weight:700; color:#0f766e; text-decoration:none; border-radius:999px;">
+                    Open GlucoForager
+                  </a>
+                </td>
+              </tr></table>
+            </td></tr>
+          </table>
+        </td></tr>
+
+        <tr><td style="padding:26px 32px 0 32px;">
+          <p style="margin:0 0 4px 0; font-size:12px; letter-spacing:1.2px; text-transform:uppercase; font-weight:700; color:#0d9488;">What we've been building</p>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">{highlights}</table>
+        </td></tr>
+
+        <tr><td style="padding:12px 32px 0 32px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px;">
+            <tr><td style="padding:16px 20px;">
+              <p style="margin:0 0 6px 0; font-size:12px; letter-spacing:1.2px; text-transform:uppercase; font-weight:700; color:#0f766e;">Also new</p>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">{also_new}</table>
+            </td></tr>
+          </table>
+        </td></tr>
+
+        <tr><td style="padding:24px 32px 0 32px;">
+          <p style="margin:0 0 6px 0; font-size:15px; font-weight:700; color:#0f172a;">What happens after {period}?</p>
+          <p style="margin:0 0 14px 0; font-size:14px; line-height:22px; color:#475569;">
+            You go back to the free plan automatically, which still includes free uses every week. You won't be
+            charged: there's no card on file.
+          </p>
+          <p style="margin:0; font-size:14px; line-height:22px; color:#475569;">
+            <strong style="color:#0f172a;">Update to the latest version</strong> in the
+            <a href="https://apps.apple.com/us/app/glucoforager/id6758808427" target="_blank" style="color:#0d9488; font-weight:700; text-decoration:none;">App Store</a>
+            or
+            <a href="https://play.google.com/store/apps/details?id=com.glucoforager.app" target="_blank" style="color:#0d9488; font-weight:700; text-decoration:none;">Google Play</a>
+            to see everything new.
+          </p>
+        </td></tr>
+
+        <tr><td style="padding:24px 32px 28px 32px;">
+          <p style="margin:0; font-size:15px; line-height:24px; color:#334155;">
+            Have a great weekend, and if anything could be better, just reply. I read every message.<br/><br/>
+            <strong style="color:#0f172a;">Adey</strong><br/>
+            <span style="color:#64748b;">Founder, GlucoForager</span>
+          </p>
+        </td></tr>
+
+        <tr><td style="padding:24px 32px 28px 32px; background:#f8fafc; border-top:1px solid #e2e8f0;">
+          <p style="margin:0 0 8px 0; font-size:13px; font-weight:700; color:#0f172a;">GlucoForager</p>
+          <p style="margin:0 0 12px 0; font-size:12px; line-height:18px; color:#64748b;">
+            Diabetes-friendly recipes, meal ideas and blood sugar insights.<br/>
+            <a href="{site}/recipes" target="_blank" style="color:#0f766e; text-decoration:none;">Recipes</a> &nbsp;&middot;&nbsp;
+            <a href="{site}/blog" target="_blank" style="color:#0f766e; text-decoration:none;">Blog</a> &nbsp;&middot;&nbsp;
+            <a href="{download_url}" target="_blank" style="color:#0f766e; text-decoration:none;">Get the app</a> &nbsp;&middot;&nbsp;
+            <a href="mailto:hello@glucoforager.com" style="color:#0f766e; text-decoration:none;">hello@glucoforager.com</a>
+          </p>
+          <p style="margin:0 0 12px 0; font-size:11px; line-height:17px; color:#94a3b8;">
+            GlucoForager offers general guidance, not medical advice. Talk to your doctor, diabetes nurse or dietitian
+            before making changes to your diet or treatment.
+          </p>
+          <p style="margin:0; font-size:11px; line-height:17px; color:#94a3b8;">
+            You're receiving this because you have a GlucoForager account.
+            <a href="{esc(unsubscribe_url)}" target="_blank" style="color:#64748b; text-decoration:underline;">Unsubscribe</a>
+          </p>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+    return subject, html_body
+
+
 def send_welcome_week_relaunch_email(to_email: str, full_name: str | None, user_id: int, *, welcome_days: int = 7) -> str | None:
     """One-off: existing non-paying users get a fresh welcome week."""
-    period = f"{welcome_days} day{'' if welcome_days == 1 else 's'}"
-    body = f"""
-      <p>Hi {_first_name(full_name)},</p>
-      <p style="line-height:1.6;">You set up GlucoForager a while ago, and we'd love for you to see what it can really do.</p>
-      <p style="line-height:1.6;">For the next {period}, <strong>everything in Premium is unlocked, free, with no card needed.</strong>
-      It's already active on your account, and every suggestion is shaped around your food profile.</p>
-      <p style="line-height:1.6;">Open the app and ask it what to eat today.</p>
-    """
-    html = _welcome_week_shell(
-        to_email=to_email,
-        user_id=user_id,
-        heading=f"We've unlocked Premium for you, free for {period}",
-        body_html=body,
-        button_label="Open GlucoForager",
-        button_url=_site_url(),
-    )
-    return _send_email(to_email, f"We've unlocked GlucoForager Premium for you, free for {period}", html)
+    subject, html_body = render_welcome_week_relaunch_email(to_email, full_name, user_id, welcome_days=welcome_days)
+    return _send_email(to_email, subject, html_body, reply_to="hello@glucoforager.com")
 
 
 def _days_phrase(days: int) -> str:
