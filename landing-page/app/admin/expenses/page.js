@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
@@ -74,6 +74,9 @@ export default function ExpensesPage() {
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [editingId, setEditingId] = useState(null);
   const [page, setPage] = useState(1);
+  const [receiptBusyId, setReceiptBusyId] = useState(null);
+  const receiptInput = useRef(null);
+  const receiptFor = useRef(null);
 
   const [expenseDate, setExpenseDate] = useState(new Date().toISOString().slice(0, 10));
   const [amount, setAmount] = useState('');
@@ -217,6 +220,48 @@ export default function ExpensesPage() {
     }
   };
 
+  const pickReceipt = (id) => {
+    receiptFor.current = id;
+    receiptInput.current?.click();
+  };
+
+  const uploadReceipt = async (event) => {
+    const file = event.target.files?.[0];
+    const id = receiptFor.current;
+    event.target.value = '';
+    if (!file || !id || !token) return;
+    setReceiptBusyId(id);
+    setMessage('');
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      const res = await fetch(`${API_URL}/api/admin/accounts/expenses/${id}/receipt`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || 'Failed to upload receipt.');
+      await load();
+    } catch (e) {
+      setMessage(e?.message || 'Failed to upload receipt.');
+    } finally {
+      setReceiptBusyId(null);
+    }
+  };
+
+  const openReceipt = async (id) => {
+    try {
+      const res = await fetch(`${API_URL}/api/admin/accounts/expenses/${id}/receipt`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error();
+      window.open(URL.createObjectURL(await res.blob()), '_blank');
+    } catch {
+      setMessage('Could not open the receipt.');
+    }
+  };
+
   const downloadReport = async (scope) => {
     if (!token || exporting) return;
     setMessage('');
@@ -266,7 +311,10 @@ export default function ExpensesPage() {
     <div className="admin-page">
       <div className="admin-card">
         <h2 className="admin-title">Expenses</h2>
-        <p className="admin-subtitle">Simple operations expenses tracker (MVP).</p>
+        <p className="admin-subtitle">
+          Record every business cost and attach its receipt or invoice. Tax-year totals and income are on the{' '}
+          <a href="/admin/accounts">Accounts</a> page.
+        </p>
         {message && <p className="admin-subtitle">{message}</p>}
 
         <form onSubmit={create}>
@@ -464,6 +512,13 @@ export default function ExpensesPage() {
           <p className="admin-subtitle">No expenses for this period.</p>
         ) : (
           <div style={{ overflowX: 'auto', marginTop: 10 }}>
+            <input
+              ref={receiptInput}
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.webp"
+              style={{ display: 'none' }}
+              onChange={uploadReceipt}
+            />
             <table className="admin-table">
               <thead>
                 <tr>
@@ -472,6 +527,7 @@ export default function ExpensesPage() {
                   <th>GBP value</th>
                   <th>Category</th>
                   <th>Note</th>
+                  <th>Receipt</th>
                   <th />
                 </tr>
               </thead>
@@ -490,6 +546,22 @@ export default function ExpensesPage() {
                     </td>
                     <td>{categoryLabel(x.category)}</td>
                     <td>{x.note || ''}</td>
+                    <td>
+                      {x.has_receipt ? (
+                        <button className="admin-button neutral" type="button" onClick={() => openReceipt(x.id)} title={x.receipt_name || ''}>
+                          View
+                        </button>
+                      ) : (
+                        <button
+                          className="admin-button secondary"
+                          type="button"
+                          onClick={() => pickReceipt(x.id)}
+                          disabled={receiptBusyId === x.id}
+                        >
+                          {receiptBusyId === x.id ? 'Uploading...' : 'Attach'}
+                        </button>
+                      )}
+                    </td>
                     <td>
                       <button className="admin-button info" type="button" onClick={() => startEdit(x)} style={{ marginRight: 8 }}>
                         Edit

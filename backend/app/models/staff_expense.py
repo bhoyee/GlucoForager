@@ -23,5 +23,12 @@ class StaffExpense(Base):
     category = Column(String, nullable=False, default="general")
     note = Column(String, nullable=True)
 
+    # Receipt or invoice (private drive storage).
+    receipt_storage_backend = Column(String, nullable=True)
+    receipt_remote_dir = Column(String, nullable=True)
+    receipt_filename = Column(String, nullable=True)
+    receipt_original_name = Column(String, nullable=True)
+    receipt_content_type = Column(String, nullable=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
 

@@ -20,6 +20,7 @@ from .staff_drive_file import StaffDriveFile  # noqa: F401
 from .staff_drive_event import StaffDriveEvent  # noqa: F401
 from .staff_ticket import StaffTicket, StaffTicketMessage  # noqa: F401
 from .staff_expense import StaffExpense  # noqa: F401
+from .business_income import BusinessIncome  # noqa: F401
 from .staff_compensation import StaffCompensation  # noqa: F401
 from .payroll_run import PayrollRun  # noqa: F401
 from .payroll_item import PayrollItem  # noqa: F401
