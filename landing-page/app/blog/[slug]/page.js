@@ -1,10 +1,10 @@
+import { Fragment } from 'react';
 import Link from 'next/link';
 import BlogComments from '../../../components/BlogComments';
 import BlogShare from '../../../components/BlogShare';
 import BlogTopBar from '../../../components/BlogTopBar';
 import BlogCoverImage from '../../../components/BlogCoverImage';
-import WhatsAppCtaCard from '../../../components/WhatsAppCtaCard';
-import AppDownloadCard from '../../../components/AppDownloadCard';
+import BlogAppPromo from '../../../components/BlogAppPromo';
 import BlogImageFallback from '../../../components/BlogImageFallback';
 import { formatDMY } from '../../../lib/formatDate';
 
@@ -112,17 +112,40 @@ function rewriteContentHtml(html) {
   });
 }
 
+const CONTENT_HTML_CLASS =
+  'text-gray-800 leading-7 [&_p]:mt-4 [&_h1]:text-3xl [&_h1]:font-extrabold [&_h1]:text-gray-900 [&_h2]:mt-8 [&_h2]:text-2xl [&_h2]:font-bold [&_h2]:text-gray-900 [&_h3]:mt-6 [&_h3]:text-xl [&_h3]:font-bold [&_h3]:text-gray-900 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:mt-4 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:mt-4 [&_li]:mt-1 [&_a]:text-teal-700 [&_a]:font-semibold hover:[&_a]:text-teal-900';
+
+// Where to place the app card inside an article: before the section heading nearest the middle,
+// or else after the paragraph nearest the middle. Returns -1 when the article is too short.
+function midArticleSplitIndex(html) {
+  if (html.length < 2500) return -1;
+  const middle = html.length / 2;
+  const nearest = (indexes) =>
+    indexes.filter((i) => i > html.length * 0.25 && i < html.length * 0.75).sort((a, b) => Math.abs(a - middle) - Math.abs(b - middle))[0];
+  const headings = [...html.matchAll(/<h2[\s>]/gi)].map((m) => m.index);
+  const atHeading = nearest(headings);
+  if (atHeading !== undefined) return atHeading;
+  const paragraphEnds = [...html.matchAll(/<\/p>/gi)].map((m) => m.index + m[0].length);
+  const atParagraph = nearest(paragraphEnds);
+  return atParagraph === undefined ? -1 : atParagraph;
+}
+
 function renderContent(content) {
   const looksLikeHtml = /<\/?[a-z][\s\S]*>/i.test(String(content || ''));
   if (looksLikeHtml) {
     const safeHtml = rewriteContentHtml(content);
-    return (
-      <div
-        className="text-gray-800 leading-7 [&_p]:mt-4 [&_h1]:text-3xl [&_h1]:font-extrabold [&_h1]:text-gray-900 [&_h2]:mt-8 [&_h2]:text-2xl [&_h2]:font-bold [&_h2]:text-gray-900 [&_h3]:mt-6 [&_h3]:text-xl [&_h3]:font-bold [&_h3]:text-gray-900 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:mt-4 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:mt-4 [&_li]:mt-1 [&_a]:text-teal-700 [&_a]:font-semibold hover:[&_a]:text-teal-900"
-        // eslint-disable-next-line react/no-danger
-        dangerouslySetInnerHTML={{ __html: safeHtml }}
-      />
-    );
+    const split = midArticleSplitIndex(safeHtml);
+    const parts = split < 0 ? [safeHtml] : [safeHtml.slice(0, split), safeHtml.slice(split)];
+    return parts.map((part, idx) => (
+      <div key={idx}>
+        {idx > 0 ? <BlogAppPromo /> : null}
+        <div
+          className={CONTENT_HTML_CLASS}
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{ __html: part }}
+        />
+      </div>
+    ));
   }
 
   const blocks = String(content || '')
@@ -130,46 +153,53 @@ function renderContent(content) {
     .map((block) => block.trim())
     .filter(Boolean);
 
-  return blocks.map((block, idx) => {
-    const lines = block.split('\n').map((l) => l.trim());
-    const isH2 = lines.length === 1 && lines[0].startsWith('## ');
-    const isH1 = lines.length === 1 && lines[0].startsWith('# ');
-    const isList = lines.every((l) => l.startsWith('- '));
+  const promoAfter = blocks.length >= 6 ? Math.floor(blocks.length / 2) - 1 : -1;
+  return blocks.map((block, idx) => (
+    <Fragment key={idx}>
+      {renderBlock(block)}
+      {idx === promoAfter ? <BlogAppPromo /> : null}
+    </Fragment>
+  ));
+}
 
-    if (isH1) {
-      return (
-        <h2 key={idx} className="text-2xl font-bold text-gray-900 mt-8">
-          {lines[0].slice(2)}
-        </h2>
-      );
-    }
-    if (isH2) {
-      return (
-        <h3 key={idx} className="text-xl font-bold text-gray-900 mt-6">
-          {lines[0].slice(3)}
-        </h3>
-      );
-    }
-    if (isList) {
-      return (
-        <ul key={idx} className="list-disc pl-6 space-y-1 text-gray-800">
-          {lines.map((l) => (
-            <li key={l}>{l.slice(2)}</li>
-          ))}
-        </ul>
-      );
-    }
+function renderBlock(block) {
+  const lines = block.split('\n').map((l) => l.trim());
+  const isH2 = lines.length === 1 && lines[0].startsWith('## ');
+  const isH1 = lines.length === 1 && lines[0].startsWith('# ');
+  const isList = lines.every((l) => l.startsWith('- '));
 
-    const safe = escapeHtml(block).replaceAll('\n', '<br />');
+  if (isH1) {
     return (
-      <p
-        key={idx}
-        className="text-gray-800 leading-7"
-        // eslint-disable-next-line react/no-danger
-        dangerouslySetInnerHTML={{ __html: safe }}
-      />
+      <h2 className="text-2xl font-bold text-gray-900 mt-8">
+        {lines[0].slice(2)}
+      </h2>
     );
-  });
+  }
+  if (isH2) {
+    return (
+      <h3 className="text-xl font-bold text-gray-900 mt-6">
+        {lines[0].slice(3)}
+      </h3>
+    );
+  }
+  if (isList) {
+    return (
+      <ul className="list-disc pl-6 space-y-1 text-gray-800">
+        {lines.map((l) => (
+          <li key={l}>{l.slice(2)}</li>
+        ))}
+      </ul>
+    );
+  }
+
+  const safe = escapeHtml(block).replaceAll('\n', '<br />');
+  return (
+    <p
+      className="text-gray-800 leading-7"
+      // eslint-disable-next-line react/no-danger
+      dangerouslySetInnerHTML={{ __html: safe }}
+    />
+  );
 }
 
 export async function generateMetadata({ params }) {
@@ -267,39 +297,32 @@ export default async function BlogPostPage({ params }) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <BlogTopBar rightHref="/" rightLabel="Back to home" />
-      <div className="container mx-auto max-w-6xl px-4 py-10 space-y-6">
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-8 items-start">
-          <div className="min-w-0 space-y-6 max-w-3xl">
-            <div className="flex items-center justify-between gap-6 flex-wrap">
-              <Link href="/blog" className="text-teal-700 font-semibold hover:text-teal-900">
-                ← Blog
-              </Link>
-              <BlogShare title={post.title} url={url} />
+      <div className="container mx-auto max-w-3xl px-4 py-10">
+        <div className="min-w-0 space-y-6">
+          <div className="flex items-center justify-between gap-6 flex-wrap">
+            <Link href="/blog" className="text-teal-700 font-semibold hover:text-teal-900">
+              ← Blog
+            </Link>
+            <BlogShare title={post.title} url={url} />
+          </div>
+
+          <BlogCoverImage title={post.title} imageUrl={resolveImageUrl(post.image_url)} aspect="16/7" roundedClass="rounded-2xl" />
+
+          <header className="space-y-3">
+            <h1 className="text-4xl font-bold text-gray-900">{post.title}</h1>
+            <div className="flex items-center gap-3 text-sm text-gray-600">
+              {post.author_name ? <span>By {post.author_name}</span> : null}
+              {post.published_at ? <span>{formatDMY(post.published_at)}</span> : null}
             </div>
+            {post.excerpt ? <p className="text-lg text-gray-700">{stripHtml(post.excerpt)}</p> : null}
+          </header>
 
-            <BlogCoverImage title={post.title} imageUrl={resolveImageUrl(post.image_url)} aspect="16/7" roundedClass="rounded-2xl" />
+          <article className="space-y-4 rounded-2xl border border-gray-200 bg-white p-6">
+            <BlogImageFallback />
+            {renderContent(post.content)}
+          </article>
 
-            <header className="space-y-3">
-              <h1 className="text-4xl font-bold text-gray-900">{post.title}</h1>
-              <div className="flex items-center gap-3 text-sm text-gray-600">
-                {post.author_name ? <span>By {post.author_name}</span> : null}
-                {post.published_at ? <span>{formatDMY(post.published_at)}</span> : null}
-              </div>
-              {post.excerpt ? <p className="text-lg text-gray-700">{stripHtml(post.excerpt)}</p> : null}
-            </header>
-
-            <article className="space-y-4 rounded-2xl border border-gray-200 bg-white p-6">
-              <BlogImageFallback />
-              {renderContent(post.content)}
-            </article>
-
-            <BlogComments slug={post.slug} initialComments={initialComments} />
-          </div>
-
-          <div className="space-y-6 lg:sticky lg:top-24">
-            <WhatsAppCtaCard />
-            <AppDownloadCard />
-          </div>
+          <BlogComments slug={post.slug} initialComments={initialComments} />
         </div>
       </div>
     </main>
