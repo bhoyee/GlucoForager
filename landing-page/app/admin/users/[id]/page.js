@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import UserActivityTab from './UserActivityTab';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -698,6 +699,7 @@ export default function AdminUserDetail() {
           <TabButton id="access">Access & Billing</TabButton>
           <TabButton id="preferences">Preferences</TabButton>
           <TabButton id="transactions">Transactions</TabButton>
+          <TabButton id="activity">Activity</TabButton>
         </div>
       </div>
 
@@ -1079,6 +1081,8 @@ export default function AdminUserDetail() {
           </div>
         </div>
       ) : null}
+
+      {activeTab === 'activity' ? <UserActivityTab userId={userId} token={token} /> : null}
 
       {pendingAction && confirmContent && (
         <div className="admin-modal-backdrop" role="presentation">
