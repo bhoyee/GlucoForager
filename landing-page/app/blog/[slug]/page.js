@@ -297,7 +297,7 @@ export default async function BlogPostPage({ params }) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <BlogTopBar rightHref="/" rightLabel="Back to home" />
-      <div className="container mx-auto max-w-3xl px-4 py-10">
+      <div className="container mx-auto max-w-5xl px-4 py-10">
         <div className="min-w-0 space-y-6">
           <div className="flex items-center justify-between gap-6 flex-wrap">
             <Link href="/blog" className="text-teal-700 font-semibold hover:text-teal-900">
@@ -306,7 +306,7 @@ export default async function BlogPostPage({ params }) {
             <BlogShare title={post.title} url={url} />
           </div>
 
-          <BlogCoverImage title={post.title} imageUrl={resolveImageUrl(post.image_url)} aspect="16/7" roundedClass="rounded-2xl" />
+          <BlogCoverImage title={post.title} imageUrl={resolveImageUrl(post.image_url)} aspect="16/9" roundedClass="rounded-2xl" />
 
           <header className="space-y-3">
             <h1 className="text-4xl font-bold text-gray-900">{post.title}</h1>
@@ -317,7 +317,7 @@ export default async function BlogPostPage({ params }) {
             {post.excerpt ? <p className="text-lg text-gray-700">{stripHtml(post.excerpt)}</p> : null}
           </header>
 
-          <article className="space-y-4 rounded-2xl border border-gray-200 bg-white p-6">
+          <article className="space-y-4 text-[17px]">
             <BlogImageFallback />
             {renderContent(post.content)}
           </article>
