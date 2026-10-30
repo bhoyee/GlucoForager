@@ -873,6 +873,7 @@ export default function AdminShell({ children }) {
           { href: '/admin/payroll', label: 'Payroll', icon: 'payroll', perm: 'payroll.manage' },
           { href: '/admin/staff', label: 'Staff', icon: 'staff', perm: 'staff.manage' },
           { href: '/admin/expenses', label: 'Expenses', icon: 'expenses', perm: 'expenses.read' },
+          { href: '/admin/accounts', label: 'Accounts', icon: 'reports', perm: 'expenses.read' },
           { href: '/admin/requests/manage', label: 'Requests', icon: 'requests', perm: 'requests.manage' },
           { href: '/admin/audit', label: 'Audit Log', icon: 'audit', perm: 'admin.manage' },
         ],

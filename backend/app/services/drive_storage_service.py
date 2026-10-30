@@ -64,18 +64,25 @@ def _remote_kind_dir(kind: str) -> str:
     return "pdfs"
 
 
-def drive_remote_dir_for_user(*, staff_user_id: int, kind: str) -> str:
+def _drive_remote_dir(owner: str, kind: str) -> str:
     base_dir = str(settings.drive_ftp_base_dir or "").strip().rstrip("/")
     if not base_dir:
         base_dir = "/public_html/glucoforager.com/private-drive"
-    return f"{base_dir}/{int(staff_user_id)}/{_remote_kind_dir(kind)}"
+    return f"{base_dir}/{owner}/{_remote_kind_dir(kind)}"
 
 
-def store_drive_upload(*, staff_user_id: int, file: UploadFile) -> StoredDriveObject:
+def drive_remote_dir_for_user(*, staff_user_id: int, kind: str) -> str:
+    return _drive_remote_dir(str(int(staff_user_id)), kind)
+
+
+def store_drive_upload(
+    *, staff_user_id: int, file: UploadFile, folder: str | None = None, max_bytes: int | None = None
+) -> StoredDriveObject:
+    """folder stores the upload under <base>/<folder>/<kind> instead of the uploader's own drive."""
     extension = os.path.splitext(file.filename or "")[1].lower()
     kind = _guess_kind(file.content_type, extension)
 
-    max_bytes = _max_bytes_for_upload(kind, extension)
+    max_bytes = max_bytes or _max_bytes_for_upload(kind, extension)
     size = _read_upload_size(file)
     if size is not None and size > max_bytes:
         raise ValueError(f"File too large. Max {max_bytes} bytes.")
@@ -91,7 +98,7 @@ def store_drive_upload(*, staff_user_id: int, file: UploadFile) -> StoredDriveOb
     backend = str(settings.drive_storage_backend or "ftp").strip().lower()
 
     if backend == "ftp":
-        remote_dir = drive_remote_dir_for_user(staff_user_id=staff_user_id, kind=kind)
+        remote_dir = _drive_remote_dir(folder or str(int(staff_user_id)), kind)
         ftp = open_shared_ftp()
         try:
             file.file.seek(0)
@@ -107,7 +114,7 @@ def store_drive_upload(*, staff_user_id: int, file: UploadFile) -> StoredDriveOb
         return StoredDriveObject(kind=kind, filename=filename, storage_backend="ftp", remote_dir=remote_dir, size_bytes=size)
 
     # local (dev fallback)
-    subdir = os.path.join(settings.uploads_dir, "private-drive", str(int(staff_user_id)), _remote_kind_dir(kind))
+    subdir = os.path.join(settings.uploads_dir, "private-drive", folder or str(int(staff_user_id)), _remote_kind_dir(kind))
     os.makedirs(subdir, exist_ok=True)
     destination = os.path.join(subdir, filename)
     file.file.seek(0)

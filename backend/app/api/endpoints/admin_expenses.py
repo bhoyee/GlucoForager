@@ -20,6 +20,7 @@ from ..admin_dependencies import require_staff_permission
 from ...database import get_db
 from ...models.staff_expense import StaffExpense
 from ...models.staff_user import StaffUser
+from ...services.drive_storage_service import delete_drive_object
 from ...services.exchange_rate_service import ExchangeRateError, convert_to_gbp
 
 
@@ -112,6 +113,8 @@ def list_expenses(
                 "converted_at": r.converted_at.isoformat() if r.converted_at else None,
                 "category": r.category,
                 "note": r.note,
+                "has_receipt": bool(r.receipt_filename),
+                "receipt_name": r.receipt_original_name,
                 "created_by_staff_user_id": r.created_by_staff_user_id,
                 "created_at": r.created_at.isoformat() if r.created_at else None,
             }
@@ -277,6 +280,13 @@ def delete_expense(
     # MVP: only allow creator to delete (admin override can come later).
     if int(row.created_by_staff_user_id) != int(current_staff.id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+    if row.receipt_filename:
+        try:
+            delete_drive_object(
+                storage_backend=row.receipt_storage_backend, remote_dir=row.receipt_remote_dir, filename=row.receipt_filename
+            )
+        except Exception:
+            pass  # don't block deleting the record over a missing remote file
     db.delete(row)
     db.commit()
     return {"ok": True}
