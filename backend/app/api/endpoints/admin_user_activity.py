@@ -4,7 +4,7 @@ import logging
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
-from sqlalchemy import or_
+from sqlalchemy import and_, false, func, or_
 from sqlalchemy.orm import Session
 
 from ..admin_dependencies import require_staff_permission
@@ -340,4 +340,218 @@ def feature_usage(
         "features": features,
         "dates": dates,
         "series": series,
+    }
+
+
+# ── One user's activity (admin user page "Activity" tab) ──────────────────────
+# Every event is grouped into the feature it belongs to, so the timeline can be
+# filtered by feature and the summary counts real uses. (key, label, event_type
+# prefixes, ai.request request_types)
+USER_FEATURE_GROUPS: list[tuple[str, str, tuple[str, ...], tuple[str, ...]]] = [
+    ("recipes", "Recipe ideas", ("recipe_generation.",), ("text", "recipes")),
+    ("fridge_scan", "Fridge scans", ("scan_analysis.",), ("vision", "vision_batch")),
+    ("food_scan", "Food photo scans", (), ("food_scan", "meal_estimate")),
+    ("barcode", "Barcode scans", ("barcode.",), ()),
+    ("glucoguide", "GlucoGuide AI", (), ("agent",)),
+    ("swaps", "Food swaps", (), ("swaps",)),
+    ("meal_plan", "Meal plans", ("daily_plan.", "meal_plan."), ("daily_plan",)),
+    ("meal_log", "Meals logged", ("meal_log.",), ()),
+    ("glucose", "Glucose readings", ("glucose_reading.",), ()),
+    ("challenge", "Daily challenge", ("challenge.",), ()),
+    ("favorites", "Saved recipes", ("favorite.",), ()),
+    ("recipe_check_in", "Recipe check-ins", ("recipe.check_in",), ()),
+    ("shopping", "Shopping list", ("shopping_list.",), ()),
+    ("recipe_search", "Recipe search", ("recipe.search",), ()),
+    ("account", "Sign-in & account", ("auth.", "push_token."), ()),
+]
+_GROUP_LABELS = {key: label for key, label, _p, _r in USER_FEATURE_GROUPS}
+
+# One event per real use, for the summary counts (other events are steps of the same use).
+_USE_EVENTS = {
+    "recipes": ("recipe_generation.started", None),
+    "fridge_scan": ("scan_analysis.started", None),
+    "food_scan": ("ai.request", ("food_scan", "meal_estimate")),
+    "barcode": ("barcode.scanned", None),
+    "glucoguide": ("ai.request", ("agent",)),
+    "swaps": ("ai.request", ("swaps",)),
+    "meal_plan": ("daily_plan.created", None),
+    "meal_log": ("meal_log.created", None),
+    "glucose": ("glucose_reading.created", None),
+    "challenge": ("challenge.task_completed", None),
+    "favorites": ("favorite.saved", None),
+    "recipe_check_in": ("recipe.check_in", None),
+    "shopping": ("shopping_list.created", None),
+    "recipe_search": ("recipe.search", None),
+    "account": ("auth.login", None),
+}
+
+_AI_LABELS = {
+    "food_scan": "Scanned a food photo",
+    "meal_estimate": "Estimated a meal's carbs",
+    "text": "AI wrote recipe ideas",
+    "vision": "AI read a fridge photo",
+    "vision_batch": "AI read fridge photos",
+    "agent": "Asked GlucoGuide AI",
+    "swaps": "Generated food swaps",
+    "daily_plan": "AI built a daily meal plan",
+}
+
+# Automatic or intermediate AI steps already represented by another event.
+_TECHNICAL_AI = ("recipe_image", "text", "vision", "vision_batch", "daily_plan")
+
+
+def _request_type(metadata) -> str | None:
+    return metadata.get("request_type") if isinstance(metadata, dict) else None
+
+
+def user_event_feature(event_type: str, metadata) -> str | None:
+    request_type = _request_type(metadata)
+    for key, _label, prefixes, request_types in USER_FEATURE_GROUPS:
+        if event_type == "ai.request":
+            if request_type in request_types:
+                return key
+        elif any(event_type.startswith(p) for p in prefixes):
+            return key
+    return None
+
+
+def is_technical_event(event_type: str, metadata) -> bool:
+    """Automatic or intermediate steps: hidden unless 'show technical events' is on."""
+    return (
+        event_type.endswith(".running")
+        or event_type == "push_token.updated"
+        or (event_type == "ai.request" and _request_type(metadata) in _TECHNICAL_AI)
+    )
+
+
+def _request_type_sql():
+    return func.coalesce(UserActivityEvent.metadata_json["request_type"].as_string(), "")
+
+
+def _feature_sql(key: str):
+    for k, _label, prefixes, request_types in USER_FEATURE_GROUPS:
+        if k != key:
+            continue
+        parts = [and_(UserActivityEvent.event_type != "ai.request", UserActivityEvent.event_type.like(f"{p}%")) for p in prefixes]
+        if request_types:
+            parts.append(and_(UserActivityEvent.event_type == "ai.request", _request_type_sql().in_(request_types)))
+        return or_(*parts)
+    return None
+
+
+def _not_technical_sql():
+    return and_(
+        ~UserActivityEvent.event_type.like("%.running"),
+        UserActivityEvent.event_type != "push_token.updated",
+        or_(UserActivityEvent.event_type != "ai.request", ~_request_type_sql().in_(_TECHNICAL_AI)),
+    )
+
+
+def _serialize_user_event(event: UserActivityEvent) -> dict:
+    metadata = event.metadata_json or {}
+    feature = user_event_feature(event.event_type, metadata)
+    label = event.label
+    if event.event_type == "ai.request":
+        label = _AI_LABELS.get(_request_type(metadata), label)
+    return {
+        "id": event.id,
+        "event_type": event.event_type,
+        "label": label,
+        "feature": feature,
+        "feature_label": _GROUP_LABELS.get(feature, "Other"),
+        "source": event.source,
+        "technical": is_technical_event(event.event_type, metadata),
+        "metadata": metadata,
+        "created_at": _utc_iso(event.created_at),
+    }
+
+
+@router.get("/user/{user_id}")
+def user_activity_timeline(
+    user_id: int,
+    page: int = 1,
+    page_size: int = 25,
+    feature: str | None = None,
+    include_technical: bool = False,
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("users.read")),  # noqa: ARG001
+):
+    """One user's activity, newest first, paginated in the database."""
+    page_value = max(1, int(page or 1))
+    page_size_value = max(1, min(100, int(page_size or 25)))
+    query = db.query(UserActivityEvent).filter(UserActivityEvent.user_id == int(user_id))
+    if not include_technical:
+        query = query.filter(_not_technical_sql())
+    if feature:
+        condition = _feature_sql(feature.strip())
+        query = query.filter(condition if condition is not None else false())
+
+    total = query.count()
+    rows = (
+        query.order_by(UserActivityEvent.created_at.desc(), UserActivityEvent.id.desc())
+        .offset((page_value - 1) * page_size_value)
+        .limit(page_size_value)
+        .all()
+    )
+    return {
+        "items": [_serialize_user_event(e) for e in rows],
+        "page": page_value,
+        "page_size": page_size_value,
+        "total": total,
+    }
+
+
+@router.get("/user/{user_id}/summary")
+def user_activity_summary(
+    user_id: int,
+    days: int = 30,
+    db: Session = Depends(get_db),
+    current_staff: StaffUser = Depends(require_staff_permission("users.read")),  # noqa: ARG001
+):
+    """Which features this user uses, how often, and how active they are."""
+    from datetime import datetime, timedelta
+
+    days_value = days if days in (7, 30, 60) else 30
+    since = datetime.utcnow() - timedelta(days=days_value)
+    rows = (
+        db.query(UserActivityEvent.event_type, UserActivityEvent.metadata_json, UserActivityEvent.created_at)
+        .filter(UserActivityEvent.user_id == int(user_id), UserActivityEvent.created_at >= since)
+        .all()
+    )
+
+    uses: dict[str, int] = {key: 0 for key, *_ in USER_FEATURE_GROUPS}
+    last_used: dict[str, datetime] = {}
+    active_days: set = set()
+    actions = 0
+    for event_type, metadata, created_at in rows:
+        if is_technical_event(event_type, metadata):
+            continue
+        actions += 1
+        if created_at:
+            active_days.add(created_at.date())
+        for key, (use_event, request_types) in _USE_EVENTS.items():
+            if event_type == use_event and (request_types is None or _request_type(metadata) in request_types):
+                uses[key] += 1
+                if created_at and (key not in last_used or created_at > last_used[key]):
+                    last_used[key] = created_at
+                break
+
+    features = [
+        {"key": key, "label": label, "uses": uses[key], "last_used_at": _utc_iso(last_used.get(key))}
+        for key, label, _p, _r in USER_FEATURE_GROUPS
+        if uses[key] > 0
+    ]
+    features.sort(key=lambda f: (-f["uses"], f["label"]))
+    last_event = db.query(func.max(UserActivityEvent.created_at)).filter(UserActivityEvent.user_id == int(user_id)).scalar()
+    user = db.get(User, int(user_id))
+    product_features = [f for f in features if f["key"] != "account"]
+    return {
+        "days": days_value,
+        "actions": actions,
+        "active_days": len(active_days),
+        "last_activity_at": _utc_iso(last_event),
+        "last_active_at": _utc_iso(getattr(user, "last_active_at", None)) if user else None,
+        "top_feature": product_features[0]["label"] if product_features else None,
+        "features": features,
+        "feature_options": [{"key": k, "label": label} for k, label, _p, _r in USER_FEATURE_GROUPS],
     }
