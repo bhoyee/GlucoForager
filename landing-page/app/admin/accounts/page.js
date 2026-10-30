@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { openFileInNewTab } from '../lib/openFileInNewTab';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -146,11 +147,28 @@ export default function AccountsPage() {
     }
   };
 
+  const removeDocument = async (id) => {
+    if (!window.confirm('Remove this statement? The income record itself stays.')) return;
+    setBusyId(id);
+    setMessage('');
+    try {
+      const res = await api(`/income/${id}/document`, { method: 'DELETE' });
+      if (!res.ok) throw new Error();
+      await load();
+    } catch {
+      setMessage('Failed to remove the statement.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const openDocument = async (id) => {
     try {
-      const res = await api(`/income/${id}/document`);
-      if (!res.ok) throw new Error();
-      window.open(URL.createObjectURL(await res.blob()), '_blank');
+      await openFileInNewTab(async () => {
+        const res = await api(`/income/${id}/document`);
+        if (!res.ok) throw new Error();
+        return res.blob();
+      }, 'statement');
     } catch {
       setMessage('Could not open the statement.');
     }
@@ -285,7 +303,8 @@ export default function AccountsPage() {
         <h3 style={{ margin: 0 }}>{editingId ? 'Edit income' : 'Record income'}</h3>
         <p className="admin-subtitle" style={{ marginTop: 4 }}>
           Add each payout as it lands in the bank: App Store Connect (Payments and Financial Reports), Google Play Console
-          (Payouts) or Stripe. Attach the payout statement.
+          (Payouts) or Stripe. Enter the amount you actually received, after the store&apos;s commission and VAT (for example,
+          a £5.99 UK subscription pays out about £4.24), and attach the payout statement.
         </p>
         <form onSubmit={save}>
           <div className="admin-grid">
@@ -294,7 +313,7 @@ export default function AccountsPage() {
               <input type="date" value={form.income_date} onChange={(e) => setForm({ ...form, income_date: e.target.value })} required />
             </div>
             <div className="admin-field">
-              <label>Amount</label>
+              <label>Amount received</label>
               <input value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="0.00" required />
             </div>
             <div className="admin-field">
@@ -363,9 +382,21 @@ export default function AccountsPage() {
                     <td>{x.note || ''}</td>
                     <td>
                       {x.has_document ? (
-                        <button className="admin-button neutral" type="button" onClick={() => openDocument(x.id)}>
-                          View
-                        </button>
+                        <span className="admin-attachment">
+                          <button className="admin-button neutral" type="button" onClick={() => openDocument(x.id)} title={x.document_name || ''}>
+                            View
+                          </button>
+                          <button
+                            className="admin-attachment-remove"
+                            type="button"
+                            onClick={() => removeDocument(x.id)}
+                            disabled={busyId === x.id}
+                            title="Remove statement"
+                            aria-label="Remove statement"
+                          >
+                            ×
+                          </button>
+                        </span>
                       ) : (
                         <button className="admin-button secondary" type="button" onClick={() => pickDocument(x.id)} disabled={busyId === x.id}>
                           {busyId === x.id ? 'Uploading...' : 'Attach'}
