@@ -2,7 +2,7 @@
   min-height: 100vh;
   background: #f6f9f7;
   color: #1b3b2f;
-  padding: 40px 20px;
+  padding: 24px;
 }
 
 @media (max-width: 960px) {
@@ -11,8 +11,9 @@
   }
 }
 
+/* Full width: the admin uses all of the screen next to the sidebar. */
 .admin-container {
-  max-width: 1400px;
+  width: 100%;
   margin: 0 auto;
 }
 
