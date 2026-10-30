@@ -8,8 +8,8 @@ granted are skipped on the next run because they're in their welcome week):
     docker compose run --rm api python scripts/welcome_week_relaunch.py --send [--limit 90]
 
 Always excluded: users with Premium access (store trial/subscription, cancelled-but-active,
-admin comp), deleted/suspended users, anyone who unsubscribed from lifecycle emails, and the
-addresses in EXCLUDED_EMAILS.
+admin comp), deleted/suspended users, anyone who unsubscribed from lifecycle emails, anyone whose
+welcome week ended in the last 30 days, and the addresses in EXCLUDED_EMAILS.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import sys
 import time
+from datetime import datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -28,8 +29,15 @@ from app.services.free_tier_service import start_welcome_week  # noqa: E402
 from app.services.settings_service import get_free_tier_settings  # noqa: E402
 from app.services.trial_access_service import get_access_snapshot  # noqa: E402
 
-# Addresses to leave out (e.g. paying customers who'd find a "free Premium week" email unfair).
-EXCLUDED_EMAILS: set[str] = set()
+# Addresses to leave out. The three people who paid then cancelled were sent a personal
+# "why did you cancel?" email on 2026-10-30 (free month if they reply) - no mixed messages.
+EXCLUDED_EMAILS: set[str] = {
+    "nathan.a.moore.1983@gmail.com",
+    "missblair26@gmail.com",
+    "aperez.lhc@yahoo.com",
+}
+# Someone whose welcome week ended this recently has just had one: don't give a second.
+RECENT_WELCOME_WEEK_DAYS = 30
 
 
 def main() -> None:
@@ -46,7 +54,9 @@ def main() -> None:
             .order_by(User.id)
             .all()
         )
-        included, skipped = [], {"excluded_email": 0, "has_premium": 0, "already_in_welcome_week": 0}
+        included = []
+        skipped = {"excluded_email": 0, "has_premium": 0, "already_in_welcome_week": 0, "welcome_week_just_ended": 0}
+        recent_cutoff = datetime.utcnow() - timedelta(days=RECENT_WELCOME_WEEK_DAYS)
         for user in users:
             if (user.email or "").strip().lower() in EXCLUDED_EMAILS:
                 skipped["excluded_email"] += 1
@@ -57,6 +67,9 @@ def main() -> None:
                 continue
             if snapshot.access_status == "legacy_grace":
                 skipped["already_in_welcome_week"] += 1
+                continue
+            if user.trial_grace_ends_at and user.trial_grace_ends_at >= recent_cutoff:
+                skipped["welcome_week_just_ended"] += 1
                 continue
             included.append(user)
 
