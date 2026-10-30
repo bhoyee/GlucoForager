@@ -79,6 +79,39 @@ function refreshOnce(signal) {
 const sessionExpiredResponse = () =>
   new Response(JSON.stringify({ detail: 'Session expired' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
 
+// Many admin pages call fetch() directly with the token they read when they opened. Rather than
+// change every page, fetch is wrapped once (this module loads with every admin page, before any
+// page effect runs): a signed-in request to /api/admin/* always goes out with the current token,
+// renewed first if it has expired, and an unrenewable session signs out once instead of firing a
+// burst of 401s.
+const AUTH_PATHS = ['/api/admin/staff/login', '/api/admin/staff/refresh', '/api/admin/bootstrap', '/api/admin/staff/mfa'];
+
+function installAdminFetchGuard() {
+  if (typeof window === 'undefined' || window.__adminFetchGuard) return;
+  window.__adminFetchGuard = true;
+  const nativeFetch = window.fetch.bind(window);
+
+  window.fetch = async (input, init = {}) => {
+    const url = typeof input === 'string' ? input : input?.url || String(input);
+    if (!url.includes('/api/admin/') || AUTH_PATHS.some((p) => url.includes(p))) return nativeFetch(input, init);
+
+    const headers = new Headers(init.headers || (input instanceof Request ? input.headers : undefined));
+    if (!(headers.get('Authorization') || '').startsWith('Bearer ')) return nativeFetch(input, init);
+
+    if (redirectingToSignIn) return sessionExpiredResponse();
+    let token = getAdminAccessToken();
+    if (token && isTokenExpired(token)) token = await refreshOnce(init.signal);
+    if (!token) {
+      expireAdminSession();
+      return sessionExpiredResponse();
+    }
+    headers.set('Authorization', `Bearer ${token}`);
+    return nativeFetch(input, { ...init, headers });
+  };
+}
+
+installAdminFetchGuard();
+
 export async function adminFetch(url, options = {}) {
   if (redirectingToSignIn) return sessionExpiredResponse();
   let accessToken = getAdminAccessToken();
