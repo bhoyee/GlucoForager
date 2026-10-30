@@ -1239,7 +1239,7 @@ def render_welcome_week_relaunch_email(
         <tr><td style="padding:24px 32px 28px 32px;">
           <p style="margin:0; font-size:15px; line-height:24px; color:#334155;">
             Have a great weekend, and if anything could be better, just reply. I read every message.<br/><br/>
-            <strong style="color:#0f172a;">Adey</strong><br/>
+            <strong style="color:#0f172a;">Jade</strong><br/>
             <span style="color:#64748b;">Founder, GlucoForager</span>
           </p>
         </td></tr>
