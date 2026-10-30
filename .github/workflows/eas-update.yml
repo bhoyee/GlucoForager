@@ -21,6 +21,10 @@ on:
         options:
           - current
           - '1.0.10'
+      git_ref:
+        description: 'Commit or branch to publish (blank = the branch this runs on). Use to re-publish an older update.'
+        required: false
+        default: ''
 
 concurrency:
   group: eas-update-${{ github.ref }}
@@ -35,6 +39,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.git_ref || github.ref }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -62,7 +68,35 @@ jobs:
           node -e "const f='app.json';const j=require('./'+f);j.expo.version='${{ github.event.inputs.app_version }}';require('fs').writeFileSync(f,JSON.stringify(j,null,2))"
           node -e "console.log('Publishing for app version', require('./app.json').expo.version)"
 
+      # The app's EXPO_PUBLIC_* settings (RevenueCat keys etc.) live in EAS "production" environment
+      # variables - .env files aren't in git. Without --environment, `eas update` bundles none of them,
+      # and RevenueCat (purchases) silently stops working for everyone on the update.
+      - name: Check required app settings exist
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          vars="$(eas env:list --environment production --format short)"
+          missing=""
+          for name in EXPO_PUBLIC_REVENUECAT_API_KEY EXPO_PUBLIC_REVENUECAT_API_KEY_IOS EXPO_PUBLIC_API_URL; do
+            echo "$vars" | grep -q "^$name=" || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing EAS production variables:$missing - refusing to publish an update without them."
+            exit 1
+          fi
+          echo "All required EAS production variables are set."
+
       - name: EAS Update
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: eas update --branch "${{ github.event.inputs.branch }}" --message "${{ github.event.inputs.message }}" --non-interactive
+        run: eas update --branch "${{ github.event.inputs.branch }}" --message "${{ github.event.inputs.message }}" --environment production --clear-cache --non-interactive
+
+      - name: Verify the published bundle contains the RevenueCat keys
+        run: |
+          found=0
+          for f in dist/_expo/static/js/android/*.hbc dist/_expo/static/js/ios/*.hbc dist/_expo/static/js/android/*.js dist/_expo/static/js/ios/*.js; do
+            [ -f "$f" ] || continue
+            if grep -aq -e 'goog_' -e 'appl_' "$f"; then found=$((found+1)); else echo "::error::No RevenueCat key in $f"; exit 1; fi
+          done
+          [ "$found" -ge 2 ] || { echo "::error::Could not find the exported Android and iOS bundles to verify"; exit 1; }
+          echo "RevenueCat keys present in $found bundles."
