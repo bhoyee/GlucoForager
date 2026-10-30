@@ -250,6 +250,24 @@ export default function ExpensesPage() {
     }
   };
 
+  const removeReceipt = async (id) => {
+    if (!token || !window.confirm('Remove this receipt? The expense itself stays.')) return;
+    setReceiptBusyId(id);
+    setMessage('');
+    try {
+      const res = await fetch(`${API_URL}/api/admin/accounts/expenses/${id}/receipt`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error();
+      await load();
+    } catch {
+      setMessage('Failed to remove the receipt.');
+    } finally {
+      setReceiptBusyId(null);
+    }
+  };
+
   const openReceipt = async (id) => {
     try {
       const res = await fetch(`${API_URL}/api/admin/accounts/expenses/${id}/receipt`, {
@@ -548,9 +566,21 @@ export default function ExpensesPage() {
                     <td>{x.note || ''}</td>
                     <td>
                       {x.has_receipt ? (
-                        <button className="admin-button neutral" type="button" onClick={() => openReceipt(x.id)} title={x.receipt_name || ''}>
-                          View
-                        </button>
+                        <span className="admin-attachment">
+                          <button className="admin-button neutral" type="button" onClick={() => openReceipt(x.id)} title={x.receipt_name || ''}>
+                            View
+                          </button>
+                          <button
+                            className="admin-attachment-remove"
+                            type="button"
+                            onClick={() => removeReceipt(x.id)}
+                            disabled={receiptBusyId === x.id}
+                            title="Remove receipt"
+                            aria-label="Remove receipt"
+                          >
+                            ×
+                          </button>
+                        </span>
                       ) : (
                         <button
                           className="admin-button secondary"
