@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { openFileInNewTab } from '../lib/openFileInNewTab';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -163,9 +164,11 @@ export default function AccountsPage() {
 
   const openDocument = async (id) => {
     try {
-      const res = await api(`/income/${id}/document`);
-      if (!res.ok) throw new Error();
-      window.open(URL.createObjectURL(await res.blob()), '_blank');
+      await openFileInNewTab(async () => {
+        const res = await api(`/income/${id}/document`);
+        if (!res.ok) throw new Error();
+        return res.blob();
+      }, 'statement');
     } catch {
       setMessage('Could not open the statement.');
     }
