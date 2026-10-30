@@ -66,7 +66,7 @@ const roles = [
     summary:
       "Own GlucoForager's presence across social media and digital marketing, growing awareness of the app and building a community around diabetes-friendly eating.",
     responsibilities: [
-      "Plan, create, and publish content across Facebook, Instagram, X, TikTok, Bluesky, and our WhatsApp Channel",
+      "Plan, create, and publish content across Facebook, Instagram, X, TikTok and Bluesky",
       "Build and manage a content calendar aligned with product updates, blog posts, and app milestones",
       "Grow and engage our community — respond to comments and messages, and build relationships with diabetes and healthy-eating audiences",
       "Run and optimise paid social and app-install campaigns where relevant",
