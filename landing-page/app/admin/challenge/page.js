@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { confirmDialog } from '../ui/ConfirmDialog';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -219,8 +220,8 @@ export default function AdminChallengePage() {
     closeEditor();
   };
 
-  const deleteLocal = (id) => {
-    if (!confirm('Delete this task?')) return;
+  const deleteLocal = async (id) => {
+    if (!await confirmDialog({ title: 'Delete this task?', message: 'It is removed from the catalog when you save.', confirmLabel: 'Delete', tone: 'danger' })) return;
     setTasks((prev) => prev.filter((x) => String(x?.id || '').trim() !== String(id || '').trim()));
     setDirty(true);
   };
@@ -257,7 +258,7 @@ export default function AdminChallengePage() {
   };
 
   const seedFromFile = async () => {
-    if (!confirm('Replace the DB catalog with backend/app/data/challenge_tasks.json?')) return;
+    if (!await confirmDialog({ title: 'Replace the task catalog?', message: 'The database catalog will be replaced with backend/app/data/challenge_tasks.json.', confirmLabel: 'Replace', tone: 'warning' })) return;
     setMessage('');
     try {
       const response = await fetch(`${API_URL}/api/admin/challenge/seed?mode=replace`, {
@@ -310,7 +311,7 @@ export default function AdminChallengePage() {
   };
 
   const resetSnapshots = async () => {
-    if (!confirm('Clear snapshots for the selected filters? Users will get regenerated tasks on next open.')) return;
+    if (!await confirmDialog({ title: 'Clear snapshots?', message: 'Snapshots for the selected filters are cleared. Users get regenerated tasks next time they open the app.', confirmLabel: 'Clear', tone: 'warning' })) return;
     setMessage('');
     try {
       const params = new URLSearchParams();

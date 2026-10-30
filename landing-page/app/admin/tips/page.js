@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { confirmDialog } from '../ui/ConfirmDialog';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -227,7 +228,7 @@ export default function AdminTipsPage() {
   };
 
   const seedTips = async () => {
-    if (!confirm('Seed / update the default curated tips into the catalog?')) return;
+    if (!await confirmDialog({ title: 'Load the default tips?', message: 'The curated default tips are added to the catalog, updating any that already exist.', confirmLabel: 'Load tips' })) return;
     setMessage('');
     try {
       const response = await fetch(`${API_URL}/api/admin/tips/seed?mode=upsert`, {
@@ -258,7 +259,7 @@ export default function AdminTipsPage() {
   };
 
   const deleteTip = async (id) => {
-    if (!confirm('Delete this tip?')) return;
+    if (!await confirmDialog({ title: 'Delete this tip?', confirmLabel: 'Delete', tone: 'danger' })) return;
     setMessage('');
     try {
       const response = await fetch(`${API_URL}/api/admin/tips/${encodeURIComponent(id)}`, {

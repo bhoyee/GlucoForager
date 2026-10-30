@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import BlogPostForm from '../BlogPostForm';
+import { confirmDialog } from '../../ui/ConfirmDialog';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -189,7 +190,7 @@ export default function AdminEditBlogPostPage() {
   const handleDelete = async () => {
     if (!token) return;
     if (readOnly) return;
-    if (!confirm('Delete this post? This cannot be undone.')) return;
+    if (!await confirmDialog({ title: 'Delete this post?', message: 'This cannot be undone.', confirmLabel: 'Delete', tone: 'danger' })) return;
     setIsSubmitting(true);
     setMessage('');
     try {

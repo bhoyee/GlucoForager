@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { confirmDialog } from '../ui/ConfirmDialog';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 const PAGE_SIZE = 50;
@@ -97,7 +98,7 @@ export default function AdminNewsletterPage() {
 
   const deleteSubscriber = async (subscriberId) => {
     if (!token) return;
-    if (!confirm('Delete this subscriber?')) return;
+    if (!await confirmDialog({ title: 'Delete this subscriber?', message: 'They will stop receiving the newsletter.', confirmLabel: 'Delete', tone: 'danger' })) return;
     setMessage('');
     try {
       const response = await fetch(`${API_URL}/api/admin/newsletter/subscribers/${subscriberId}`, {

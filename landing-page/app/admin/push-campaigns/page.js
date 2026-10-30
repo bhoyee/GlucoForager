@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { confirmDialog } from '../ui/ConfirmDialog';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -218,7 +219,7 @@ export default function AdminPushCampaignsPage() {
 
   const deleteCampaign = async (campaignId) => {
     if (!token) return;
-    if (!confirm('Delete this campaign? This cannot be undone.')) return;
+    if (!await confirmDialog({ title: 'Delete this campaign?', message: 'This cannot be undone.', confirmLabel: 'Delete', tone: 'danger' })) return;
     setBusy(true);
     setMessage('');
     try {

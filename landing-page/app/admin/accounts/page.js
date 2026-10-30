@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { openFileInNewTab } from '../lib/openFileInNewTab';
+import { confirmDialog } from '../ui/ConfirmDialog';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -108,7 +109,7 @@ export default function AccountsPage() {
   };
 
   const remove = async (item) => {
-    if (!window.confirm(`Delete this ${gbp(item.amount_gbp ?? item.amount)} income record?`)) return;
+    if (!await confirmDialog({ title: 'Delete this income record?', message: `${gbp(item.amount_gbp ?? item.amount)} on ${item.income_date} will be removed, along with its statement.`, confirmLabel: 'Delete', tone: 'danger' })) return;
     setBusyId(item.id);
     try {
       const res = await api(`/income/${item.id}`, { method: 'DELETE' });
@@ -148,7 +149,7 @@ export default function AccountsPage() {
   };
 
   const removeDocument = async (id) => {
-    if (!window.confirm('Remove this statement? The income record itself stays.')) return;
+    if (!await confirmDialog({ title: 'Remove this statement?', message: 'The file is deleted. The income record itself stays.', confirmLabel: 'Remove', tone: 'danger' })) return;
     setBusyId(id);
     setMessage('');
     try {

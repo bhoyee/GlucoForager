@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { openFileInNewTab } from '../lib/openFileInNewTab';
+import { confirmDialog } from '../ui/ConfirmDialog';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -252,7 +253,7 @@ export default function ExpensesPage() {
   };
 
   const removeReceipt = async (id) => {
-    if (!token || !window.confirm('Remove this receipt? The expense itself stays.')) return;
+    if (!token || !await confirmDialog({ title: 'Remove this receipt?', message: 'The file is deleted. The expense itself stays.', confirmLabel: 'Remove', tone: 'danger' })) return;
     setReceiptBusyId(id);
     setMessage('');
     try {

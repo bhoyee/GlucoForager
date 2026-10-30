@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { confirmDialog } from '../../ui/ConfirmDialog';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 const PAGE_SIZE = 30;
@@ -96,7 +97,7 @@ export default function CommentsClient() {
 
   const reject = async (commentId) => {
     if (!token) return;
-    if (!confirm('Reject this comment?')) return;
+    if (!await confirmDialog({ title: 'Reject this comment?', message: 'It will not be published on the blog.', confirmLabel: 'Reject', tone: 'warning' })) return;
     try {
       const response = await fetch(`${API_URL}/api/admin/blog/comments/${commentId}/reject`, {
         method: 'POST',
@@ -116,7 +117,7 @@ export default function CommentsClient() {
 
   const remove = async (commentId) => {
     if (!token) return;
-    if (!confirm('Delete this comment? (It will be removed from the moderation queue)')) return;
+    if (!await confirmDialog({ title: 'Delete this comment?', message: 'It will be removed from the moderation queue.', confirmLabel: 'Delete', tone: 'danger' })) return;
     try {
       const response = await fetch(`${API_URL}/api/admin/blog/comments/${commentId}`, {
         method: 'DELETE',

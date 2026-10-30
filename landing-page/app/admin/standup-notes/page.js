@@ -7,6 +7,7 @@ import EmptyState from '../ui/EmptyState';
 import LoadingState from '../ui/LoadingState';
 import DataTable from '../ui/DataTable';
 import { adminFetch, clearAdminTokens } from '../lib/adminAuth';
+import { confirmDialog } from '../ui/ConfirmDialog';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -291,7 +292,7 @@ export default function StandupNotesPage() {
 
   const softDelete = async (id) => {
     if (!canManage) return;
-    if (!confirm('Delete this note? It will no longer show on dashboards.')) return;
+    if (!await confirmDialog({ title: 'Delete this note?', message: 'It will no longer show on dashboards.', confirmLabel: 'Delete', tone: 'danger' })) return;
     setMessage('');
     try {
       const r = await safeJson(`${API_URL}/api/admin/dashboard-notes/${id}`, { method: 'DELETE' });

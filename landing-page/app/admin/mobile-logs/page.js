@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { confirmDialog } from '../ui/ConfirmDialog';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -86,7 +87,7 @@ export default function AdminMobileLogsPage() {
 
   const clearLogs = useCallback(async () => {
     if (!token || isClearing) return;
-    const ok = window.confirm('Delete all current and rotated mobile logs? This cannot be undone.');
+    const ok = await confirmDialog({ title: 'Delete all mobile logs?', message: 'Current and rotated logs are deleted. This cannot be undone.', confirmLabel: 'Delete all', tone: 'danger' });
     if (!ok) return;
     setIsClearing(true);
     setMessage('');
