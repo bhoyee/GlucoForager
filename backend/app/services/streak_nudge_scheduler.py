@@ -27,15 +27,16 @@ def run_streak_nudge_job() -> dict:
     yesterday = today - timedelta(days=1)
     db = SessionLocal()
     try:
+        # EXISTS rather than JOIN + DISTINCT: users has JSON columns, and Postgres
+        # can't compare JSON values, so SELECT DISTINCT over users fails outright.
+        has_push = (
+            db.query(PushToken.id)
+            .filter(PushToken.user_id == User.id, PushToken.enabled.is_(True))
+            .exists()
+        )
         candidates = (
             db.query(User)
-            .join(PushToken, PushToken.user_id == User.id)
-            .filter(
-                User.deleted_at.is_(None),
-                User.suspended_at.is_(None),
-                PushToken.enabled.is_(True),
-            )
-            .distinct()
+            .filter(User.deleted_at.is_(None), User.suspended_at.is_(None), has_push)
             .all()
         )
         if not candidates:
