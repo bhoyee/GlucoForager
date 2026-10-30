@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { confirmDialog } from '../ui/ConfirmDialog';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -133,7 +134,7 @@ export default function SystemHealthClient() {
         queue: 'pending queued jobs',
       };
       const label = labels[scope] || 'selected jobs';
-      const ok = window.confirm(`Delete ${label}? This cannot be undone.`);
+      const ok = await confirmDialog({ title: `Delete ${label}?`, message: 'This cannot be undone.', confirmLabel: 'Delete', tone: 'danger' });
       if (!ok) return;
       setIsDeletingJobs(true);
       setMessage('');

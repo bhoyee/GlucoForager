@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AdminTinyEditor from '../../../components/AdminTinyEditor';
+import { confirmDialog } from '../ui/ConfirmDialog';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -50,7 +51,7 @@ export default function AdminUserEmailPage() {
       return;
     }
     if (mode === 'broadcast') {
-      if (!confirm('Send this email to all app users?')) return;
+      if (!await confirmDialog({ title: 'Send to all app users?', message: 'This email goes to all app users.', confirmLabel: 'Send to all' })) return;
     }
 
     setBusy(true);

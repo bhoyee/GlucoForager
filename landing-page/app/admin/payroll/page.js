@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import EmptyState from '../ui/EmptyState';
 import LoadingState from '../ui/LoadingState';
+import { confirmDialog } from '../ui/ConfirmDialog';
 
 export default function PayrollPage() {
   const router = useRouter();
@@ -355,7 +356,7 @@ export default function PayrollPage() {
 
   const deleteComp = async (id) => {
     if (!token) return;
-    if (!confirm('Delete this compensation record? This cannot be undone.')) return;
+    if (!await confirmDialog({ title: 'Delete this compensation record?', message: 'This cannot be undone.', confirmLabel: 'Delete', tone: 'danger' })) return;
     setMessage('');
     try {
       const res = await fetch(`${API_URL}/api/admin/payroll/compensation/${id}`, {

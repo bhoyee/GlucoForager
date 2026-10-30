@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import AdminTinyEditor from '../../../../components/AdminTinyEditor';
+import { confirmDialog } from '../../ui/ConfirmDialog';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -134,8 +135,8 @@ export default function AdminNewsletterSendPage() {
           type="button"
           className="admin-button"
           disabled={busy}
-          onClick={() => {
-            if (!confirm('Send this message to all subscribed users?')) return;
+          onClick={async () => {
+            if (!(await confirmDialog({ title: 'Send to all subscribers?', message: 'This message goes to everyone subscribed to the newsletter.', confirmLabel: 'Send to all' }))) return;
             send('broadcast');
           }}
         >

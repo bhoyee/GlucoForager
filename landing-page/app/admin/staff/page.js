@@ -7,6 +7,7 @@ import EmptyState from '../ui/EmptyState';
 import LoadingState from '../ui/LoadingState';
 import { COUNTRIES } from '../lib/countries';
 import { defaultTimezoneForCountry } from '../lib/timezones';
+import { confirmDialog } from '../ui/ConfirmDialog';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -209,7 +210,7 @@ export default function AdminStaffPage() {
       setMessage('Cannot change status: staff user is deleted.');
       return;
     }
-    const ok = window.confirm(`${user.is_active ? 'Disable' : 'Enable'} ${user.email}?`);
+    const ok = await confirmDialog({ title: `${user.is_active ? 'Disable' : 'Enable'} ${user.email}?`, message: user.is_active ? 'They will not be able to sign in until enabled again.' : 'They will be able to sign in again.', confirmLabel: user.is_active ? 'Disable' : 'Enable', tone: user.is_active ? 'warning' : undefined });
     if (!ok) return;
     try {
       const res = await fetch(`${API_URL}/api/admin/staff/users/${user.id}`, {
@@ -234,7 +235,7 @@ export default function AdminStaffPage() {
     if (!token) return;
     setMessage('');
     if (user.deleted_at) return;
-    const ok = window.confirm(`Soft delete ${user.email}? They will not be able to log in.`);
+    const ok = await confirmDialog({ title: `Delete ${user.email}?`, message: 'They will not be able to sign in. The account is kept for records.', confirmLabel: 'Delete', tone: 'danger' });
     if (!ok) return;
     const reason = window.prompt('Reason (optional):') || '';
     try {

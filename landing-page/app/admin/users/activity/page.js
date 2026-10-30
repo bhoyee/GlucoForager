@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import FeatureUsage from './FeatureUsage';
+import { confirmDialog } from '../../ui/ConfirmDialog';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 const PAGE_SIZE = 25;
@@ -113,7 +114,7 @@ export default function AdminUserActivityPage() {
 
   const deleteSelected = async () => {
     if (!token || isDeleting || selectedIds.length === 0) return;
-    const ok = window.confirm(`Delete ${selectedIds.length} selected activity event(s)? This cannot be undone.`);
+    const ok = await confirmDialog({ title: `Delete ${selectedIds.length} activity event${selectedIds.length === 1 ? '' : 's'}?`, message: 'This cannot be undone.', confirmLabel: 'Delete', tone: 'danger' });
     if (!ok) return;
     setIsDeleting(true);
     setMessage('');
@@ -142,7 +143,7 @@ export default function AdminUserActivityPage() {
   const deleteAllMatching = async () => {
     if (!token || isDeleting) return;
     const scope = q.trim() || eventType.trim() || source.trim() ? 'all activity matching the current filters' : 'ALL activity events';
-    const ok = window.confirm(`Delete ${scope}? This cannot be undone.`);
+    const ok = await confirmDialog({ title: `Delete ${scope}?`, message: 'This cannot be undone.', confirmLabel: 'Delete', tone: 'danger' });
     if (!ok) return;
     setIsDeleting(true);
     setMessage('');

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ConfirmDialogHost } from './ConfirmDialog';
 import { adminFetch, clearAdminTokens, getAdminAccessToken, getAdminRefreshToken } from '../lib/adminAuth';
 
 const NAV_ICONS = {
@@ -1062,6 +1063,7 @@ export default function AdminShell({ children }) {
 
   return (
     <div className={`admin-shell${isDemo ? ' is-demo' : ''}`}>
+      <ConfirmDialogHost />
       <div className={`admin-container admin-layout${sidebarCollapsed ? ' is-collapsed' : ''}`}>
         <div
           className={`admin-backdrop${sidebarOpen ? ' is-open' : ''}`}

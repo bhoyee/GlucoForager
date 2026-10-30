@@ -6,6 +6,7 @@ import EmptyState from '../ui/EmptyState';
 import LoadingState from '../ui/LoadingState';
 import dynamic from 'next/dynamic';
 import TaskContent from '../ui/TaskContent';
+import { confirmDialog } from '../ui/ConfirmDialog';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -248,7 +249,7 @@ export default function WorkPlansPage() {
   const deleteTask = useCallback(
     async (taskId) => {
       if (!token || !canManage) return;
-      const ok = confirm('Delete this task?');
+      const ok = await confirmDialog({ title: 'Delete this task?', confirmLabel: 'Delete', tone: 'danger' });
       if (!ok) return;
       setMessage('');
       try {

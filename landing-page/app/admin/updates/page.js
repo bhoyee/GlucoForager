@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import EmptyState from '../ui/EmptyState';
 import LoadingState from '../ui/LoadingState';
 import { adminFetch, clearAdminTokens } from '../lib/adminAuth';
+import { confirmDialog } from '../ui/ConfirmDialog';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
 
@@ -131,7 +132,7 @@ export default function UpdatesPage() {
 
   const softDelete = async (id) => {
     if (!canDelete) return;
-    if (!confirm('Soft delete this update? Staff will no longer see it.')) return;
+    if (!await confirmDialog({ title: 'Delete this update?', message: 'Staff will no longer see it. You can still permanently delete it later.', confirmLabel: 'Delete', tone: 'danger' })) return;
     setMessage('');
     try {
       const r = await safeJson(`${API_URL}/api/admin/intranet-updates/${id}`, { method: 'DELETE' });
@@ -144,7 +145,7 @@ export default function UpdatesPage() {
 
   const purge = async (id) => {
     if (!isAdmin) return;
-    if (!confirm('Permanently delete this update? This cannot be undone.')) return;
+    if (!await confirmDialog({ title: 'Permanently delete this update?', message: 'This cannot be undone.', confirmLabel: 'Delete forever', tone: 'danger' })) return;
     setMessage('');
     try {
       const r = await safeJson(`${API_URL}/api/admin/intranet-updates/${id}/purge`, { method: 'DELETE' });

@@ -6503,3 +6503,41 @@
 .admin-attachment:hover .admin-attachment-remove,
 .admin-attachment:focus-within .admin-attachment-remove { opacity: 1; }
 @media (hover: none) { .admin-attachment-remove { opacity: 1; } }
+
+/* Confirmation dialog (ui/ConfirmDialog.js), used instead of window.confirm. */
+.admin-confirm-backdrop {
+  position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 16px;
+  background: rgba(15, 23, 42, 0.45); backdrop-filter: blur(3px);
+  animation: admin-confirm-fade 0.15s ease-out;
+}
+.admin-confirm {
+  width: 100%; max-width: 420px; background: #ffffff; border-radius: 18px; padding: 24px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.25); text-align: center;
+  animation: admin-confirm-pop 0.18s ease-out;
+}
+.admin-confirm-icon {
+  width: 48px; height: 48px; margin: 0 auto 14px; border-radius: 999px;
+  display: grid; place-items: center; background: #e1f5ee; color: #0f6e56;
+}
+.admin-confirm--danger .admin-confirm-icon { background: #fee2e2; color: #dc2626; }
+.admin-confirm--warning .admin-confirm-icon { background: #fef3c7; color: #b45309; }
+.admin-confirm-title { margin: 0; font-size: 18px; line-height: 1.35; font-weight: 800; color: #0f172a; }
+.admin-confirm-message { margin: 8px 0 0; font-size: 14px; line-height: 1.55; color: #475569; }
+.admin-confirm-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 22px; }
+.admin-confirm-button {
+  padding: 11px 16px; border-radius: 12px; border: 1px solid #d8e2dd; background: #ffffff;
+  color: #1e293b; font-size: 14px; font-weight: 700; cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.admin-confirm-button:hover { background: #f4f7f6; }
+.admin-confirm-button:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(15, 110, 86, 0.3); }
+.admin-confirm-button--primary { background: #0f6e56; border-color: #0f6e56; color: #ffffff; }
+.admin-confirm-button--primary:hover { background: #0b5945; }
+.admin-confirm-button--danger { background: #dc2626; border-color: #dc2626; color: #ffffff; }
+.admin-confirm-button--danger:hover { background: #b91c1c; }
+.admin-confirm-button--danger:focus-visible { box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.3); }
+@keyframes admin-confirm-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes admin-confirm-pop { from { opacity: 0; transform: translateY(8px) scale(0.97); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .admin-confirm-backdrop, .admin-confirm { animation: none; }
+}
