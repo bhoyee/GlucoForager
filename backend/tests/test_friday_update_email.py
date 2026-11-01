@@ -1,4 +1,4 @@
-"""Friday update / welcome-week relaunch email: the right promise, links and opt-out."""
+""""What's new" / welcome-week relaunch email: the right promise, links and opt-out."""
 
 import unittest
 
@@ -8,7 +8,7 @@ from app.services.email_service import render_welcome_week_relaunch_email
 class FridayUpdateEmailTest(unittest.TestCase):
     def test_content_links_and_unsubscribe(self):
         subject, html = render_welcome_week_relaunch_email("sam@example.com", "Sam Carter", 7, welcome_days=7)
-        self.assertEqual(subject, "Your Friday update: a new GlucoForager (and 7 days of Premium on us)")
+        self.assertEqual(subject, "What's new: a new GlucoForager (and 7 days of Premium on us)")
         self.assertIn("Hi Sam,", html)
         self.assertIn("7 days of Premium, on us", html)
         self.assertIn("no card on file", html)
