@@ -35,6 +35,7 @@ EXCLUDED_EMAILS: set[str] = {
     "nathan.a.moore.1983@gmail.com",
     "missblair26@gmail.com",
     "aperez.lhc@yahoo.com",
+    "arturbroda28@gmail.coma",  # typo'd duplicate of arturbroda28@gmail.com; would bounce
 }
 # Someone whose welcome week ended this recently has just had one: don't give a second.
 RECENT_WELCOME_WEEK_DAYS = 30

@@ -1121,7 +1121,7 @@ _UPDATE_ALSO_NEW = [
 def render_welcome_week_relaunch_email(
     to_email: str, full_name: str | None, user_id: int, *, welcome_days: int = 7
 ) -> tuple[str, str]:
-    """"Your Friday update": what's new in the app, plus a fresh welcome week of Premium
+    """"What's new": the latest in the app, plus a fresh welcome week of Premium
     (already granted by the relaunch script) as the reason to come back and try it.
     Text-led, table-based and inline-styled so it stays short and renders everywhere."""
     from .user_email_tokens import make_dunning_unsubscribe_token
@@ -1132,7 +1132,7 @@ def render_welcome_week_relaunch_email(
     first = esc(_first_name(full_name))
     download_url = f"{site}/download"
     unsubscribe_url = f"{site}/unsubscribe?type=dunning&token={make_dunning_unsubscribe_token(user_id, to_email)}"
-    subject = f"Your Friday update: a new GlucoForager (and {period} of Premium on us)"
+    subject = f"What's new: a new GlucoForager (and {period} of Premium on us)"
     preheader = f"Here's what we've been building, and {period} of Premium is already unlocked on your account."
 
     highlights = "".join(
@@ -1178,12 +1178,12 @@ def render_welcome_week_relaunch_email(
                 <span style="display:inline-block; vertical-align:middle; margin-left:8px; font-size:18px; font-weight:700; color:#ffffff;">GlucoForager</span>
               </a>
             </td>
-            <td align="right" valign="middle" style="font-size:12px; color:#ccfbf1; letter-spacing:1px; text-transform:uppercase;">Friday update</td>
+            <td align="right" valign="middle" style="font-size:12px; color:#ccfbf1; letter-spacing:1px; text-transform:uppercase;">What's new</td>
           </tr></table>
         </td></tr>
 
         <tr><td style="padding:30px 32px 6px 32px;">
-          <p style="margin:0 0 10px 0; font-size:12px; letter-spacing:1.2px; text-transform:uppercase; font-weight:700; color:#0d9488;">Your Friday update</p>
+          <p style="margin:0 0 10px 0; font-size:12px; letter-spacing:1.2px; text-transform:uppercase; font-weight:700; color:#0d9488;">What's new in GlucoForager</p>
           <h1 style="margin:0 0 12px 0; font-size:28px; line-height:35px; font-weight:800; color:#0f172a;">A lot has changed in GlucoForager</h1>
           <p style="margin:0; font-size:16px; line-height:26px; color:#334155;">
             Hi {first}, here's what we've been building since you last looked, and a gift so you can try all of it.
@@ -1238,7 +1238,7 @@ def render_welcome_week_relaunch_email(
 
         <tr><td style="padding:24px 32px 28px 32px;">
           <p style="margin:0; font-size:15px; line-height:24px; color:#334155;">
-            Have a great weekend, and if anything could be better, just reply. I read every message.<br/><br/>
+            Have a great week, and if anything could be better, just reply. I read every message.<br/><br/>
             <strong style="color:#0f172a;">Jade</strong><br/>
             <span style="color:#64748b;">Founder, GlucoForager</span>
           </p>
