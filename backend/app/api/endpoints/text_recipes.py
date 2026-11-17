@@ -55,7 +55,7 @@ IngredientStr = Annotated[
 
 
 class TextRecipeRequest(BaseModel):
-    ingredients: list[IngredientStr] = Field(default_factory=list, max_length=20)
+    ingredients: list[IngredientStr] = Field(default_factory=list, max_length=50)
     filters: list[str] | None = None
     exclude_titles: list[str] | None = Field(default=None, max_length=20)
     variety_mode: bool = False
@@ -74,6 +74,7 @@ class TextRecipeRequest(BaseModel):
         if not isinstance(value, list):
             return value
         cleaned = []
+        seen = set()
         for item in value:
             if not isinstance(item, str):
                 continue
@@ -82,7 +83,9 @@ class TextRecipeRequest(BaseModel):
             for part in parts:
                 part = part.strip().strip(",.;")
                 normalized = " ".join(part.split())
-                if normalized:
+                key = normalized.casefold()
+                if normalized and key not in seen:
+                    seen.add(key)
                     cleaned.append(normalized)
         return cleaned
 
