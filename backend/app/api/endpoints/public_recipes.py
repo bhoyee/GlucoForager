@@ -9,6 +9,7 @@ URLs are /recipes/<slug>-<id>: the id finds the recipe, the slug is for people a
 
 from __future__ import annotations
 
+import json
 import re
 import unicodedata
 from datetime import datetime
@@ -154,7 +155,7 @@ def list_public_recipes(
     key = f"public_recipes:list:v1:{meal}:{','.join(sorted(quick_set))}:{term}:{page}:{page_size}"
     cached = cache.get(key)
     if cached:
-        return cached
+        return json.loads(cached)
 
     rows = [
         r for r in _all_public(db)
@@ -167,7 +168,7 @@ def list_public_recipes(
         "page_size": page_size,
         "items": [_card(r) for r in rows[start:start + page_size]],
     }
-    cache.set(key, result, ttl_seconds=CACHE_TTL)
+    cache.set(key, json.dumps(result), ttl_seconds=CACHE_TTL)
     return result
 
 
@@ -175,14 +176,14 @@ def list_public_recipes(
 def public_recipe_sitemap(db: Session = Depends(get_db)):
     cached = cache.get("public_recipes:sitemap:v1")
     if cached:
-        return cached
+        return json.loads(cached)
     result = {
         "items": [
             {"slug": recipe_slug(r), "updated_at": (r.updated_at or r.created_at or datetime.utcnow()).isoformat()}
             for r in _all_public(db)
         ]
     }
-    cache.set("public_recipes:sitemap:v1", result, ttl_seconds=CACHE_TTL)
+    cache.set("public_recipes:sitemap:v1", json.dumps(result), ttl_seconds=CACHE_TTL)
     return result
 
 
@@ -195,7 +196,7 @@ def get_public_recipe(slug: str, db: Session = Depends(get_db)):
     key = f"public_recipes:detail:v1:{recipe_id}"
     cached = cache.get(key)
     if cached:
-        return cached
+        return json.loads(cached)
 
     recipe = _public_query(db).filter(Recipe.id == recipe_id).first()
     if not recipe or not is_public_quality(recipe):
@@ -220,5 +221,5 @@ def get_public_recipe(slug: str, db: Session = Depends(get_db)):
         "created_at": (recipe.created_at or datetime.utcnow()).isoformat(),
         "related": [_card(r) for r in related_rows],
     }
-    cache.set(key, result, ttl_seconds=CACHE_TTL)
+    cache.set(key, json.dumps(result), ttl_seconds=CACHE_TTL)
     return result

@@ -1,6 +1,10 @@
 """Public recipe pages: clean URLs and only good recipes on the website."""
 
 import unittest
+from unittest import mock
+
+from app.api.endpoints import public_recipes
+from app.services.cache_service import CacheService
 
 from app.api.endpoints.public_recipes import _ingredients, _matches_quick, is_public_quality, recipe_slug, slugify
 from app.models.recipe import Recipe
@@ -21,6 +25,56 @@ def make_recipe(**overrides) -> Recipe:
     )
     data.update(overrides)
     return Recipe(**data)
+
+
+class PublicRecipeCacheTest(unittest.TestCase):
+    def test_endpoints_round_trip_json_in_redis_and_memory(self):
+        for redis_enabled in (True, False):
+            for endpoint in ("list", "sitemap", "detail"):
+                with self.subTest(redis=redis_enabled, endpoint=endpoint):
+                    cache = CacheService()
+                    cache.client = None
+                    stored = {}
+                    if redis_enabled:
+                        client = mock.Mock()
+
+                        def setex(key, ttl, value):
+                            self.assertIsInstance(value, str)
+                            self.assertEqual(ttl, public_recipes.CACHE_TTL)
+                            stored[key] = value.encode("utf-8")
+
+                        client.setex.side_effect = setex
+                        client.get.side_effect = lambda key: stored.get(key)
+                        cache.client = client
+
+                    query = mock.MagicMock()
+                    query.filter.return_value = query
+                    query.order_by.return_value = query
+                    query.limit.return_value = query
+                    query.first.return_value = make_recipe()
+                    query.all.return_value = []
+                    with mock.patch.object(public_recipes, "cache", cache), mock.patch.object(
+                        public_recipes, "_all_public", return_value=[make_recipe()]
+                    ) as all_public, mock.patch.object(public_recipes, "_public_query", return_value=query) as public_query:
+                        def call():
+                            if endpoint == "list":
+                                return public_recipes.list_public_recipes(
+                                    meal_type=None, quick=None, q=None, page=1, page_size=24, db=mock.Mock()
+                                )
+                            if endpoint == "sitemap":
+                                return public_recipes.public_recipe_sitemap(db=mock.Mock())
+                            return public_recipes.get_public_recipe("recipe-42", db=mock.Mock())
+
+                        first = call()
+                        all_public.reset_mock()
+                        public_query.reset_mock()
+                        self.assertIsInstance(first, dict)
+                        self.assertEqual(call(), first)
+                        all_public.assert_not_called()
+                        public_query.assert_not_called()
+                        if redis_enabled:
+                            self.assertIs(cache.client, client)
+                            client.setex.assert_called_once()
 
 
 class SlugTest(unittest.TestCase):
